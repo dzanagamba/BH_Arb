@@ -9,11 +9,10 @@ Usage:
   python scripts/generate_team_mappings.py --min 5
 """
 
+import collections
 import json
 import pathlib
-import collections
 import sys
-import re
 
 MIN_FREQ = int(sys.argv[sys.argv.index("--min")+1]) if "--min" in sys.argv else 5
 
@@ -24,7 +23,8 @@ if not cache.exists():
 
 # Load normalizer to test mapping
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
-from engine.normalizer import TeamNormalizer
+from engine.normalizer import TeamNormalizer  # noqa: E402
+
 norm = TeamNormalizer()
 
 data = json.load(open(cache, encoding="utf-8"))
