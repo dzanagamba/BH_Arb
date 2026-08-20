@@ -425,6 +425,18 @@ async function loadResults(silent = false) {
         if (data.last_scan_time) {
             const dt = new Date(data.last_scan_time);
             document.getElementById('stat-time').textContent = formatTime(dt);
+            // P0-6 staleness badge — warn if odds older than 2 minutes
+            const ageSec = (Date.now() - dt.getTime()) / 1000;
+            if (ageSec > 120) {
+                showError(`⚠️ Odds are ${Math.round(ageSec)}s old — click Verify Odds before betting (stale cache)`);
+            } else {
+                // Clear stale warning if previously shown and now fresh
+                const banner = document.getElementById('error-banner');
+                const bannerText = document.getElementById('error-banner-text');
+                if (bannerText && bannerText.textContent.includes('Odds are') && bannerText.textContent.includes('old')) {
+                    hideError();
+                }
+            }
         }
 
         applyFilters();

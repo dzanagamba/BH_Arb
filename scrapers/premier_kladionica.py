@@ -129,7 +129,7 @@ class PremierKladionicaScraper:
     def __init__(self):
         self.headers = dict(API_HEADERS)
 
-    async def fetch_and_parse(self, live: bool = False) -> list[Match]:
+    async def fetch_and_parse(self, live: bool = False, scan_time: datetime | None = None) -> list[Match]:
         async with httpx.AsyncClient(timeout=60.0, verify=VERIFY_SSL) as client:
             sync = await self._full_sync(client)
             if not sync:
@@ -172,7 +172,8 @@ class PremierKladionicaScraper:
                         set_tip_tip[key] = row[4]
 
             # dogs: football events (section 5)
-            now_ms = int(datetime.now(UTC).timestamp() * 1000)
+            now_aware = (scan_time.replace(tzinfo=UTC) if scan_time and scan_time.tzinfo is None else scan_time) if scan_time else datetime.now(UTC)
+            now_ms = int(now_aware.timestamp() * 1000)
             events = []
             for row in sections[5] or []:
                 if not isinstance(row, list) or len(row) < 15:
@@ -207,12 +208,15 @@ class PremierKladionicaScraper:
                 logger.info(f"[PremierKladionica] No {'live' if live else 'prematch'} football events in sync")
                 return []
 
-            # delta sync for odds
+            # delta sync for odds — concurrent batches (P1-5)
             odds_by_event: dict[int, list[list]] = {}
             ver = sections[0][0][4] if sections and sections[0] else 0
-            for start in range(0, len(events), ODDS_CHUNK):
-                chunk_ids = ",".join(str(e["id"]) for e in events[start:start + ODDS_CHUNK])
-                delta = await self._delta_sync(client, chunk_ids, ver)
+            import asyncio as _asyncio
+            chunk_ids_list = [",".join(str(e["id"]) for e in events[start:start + ODDS_CHUNK]) for start in range(0, len(events), ODDS_CHUNK)]
+            async def _fetch_chunk(chunk_ids: str):
+                return await self._delta_sync(client, chunk_ids, ver)
+            deltas = await _asyncio.gather(*[_fetch_chunk(cid) for cid in chunk_ids_list])
+            for delta in deltas:
                 if delta is None:
                     continue
                 for sec in delta:
@@ -245,6 +249,7 @@ class PremierKladionicaScraper:
                     url=f"{BASE_URL}/ponuda/",
                     match_code=str(event["id"]),
                     is_live=live,
+                    fetched_at=datetime.now(UTC).replace(tzinfo=None),
                 ))
 
             logger.info(f"[PremierKladionica] {'Live' if live else 'Prematch'} total: {len(matches)} matches")
@@ -371,5 +376,5 @@ class PremierKladionicaScraper:
             return None
         return data[0]
 
-    async def scrape(self, live: bool = False) -> list[Match]:
-        return await self.fetch_and_parse(live=live)
+    async def scrape(self, live: bool = False, scan_time: datetime | None = None) -> list[Match]:
+        return await self.fetch_and_parse(live=live, scan_time=scan_time)

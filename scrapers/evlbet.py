@@ -6,7 +6,7 @@ Endpoint: GET https://sportapis.evlbet.com/SportsOfferApi/api/sport/offer/v3/mat
 """
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 
 import httpx
 
@@ -40,7 +40,7 @@ def _parse_dt(raw) -> datetime | None:
 class EvlbetScraper:
     """EVLBet scraper using direct HTTP API calls."""
 
-    async def fetch_and_parse(self, live: bool = False) -> list[Match]:
+    async def fetch_and_parse(self, live: bool = False, scan_time: datetime | None = None) -> list[Match]:
         if live:
             # The EVLBet live feed (`/matches/live`) carries live scores and
             # match state but NO odds (its Offers arrays are always empty), so
@@ -142,7 +142,8 @@ class EvlbetScraper:
             markets=markets,
             url=f"{BASE_URL}/",
             match_code=mid,
+            fetched_at=datetime.now(UTC).replace(tzinfo=None),
         )
 
-    async def scrape(self, live: bool = False) -> list[Match]:
-        return await self.fetch_and_parse(live=live)
+    async def scrape(self, live: bool = False, scan_time: datetime | None = None) -> list[Match]:
+        return await self.fetch_and_parse(live=live, scan_time=scan_time)

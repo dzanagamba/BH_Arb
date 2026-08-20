@@ -144,16 +144,21 @@ def _resolve_mbet_market(raw_sport_id: str, odds_dict: dict) -> dict[str, list[O
         if odd is None:
             continue
         hc_by_line.setdefault(line, {})[side] = odd
-    for line, sides in hc_by_line.items():
-        home_odd = sides.get("H1")
-        away_odd = sides.get("H2")
-        if not home_odd or not away_odd:
-            continue
-        home_line = -line if home_odd < away_odd else line
-        markets["asian_handicap"] = [
-            OddsValue(label=ah_label("1", home_line), value=home_odd),
-            OddsValue(label=ah_label("2", -home_line), value=away_odd),
-        ]
+    # P1-4: preserve all handicap lines (previous code overwrote, keeping only last line)
+    if hc_by_line:
+        ah_odds: list[OddsValue] = []
+        for line, sides in hc_by_line.items():
+            home_odd = sides.get("H1")
+            away_odd = sides.get("H2")
+            if not home_odd or not away_odd:
+                continue
+            home_line = -line if home_odd < away_odd else line
+            ah_odds.extend([
+                OddsValue(label=ah_label("1", home_line), value=home_odd),
+                OddsValue(label=ah_label("2", -home_line), value=away_odd),
+            ])
+        if ah_odds:
+            markets["asian_handicap"] = ah_odds
 
     # Both Teams to Score
     gg_val = _get_active_value(odds_dict.get(f"o{s}:gg:GG"))
@@ -298,10 +303,11 @@ class MBetScraper:
         self.base_url = BASE_API
         self.headers = dict(API_HEADERS)
 
-    async def fetch_and_parse(self, live: bool = False) -> list[Match]:
-        now = datetime.now(UTC)
-        now_str = now.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-        future = now + timedelta(days=14)
+    async def fetch_and_parse(self, live: bool = False, scan_time: datetime | None = None) -> list[Match]:
+        # Single wall-clock from run_scan ensures uniform 14-day window across scrapers
+        now_aware = (scan_time.replace(tzinfo=UTC) if scan_time and scan_time.tzinfo is None else scan_time) if scan_time else datetime.now(UTC)
+        now_str = now_aware.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        future = now_aware + timedelta(days=14)
         future_str = future.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
         all_matches: list[Match] = []
@@ -425,8 +431,9 @@ class MBetScraper:
             url="https://mbet.ba/",
             match_code=event_id,
             is_live=live,
+            fetched_at=datetime.now(UTC).replace(tzinfo=None),
         )
 
-    async def scrape(self, live: bool = False) -> list[Match]:
+    async def scrape(self, live: bool = False, scan_time: datetime | None = None) -> list[Match]:
         """Compatibility wrapper."""
-        return await self.fetch_and_parse(live=live)
+        return await self.fetch_and_parse(live=live, scan_time=scan_time)

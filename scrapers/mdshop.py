@@ -74,15 +74,18 @@ class MDShopScraper:
         self.base_url = BASE_API
         self.headers = dict(API_HEADERS)
 
-    async def fetch_and_parse(self, live: bool = False) -> list[Match]:
+    async def fetch_and_parse(self, live: bool = False, scan_time: datetime | None = None) -> list[Match]:
         """
         Fetch events for all sports and parse into Match objects.
         `live=True` fetches the in-play feed, which uses a different bet type
         ID space handled by parse_nsoft_live_bets().
+        `scan_time` (naive UTC) is the single wall-clock for this scan — passed from
+        server/api.py:run_scan so all scrapers use the same 14-day window. When None,
+        falls back to now for standalone/test usage.
         """
-        now = datetime.now(UTC)
-        now_str = now.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3]
-        future = now + timedelta(days=14)
+        now_aware = (scan_time.replace(tzinfo=UTC) if scan_time and scan_time.tzinfo is None else scan_time) if scan_time else datetime.now(UTC)
+        now_str = now_aware.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3]
+        future = now_aware + timedelta(days=14)
         future_str = future.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3]
 
         all_matches: list[Match] = []
@@ -175,6 +178,7 @@ class MDShopScraper:
             url=nsoft_event_url("https://www.mdshop.ba", event_id, live=live),
             match_code=event_id,
             is_live=live,
+            fetched_at=datetime.now(UTC).replace(tzinfo=None),
         )
 
     def _parse_bets(self, bets: list, live: bool = False) -> list[Market]:
@@ -183,8 +187,8 @@ class MDShopScraper:
             return parse_nsoft_live_bets(bets)
         return parse_nsoft_bets(bets)
 
-    async def scrape(self, live: bool = False) -> list[Match]:
+    async def scrape(self, live: bool = False, scan_time: datetime | None = None) -> list[Match]:
         """
         Wrapper method compatible with our existing scraper interface.
         """
-        return await self.fetch_and_parse(live=live)
+        return await self.fetch_and_parse(live=live, scan_time=scan_time)

@@ -17,7 +17,7 @@ import json
 import logging
 import os
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request
@@ -60,7 +60,13 @@ def _require_api_key(x_api_key: str = Header(default="")) -> None:
 # and persisted to a JSON state file so toggles survive restarts.
 _BOOKMAKER_STATE_FILE = os.path.join(CACHE_DIR, "bookmaker_state.json")
 _bookmaker_enabled: dict[str, bool] = {bid: bool(cfg.get("enabled", True)) for bid, cfg in BOOKMAKERS.items()}
+# Per-mode locks — prematch and live scans run independently (P0-7)
 _scan_lock = asyncio.Lock()
+_prematch_lock = asyncio.Lock()
+_live_lock = asyncio.Lock()
+
+def _lock_for(mode: str) -> asyncio.Lock:
+    return _live_lock if mode == "live" else _prematch_lock
 
 # ─── Experimental market toggles ────────────────────────────────────────
 # The markets in EXPERIMENTAL_MARKETS are OFF by default and only detected
@@ -219,9 +225,12 @@ async def run_scan(mode: str = "prematch"):
 
     `mode` selects the feed: "prematch" (future matches) or "live" (in-play).
     Each mode has its own status object and cache file.
+    Uniform `scan_started_at` (naive UTC) is passed to all scrapers so date
+    windows are identical (P0-5) and odds can be age-checked (P0-1).
     """
     is_live = mode == "live"
     status, surebets_cache, matches_cache, report_cache, per_bookie = _state_for(mode)
+    scan_started_at = datetime.now(UTC).replace(tzinfo=None)
 
     status.is_scanning = True
     status.bookmakers_done = []
@@ -249,7 +258,15 @@ async def run_scan(mode: str = "prematch"):
                     return []
 
                 scraper = scraper_class()
-                matches = await scraper.scrape(live=is_live)
+                # Pass uniform scan_time for window consistency; fallback to inspecting signature
+                try:
+                    matches = await scraper.scrape(live=is_live, scan_time=scan_started_at)
+                except TypeError:
+                    matches = await scraper.scrape(live=is_live)
+                # Stamp fetched_at if scraper missed it (defense in depth)
+                for m in matches:
+                    if not m.fetched_at:
+                        m.fetched_at = scan_started_at
 
                 status.bookmaker_progress[bookie_id] = "done"
                 status.bookmakers_done.append(config["name"])
@@ -276,6 +293,15 @@ async def run_scan(mode: str = "prematch"):
             elif isinstance(res, Exception):
                 logger.error(f"Scraper gather exception: {res}")
                 status.errors.append(f"Scraper error: {str(res)[:200]}")
+
+        # Age spread guard (P0-1): warn if scrapers' fetched_at diverge >90s
+        if all_matches:
+            times = [m.fetched_at for m in all_matches if m.fetched_at]
+            if times:
+                spread = (max(times) - min(times)).total_seconds()
+                if spread > 90:
+                    logger.warning(f"Odds age spread {spread:.0f}s exceeds 90s — results may be stale")
+                    status.errors.append(f"Odds age spread {spread:.0f}s — verify before betting")
 
         # --- Match and find surebets ---
         status.current_bookmaker = "Analysing matches..."
@@ -320,11 +346,17 @@ async def run_scan(mode: str = "prematch"):
 
 
 def _save_cache(mode: str = "prematch"):
-    """Persist last scan results to JSON cache files."""
+    """Persist last scan results to JSON cache files (with TTL metadata P0-6)."""
     status, surebets_cache, matches_cache, _, _ = _state_for(mode)
     cache_file = _LIVE_CACHE_FILE if mode == "live" else _PREMATCH_CACHE_FILE
     try:
         os.makedirs(CACHE_DIR, exist_ok=True)
+        # Include fetched_at spread for staleness UI
+        fetched_times = []
+        for m in matches_cache:
+            ft = m.get("fetched_at") if isinstance(m, dict) else getattr(m, "fetched_at", None)
+            if ft:
+                fetched_times.append(str(ft))
         with open(cache_file, "w", encoding="utf-8") as f:
             json.dump({
                 "surebets": surebets_cache,
@@ -332,13 +364,14 @@ def _save_cache(mode: str = "prematch"):
                 "matches_count": len(matches_cache),
                 "mode": mode,
                 "scan_time": status.last_scan_time.isoformat() if status.last_scan_time else None,
+                "fetched_at": status.last_scan_time.isoformat() if status.last_scan_time else None,
             }, f, ensure_ascii=False, indent=2, default=str)
     except Exception as e:
         logger.warning(f"Cache save failed: {e}")
 
 
 def _load_cache():
-    """Restore last scan results from the JSON cache files on startup."""
+    """Restore last scan results from the JSON cache files on startup (TTL 30min P0-6)."""
     for mode, cache_file, state_fields in (
         ("prematch", _PREMATCH_CACHE_FILE, (scan_status, cached_surebets, cached_matches)),
         ("live", _LIVE_CACHE_FILE, (live_status, cached_live_surebets, cached_live_matches)),
@@ -349,14 +382,24 @@ def _load_cache():
                 continue
             with open(cache_file, encoding="utf-8") as f:
                 data = json.load(f)
-            surebets_cache[:] = data.get("surebets", [])
-            matches_cache[:] = data.get("matches", [])
             scan_time = data.get("scan_time")
+            # TTL: discard cache older than 30 minutes (stale cache replay guard)
             if scan_time:
                 try:
-                    status.last_scan_time = datetime.fromisoformat(scan_time)
+                    parsed = datetime.fromisoformat(scan_time)
+                    # Handle naive UTC stored
+                    if parsed.tzinfo is None:
+                        age = (datetime.now(UTC).replace(tzinfo=None) - parsed).total_seconds()
+                    else:
+                        age = (datetime.now(UTC) - parsed).total_seconds()
+                    if age > 1800:
+                        logger.info(f"Cache {mode} expired ({age/60:.0f}min old) — discarding")
+                        continue
+                    status.last_scan_time = parsed
                 except ValueError:
                     pass
+            surebets_cache[:] = data.get("surebets", [])
+            matches_cache[:] = data.get("matches", [])
             status.total_matches = len(matches_cache)
             status.surebets_found = len(surebets_cache)
             logger.info(
@@ -382,11 +425,12 @@ async def trigger_scan(
     mode: str = "prematch",
     _auth: None = Depends(_require_api_key),
 ):
-    """Trigger a new scan of all bookmakers (mode=prematch|live)."""
+    """Trigger a new scan of all bookmakers (mode=prematch|live). P0-7 per-mode lock."""
     if mode not in ("prematch", "live"):
         raise HTTPException(status_code=400, detail="mode must be 'prematch' or 'live'")
 
     status, _, _, _, _ = _state_for(mode)
+    mode_lock = _lock_for(mode)
 
     if SCAN_RATE_LIMIT > 0:
         client_ip = request.client.host if request.client else "unknown"
@@ -400,11 +444,11 @@ async def trigger_scan(
         window.append(now_ts)
         _scan_request_times[client_ip] = window
 
-    async with _scan_lock:
-        if scan_status.is_scanning or live_status.is_scanning:
+    async with mode_lock:
+        if status.is_scanning:
             return {
                 "status": "already_scanning",
-                "message": "A scan is already in progress. Please wait.",
+                "message": f"A {mode} scan is already in progress. Please wait.",
             }
         status.is_scanning = True
 
@@ -573,8 +617,10 @@ async def verify_surebet(req: VerifyRequest, _auth: None = Depends(_require_api_
     if not target:
         raise HTTPException(status_code=404, detail="Surebet not found")
 
-    async with _scan_lock:
-        if scan_status.is_scanning or live_status.is_scanning:
+    mode_lock = _lock_for(req.mode)
+    status_for_mode, _, _, _, _ = _state_for(req.mode)
+    async with mode_lock:
+        if status_for_mode.is_scanning:
             raise HTTPException(
                 status_code=409,
                 detail="A scan is in progress — retry after it finishes",

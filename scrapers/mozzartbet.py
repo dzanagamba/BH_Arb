@@ -7,7 +7,7 @@ Playwright browser for Cloudflare session, then API interception + pagination.
 import logging
 import math
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 
 from models.schemas import Market, MarketType, Match, OddsValue
 from scrapers.base import launch_browser
@@ -316,6 +316,7 @@ def _event_to_match(event: dict, seen: set, live: bool = False) -> Match | None:
         kickoff=kickoff, markets=markets,
         url=f"{BASE_URL}/sr/{'uzivo' if live else 'kladjenje'}/sport/1", match_code=mid,
         is_live=live,
+        fetched_at=datetime.now(UTC).replace(tzinfo=None),
     )
 
 # ---- Scraper class ----
@@ -329,7 +330,7 @@ class MozzartbetScraper:
     4. Parse all collected items into Match objects
     """
 
-    async def fetch_and_parse(self, live: bool = False) -> list[Match]:
+    async def fetch_and_parse(self, live: bool = False, scan_time: datetime | None = None) -> list[Match]:
         p, browser, context = await launch_browser()
         all_raw_items: list[dict] = []
         try:
@@ -356,7 +357,9 @@ class MozzartbetScraper:
             await page.wait_for_timeout(3000)
 
             # 2. Paginate via page.request (with correct headers from the page)
-            page_size = 50
+            # BUILD_SPECIFICATION_V3.md:127 specifies pageSize 15 (API default).
+            # Using 50 caused truncated catalog on some deployments (only 56 matches).
+            page_size = 15
             api_body: dict = {
                 "date": "live" if live else "all_days",
                 "sort": "bycompetition",
@@ -365,7 +368,7 @@ class MozzartbetScraper:
             }
             referer = f"{BASE_URL}/sr/kladjenje/sport/1?date=all_days"
             page_num = 1
-            max_pages = 100
+            max_pages = 35  # per spec pages 1-35, updated dynamically below
 
             while page_num <= max_pages:
                 api_body["currentPage"] = page_num
@@ -390,10 +393,21 @@ class MozzartbetScraper:
                         break
                     all_raw_items.extend(items)
 
-                    match_count = data.get("matchCount")
-                    if match_count and isinstance(match_count, int):
-                        dynamic_total = math.ceil(match_count / page_size)
-                        max_pages = min(dynamic_total, 100)
+                    # The API may return totalPages, matchCount, or totalItems —
+                    # handle all three for robustness.
+                    total_pages = data.get("totalPages")
+                    if isinstance(total_pages, int) and total_pages > 0:
+                        max_pages = min(total_pages, 100)
+                    else:
+                        match_count = data.get("matchCount")
+                        if isinstance(match_count, int) and match_count > 0:
+                            dynamic_total = math.ceil(match_count / page_size)
+                            max_pages = min(dynamic_total, 100)
+                        else:
+                            total_items = data.get("totalItems")
+                            if isinstance(total_items, int) and total_items > 0:
+                                dynamic_total = math.ceil(total_items / page_size)
+                                max_pages = min(dynamic_total, 100)
 
                     logger.debug(f"[Mozzartbet] Page {page_num}/{max_pages}: {len(items)} items")
                     if len(items) < page_size or page_num >= max_pages:
@@ -422,5 +436,5 @@ class MozzartbetScraper:
         logger.info(f"[Mozzartbet] {len(matches)} {'live' if live else 'prematch'} matches from {len(all_raw_items)} raw items")
         return matches
 
-    async def scrape(self, live: bool = False) -> list[Match]:
-        return await self.fetch_and_parse(live=live)
+    async def scrape(self, live: bool = False, scan_time: datetime | None = None) -> list[Match]:
+        return await self.fetch_and_parse(live=live, scan_time=scan_time)

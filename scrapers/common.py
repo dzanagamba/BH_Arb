@@ -35,6 +35,9 @@ def parse_dt(raw) -> datetime | None:
             return datetime.fromtimestamp(ts, tz=UTC).replace(tzinfo=None)
         if isinstance(raw, str):
             s = raw.strip()
+            # Explicit Z handling — fromisoformat doesn't accept bare Z
+            if s.endswith("Z"):
+                s = s[:-1] + "+00:00"
             try:
                 dt = datetime.fromisoformat(s)
                 if dt.tzinfo is not None:
@@ -100,6 +103,43 @@ def flip_ah_label(label: str) -> str:
         return label
     idx, line = parsed
     return ah_label("2" if idx == "1" else "1", line)
+
+
+def get_active_odds_value(entry) -> float | None:
+    """Return float odds if entry is active/not suspended, else None (P0-2 unified guard).
+
+    Checks common suspend signals across providers:
+      - market_status != ACTIVE / oddtype_status !=1 (MBet/Alea)
+      - isv ==0 (WWIN)
+      - naPon !=1 (Premier)
+      - value <1.01 (all)
+    Accepts dict {value, market_status, ...} or bare float/str.
+    """
+    if entry is None:
+        return None
+    if isinstance(entry, dict):
+        # WWIN-style isv
+        if entry.get("isv") == 0:
+            return None
+        # Premier naPon
+        if "naPon" in entry and entry.get("naPon") != 1:
+            return None
+        # MBet Alea market_status / oddtype_status
+        if entry.get("market_status") is not None and entry.get("market_status") != "ACTIVE":
+            return None
+        if entry.get("oddtype_status") is not None and entry.get("oddtype_status") != 1:
+            return None
+        # Generic suspended/active flags
+        if entry.get("suspended") is True or entry.get("active") is False:
+            return None
+        val = entry.get("value", entry.get("va", entry.get("odd", entry.get("odds", entry.get("koef")))))
+    else:
+        val = entry
+    try:
+        f = float(val) if val is not None else 0.0
+        return f if f >= 1.01 else None
+    except (ValueError, TypeError):
+        return None
 
 
 def nsoft_event_url(site_base: str, event_id: str, live: bool = False) -> str:

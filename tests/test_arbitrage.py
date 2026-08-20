@@ -6,9 +6,12 @@ from engine.arbitrage import ArbitrageEngine
 from models.schemas import Market, MarketType, Match, MatchGroup, OddsValue
 
 
+def _future_kickoff():
+    return datetime.now(UTC).replace(tzinfo=None) + timedelta(hours=2)
+
 def _group(bookie_odds, kickoff=None):
     """Build a MatchGroup where each bookmaker provides a BTTS (GG/NG) market."""
-    kickoff = kickoff or datetime(2026, 8, 15, 18, 0)
+    kickoff = kickoff or _future_kickoff()
     matches = []
     for bookie, (gg, ng) in bookie_odds.items():
         matches.append(Match(
@@ -101,7 +104,7 @@ def test_expiry_uses_utc_not_local_time():
 
 def _dc_group():
     """1X2 from bookie A, Double Chance from bookie B — same real-world match."""
-    kickoff = datetime(2026, 8, 15, 18, 0)
+    kickoff = _future_kickoff()
     m_a = Match(
         bookmaker="mdshop", home_team="Sarajevo", away_team="Željezničar",
         league="BiH - Premier Liga", kickoff=kickoff,
@@ -138,7 +141,7 @@ def test_cross_market_dc_surebet():
 
 
 def test_cross_market_dc_rejects_same_bookmaker_both_legs():
-    kickoff = datetime(2026, 8, 15, 18, 0)
+    kickoff = _future_kickoff()
     # Bookie A holds the BEST odds for BOTH "1" and "X2" — same-bookie combo must be rejected
     m_a = Match(
         bookmaker="mdshop", home_team="Sarajevo", away_team="Željezničar",

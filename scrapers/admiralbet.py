@@ -65,7 +65,7 @@ def _parse_bets(bets: list, live: bool = False) -> list[Market]:
 class AdmiralbetScraper:
     """Admiralbet — Playwright hybrid (session + API pagination)."""
 
-    async def fetch_and_parse(self, live: bool = False) -> list[Match]:
+    async def fetch_and_parse(self, live: bool = False, scan_time: datetime | None = None) -> list[Match]:
         p, browser, context = await launch_browser()
         all_raw_events: list[dict] = []
         try:
@@ -82,10 +82,10 @@ class AdmiralbetScraper:
             )
             await page.wait_for_timeout(5000)
 
-            # 3. Fetch all football events via getwebevents endpoint
-            now = datetime.now(UTC)
-            date_from = now.strftime("%Y-%m-%dT%H:%M:%S.000")
-            date_to = (now + timedelta(days=14)).strftime("%Y-%m-%dT%H:%M:%S.000")
+            # 3. Fetch all football events via getwebevents endpoint (uniform window)
+            now_aware = (scan_time.replace(tzinfo=UTC) if scan_time and scan_time.tzinfo is None else scan_time) if scan_time else datetime.now(UTC)
+            date_from = now_aware.strftime("%Y-%m-%dT%H:%M:%S.000")
+            date_to = (now_aware + timedelta(days=14)).strftime("%Y-%m-%dT%H:%M:%S.000")
 
             url = (
                 f"{API_DOMAIN}/api/offer/getwebevents"
@@ -143,10 +143,11 @@ class AdmiralbetScraper:
                 league=league, kickoff=kickoff, markets=markets,
                 url=nsoft_event_url(BASE_URL, mid, live=live), match_code=mid,
                 is_live=live,
+                fetched_at=datetime.now(UTC).replace(tzinfo=None),
             ))
 
         logger.info(f"[Admiralbet] {len(matches)} {'live' if live else 'prematch'} matches from {len(all_raw_events)} raw events")
         return matches
 
-    async def scrape(self, live: bool = False) -> list[Match]:
-        return await self.fetch_and_parse(live=live)
+    async def scrape(self, live: bool = False, scan_time: datetime | None = None) -> list[Match]:
+        return await self.fetch_and_parse(live=live, scan_time=scan_time)

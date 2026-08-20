@@ -12,6 +12,7 @@ and falls back to the generic recursive finder for flat payloads.
 """
 
 import logging
+from datetime import UTC, datetime
 
 import httpx
 from playwright.async_api import Page
@@ -177,11 +178,12 @@ class BetoleScraper(BaseScraper):
     def extra_blocked_fragments(self) -> list[str]:
         return ["casino", "live-casino", "virtual", "slots", "poker", "jackpot"]
 
-    async def fetch_and_parse(self, live: bool = False) -> list[Match]:
+    async def fetch_and_parse(self, live: bool = False, scan_time: datetime | None = None) -> list[Match]:
         """Fetch Betole's direct prematch feed and parse its pick-code odds.
 
         The desk feed mixes prematch and in-play events (`live` flag per
         event); in live mode only the in-play ones are kept.
+        `scan_time` is accepted for uniform window API compatibility (not used — desk feed is unwindowed).
         """
         matches: list[Match] = []
         seen_ids: set[str] = set()
@@ -248,6 +250,7 @@ class BetoleScraper(BaseScraper):
                         url=OFFER_URL,
                         match_code=str(event.get("matchCode") or event_id),
                         is_live=live,
+                        fetched_at=datetime.now(UTC).replace(tzinfo=None),
                     ))
 
                 if len(events) < PAGE_SIZE or new_events == 0:
@@ -256,8 +259,8 @@ class BetoleScraper(BaseScraper):
         logger.info(f"[Betole] {len(matches)} {'live' if live else 'prematch'} matches parsed")
         return matches
 
-    async def scrape(self, live: bool = False) -> list[Match]:
-        return await self.fetch_and_parse(live=live)
+    async def scrape(self, live: bool = False, scan_time: datetime | None = None) -> list[Match]:
+        return await self.fetch_and_parse(live=live, scan_time=scan_time)
 
     async def extract_matches(self, page: Page) -> list[Match]:
         matches: list[Match] = []

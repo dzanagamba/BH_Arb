@@ -48,6 +48,7 @@ class Match(BaseModel):
     low_confidence: bool = False
     is_swapped: bool = False
     is_live: bool = False
+    fetched_at: datetime | None = None  # naive UTC wall-clock when odds were fetched (P0-1)
 
     def has_markets(self) -> bool:
         return len(self.markets) > 0

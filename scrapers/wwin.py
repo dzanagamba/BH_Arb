@@ -128,15 +128,15 @@ def _build_markets_from_bets(bets: list) -> list[Market]:
 class WWINScraper:
     """Scraper for wwin.ba — Playwright session + REST API."""
 
-    async def fetch_and_parse(self, live: bool = False) -> list[Match]:
+    async def fetch_and_parse(self, live: bool = False, scan_time: datetime | None = None) -> list[Match]:
         if live:
-            return await self._fetch_live()
-        return await self._fetch_prematch()
+            return await self._fetch_live(scan_time=scan_time)
+        return await self._fetch_prematch(scan_time=scan_time)
 
-    async def _fetch_prematch(self) -> list[Match]:
+    async def _fetch_prematch(self, scan_time: datetime | None = None) -> list[Match]:
         all_matches: list[Match] = []
         seen_ids: set[str] = set()
-        now = datetime.now(UTC)
+        now = (scan_time.replace(tzinfo=UTC) if scan_time and scan_time.tzinfo is None else scan_time) if scan_time else datetime.now(UTC)
 
         p, browser, context = await launch_browser()
         try:
@@ -209,6 +209,7 @@ class WWINScraper:
                         markets=markets,
                         url=f"{BASE_URL}/kladjenje/",
                         match_code=event_id,
+                        fetched_at=datetime.now(UTC).replace(tzinfo=None),
                     ))
         finally:
             await browser.close()
@@ -217,7 +218,7 @@ class WWINScraper:
         logger.info(f"[WWIN] Prematch total: {len(all_matches)} matches")
         return all_matches
 
-    async def _fetch_live(self) -> list[Match]:
+    async def _fetch_live(self, scan_time: datetime | None = None) -> list[Match]:
         all_matches: list[Match] = []
         p, browser, context = await launch_browser()
         try:
@@ -293,6 +294,7 @@ class WWINScraper:
                     url=f"{BASE_URL}/kladjenje-uzivo/",
                     match_code=event_id,
                     is_live=True,
+                    fetched_at=datetime.now(UTC).replace(tzinfo=None),
                 ))
         finally:
             await browser.close()
@@ -301,5 +303,5 @@ class WWINScraper:
         logger.info(f"[WWIN] Live total: {len(all_matches)} matches")
         return all_matches
 
-    async def scrape(self, live: bool = False) -> list[Match]:
-        return await self.fetch_and_parse(live=live)
+    async def scrape(self, live: bool = False, scan_time: datetime | None = None) -> list[Match]:
+        return await self.fetch_and_parse(live=live, scan_time=scan_time)

@@ -16,7 +16,7 @@ import httpx
 from config.settings import VERIFY_SSL
 from models.schemas import Market, MarketType, Match, OddsValue
 from scrapers.base import fetch_with_retry
-from scrapers.common import normalize_outcome
+from scrapers.common import normalize_outcome, parse_dt
 
 logger = logging.getLogger(__name__)
 
@@ -58,9 +58,9 @@ class SportPlusScraper:
         self.url = BASE_API
         self.headers = dict(API_HEADERS)
 
-    async def fetch_and_parse(self, live: bool = False) -> list[Match]:
+    async def fetch_and_parse(self, live: bool = False, scan_time: datetime | None = None) -> list[Match]:
         if live:
-            return await self._fetch_live()
+            return await self._fetch_live(scan_time=scan_time)
         all_matches: list[Match] = []
         seen_codes: set[tuple] = set()
 
@@ -94,7 +94,7 @@ class SportPlusScraper:
         logger.info(f"[SportPlus] Total: {len(all_matches)} matches")
         return all_matches
 
-    async def _fetch_live(self) -> list[Match]:
+    async def _fetch_live(self, scan_time: datetime | None = None) -> list[Match]:
         """Fetch and parse the in-play offer (`/api/v1/live/offer`)."""
         all_matches: list[Match] = []
         seen_ids: set[str] = set()
@@ -166,6 +166,7 @@ class SportPlusScraper:
             url="https://www.sportplus.ba/live",
             match_code=match_id,
             is_live=True,
+            fetched_at=datetime.now(UTC).replace(tzinfo=None),
         )
 
     def _parse_live_markets(self, raw_markets: list) -> list[Market]:
@@ -286,17 +287,8 @@ class SportPlusScraper:
             return None
         seen_codes.add(code)
 
-        # Parse match date — normalize to naive UTC to match all other scrapers
-        match_date_str = m.get("matchDate")
-        kickoff = None
-        if match_date_str:
-            try:
-                dt = datetime.fromisoformat(match_date_str)
-                if dt.tzinfo is not None:
-                    dt = dt.astimezone(UTC).replace(tzinfo=None)
-                kickoff = dt
-            except (ValueError, TypeError):
-                pass
+        # Parse match date — normalize to naive UTC via shared helper (handles Z/+02:00)
+        kickoff = parse_dt(m.get("matchDate"))
 
         # Extract league/competition name + country
         league_raw = m.get("leagueName")
@@ -324,6 +316,7 @@ class SportPlusScraper:
             markets=markets,
             url="https://www.sportplus.ba/prematch/betting",
             match_code=match_id,
+            fetched_at=datetime.now(UTC).replace(tzinfo=None),
         )
 
     def _parse_markets(self, raw_markets: list) -> list[Market]:
@@ -505,6 +498,6 @@ class SportPlusScraper:
             return [gg, ng]
         return []
 
-    async def scrape(self, live: bool = False) -> list[Match]:
+    async def scrape(self, live: bool = False, scan_time: datetime | None = None) -> list[Match]:
         """Compatibility wrapper."""
-        return await self.fetch_and_parse(live=live)
+        return await self.fetch_and_parse(live=live, scan_time=scan_time)
