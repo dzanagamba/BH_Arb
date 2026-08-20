@@ -1,0 +1,440 @@
+{
+    "_comment": "Map canonical league ID -> array of known name variations across 4 bookmakers",
+    "premier_liga_bih": [
+        "PLBIH",
+        "Bosna i Hercegovina - Premier Liga",
+        "BiH - Premier Liga",
+        "Bosna - Premier Liga",
+        "Bosna - Premijer Liga",
+        "Premijer Liga",
+        "PREMIER LIGA",
+        "Bosnia - Premier League",
+        "Premier Liga BiH",
+        "Premier Liga",
+        "BIH Premijer Liga",
+        "BIH Premier Liga",
+        "Premijer Liga BiH"
+    ],
+    "prva_liga_fbih": [
+        "Bosna FBiH - Prva Liga",
+        "First League FBiH",
+        "Prva Liga FBiH",
+        "1. Liga FBiH",
+        "Bosna - Prva Liga FBiH",
+        "BiH - Prva Liga FBiH"
+    ],
+    "prva_liga_rs": [
+        "Bosna RS - Prva Liga",
+        "Prva Liga RS",
+        "1. Liga RS",
+        "Republika Srpska - Prva Liga",
+        "First League RS",
+        "BiH - Prva Liga RS"
+    ],
+    "premier_league": [
+        "Engleska - Premier liga",
+        "Engleska Premier League",
+        "Engleska - Premijer Liga",
+        "England Premier League",
+        "ENGLESKA 1",
+        "Premijer Liga",
+        "Engleska - Premier League",
+        "Engleska 1.Liga",
+        "EPL",
+        "Eng - Premijer Liga",
+        "England - Premier League",
+        "Engleska 1",
+        "Premier League"
+    ],
+    "championship": [
+        "EFL Championship",
+        "England - Championship",
+        "Engleska 2",
+        "ENGLESKA 2",
+        "Engleska Championship",
+        "Engleska - Championship",
+        "Championship"
+    ],
+    "league_one": [
+        "League One",
+        "EFL League One",
+        "Engleska - League One"
+    ],
+    "fa_cup": [
+        "FA Cup",
+        "Engleska - FA Cup",
+        "FA Kup"
+    ],
+    "efl_cup": [
+        "EFL Cup",
+        "Engleska - Liga Kup",
+        "ENGLESKA  -  LIGA  KUP",
+        "Engleska EFL kup",
+        "england efl cup",
+        "Engleska Liga Kup",
+        "EFL Kup",
+        "League Cup"
+    ],
+    "la_liga": [
+        "Spanija 1",
+        "Spanija - La Liga",
+        "Spain - La Liga",
+        "La Liga Santander",
+        "Španija 1.Liga",
+        "Španija 1",
+        "LaLiga",
+        "ŠPANIJA 1",
+        "La Liga",
+        "Španija - La Liga",
+        "Španija Primera Liga",
+        "Primera Division"
+    ],
+    "serie_a": [
+        "Italy - Serie A",
+        "Italija Serie A",
+        "Italija - Seria A",
+        "Seria A",
+        "Italija - Serie A",
+        "Italija 1",
+        "Italija 1.Liga",
+        "ITALIJA 1",
+        "Serie A"
+    ],
+    "serie_b": [
+        "Italija - Serie B",
+        "Serie B",
+        "Italy - Serie B"
+    ],
+    "bundesliga": [
+        "1. Bundesliga",
+        "Njemacka 1",
+        "Njemačka 1",
+        "Bundesliga",
+        "Njemačka - Bundesliga",
+        "Njemacka - Bundesliga",
+        "Njemačka 1.Liga",
+        "Germany - Bundesliga",
+        "NJEMAČKA 1",
+        "Njemačka Bundesliga",
+        "Njemacka Bundesliga"
+    ],
+    "bundesliga_2": [
+        "Bundesliga 2",
+        "Njemačka - 2. Bundesliga",
+        "2. Bundesliga"
+    ],
+    "ligue_1": [
+        "Ligue1",
+        "Francuska 1.Liga",
+        "France - Ligue 1",
+        "FRANCUSKA 1",
+        "Francuska 1",
+        "Francuska - Liga 1",
+        "Liga 1",
+        "Ligue 1",
+        "Francuska - Ligue 1"
+    ],
+    "eliteserien": [
+        "NORVEŠKA 1",
+        "NORWAY 1",
+        "Norway - Eliteserien",
+        "Eliteserien",
+        "Norveška 1.Liga",
+        "Norveška - 1. Liga",
+        "Norveška 1",
+        "Norveška - Eliteserien"
+    ],
+    "champions_league": [
+        "UEFA Liga Šampiona",
+        "Liga sampiona - Grupna faza",
+        "Lige Šampiona",
+        "UEFA Champions League",
+        "Champions League",
+        "Liga Šampiona - Grupna faza",
+        "UCL",
+        "Liga Šampiona",
+        "Liga šampiona - Play-off",
+        "Liga šampiona",
+        "Liga Sampiona"
+    ],
+    "europa_league": [
+        "Europa League",
+        "UEFA Liga Evrope",
+        "Liga Evrope",
+        "Liga evrope",
+        "UEL",
+        "UEFA Europa League",
+        "UEFA Europa League - Qualification"
+    ],
+    "conference_league": [
+        "UECL",
+        "UEFA Konferencijska Liga",
+        "UEFA Conference League",
+        "Liga konferencija",
+        "UEFA Conference League - Qualification",
+        "Konferencijska Liga",
+        "Conference League"
+    ],
+    "super_liga_srbija": [
+        "Srpska Super Liga",
+        "SrbijaSuper liga",
+        "Serbia - Super Liga",
+        "Srbija - Super Liga",
+        "Super Liga",
+        "Superliga Srbije",
+        "Srbija Superliga"
+    ],
+    "prva_liga_srbija": [
+        "Srbija - Prva Liga",
+        "Prva Liga Srbije",
+        "Serbia - First League"
+    ],
+    "hnl": [
+        "Croatia - HNL",
+        "Hrvatska - 1. HNL",
+        "HNL",
+        "SuperSport HNL",
+        "CROATIA 1",
+        "1. HNL",
+        "Hrvatska 1",
+        "Hrvatska - HNL",
+        "Hrvatska Nogometna Liga"
+    ],
+    "super_lig_turkey": [
+        "Turska - Super Lig",
+        "Turkey - Super Lig",
+        "Turska 1",
+        "TURKEY 1",
+        "Turska - Süper Lig",
+        "Süper Lig",
+        "Turska Super Lig",
+        "Super Lig"
+    ],
+    "eredivisie": [
+        "Holandija - Eredivisie",
+        "Holandija Eredivisie",
+        "Netherlands - Eredivisie",
+        "Eredivisie",
+        "Holandija 1",
+        "NETHERLANDS 1"
+    ],
+    "primeira_liga": [
+        "Portugal - Primeira Liga",
+        "Liga Portugal",
+        "Primeira Liga",
+        "Portugalija - Primeira Liga",
+        "Portugal Primeira Liga"
+    ],
+    "scottish_premiership": [
+        "Scotland - Premiership",
+        "skotska 1",
+        "Škotska - Premiership",
+        "scotland 1",
+        "Scottish Premiership",
+        "Skotska Premier Liga",
+        "Škotska 1"
+    ],
+    "jupiler_pro_league": [
+        "BELGIUM 1",
+        "Belgijska liga",
+        "Belgija - Pro Liga",
+        "Jupiler Pro League",
+        "Belgija 1",
+        "Belgium - Pro League"
+    ],
+    "ligue_1_france": [
+        "Ligue 1 Uber Eats",
+        "Ligue 1 McDonald's"
+    ],
+    "nations_league": [
+        "UEFA Liga Nacija",
+        "Liga Nacija",
+        "Nations League",
+        "UEFA Nations League"
+    ],
+    "world_cup_qual": [
+        "SP Kvalifikacije",
+        "World Cup Qualification",
+        "WC Kvalifikacije",
+        "Kvalifikacije za SP"
+    ],
+    "euro_qual": [
+        "EURO Kvalifikacije",
+        "Kvalifikacije za EP",
+        "Euro Qualification",
+        "EP Kvalifikacije"
+    ],
+    "obos_ligaen": [
+        "Norveška 2",
+        "NORWAY 2"
+    ],
+    "allsvenskan": [
+        "SWEDEN 1",
+        "Švedska 1"
+    ],
+    "superettan": [
+        "Švedska 2",
+        "Svedska 2",
+        "SWEDEN 2"
+    ],
+    "danish_1st_div": [
+        "DENMARK 2",
+        "Danska 2"
+    ],
+    "danish_2nd_div": [
+        "Danska 3",
+        "DENMARK 3"
+    ],
+    "danish_3rd_div": [
+        "Danska 4",
+        "DENMARK 4"
+    ],
+    "mls": [
+        "MLS",
+        "USA MLS",
+        "SAD 1"
+    ],
+    "usl_championship": [
+        "USL CHAMPIONSHIP",
+        "SAD 2",
+        "USA USL"
+    ],
+    "liga_mx": [
+        "Meksiko 1",
+        "MEXICO 1"
+    ],
+    "liga_betplay": [
+        "COLOMBIA 1",
+        "Kolumbija 1"
+    ],
+    "czech_first_league": [
+        "CZECH REP. 1",
+        "Češka 1"
+    ],
+    "austrian_2_liga": [
+        "Austrija 2",
+        "AUSTRIA 2"
+    ],
+    "argentine_primera": [
+        "Liga Profesional - Clausura",
+        "Argentina 1"
+    ],
+    "copa_do_brasil": [
+        "BRAZIL Copa do Brasil",
+        "Brazil kup"
+    ],
+    "chile_primera": [
+        "Čile 1",
+        "CHILE 1"
+    ],
+    "ecuador_serie_a": [
+        "ECUADOR 1",
+        "Ekvador 1"
+    ],
+    "finland_veikkausliiga": [
+        "Finska 1",
+        "FINLAND 1"
+    ],
+    "finland_kolmonen": [
+        "Finska 3",
+        "FINLAND Kolmonen"
+    ],
+    "mlb": [
+        "MLB"
+    ],
+    "hungarian_liga_1": [
+        "hungary 1",
+        "madjarska 1",
+        "Mađarska 1"
+    ],
+    "mexico_liga_expansion": [
+        "mexico liga de expansion mx - apertura",
+        "mexico 2",
+        "Liga de Expansion MX",
+        "meksiko 2"
+    ],
+    "brazil_goiano_2": [
+        "brazil goiano 2",
+        "brazil campeonato goiano 2"
+    ],
+    "czech_2nd_div": [
+        "czech.rep 2",
+        "ceska 2",
+        "Češka 2"
+    ],
+    "finland_2nd_div": [
+        "Finska 2",
+        "finland 2",
+        "finska 2"
+    ],
+    "russian_premier": [
+        "Rusija 1",
+        "rusija 1",
+        "russia 1"
+    ],
+    "scottish_championship": [
+        "Škotska 2",
+        "skotska 2",
+        "scotland 2"
+    ],
+    "swiss_super_league": [
+        "Švajcarska 1",
+        "switzerland 1",
+        "svajcarska 1"
+    ],
+    "usl_league_one": [
+        "usa usl league one",
+        "sad 3 usl",
+        "USL League One"
+    ],
+    "australia_npl_vic": [
+        "australia npl victoria",
+        "australija 2 viktorija"
+    ],
+    "australia_cup": [
+        "australia cup",
+        "australija kup"
+    ],
+    "netherlands_super_cup": [
+        "holandija superkup",
+        "netherland johan cruyff shield"
+    ],
+    "portugal_super_cup": [
+        "portugalija superkup",
+        "portugal super cup"
+    ],
+    "polish_ekstraklasa": [
+        "poland 1",
+        "Poljska 1",
+        "poljska 1"
+    ],
+    "irish_first_div": [
+        "Irska 2",
+        "irska 2",
+        "ireland 2"
+    ],
+    "uruguay_primera": [
+        "Urugvaj 1",
+        "urugvaj 1",
+        "uruguay 1 - torneo intermedio"
+    ],
+    "israel_toto_cup": [
+        "israel league cup",
+        "israel toto cup"
+    ],
+    "romanian_liga_1": [
+        "Rumunija 1",
+        "rumunija 1",
+        "romania 1"
+    ],
+    "bugarian_first_league": [
+        "bulgaria 1",
+        "Bugarska 1",
+        "bugarska 1"
+    ],
+    "chinese_super_league": [
+        "kina 1",
+        "Kina 1",
+        "china 1"
+    ]
+}

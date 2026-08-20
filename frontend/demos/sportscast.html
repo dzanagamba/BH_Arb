@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SureCast — Matchday Central</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Archivo:wght@400;600;700;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   SURECAST — broadcast sportscast scoreboard (refined)
+   ============================================================ */
+:root {
+  --navy-900: #030c1d;
+  --navy-800: #061834;
+  --navy-700: #0a1e3f;
+  --navy-600: #0d2856;
+  --navy-500: #14376f;
+  --blue: #2f6fe0;
+  --blue-2: #5b8df0;
+  --gold: #ffd54a;
+  --gold-deep: #e9a91e;
+  --gold-grad: linear-gradient(180deg, #ffe08a 0%, #ffd54a 42%, #e9a91e 100%);
+  --red-live: #ff2e2e;
+  --green: #4dff9b;
+  --white: #ffffff;
+  --ice: #d6e3ff;
+  --ice-2: #8fb0e0;
+  --ice-3: #5d7ba8;
+  --ink: #041226;
+  --display: 'Bebas Neue', 'Archivo', sans-serif;
+  --sans: 'Archivo', system-ui, sans-serif;
+  --data: 'Rajdhani', 'Archivo', sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+
+body {
+  font-family: var(--sans);
+  color: var(--white);
+  background: var(--navy-900);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Stadium floodlights + moving light rays */
+body::before {
+  content: ''; position: fixed; inset: -20%; z-index: 0; pointer-events: none;
+  background:
+    conic-gradient(from 0deg at 50% 50%, transparent 0deg, rgba(47,111,224,.05) 40deg, transparent 80deg,
+                                      transparent 180deg, rgba(47,111,224,.05) 220deg, transparent 260deg);
+  animation: rays 40s linear infinite;
+}
+@keyframes rays { to { transform: rotate(360deg); } }
+body::after {
+  content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background:
+    radial-gradient(ellipse 60% 45% at 15% -10%, rgba(47,111,224,.30), transparent 60%),
+    radial-gradient(ellipse 60% 45% at 85% -10%, rgba(47,111,224,.24), transparent 60%),
+    radial-gradient(ellipse 90% 70% at 50% 125%, rgba(255,213,74,.12), transparent 60%),
+    radial-gradient(ellipse 130% 110% at 50% 50%, transparent 52%, rgba(1,4,12,.82) 100%);
+}
+
+.wrap { position: relative; z-index: 1; display: flex; flex-direction: column; min-height: 100vh; padding-bottom: 70px; }
+
+/* ============================================================
+   TOP BROADCAST BAR
+   ============================================================ */
+.topbar {
+  display: flex; align-items: stretch; position: sticky; top: 0; z-index: 50;
+  background: linear-gradient(180deg, #0c2650, #071a3a);
+  border-bottom: 1px solid rgba(255,213,74,.2);
+}
+.topbar::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: -3px; height: 3px;
+  background: linear-gradient(90deg, transparent, var(--gold) 20%, var(--gold) 80%, transparent);
+  opacity: .9;
+}
+
+.brand { display: flex; align-items: center; gap: 14px; padding: 12px 22px; background: rgba(3,12,29,.6); border-right: 1px solid rgba(255,213,74,.16); }
+.brand-badge {
+  width: 42px; height: 42px; display: grid; place-items: center; position: relative;
+  background: var(--gold-grad); color: var(--ink);
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  box-shadow: 0 0 24px rgba(255,213,74,.35);
+}
+.brand-badge svg { width: 21px; height: 21px; }
+.brand-name { font-family: var(--display); font-size: 27px; letter-spacing: 2px; line-height: .95; }
+.brand-name small { display: block; font-family: var(--sans); font-size: 9px; font-weight: 900; letter-spacing: 3.5px; color: var(--gold); margin-top: 2px; }
+
+.topbar-center { flex: 1; display: flex; align-items: center; justify-content: center; gap: 18px; padding: 0 18px; }
+.league-chip { display: flex; align-items: center; gap: 9px; font-size: 11px; font-weight: 800; letter-spacing: 1.5px; color: var(--ice); text-transform: uppercase; }
+.league-chip i { font-style: normal; color: var(--gold); font-size: 12px; animation: spin-slow 6s linear infinite; }
+@keyframes spin-slow { to { transform: rotate(360deg); } }
+
+.mode-toggle { display: flex; background: rgba(0,0,0,.4); border: 1px solid rgba(255,213,74,.28); border-radius: 4px; overflow: hidden; }
+.mode-btn { border: 0; background: transparent; color: var(--ice-2); font-family: var(--sans); font-weight: 800; font-size: 12px; letter-spacing: 1.5px; padding: 9px 20px; cursor: pointer; text-transform: uppercase; transition: .18s ease; }
+.mode-btn:hover { color: #fff; }
+.mode-btn.active { background: var(--gold); color: var(--ink); }
+.mode-btn.live.active { background: var(--red-live); color: #fff; }
+.mode-btn.live { display: flex; align-items: center; gap: 7px; }
+.mode-btn.live::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--red-live); animation: blink 1.1s steps(2) infinite; }
+
+.topbar-right { display: flex; align-items: center; gap: 16px; padding: 0 20px; }
+.clock { font-family: var(--data); font-weight: 700; font-size: 20px; font-variant-numeric: tabular-nums; color: var(--white); letter-spacing: 1px; text-align: right; line-height: 1.05; }
+.clock small { display: block; font-size: 9px; color: var(--ice-2); letter-spacing: 2px; text-transform: uppercase; }
+.onair {
+  display: flex; align-items: center; gap: 9px; background: rgba(255,46,46,.12);
+  border: 1px solid rgba(255,46,46,.5); padding: 8px 14px; border-radius: 3px;
+  font-size: 11px; font-weight: 900; letter-spacing: 2px; color: #ff8080; text-transform: uppercase;
+  box-shadow: inset 0 0 20px rgba(255,46,46,.15);
+}
+.onair .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red-live); animation: blink 1.1s steps(2) infinite; box-shadow: 0 0 12px var(--red-live); }
+@keyframes blink { 50% { opacity: .2; } }
+
+/* signal strip under topbar */
+.signal {
+  position: sticky; top: 66px; z-index: 49; display: flex; align-items: center; gap: 12px;
+  background: rgba(6,20,44,.92); backdrop-filter: blur(6px); border-bottom: 1px solid rgba(255,213,74,.12);
+  padding: 6px 24px; font-size: 10px; font-weight: 800; letter-spacing: 2px; color: var(--ice-2); text-transform: uppercase;
+}
+.signal .bar { flex: 1; height: 3px; background: rgba(255,255,255,.07); border-radius: 99px; overflow: hidden; }
+.signal .bar i { display: block; height: 100%; width: 0%; background: linear-gradient(90deg, var(--gold), var(--green)); border-radius: 99px; animation: scan 3.2s ease-in-out infinite; box-shadow: 0 0 10px var(--gold); }
+@keyframes scan { 0% { width: 0; } 50% { width: 78%; } 100% { width: 100%; } }
+.signal .ok { color: var(--green); display: flex; align-items: center; gap: 7px; }
+.signal .ok::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 10px var(--green); animation: blink 1.6s steps(2) infinite; }
+
+/* ============================================================
+   MAIN
+   ============================================================ */
+.main { max-width: 1280px; margin: 0 auto; padding: 30px 28px 0; width: 100%; }
+
+.section-head { display: flex; align-items: center; gap: 14px; margin: 34px 0 18px; }
+.section-head h2 { font-family: var(--display); font-size: 32px; letter-spacing: 2px; color: var(--white); }
+.section-head .rule { flex: 1; height: 2px; background: linear-gradient(90deg, rgba(255,213,74,.55), transparent); }
+.section-head .live-tag { font-size: 10px; font-weight: 900; letter-spacing: 2px; color: var(--red-live); text-transform: uppercase; display: flex; align-items: center; gap: 6px; }
+.section-head .live-tag::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--red-live); animation: blink 1.1s steps(2) infinite; }
+
+/* ============================================================
+   HERO JUMBO SCOREBOARD
+   ============================================================ */
+.jumbo {
+  position: relative; height: 360px; display: flex; align-items: stretch; overflow: hidden;
+  border: 1px solid rgba(255,213,74,.24); box-shadow: 0 34px 80px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.08);
+}
+.jumbo .half { width: 50.5%; position: relative; display: flex; align-items: center; padding: 34px 52px; }
+.jumbo .half.left  { background: linear-gradient(120deg, #8a2130 0%, #3f0d1c 100%); clip-path: polygon(0 0, 100% 0, calc(100% - 46px) 100%, 0 100%); }
+.jumbo .half.right { background: linear-gradient(240deg, #17498f 0%, #0a2450 100%); clip-path: polygon(46px 0, 100% 0, 100% 100%, 0 100%); margin-left: -1%; }
+.jumbo .half::before {
+  content: ''; position: absolute; inset: 0;
+  background: repeating-linear-gradient(115deg, rgba(255,255,255,.05) 0 1px, transparent 1px 14px);
+}
+/* glossy sheen sweep */
+.jumbo .half::after {
+  content: ''; position: absolute; top: -40%; bottom: -40%; width: 60px; transform: skewX(-20deg);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.10), transparent);
+  animation: sheen 7s ease-in-out infinite;
+}
+.jumbo .half.left::after { animation-delay: .4s; }
+@keyframes sheen { 0%, 20% { left: -20%; } 60%, 100% { left: 120%; } }
+
+.jumbo-team { position: relative; z-index: 2; }
+.jumbo .half.left  { justify-content: flex-start; }
+.jumbo .half.right { justify-content: flex-end; text-align: right; }
+.jumbo-pos { font-family: var(--sans); font-size: 11px; font-weight: 900; letter-spacing: 3px; color: rgba(255,255,255,.72); text-transform: uppercase; }
+.jumbo-name { font-family: var(--display); font-size: 64px; letter-spacing: 1px; line-height: .9; margin: 10px 0 16px; text-shadow: 0 6px 30px rgba(0,0,0,.5); }
+.jumbo-bookie { display: inline-flex; align-items: center; gap: 8px; background: rgba(0,0,0,.32); border: 1px solid rgba(255,255,255,.28); border-radius: 3px; padding: 7px 14px; font-size: 12px; font-weight: 800; letter-spacing: 1px; }
+.jumbo-bookie i { font-style: normal; width: 9px; height: 9px; border-radius: 2px; box-shadow: 0 0 8px currentColor; }
+.jumbo-odds { display: block; font-family: var(--data); font-weight: 700; font-size: 48px; line-height: 1; margin-top: 16px; font-variant-numeric: tabular-nums; text-shadow: 0 0 26px rgba(0,0,0,.4); }
+.jumbo-odds small { display: block; font-family: var(--sans); font-size: 10px; letter-spacing: 2px; color: rgba(255,255,255,.68); margin-top: 4px; text-transform: uppercase; }
+
+/* center LED */
+.jumbo-center {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); z-index: 5;
+  width: 224px; padding: 24px 18px; text-align: center; overflow: hidden;
+  background: linear-gradient(180deg, #0d2c64, #05132d);
+  border: 3px solid var(--gold);
+  clip-path: polygon(26px 0, calc(100% - 26px) 0, 100% 26px, 100% calc(100% - 26px), calc(100% - 26px) 100%, 26px 100%, 0 calc(100% - 26px), 0 26px);
+  box-shadow: 0 0 0 6px rgba(0,0,0,.35), 0 20px 55px rgba(0,0,0,.62), inset 0 0 34px rgba(47,111,224,.3);
+}
+.jumbo-center::after {
+  content: ''; position: absolute; top: -50%; bottom: -50%; width: 40px; transform: skewX(-20deg);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.16), transparent);
+  animation: sheen 5s ease-in-out infinite;
+}
+.jumbo-vs { font-family: var(--display); font-size: 28px; letter-spacing: 5px; color: var(--gold); line-height: 1; text-shadow: 0 0 18px rgba(255,213,74,.4); }
+.jumbo-profit { font-family: var(--data); font-weight: 700; font-size: 50px; line-height: 1; color: var(--green); text-shadow: 0 0 24px rgba(77,255,155,.6); font-variant-numeric: tabular-nums; }
+.jumbo-profit small { display: block; font-family: var(--sans); font-size: 9px; font-weight: 900; letter-spacing: 2px; color: var(--ice-2); margin-top: 7px; text-transform: uppercase; }
+.jumbo-flag { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); z-index: 6; background: var(--gold-grad); color: var(--ink); font-size: 10px; font-weight: 900; letter-spacing: 2.5px; padding: 4px 20px; clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 100%, 0 100%); }
+
+/* countdown strip */
+.countdown {
+  display: flex; align-items: center; gap: 18px; padding: 13px 22px; margin-top: 14px;
+  background: linear-gradient(180deg, #0d2856, #091c3c); border: 1px solid rgba(255,213,74,.16);
+}
+.countdown .cd-label { font-size: 10px; font-weight: 900; letter-spacing: 2px; color: var(--ice-2); text-transform: uppercase; }
+.countdown .cd-time { font-family: var(--data); font-weight: 700; font-size: 26px; font-variant-numeric: tabular-nums; color: var(--gold); text-shadow: 0 0 16px rgba(255,213,74,.4); }
+.countdown .cd-bar { flex: 1; height: 5px; background: rgba(255,255,255,.08); border-radius: 99px; overflow: hidden; }
+.countdown .cd-bar i { display: block; height: 100%; background: var(--gold-grad); border-radius: 99px; transition: width 1s linear; }
+.countdown .cd-match { font-family: var(--display); font-size: 20px; letter-spacing: 1px; color: var(--white); }
+
+/* ============================================================
+   KPI CHYRONS
+   ============================================================ */
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 16px; }
+.kpi { position: relative; padding: 18px 20px; background: linear-gradient(180deg, #0e2a56, #0a1e3f); border: 1px solid rgba(255,213,74,.16); overflow: hidden; transition: transform .18s ease; }
+.kpi:hover { transform: translateY(-2px); }
+.kpi::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 4px; background: var(--gold-grad); }
+.kpi .num { font-family: var(--data); font-weight: 700; font-size: 38px; line-height: 1; font-variant-numeric: tabular-nums; }
+.kpi .lbl { font-family: var(--sans); font-size: 10px; font-weight: 800; letter-spacing: 2px; color: var(--ice-2); text-transform: uppercase; margin-top: 7px; }
+.kpi .num.gold { color: var(--gold); text-shadow: 0 0 18px rgba(255,213,74,.4); }
+.kpi .num.green { color: var(--green); text-shadow: 0 0 18px rgba(77,255,155,.4); }
+
+/* ============================================================
+   BOOKMAKER CHANNEL RAIL
+   ============================================================ */
+.channels { margin-top: 20px; background: linear-gradient(180deg, #0c2349, #081a38); border: 1px solid rgba(255,213,74,.16); padding: 16px 20px; }
+.channels-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.channels-head h3 { font-family: var(--display); font-size: 20px; letter-spacing: 2px; color: var(--white); }
+.channels-head span { font-size: 10px; font-weight: 800; letter-spacing: 2px; color: var(--green); text-transform: uppercase; }
+.channel-grid { display: grid; grid-template-columns: repeat(9, 1fr); gap: 10px; }
+.channel { position: relative; padding: 12px 8px; text-align: center; background: rgba(0,0,0,.28); border: 1px solid rgba(255,255,255,.08); border-radius: 4px; transition: .18s ease; }
+.channel:hover { border-color: var(--dot); transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,.4); }
+.channel .dot { width: 10px; height: 10px; border-radius: 50%; margin: 0 auto 8px; background: var(--dot); box-shadow: 0 0 12px var(--dot); }
+.channel .dot.off { box-shadow: none; opacity: .3; }
+.channel .nm { font-size: 10px; font-weight: 800; letter-spacing: .5px; color: var(--ice); }
+.channel .st { font-size: 8px; font-weight: 800; letter-spacing: 1.5px; color: var(--ice-3); text-transform: uppercase; margin-top: 3px; }
+
+/* ============================================================
+   SCOREBOARD CARDS
+   ============================================================ */
+.board { display: grid; grid-template-columns: 1fr; gap: 16px; }
+
+.score-card { position: relative; background: linear-gradient(180deg, #0d2650, #081a38); border: 1px solid rgba(255,213,74,.16); overflow: hidden; transition: transform .2s ease, box-shadow .2s ease; }
+.score-card:hover { transform: translateY(-3px); box-shadow: 0 22px 48px rgba(0,0,0,.45); border-color: rgba(255,213,74,.4); }
+.score-card::before { content: ''; position: absolute; top: 0; left: 0; width: 6px; height: 100%; background: var(--edge, var(--gold)); }
+.score-card.live::before { background: var(--red-live); animation: blink 1.4s steps(2) infinite; }
+
+.score-top { display: flex; align-items: center; gap: 16px; padding: 16px 20px 14px 26px; border-bottom: 1px solid rgba(255,255,255,.08); }
+.score-profit { font-family: var(--data); font-weight: 700; font-size: 36px; color: var(--green); text-shadow: 0 0 20px rgba(77,255,155,.42); font-variant-numeric: tabular-nums; line-height: 1; }
+.score-profit small { display: block; font-family: var(--sans); font-size: 9px; font-weight: 900; letter-spacing: 2px; color: var(--ice-2); }
+.score-mkt { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.score-mkt .mkt-badge { background: rgba(255,213,74,.12); border: 1px solid rgba(255,213,74,.4); color: var(--gold); font-size: 10px; font-weight: 900; letter-spacing: 2px; padding: 5px 12px; text-transform: uppercase; }
+.score-mkt .live-pill { background: var(--red-live); font-size: 10px; font-weight: 900; letter-spacing: 2px; padding: 5px 12px; display: none; align-items: center; gap: 6px; }
+.score-card.live .live-pill { display: flex; }
+.score-mkt .live-pill::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #fff; animation: blink 1s steps(2) infinite; }
+
+.score-teams { display: flex; align-items: center; padding: 16px 20px 16px 26px; }
+.score-teams .tname { font-family: var(--display); font-size: 32px; letter-spacing: 1px; }
+.score-teams .tname small { display: block; font-family: var(--sans); font-size: 10px; letter-spacing: 2px; color: var(--ice-2); text-transform: uppercase; }
+.score-teams .vs { font-family: var(--display); color: var(--gold); font-size: 18px; letter-spacing: 3px; padding: 0 18px; }
+
+.score-odds { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid rgba(255,255,255,.08); }
+.score-cell { padding: 13px 18px 15px 26px; border-right: 1px solid rgba(255,255,255,.08); position: relative; }
+.score-cell:last-child { border-right: 0; }
+.score-cell .bk { font-size: 10px; font-weight: 800; letter-spacing: 1px; color: var(--ice-2); text-transform: uppercase; display: flex; align-items: center; gap: 7px; }
+.score-cell .bk i { font-style: normal; width: 8px; height: 8px; border-radius: 2px; }
+.score-cell .odd { font-family: var(--data); font-weight: 700; font-size: 32px; font-variant-numeric: tabular-nums; display: flex; align-items: center; gap: 8px; }
+.score-cell .mv { font-size: 12px; font-weight: 700; font-family: var(--data); }
+.score-cell .mv.up { color: var(--green); }
+.score-cell .mv.down { color: #ff6b6b; }
+.score-cell .st { font-family: var(--sans); font-size: 11px; font-weight: 700; color: var(--gold); }
+.score-cell .who { position: absolute; top: 0; right: 12px; transform: translateY(-50%); background: #0d2650; border: 1px solid rgba(255,213,74,.3); color: var(--ice); font-size: 9px; font-weight: 900; letter-spacing: 1px; padding: 2px 8px; text-transform: uppercase; }
+
+.score-foot { display: flex; align-items: center; gap: 20px; padding: 12px 20px 13px 26px; border-top: 1px solid rgba(255,255,255,.08); background: rgba(0,0,0,.2); }
+.score-foot .f { font-size: 11px; font-weight: 700; color: var(--ice-2); }
+.score-foot .f b { color: var(--white); font-family: var(--data); font-size: 16px; font-weight: 700; margin-left: 4px; }
+.score-foot .actions { margin-left: auto; display: flex; gap: 8px; }
+.score-foot .btn { border: 0; cursor: pointer; font-family: var(--sans); font-weight: 800; font-size: 11px; letter-spacing: 1px; padding: 8px 16px; text-transform: uppercase; border-radius: 3px; transition: .15s ease; }
+.btn-solid { background: var(--gold-grad); color: var(--ink); box-shadow: 0 4px 14px rgba(255,213,74,.28); }
+.btn-solid:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(255,213,74,.4); }
+.btn-ghost { background: transparent; color: var(--ice); border: 1px solid rgba(255,255,255,.25) !important; }
+.btn-ghost:hover { border-color: var(--gold) !important; color: var(--gold); }
+
+/* ============================================================
+   BOTTOM TICKER
+   ============================================================ */
+.ticker { position: fixed; left: 0; right: 0; bottom: 0; height: 50px; z-index: 60; background: #031229; border-top: 3px solid var(--gold); display: flex; align-items: stretch; }
+.ticker .tick-tag { background: var(--gold-grad); color: var(--ink); font-family: var(--sans); font-weight: 900; font-size: 12px; letter-spacing: 2px; padding: 0 24px; display: flex; align-items: center; text-transform: uppercase; white-space: nowrap; }
+.ticker .tick-view { flex: 1; overflow: hidden; display: flex; align-items: center; }
+.ticker .tick-track { display: inline-flex; align-items: center; white-space: nowrap; animation: tick 44s linear infinite; }
+.ticker .tick-item { display: inline-flex; align-items: center; gap: 11px; padding: 0 34px; font-size: 13px; font-weight: 700; }
+.ticker .tick-item .g { color: var(--green); font-family: var(--data); font-weight: 700; font-size: 15px; }
+.ticker .tick-item .sep { color: var(--gold); }
+@keyframes tick { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+@media (max-width: 920px) {
+  .jumbo { height: auto; flex-direction: column; }
+  .jumbo .half, .jumbo .half.left, .jumbo .half.right { width: 100%; clip-path: none; margin-left: 0; padding: 24px; justify-content: flex-start; text-align: left; }
+  .jumbo-center { position: static; transform: none; margin: -46px auto 20px; width: 210px; }
+  .jumbo-name { font-size: 44px; }
+  .kpis { grid-template-columns: repeat(2, 1fr); }
+  .channel-grid { grid-template-columns: repeat(3, 1fr); }
+  .score-teams { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .score-odds { grid-template-columns: 1fr; }
+  .score-cell { border-right: 0; border-bottom: 1px solid rgba(255,255,255,.08); }
+  .league-chip, .countdown .cd-match { display: none; }
+  .signal { top: 66px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- TOP BROADCAST BAR -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-badge">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#041226" stroke-width="2.4"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1" fill="#041226"/></svg>
+      </div>
+      <div class="brand-name">SURECAST<small>MATCHDAY CENTRAL</small></div>
+    </div>
+    <div class="topbar-center">
+      <span class="league-chip"><i>◆</i> Premijer Liga BiH · 9 Bookmakers</span>
+      <div class="mode-toggle">
+        <button class="mode-btn active">Future Matches</button>
+        <button class="mode-btn live">Live Matches</button>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="onair"><span class="dot"></span>On Air</div>
+      <div class="clock"><span id="clock">18:30:12</span><small id="clock-date">Sat · 15 Aug 2026</small></div>
+    </div>
+  </header>
+
+  <!-- SIGNAL STRIP -->
+  <div class="signal">
+    <span>Scanner</span>
+    <div class="bar"><i></i></div>
+    <span class="ok">9 / 9 Bookmakers Online</span>
+  </div>
+
+  <main class="main">
+
+    <!-- HERO JUMBO -->
+    <div class="jumbo">
+      <div class="half left">
+        <div class="jumbo-team">
+          <div class="jumbo-pos">Home · 1</div>
+          <div class="jumbo-name">Sarajevo</div>
+          <div class="jumbo-bookie"><i style="background:#FF6B00"></i> Mozzartbet</div>
+          <div class="jumbo-odds">2.60<small>Stake 40.45 KM</small></div>
+        </div>
+      </div>
+      <div class="jumbo-center">
+        <div class="jumbo-vs">VS</div>
+        <div class="jumbo-profit">+5.17%<small>Guaranteed Profit</small></div>
+      </div>
+      <div class="half right">
+        <div class="jumbo-team">
+          <div class="jumbo-pos">Away · 2</div>
+          <div class="jumbo-name">Željezničar</div>
+          <div class="jumbo-bookie"><i style="background:#3b82f6"></i> Admiralbet</div>
+          <div class="jumbo-odds">3.30<small>Stake 31.87 KM</small></div>
+        </div>
+      </div>
+      <div class="jumbo-flag">Featured Edge</div>
+    </div>
+
+    <!-- KICKOFF COUNTDOWN -->
+    <div class="countdown">
+      <span class="cd-label">Kickoff In</span>
+      <span class="cd-time" id="cd-time">01:42:18</span>
+      <div class="cd-bar"><i id="cd-bar" style="width:32%"></i></div>
+      <span class="cd-match">Sarajevo vs Željezničar · Today 18:00</span>
+    </div>
+
+    <!-- KPI CHYRONS -->
+    <div class="kpis">
+      <div class="kpi"><div class="num">1,284</div><div class="lbl">Matches Scanned</div></div>
+      <div class="kpi"><div class="num green">4</div><div class="lbl">Surebets Found</div></div>
+      <div class="kpi"><div class="num gold">5.17%</div><div class="lbl">Best Profit</div></div>
+      <div class="kpi"><div class="num">2m ago</div><div class="lbl">Last Scan</div></div>
+    </div>
+
+    <!-- BOOKMAKER CHANNELS -->
+    <div class="channels">
+      <div class="channels-head"><h3>Broadcast Sources</h3><span>All Channels Live</span></div>
+      <div class="channel-grid">
+        <div class="channel" style="--dot:#FF6B00"><div class="dot"></div><div class="nm">Mozzartbet</div><div class="st">Online</div></div>
+        <div class="channel" style="--dot:#22c55e"><div class="dot"></div><div class="nm">MDShop</div><div class="st">Online</div></div>
+        <div class="channel" style="--dot:#3b82f6"><div class="dot"></div><div class="nm">Admiralbet</div><div class="st">Online</div></div>
+        <div class="channel" style="--dot:#E91E63"><div class="dot"></div><div class="nm">MBet</div><div class="st">Online</div></div>
+        <div class="channel" style="--dot:#FF5722"><div class="dot"></div><div class="nm">SportPlus</div><div class="st">Online</div></div>
+        <div class="channel" style="--dot:#9C27B0"><div class="dot"></div><div class="nm">EVLBet</div><div class="st">Online</div></div>
+        <div class="channel" style="--dot:#16A34A"><div class="dot"></div><div class="nm">Premier</div><div class="st">Online</div></div>
+        <div class="channel" style="--dot:#EF4444"><div class="dot"></div><div class="nm">WWIN</div><div class="st">Online</div></div>
+        <div class="channel" style="--dot:#ef4444"><div class="dot off"></div><div class="nm">Betole</div><div class="st">Offline</div></div>
+      </div>
+    </div>
+
+    <!-- SCOREBOARD -->
+    <div class="section-head">
+      <h2>Scoreboard</h2>
+      <span class="rule"></span>
+      <span class="live-tag">1 Live Edge</span>
+    </div>
+    <div class="board">
+
+      <article class="score-card" style="--edge:#FF6B00">
+        <div class="score-top">
+          <div class="score-profit">+3.74%<small>PROFIT</small></div>
+          <div class="score-mkt"><span class="mkt-badge">O/U 2.5</span></div>
+        </div>
+        <div class="score-teams">
+          <div class="tname">Zrinjski<small>MBet · Over 2.05</small></div>
+          <div class="vs">VS</div>
+          <div class="tname">Borac BL<small>SportPlus · Under 2.10</small></div>
+        </div>
+        <div class="score-odds">
+          <div class="score-cell"><span class="who">Over</span><div class="bk"><i style="background:#E91E63"></i>MBet</div><div class="odd">2.05 <span class="mv up">▲</span></div><div class="st">50.60 KM</div></div>
+          <div class="score-cell"><span class="who">Under</span><div class="bk"><i style="background:#FF5722"></i>SportPlus</div><div class="odd">2.10 <span class="mv down">▼</span></div><div class="st">49.40 KM</div></div>
+          <div class="score-cell"><div class="bk">Return</div><div class="odd" style="color:#4dff9b">103.74</div><div class="st">on 100 KM</div></div>
+        </div>
+        <div class="score-foot">
+          <span class="f">Kickoff <b>Today 20:30</b></span>
+          <span class="f">Premijer Liga BiH</span>
+          <div class="actions"><button class="btn btn-ghost">Verify</button><button class="btn btn-solid">Copy Plan</button></div>
+        </div>
+      </article>
+
+      <article class="score-card live" style="--edge:#ff2e2e">
+        <div class="score-top">
+          <div class="score-profit">+3.60%<small>PROFIT</small></div>
+          <div class="score-mkt"><span class="mkt-badge">BTTS · GG/NG</span><span class="live-pill">Live 62'</span></div>
+        </div>
+        <div class="score-teams">
+          <div class="tname">Široki Brijeg<small>EVLBet · GG 1.92</small></div>
+          <div class="vs">VS</div>
+          <div class="tname">Velež<small>WWIN · NG 2.25</small></div>
+        </div>
+        <div class="score-odds">
+          <div class="score-cell"><span class="who">GG</span><div class="bk"><i style="background:#9C27B0"></i>EVLBet</div><div class="odd">1.92 <span class="mv up">▲</span></div><div class="st">53.96 KM</div></div>
+          <div class="score-cell"><span class="who">NG</span><div class="bk"><i style="background:#EF4444"></i>WWIN</div><div class="odd">2.25 <span class="mv up">▲</span></div><div class="st">46.04 KM</div></div>
+          <div class="score-cell"><div class="bk">Return</div><div class="odd" style="color:#4dff9b">103.60</div><div class="st">on 100 KM</div></div>
+        </div>
+        <div class="score-foot">
+          <span class="f">Status <b style="color:#ff6b6b">● In play</b></span>
+          <span class="f">Premijer Liga BiH</span>
+          <div class="actions"><button class="btn btn-ghost">Verify</button><button class="btn btn-solid">Copy Plan</button></div>
+        </div>
+      </article>
+
+      <article class="score-card" style="--edge:#16A34A">
+        <div class="score-top">
+          <div class="score-profit">+1.99%<small>PROFIT</small></div>
+          <div class="score-mkt"><span class="mkt-badge">Double Chance</span></div>
+        </div>
+        <div class="score-teams">
+          <div class="tname">Tuzla City<small>Premier · 1X 1.52</small></div>
+          <div class="vs">VS</div>
+          <div class="tname">Sloboda<small>Betole · 2 3.10</small></div>
+        </div>
+        <div class="score-odds">
+          <div class="score-cell"><span class="who">1X</span><div class="bk"><i style="background:#16A34A"></i>Premier Klad.</div><div class="odd">1.52 <span class="mv down">▼</span></div><div class="st">67.10 KM</div></div>
+          <div class="score-cell"><span class="who">2</span><div class="bk"><i style="background:#ef4444"></i>Betole</div><div class="odd">3.10 <span class="mv up">▲</span></div><div class="st">32.90 KM</div></div>
+          <div class="score-cell"><div class="bk">Return</div><div class="odd" style="color:#4dff9b">101.99</div><div class="st">on 100 KM</div></div>
+        </div>
+        <div class="score-foot">
+          <span class="f">Kickoff <b>Tomorrow 16:00</b></span>
+          <span class="f">Premijer Liga BiH</span>
+          <div class="actions"><button class="btn btn-ghost">Verify</button><button class="btn btn-solid">Copy Plan</button></div>
+        </div>
+      </article>
+
+    </div>
+  </main>
+</div>
+
+<!-- BOTTOM TICKER -->
+<div class="ticker">
+  <div class="tick-tag">Live Edges</div>
+  <div class="tick-view"><div class="tick-track">
+    <span class="tick-item"><span class="g">+5.17%</span> Sarajevo vs Željezničar <span class="sep">◆</span> Mozzartbet 2.60 / MDShop 3.80 / Admiralbet 3.30</span>
+    <span class="tick-item"><span class="g">+3.74%</span> Zrinjski vs Borac BL <span class="sep">◆</span> MBet 2.05 / SportPlus 2.10</span>
+    <span class="tick-item"><span class="g">+3.60%</span> Široki Brijeg vs Velež <span class="sep">◆</span> EVLBet 1.92 / WWIN 2.25</span>
+    <span class="tick-item"><span class="g">+1.99%</span> Tuzla City vs Sloboda <span class="sep">◆</span> Premier 1.52 / Betole 3.10</span>
+    <span class="tick-item"><span class="g">+5.17%</span> Sarajevo vs Željezničar <span class="sep">◆</span> Mozzartbet 2.60 / MDShop 3.80 / Admiralbet 3.30</span>
+    <span class="tick-item"><span class="g">+3.74%</span> Zrinjski vs Borac BL <span class="sep">◆</span> MBet 2.05 / SportPlus 2.10</span>
+    <span class="tick-item"><span class="g">+3.60%</span> Široki Brijeg vs Velež <span class="sep">◆</span> EVLBet 1.92 / WWIN 2.25</span>
+    <span class="tick-item"><span class="g">+1.99%</span> Tuzla City vs Sloboda <span class="sep">◆</span> Premier 1.52 / Betole 3.10</span>
+  </div></div>
+</div>
+
+<script>
+function tickClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  document.getElementById('clock-date').textContent = now.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+}
+tickClock(); setInterval(tickClock, 1000);
+
+// kickoff countdown to next 18:00
+function tickCountdown() {
+  const now = new Date();
+  let target = new Date(now);
+  target.setHours(18, 0, 0, 0);
+  if (target <= now) target.setDate(target.getDate() + 1);
+  const diff = target - now;
+  const h = String(Math.floor(diff / 3600000)).padStart(2, '0');
+  const m = String(Math.floor((diff % 3600000) / 60000)).padStart(2, '0');
+  const s = String(Math.floor((diff % 60000) / 1000)).padStart(2, '0');
+  document.getElementById('cd-time').textContent = h + ':' + m + ':' + s;
+  // progress toward kickoff (from 6h window)
+  const pct = Math.min(100, Math.max(0, 100 - (diff / 21600000) * 100));
+  document.getElementById('cd-bar').style.width = pct + '%';
+}
+tickCountdown(); setInterval(tickCountdown, 1000);
+
+document.querySelectorAll('.mode-btn').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.mode-btn').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+}));
+</script>
+</body>
+</html>
