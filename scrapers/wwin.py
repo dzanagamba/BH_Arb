@@ -25,6 +25,7 @@ Live:
   Same market ids as prematch.
 """
 
+import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
 
@@ -145,42 +146,65 @@ class WWINScraper:
             await page.wait_for_timeout(5000)
 
             # The events endpoint accepts at most two bet ids per call, so fetch
-            # the markets in groups and merge by event id.
+            # the markets in groups and merge by event id. P2: parallel fetch with retry.
             bet_groups = ("95,6", "3", "11", "2")
-            for day_offset in range(0, 15):
+            sem = asyncio.Semaphore(6)
+
+            async def fetch_one(day_offset: int, bets: str):
                 day_start = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=day_offset)
                 tfrom = int((day_start - timedelta(hours=1)).timestamp())
                 tto = int((day_start + timedelta(days=1, hours=2)).timestamp())
-
-                merged: dict[str, dict] = {}
-                for bets in bet_groups:
-                    resp = await page.request.get(
-                        f"{API_ROOT}/PrematchEvents/events",
-                        params={
-                            "key": "bs",
-                            "bets": bets,
-                            "tfrom": str(tfrom),
-                            "tto": str(tto),
-                            "spid": str(FOOTBALL_SPORT_ID),
-                        },
-                        headers={"Accept": "application/json, text/plain, */*", "Referer": f"{BASE_URL}/kladjenje/"},
-                    )
-                    if resp.status != 200:
-                        logger.debug(f"[WWIN] HTTP {resp.status} for day {day_offset} bets={bets}")
-                        continue
+                for attempt in range(3):
                     try:
-                        data = await resp.json()
-                        events = (data.get("events") or data.get("p") or []) if isinstance(data, dict) else []
-                    except Exception:
-                        continue
-                    for event in events:
-                        if not isinstance(event, dict) or event.get("id") is None:
+                        async with sem:
+                            resp = await page.request.get(
+                                f"{API_ROOT}/PrematchEvents/events",
+                                params={
+                                    "key": "bs",
+                                    "bets": bets,
+                                    "tfrom": str(tfrom),
+                                    "tto": str(tto),
+                                    "spid": str(FOOTBALL_SPORT_ID),
+                                },
+                                headers={"Accept": "application/json, text/plain, */*", "Referer": f"{BASE_URL}/kladjenje/"},
+                            )
+                        if resp.status != 200:
+                            if attempt < 2:
+                                await asyncio.sleep(0.5 * (2 ** attempt))
+                                continue
+                            logger.debug(f"[WWIN] HTTP {resp.status} for day {day_offset} bets={bets}")
+                            return day_offset, bets, []
+                        try:
+                            data = await resp.json()
+                            events = (data.get("events") or data.get("p") or []) if isinstance(data, dict) else []
+                            return day_offset, bets, events
+                        except Exception:
+                            return day_offset, bets, []
+                    except Exception as e:
+                        if attempt < 2:
+                            await asyncio.sleep(0.5 * (2 ** attempt))
                             continue
-                        event_id = str(event["id"])
-                        if event_id not in merged:
-                            merged[event_id] = {**event, "bets": []}
-                        merged[event_id]["bets"].extend(event.get("bets", []) or [])
+                        logger.debug(f"[WWIN] fetch error day {day_offset} bets={bets}: {e}")
+                        return day_offset, bets, []
+                return day_offset, bets, []
 
+            tasks = [fetch_one(d, b) for d in range(15) for b in bet_groups]
+            results = await asyncio.gather(*tasks)
+
+            # Merge by day then by event_id
+            by_day: dict[int, dict[str, dict]] = {}
+            for day_offset, _bets, events in results:
+                bucket = by_day.setdefault(day_offset, {})
+                for event in events:
+                    if not isinstance(event, dict) or event.get("id") is None:
+                        continue
+                    event_id = str(event["id"])
+                    if event_id not in bucket:
+                        bucket[event_id] = {**event, "bets": []}
+                    bucket[event_id]["bets"].extend(event.get("bets", []) or [])
+
+            for day_offset in sorted(by_day.keys()):
+                merged = by_day[day_offset]
                 for event_id, event in merged.items():
                     if event_id in seen_ids:
                         continue

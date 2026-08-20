@@ -97,6 +97,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadConfig();
     initBookmakerChips();
     await loadResults(true);  // Load any cached results from previous scan (no alert sound)
+    loadHealth();
+    setInterval(loadHealth, 30000);
 });
 
 function restoreDashboardTheme() {
@@ -409,8 +411,10 @@ async function loadResults(silent = false) {
         document.getElementById('stat-matches').textContent =
             data.total_matches != null ? data.total_matches.toLocaleString() : '—';
 
+        const dustCount = allSurebets.filter(s => s.profit_percent >= 0.2 && s.profit_percent < 0.5).length;
+        const realCount = allSurebets.filter(s => s.profit_percent >= 0.5).length;
         document.getElementById('stat-surebets').textContent =
-            allSurebets.length > 0 ? allSurebets.length : '0';
+            allSurebets.length > 0 ? (dustCount ? `${realCount} (+${dustCount} dust)` : `${realCount}`) : '0';
 
         if (allSurebets.length > 0) {
             const best = allSurebets.reduce((a, b) =>
@@ -903,6 +907,22 @@ function formatLeague(league) {
 function capitalize(str) {
     if (!str) return '';
     return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+async function loadHealth() {
+    try {
+        const res = await fetch('/api/health');
+        const data = await res.json();
+        const bar = document.getElementById('health-bar');
+        if (!bar) return;
+        const fmtAge = (sec) => sec == null ? '—' : sec < 60 ? `${Math.round(sec)}s ago` : `${Math.round(sec/60)}m ago`;
+        const fmtPer = (obj) => obj && Object.keys(obj).length ? Object.entries(obj).map(([k,v]) => `${k}:${v}`).join(' ') : '—';
+        bar.style.display = '';
+        bar.innerHTML = `Health — Prematch ${fmtAge(data.prematch?.last_scan_age_sec)} [${fmtPer(data.prematch?.per_bookie)}] | Live ${fmtAge(data.live?.last_scan_age_sec)} [${fmtPer(data.live?.per_bookie)}] | TTL ${data.odds_ttl_sec}s`;
+        if (data.prematch?.errors?.length || data.live?.errors?.length) {
+            bar.title = [...(data.prematch?.errors||[]), ...(data.live?.errors||[])].join(' | ');
+        }
+    } catch (e) { /* ignore */ }
 }
 
 // ─── Alert Sound ──────────────────────────────────────────────────────────────
