@@ -5,7 +5,6 @@ Playwright browser for Cloudflare session, then API interception + pagination.
 """
 
 import logging
-import math
 import time
 from datetime import UTC, datetime
 
@@ -357,8 +356,10 @@ class MozzartbetScraper:
             await page.wait_for_timeout(3000)
 
             # 2. Paginate via page.request (with correct headers from the page)
-            # BUILD_SPECIFICATION_V3.md:127 specifies pageSize 15 (API default).
-            # Using 50 caused truncated catalog on some deployments (only 56 matches).
+            # Site uses currentPage 0-based and pageSize 15. The API returns
+            # matchCount per page (not total) and nextStepPath, so we paginate
+            # until a short page is returned. Vision 2026-08-20 showed 88 Fudbal
+            # fixtures but scraper only returned 23 due to early break on matchCount.
             page_size = 15
             api_body: dict = {
                 "date": "live" if live else "all_days",
@@ -367,10 +368,10 @@ class MozzartbetScraper:
                 "competitionIds": [], "search": "", "matchTypeId": 0,
             }
             referer = f"{BASE_URL}/sr/kladjenje/sport/1?date=all_days"
-            page_num = 1
-            max_pages = 35  # per spec pages 1-35, updated dynamically below
+            page_num = 0
+            max_pages = 100  # safety cap; real break is short page
 
-            while page_num <= max_pages:
+            while page_num < max_pages:
                 api_body["currentPage"] = page_num
                 try:
                     resp = await page.request.post(
@@ -393,24 +394,13 @@ class MozzartbetScraper:
                         break
                     all_raw_items.extend(items)
 
-                    # The API may return totalPages, matchCount, or totalItems —
-                    # handle all three for robustness.
+                    # Only totalPages is reliable for total; matchCount is per-page
                     total_pages = data.get("totalPages")
                     if isinstance(total_pages, int) and total_pages > 0:
                         max_pages = min(total_pages, 100)
-                    else:
-                        match_count = data.get("matchCount")
-                        if isinstance(match_count, int) and match_count > 0:
-                            dynamic_total = math.ceil(match_count / page_size)
-                            max_pages = min(dynamic_total, 100)
-                        else:
-                            total_items = data.get("totalItems")
-                            if isinstance(total_items, int) and total_items > 0:
-                                dynamic_total = math.ceil(total_items / page_size)
-                                max_pages = min(dynamic_total, 100)
 
                     logger.debug(f"[Mozzartbet] Page {page_num}/{max_pages}: {len(items)} items")
-                    if len(items) < page_size or page_num >= max_pages:
+                    if len(items) < page_size:
                         break
                     page_num += 1
 

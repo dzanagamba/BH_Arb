@@ -89,6 +89,19 @@
         "Španija Primera Liga",
         "Primera Division"
     ],
+    "laliga_2": [
+        "LaLiga 2",
+        "La Liga 2",
+        "Laliga 2",
+        "Španija 2",
+        "Spanija 2",
+        "ŠPANIJA 2",
+        "Spanija - La Liga 2",
+        "Spain - LaLiga 2",
+        "Spain LaLiga2",
+        "Španija 2.Liga",
+        "Spanija 2.Liga"
+    ],
     "serie_a": [
         "Italy - Serie A",
         "Italija Serie A",
@@ -164,7 +177,21 @@
         "Liga evrope",
         "UEL",
         "UEFA Europa League",
-        "UEFA Europa League - Qualification"
+        "UEFA Europa League - Qualification",
+        "Evropska Liga",
+        "EUROPSKA LIGA",
+        "EUROPSKA LIGA - KVALIFIKACIJE",
+        "Kvalifikacije za LE",
+        "KVALIFIKACIJE ZA LE",
+        "KVALIFIKACIJE  ZA  LE",
+        "PLAY OFF - KVALIFIKACIJE - FINALE",
+        "Play Off - Kvalifikacije - Finale",
+        "Liga Evrope - Kvalifikacije",
+        "UEFA Europa League - Qualification Play Off",
+        "Medjunarodne klupske - Evropska liga - Kvalifikacije",
+        "Međunarodne klupske - Evropska liga - Kvalifikacije",
+        "Medjunarodne klupske - Evropska liga",
+        "Međunarodne klupske - Evropska liga"
     ],
     "conference_league": [
         "UECL",
@@ -173,7 +200,11 @@
         "Liga konferencija",
         "UEFA Conference League - Qualification",
         "Konferencijska Liga",
-        "Conference League"
+        "Conference League",
+        "Medjunarodne klupske - Konferencijska liga - Kvalifikacije",
+        "Međunarodne klupske - Konferencijska liga - Kvalifikacije",
+        "Medjunarodne klupske - Konferencijska liga",
+        "Međunarodne klupske - Konferencijska liga"
     ],
     "super_liga_srbija": [
         "Srpska Super Liga",
@@ -182,7 +213,15 @@
         "Srbija - Super Liga",
         "Super Liga",
         "Superliga Srbije",
-        "Srbija Superliga"
+        "Srbija Superliga",
+        "Srbija 1",
+        "SRBIJA 1",
+        "srbija 1",
+        "Srbija 1 Mozzartbet SuperLiga",
+        "Mozzartbet SuperLiga",
+        "Mozzart Bet Super Liga",
+        "Serbia 1",
+        "Srbija - 1. Liga"
     ],
     "prva_liga_srbija": [
         "Srbija - Prva Liga",
@@ -223,7 +262,11 @@
         "Liga Portugal",
         "Primeira Liga",
         "Portugalija - Primeira Liga",
-        "Portugal Primeira Liga"
+        "Portugal Primeira Liga",
+        "Portugalija 1",
+        "PORTUGALIJA 1",
+        "Portugal 1",
+        "Portugal 1 Liga"
     ],
     "scottish_premiership": [
         "Scotland - Premiership",
@@ -342,7 +385,10 @@
         "Primera Division, Apertura",
         "Primera Nacional",
         "ARGENTINA 1",
-        "Argentina Primera"
+        "Argentina Primera",
+        "Argentina 2",
+        "ARGENTINA 2",
+        "Primera B Nacional"
     ],
     "copa_do_brasil": [
         "BRAZIL Copa do Brasil",
@@ -352,17 +398,30 @@
         "Čile 1",
         "CHILE 1"
     ],
+    "chile_primera_b": [
+        "Čile 2",
+        "Cile 2",
+        "Chile 2",
+        "CHILE 2",
+        "Primera B",
+        "Chile - Primera B"
+    ],
     "ecuador_serie_a": [
         "ECUADOR 1",
         "Ekvador 1"
     ],
     "finland_veikkausliiga": [
         "Finska 1",
-        "FINLAND 1"
+        "FINLAND 1",
+        "Veikkausliiga",
+        "Veikkausliiga - Regular Season",
+        "Finska - Veikkausliiga"
     ],
     "finland_kolmonen": [
         "Finska 3",
-        "FINLAND Kolmonen"
+        "FINLAND Kolmonen",
+        "Ykkonen",
+        "Ykkönen"
     ],
     "mlb": [
         "MLB"
@@ -477,12 +536,84 @@
         "brazil - brazil 3",
         "brasileiro, serie c",
         "brazilska 2.liga",
-        "brazilska 3.liga"
+        "brazilska 3.liga",
+        "Brazil 2",
+        "BRAZIL 2",
+        "Brazil 3",
+        "BRAZIL 3",
+        "brazil 2",
+        "brazil 3"
     ],
     "danish_superliga": [
         "danska 1.liga",
         "danska 1",
         "denmark 1",
         "superligaen"
+    ],
+    "eerste_divisie": [
+        "Eerste Divisie",
+        "Eerste Divisie ",
+        "Holandija 2",
+        "NETHERLANDS 2",
+        "Netherlands 2",
+        "Holandija 2 "
+    ],
+    "slovenia_prva_liga": [
+        "Slovenija 1",
+        "Slovenia 1",
+        "Prva Liga",
+        "prva liga",
+        "1. SNL",
+        "SLOVENIJA 1"
+    ],
+    "j_league_2": [
+        "Japan 2",
+        "JAPAN 2",
+        "J.Liga 2",
+        "J League 2",
+        "japan 2",
+        "j liga 2"
+    ],
+    "j_league_3": [
+        "Japan 3",
+        "JAPAN 3",
+        "J.Liga 3",
+        "J League 3",
+        "japan 3",
+        "j liga 3"
+    ],
+    "k_league_1": [
+        "Juzna Koreja 1",
+        "Južna Koreja 1",
+        "K-Liga 1",
+        "K League 1",
+        "k-liga 1",
+        "juzna koreja 1"
+    ],
+    "k_league_2": [
+        "Juzna Koreja 2",
+        "Južna Koreja 2",
+        "K-Liga 2",
+        "K League 2",
+        "k-liga 2",
+        "juzna koreja 2"
+    ],
+    "austrian_bundesliga": [
+        "Austrija 1",
+        "AUSTRIA 1",
+        "Austria 1",
+        "Austrija - Bundesliga",
+        "Austrian Bundesliga",
+        "Austrija 1. Liga"
+    ],
+    "nemacka_2": [
+        "Njemacka 2",
+        "Njemačka 2",
+        "Nemacka 2",
+        "Nemacka 2",
+        "Germany 2",
+        "2. Bundesliga",
+        "Bundesliga 2",
+        "Njemacka - 2. Bundesliga"
     ]
 }

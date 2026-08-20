@@ -42,12 +42,24 @@ logger = logging.getLogger(__name__)
 
 # Generic fallback leagues that are too vague to enforce a league gate on
 # Expanded in muse12 (P1-3): friendlies/cups/superliga are vague — keep permissive
+# NOTE: cleaned league names keep the dot, e.g. "2. Liga" -> "2. liga" (dot+space). Both forms are listed.
 GENERIC_LEAGUES = {
-    "football", "fudbal", "soccer", "unknown_league", "", "2.liga", "3.liga",
-    "kup", "klubovi", "1.liga", "superliga", "super liga",
+    "football", "fudbal", "soccer", "unknown_league", "", "2.liga", "2. liga", "3.liga", "3. liga",
+    "kup", "klubovi", "1.liga", "1. liga", "superliga", "super liga",
     "prijateljske", "prijateljske utakmice", "prijateljske klubske",
     "world club friendly", "club friendly", "klubovi prijateljski",
     "elitne prijateljske", "friendlies",
+    # Ambiguous short names without country — treat as generic to avoid false hard rejects
+    # (e.g. "Premier Liga" appears for both BIH and ENG; country gate + teams decide)
+    "premier liga", "premijer liga", "premier league",
+    "bundesliga", "prva liga", "vtora liga",
+}
+
+# European competitions that are considered compatible for same-team same-time fixtures
+# (same two clubs cannot play two different UEFA competitions at identical kickoff)
+EUROPEAN_COMPATIBLE_LEAGUES = {
+    "europa_league", "conference_league", "champions_league",
+    "europa", "conference", "champions",
 }
 
 # Derived thresholds (from config.settings)
@@ -130,6 +142,11 @@ class MatchMatcher:
                 # Specific league — only its bucket plus generic groups
                 candidate_groups = list(groups_by_league.get(m_league, []))
                 candidate_groups.extend(groups_by_league.get("", []))
+                # European cross-label: Europa/Conference/Champions at same time are same match
+                if m_league in EUROPEAN_COMPATIBLE_LEAGUES:
+                    for euro in EUROPEAN_COMPATIBLE_LEAGUES:
+                        if euro != m_league:
+                            candidate_groups.extend(groups_by_league.get(euro, []))
 
             for group in candidate_groups:
                 # Skip if this bookmaker already contributed a match to this group
@@ -210,13 +227,18 @@ class MatchMatcher:
             return 0.0, False
 
         # Hard gate: If both match and group have specific (non-generic) leagues, they MUST match
+        # Exception: European competitions at same kickoff with same teams are same match even if labeled differently
         if (
             m_league and g_league
             and m_league not in GENERIC_LEAGUES
             and g_league not in GENERIC_LEAGUES
             and m_league != g_league
         ):
-            return 0.0, False
+            # Allow cross-label European fixtures (e.g. Europa vs Conference at identical time)
+            if m_league in EUROPEAN_COMPATIBLE_LEAGUES and g_league in EUROPEAN_COMPATIBLE_LEAGUES:
+                pass  # compat — don't reject, rely on team/time gates
+            else:
+                return 0.0, False
 
         # Country soft gate (P1-3): if both have normalized country and mismatch, reject
         # Prevents Borac BL (BiH) vs Borac Cacak (Serbia) when league is generic/fuzzy

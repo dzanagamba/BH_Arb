@@ -88,6 +88,10 @@ CLUB_DESIGNATORS: set[str] = {
     "gnk", "rnk", "hnk", "ofk", "tsc", "rfk", "ask", "bsc",
     "afc", "ssc", "acf", "us", "as", "og", "cd", "cf", "ca",
     "rc", "rcd", "ud", "sd", "sp", "ss", "cs", "deportivo", "atletico",
+    # Swedish / Austrian / German suffixes observed on WWIN/Sportplus/MDShop (vision 2026-08-20)
+    "aif", "sv", "rb", "vfb", "tsg", "ssv", "ksv", "asv", "ev", "osk",
+    "wac", "skn", "scr", "aks",
+    "ac", "cfc", "bfc", "rfc", "vfl", "fsv", "ssg", "usc", "tss",
 }
 
 # Patterns for special categories (also used by base scraper)
@@ -208,17 +212,31 @@ class TeamNormalizer:
                 name = name[len(prefix) + 1:].strip()
                 break
 
+        # Dotted abbreviations like "R.B. Salzburg" -> "rb salzburg" -> strip "rb"
+        # and "Univ.Craiova" -> "univ craiova" (dot between words without space)
+        # Remove dots between letters before splitting, keep dot in "1. liga" leagues
+        # but for teams we can safely turn "r.b." -> "rb ".
+        # This is team-specific; league names keep dots via separate path.
+        # Here we normalize dotted team tokens: "r.b." -> "rb" and "univ.craiova" -> "univ craiova"
+        name = re.sub(r"\b([a-z]\.)+", lambda m: m.group(0).replace(".", "") + " ", name)
+        # General dot between word characters without space (e.g. "Univ.Craiova" -> "Univ Craiova")
+        name = re.sub(r"(?<=[a-z])\.(?=[a-z])", " ", name, flags=re.IGNORECASE)
+        # Trailing abbreviation dot (e.g. "Univ. Craiova" -> "Univ Craiova", "Lech P." -> "Lech P")
+        name = re.sub(r"(?<=[a-z])\.(?=\s|$)", " ", name, flags=re.IGNORECASE)
+        name = re.sub(r"\s+", " ", name).strip()
+
         words = name.split()
         if not words:
             return name
 
-        # Strip leading designator
-        if len(words) > 1 and words[0] in CLUB_DESIGNATORS:
+        # Strip leading designator (repeated, e.g. "fc salzburg")
+        while len(words) > 1 and words[0] in CLUB_DESIGNATORS:
             words = words[1:]
-
-        # Strip trailing designator
-        if len(words) > 1 and words[-1] in CLUB_DESIGNATORS:
+        # Strip trailing designator (repeated, e.g. "kapfenberg sv", "mjallby aif")
+        while len(words) > 1 and words[-1] in CLUB_DESIGNATORS:
             words = words[:-1]
+        # Also strip dotted combos left as single token like "rb" after dot removal
+        # and handle "lillestrom" vs "lillestrom" already clean
 
         return ' '.join(words) if words else name
 
@@ -285,6 +303,16 @@ class TeamNormalizer:
         # Fallback: return cleaned name
         return cleaned
 
+    # Ambiguous short names that must stay generic (vision 2026-08-20: "Premier Liga" maps to both BIH and ENG)
+    GENERIC_LEAGUE_RAW = {
+        "premier liga", "premijer liga", "premier league",
+        "super liga", "superliga",
+        "1. liga", "1.liga", "2. liga", "2.liga", "3. liga", "3.liga",
+        "kup", "klubovi", "fudbal", "football", "soccer",
+        # Added after live leak analysis 2026-08-20: short names ambiguous across countries
+        "bundesliga", "prva liga", "vtora liga",
+    }
+
     def normalize_league(self, league_name: str) -> str:
         """Normalize a league name to its canonical ID."""
         if not league_name:
@@ -292,12 +320,19 @@ class TeamNormalizer:
 
         cleaned = self._full_clean(league_name)
 
+        # Keep ambiguous/vague league strings generic — prevents false hard rejects
+        # on short names like "Premier Liga" that appear for both BIH and ENG fixtures.
+        # Qualified variants like "BIH Premijer Liga" or "Engleska 1" map via exact lookup below.
+        if cleaned in self.GENERIC_LEAGUE_RAW:
+            return cleaned
+
         # Exact lookup
         if cleaned in self.league_reverse_map:
             return self.league_reverse_map[cleaned]
 
-        # Fuzzy fallback (lower threshold for leagues — 72%)
-        if self.league_reverse_map:
+        # Fuzzy fallback — skip for numeric leagues to avoid "Bugarska 2" -> "Bugarska 1" false matches
+        # and for any cleaned that contains a digit (tier-specific)
+        if self.league_reverse_map and not any(ch.isdigit() for ch in cleaned):
             result = process.extractOne(
                 cleaned,
                 list(self.league_reverse_map.keys()),

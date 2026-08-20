@@ -59,7 +59,13 @@ class EvlbetScraper:
                     if not r or r.status_code != 200:
                         break
                     data = r.json()
-                    events = data.get("Response", [])
+                    # API sometimes returns dict with Response key, sometimes bare list (2026-08-20)
+                    if isinstance(data, list):
+                        events = data
+                    elif isinstance(data, dict):
+                        events = data.get("Response", [])
+                    else:
+                        events = []
                     if not events:
                         break
 
