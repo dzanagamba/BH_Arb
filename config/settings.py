@@ -93,9 +93,11 @@ EXPERIMENTAL_MARKETS = [
 
 # --- Arbitrage Settings ---
 MIN_PROFIT_PERCENT = 0.5       # Minimum profit % to show as surebet
+DUST_PROFIT_PERCENT = 0.2      # Lower bound for "dust" (low-value) surebets shown in separate tab
 DEFAULT_INVESTMENT = 100.0     # Default total investment (BAM/KM)
 EXPIRY_BUFFER_MINUTES = 15     # Grace period (min) before treating a match as expired
 MAX_SUREBET_PROFIT_PERCENT = 20.0  # Sanity cap — reject higher profits (likely scraper/data errors)
+ODDS_TTL_SECONDS = 600         # Max age of odds before considered stale (prematch 10 min, live 60s enforced in engine)
 
 # --- Scraper Settings ---
 SCRAPE_TIMEOUT_MS = 30000      # Max time to wait for JSON payloads (ms)
@@ -122,6 +124,7 @@ BLOCKED_URL_FRAGMENTS = [
 KICKOFF_WINDOW_MINUTES = 120   # Max kickoff time diff (minutes) to consider same match — HARD gate
 FUZZY_MATCH_THRESHOLD = 80     # Min similarity score (0-100) for a team pairing to group (overall confidence)
 TEAM_MATCH_MIN_PERCENT = 70    # Min similarity (0-100) required for EACH team in a pairing
+BROWSER_CONCURRENCY = 2        # Max concurrent Playwright browsers (P2)
 
 # --- Server Settings ---
 HOST = os.getenv("HOST", "0.0.0.0")

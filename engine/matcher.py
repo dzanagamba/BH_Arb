@@ -41,9 +41,13 @@ from scrapers.common import flip_ah_label
 logger = logging.getLogger(__name__)
 
 # Generic fallback leagues that are too vague to enforce a league gate on
+# Expanded in muse12 (P1-3): friendlies/cups/superliga are vague — keep permissive
 GENERIC_LEAGUES = {
     "football", "fudbal", "soccer", "unknown_league", "", "2.liga", "3.liga",
-    "kup", "klubovi", "1.liga",
+    "kup", "klubovi", "1.liga", "superliga", "super liga",
+    "prijateljske", "prijateljske utakmice", "prijateljske klubske",
+    "world club friendly", "club friendly", "klubovi prijateljski",
+    "elitne prijateljske", "friendlies",
 }
 
 # Derived thresholds (from config.settings)
@@ -212,6 +216,18 @@ class MatchMatcher:
             and g_league not in GENERIC_LEAGUES
             and m_league != g_league
         ):
+            return 0.0, False
+
+        # Country soft gate (P1-3): if both have normalized country and mismatch, reject
+        # Prevents Borac BL (BiH) vs Borac Cacak (Serbia) when league is generic/fuzzy
+        m_country = (match.country_normalized or "").strip().lower()
+        # Group country is from first match (representative)
+        g_country = ""
+        if group.matches:
+            g_country = (group.matches[0].country_normalized or "").strip().lower()
+        if m_country and g_country and m_country != g_country:
+            # Allow empty/generic country to pass, but hard mismatch rejects
+            # Exception: friendlies/cups often have empty country — already handled above
             return 0.0, False
 
         # Kickoff time/date proximity gate

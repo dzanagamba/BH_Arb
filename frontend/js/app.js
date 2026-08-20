@@ -560,14 +560,19 @@ function buildSurebetCard(sb, idx) {
     card.dataset.margin = sb.total_margin;
     card.dataset.profit = sb.profit_percent;
 
-    // Profit tier coloring
+    // Profit tier coloring — dust (<0.5%) is low-value requiring verify
     if (sb.profit_percent >= 3.0) card.dataset.tier = 'high';
     else if (sb.profit_percent >= 1.5) card.dataset.tier = 'mid';
-    else if (sb.profit_percent >= 0.0) card.dataset.tier = 'low';
+    else if (sb.profit_percent >= 0.5) card.dataset.tier = 'low';
+    else if (sb.profit_percent >= 0.0) card.dataset.tier = 'dust';
     else card.dataset.tier = 'negative';
 
-    // Profit value
-    card.querySelector('.profit-value').textContent = sb.profit_percent.toFixed(2) + '%';
+    // Profit value + dust hint
+    const profitEl = card.querySelector('.profit-value');
+    profitEl.textContent = sb.profit_percent.toFixed(2) + '%';
+    if (sb.profit_percent < 0.5 && sb.profit_percent >= 0.2) {
+        profitEl.title = 'Dust — verify odds before betting (profit <0.5%)';
+    }
 
     // Market badge
     card.querySelector('.market-badge').textContent =

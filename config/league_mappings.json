@@ -240,7 +240,11 @@
         "Belgija - Pro Liga",
         "Jupiler Pro League",
         "Belgija 1",
-        "Belgium - Pro League"
+        "Belgium - Pro League",
+        "belgijska 1.liga",
+        "belgija 1",
+        "jupiler liga",
+        "belgium 1"
     ],
     "ligue_1_france": [
         "Ligue 1 Uber Eats",
@@ -292,12 +296,26 @@
     "mls": [
         "MLS",
         "USA MLS",
-        "SAD 1"
+        "SAD 1",
+        "SAD - SAD 1",
+        "SAD - SAD 1 - MLS",
+        "USA - MLS",
+        "MLS NEXT PRO",
+        "SAD - MLS Next Pro",
+        "USA MLS Next Pro",
+        "SAD 1 MLS Next Pro",
+        "SAD 3 MLS NP",
+        "SAD - SAD 3 MLS NP"
     ],
     "usl_championship": [
         "USL CHAMPIONSHIP",
         "SAD 2",
-        "USA USL"
+        "USA USL",
+        "SAD - SAD 2",
+        "USA - USL",
+        "SAD - SAD 3",
+        "SAD 3",
+        "USA USL Championship"
     ],
     "liga_mx": [
         "Meksiko 1",
@@ -317,7 +335,14 @@
     ],
     "argentine_primera": [
         "Liga Profesional - Clausura",
-        "Argentina 1"
+        "Liga Profesional",
+        "Argentina 1",
+        "ARGENTINSKA 1.LIGA",
+        "Argentina - Argentina 1",
+        "Primera Division, Apertura",
+        "Primera Nacional",
+        "ARGENTINA 1",
+        "Argentina Primera"
     ],
     "copa_do_brasil": [
         "BRAZIL Copa do Brasil",
@@ -370,7 +395,10 @@
     "russian_premier": [
         "Rusija 1",
         "rusija 1",
-        "russia 1"
+        "russia 1",
+        "Rusija - Rusija 1",
+        "RUSKA 1.LIGA",
+        "Rusija - Russian Cup - Group Stage"
     ],
     "scottish_championship": [
         "Škotska 2",
@@ -406,7 +434,9 @@
     "polish_ekstraklasa": [
         "poland 1",
         "Poljska 1",
-        "poljska 1"
+        "poljska 1",
+        "Ekstraklasa",
+        "POLJSKA 1.LIGA"
     ],
     "irish_first_div": [
         "Irska 2",
@@ -436,5 +466,23 @@
         "kina 1",
         "Kina 1",
         "china 1"
+    ],
+    "brazil_serie_a": [
+        "brazil 1",
+        "brazil - brazil 1",
+        "brazilska 1.liga",
+        "brasileiro, serie a",
+        "brazil - brazil 2",
+        "brasileiro, serie b",
+        "brazil - brazil 3",
+        "brasileiro, serie c",
+        "brazilska 2.liga",
+        "brazilska 3.liga"
+    ],
+    "danish_superliga": [
+        "danska 1.liga",
+        "danska 1",
+        "denmark 1",
+        "superligaen"
     ]
 }

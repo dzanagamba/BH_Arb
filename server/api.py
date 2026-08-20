@@ -26,11 +26,14 @@ from pydantic import BaseModel
 from config.settings import (
     API_KEY,
     BOOKMAKERS,
+    BROWSER_CONCURRENCY,
     CACHE_DIR,
     DEFAULT_INVESTMENT,
+    DUST_PROFIT_PERCENT,
     ENABLED_MARKETS,
     EXPERIMENTAL_MARKETS,
     MIN_PROFIT_PERCENT,
+    ODDS_TTL_SECONDS,
     SCAN_RATE_LIMIT,
 )
 from engine.arbitrage import ArbitrageEngine
@@ -64,6 +67,9 @@ _bookmaker_enabled: dict[str, bool] = {bid: bool(cfg.get("enabled", True)) for b
 _scan_lock = asyncio.Lock()
 _prematch_lock = asyncio.Lock()
 _live_lock = asyncio.Lock()
+_browser_sem = asyncio.Semaphore(BROWSER_CONCURRENCY)
+
+PLAYWRIGHT_BOOKIES = {"mozzartbet", "admiralbet", "wwin"}
 
 def _lock_for(mode: str) -> asyncio.Lock:
     return _live_lock if mode == "live" else _prematch_lock
@@ -243,7 +249,7 @@ async def run_scan(mode: str = "prematch"):
     try:
         all_matches: list[Match] = []
 
-        # --- Scrape each enabled bookmaker ---
+        # --- Scrape each enabled bookmaker (P2: browser concurrency cap) ---
         async def scrape_one(bookie_id: str, config: dict) -> list[Match]:
             if not _is_enabled(bookie_id):
                 status.bookmaker_progress[bookie_id] = "skipped"
@@ -251,6 +257,10 @@ async def run_scan(mode: str = "prematch"):
 
             status.bookmaker_progress[bookie_id] = "scraping"
             status.current_bookmaker = f"Scraping {config['name']}..."
+            # Limit concurrent Playwright browsers
+            sem = _browser_sem if bookie_id in PLAYWRIGHT_BOOKIES else None
+            if sem:
+                await sem.acquire()
             try:
                 scraper_class = SCRAPERS.get(bookie_id)
                 if not scraper_class:
@@ -281,6 +291,9 @@ async def run_scan(mode: str = "prematch"):
                 status.errors.append(error_msg)
                 logger.error(f"❌ Scrape error — {error_msg}", exc_info=True)
                 return []
+            finally:
+                if sem:
+                    sem.release()
 
         # Run all scrapers concurrently
         status.current_bookmaker = "Scraping all bookmakers..."
@@ -314,8 +327,10 @@ async def run_scan(mode: str = "prematch"):
 
         status.current_bookmaker = "Detecting surebets..."
         engine = ArbitrageEngine()
+        # P1-6: include dust (0.2%) — frontend filters/highlights by tier
         surebets = engine.find_surebets(
             groups,
+            min_profit=DUST_PROFIT_PERCENT,
             investment=DEFAULT_INVESTMENT,
             allow_past_kickoffs=is_live,
             enabled_markets=_enabled_markets(),
@@ -462,7 +477,17 @@ async def trigger_scan(
 
 @router.get("/health")
 async def health():
-    """Basic health check for uptime monitoring."""
+    """Health + per-bookie diagnostics (P1-6)."""
+    def age_sec(dt):
+        if not dt:
+            return None
+        try:
+            # Handle naive UTC stored
+            if dt.tzinfo is None:
+                return (datetime.now(UTC).replace(tzinfo=None) - dt).total_seconds()
+            return (datetime.now(UTC) - dt).total_seconds()
+        except Exception:
+            return None
     return {
         "status": "ok",
         "scanning": scan_status.is_scanning or live_status.is_scanning,
@@ -470,6 +495,17 @@ async def health():
         "matches_cached": len(cached_matches),
         "live_surebets_cached": len(cached_live_surebets),
         "live_matches_cached": len(cached_live_matches),
+        "prematch": {
+            "last_scan_age_sec": age_sec(scan_status.last_scan_time),
+            "per_bookie": dict(cached_per_bookie),
+            "errors": list(scan_status.errors),
+        },
+        "live": {
+            "last_scan_age_sec": age_sec(live_status.last_scan_time),
+            "per_bookie": dict(cached_live_per_bookie),
+            "errors": list(live_status.errors),
+        },
+        "odds_ttl_sec": ODDS_TTL_SECONDS,
     }
 
 
@@ -511,6 +547,7 @@ async def get_config():
         },
         "experimental_markets": {m: _market_enabled.get(m, False) for m in EXPERIMENTAL_MARKETS},
         "min_profit_percent": MIN_PROFIT_PERCENT,
+        "dust_profit_percent": DUST_PROFIT_PERCENT,
         "default_investment": DEFAULT_INVESTMENT,
     }
 

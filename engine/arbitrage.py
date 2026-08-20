@@ -27,6 +27,7 @@ from config.settings import (
     MATCH_URL_TEMPLATES,
     MAX_SUREBET_PROFIT_PERCENT,
     MIN_PROFIT_PERCENT,
+    ODDS_TTL_SECONDS,
 )
 from models.schemas import MarketType, MatchGroup, Surebet, SurebetStake
 from scrapers.common import parse_ah_label
@@ -115,12 +116,18 @@ class ArbitrageEngine:
         the experimental markets the user toggled on.
         """
         surebets: list[Surebet] = []
+        now_utc_naive = datetime.now(UTC).replace(tzinfo=None)
+        ttl = 60 if allow_past_kickoffs else ODDS_TTL_SECONDS  # live tight, prematch looser
 
         for group in groups:
             # Skip matches whose kickoff has already passed (prematch mode only;
             # live matches are in play right now and remain actionable)
             if not allow_past_kickoffs and self._is_expired(group.kickoff):
                 logger.debug(f"Skipping expired match group: {group.canonical_home} vs {group.canonical_away} ({group.kickoff})")
+                continue
+            # P2: reject groups with stale odds (any leg older than TTL)
+            if any(m.fetched_at and (now_utc_naive - m.fetched_at).total_seconds() > ttl for m in group.matches):
+                logger.debug(f"Skipping stale odds group: {group.canonical_home} vs {group.canonical_away} (age >{ttl}s)")
                 continue
 
             for market_type in MarketType:
