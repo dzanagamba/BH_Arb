@@ -1,6 +1,6 @@
 """End-to-end pipeline test: scraped-style fixtures → normalize → match → arbitrage."""
 
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 
 from engine.arbitrage import ArbitrageEngine
 from engine.matcher import MatchMatcher
@@ -24,8 +24,12 @@ def _match(bookmaker, home, away, league, kickoff, odds, country=""):
     )
 
 
+def _future_kickoff():
+    return datetime.now(UTC).replace(tzinfo=None) + timedelta(hours=2)
+
+
 def test_full_pipeline_finds_surebet():
-    kickoff = datetime(2026, 8, 20, 18, 0)
+    kickoff = _future_kickoff()
     fixtures = [
         # Same real-world match listed by 3 bookmakers with name variations
         _match("mdshop", "Željezničar", "Sarajevo", "BiH - Premier Liga", kickoff, (3.50, 4.00, 2.15)),
@@ -35,7 +39,7 @@ def test_full_pipeline_finds_surebet():
         _match("mdshop", "Borac BL", "Sloboda", "Prva Liga RS", kickoff, (2.10, 3.10, 3.40)),
         _match("mbet", "Borac Banja Luka", "Sloboda Tuzla", "Prva Liga RS", kickoff, (2.05, 3.15, 3.50)),
         # Same teams but 3h later — kickoff gate must keep it out of the main group
-        _match("evlbet", "Željezničar", "Sarajevo", "BiH - Premier Liga", datetime(2026, 8, 20, 21, 0),
+        _match("evlbet", "Željezničar", "Sarajevo", "BiH - Premier Liga", kickoff + timedelta(hours=3),
                (3.55, 4.10, 2.05)),
     ]
 

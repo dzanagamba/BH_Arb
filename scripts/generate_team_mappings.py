@@ -30,8 +30,8 @@ norm = TeamNormalizer()
 data = json.load(open(cache, encoding="utf-8"))
 matches = data.get("matches", [])
 
-counter = collections.Counter()
-examples = {}
+counter: collections.Counter[str] = collections.Counter()
+examples: dict[str, str] = {}
 for m in matches:
     for raw in (m.get("home_team"), m.get("away_team")):
         if not raw:

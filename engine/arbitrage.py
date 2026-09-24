@@ -126,7 +126,13 @@ class ArbitrageEngine:
                 logger.debug(f"Skipping expired match group: {group.canonical_home} vs {group.canonical_away} ({group.kickoff})")
                 continue
             # P2: reject groups with stale odds (any leg older than TTL)
-            if any(m.fetched_at and (now_utc_naive - m.fetched_at).total_seconds() > ttl for m in group.matches):
+            def _fetched_age_sec(fetched_at: datetime | None) -> float:
+                if not fetched_at:
+                    return 0.0
+                fa = fetched_at.astimezone(UTC).replace(tzinfo=None) if fetched_at.tzinfo else fetched_at
+                return (now_utc_naive - fa).total_seconds()
+
+            if any(_fetched_age_sec(m.fetched_at) > ttl for m in group.matches):
                 logger.debug(f"Skipping stale odds group: {group.canonical_home} vs {group.canonical_away} (age >{ttl}s)")
                 continue
 
@@ -225,7 +231,7 @@ class ArbitrageEngine:
             stakes=stakes,
             match_urls=_collect_match_urls(group),
             bet_urls=_collect_bet_urls(group),
-            found_at=datetime.now(),
+            found_at=datetime.now(UTC).replace(tzinfo=None),
         )
 
     def _check_line_market(
@@ -317,7 +323,7 @@ class ArbitrageEngine:
             stakes=stakes,
             match_urls=_collect_match_urls(group),
             bet_urls=_collect_bet_urls(group),
-            found_at=datetime.now(),
+            found_at=datetime.now(UTC).replace(tzinfo=None),
         )
 
     @staticmethod
@@ -336,9 +342,9 @@ class ArbitrageEngine:
             parsed = parse_ah_label(label)
             if parsed is None:
                 return None
-            idx, line = parsed
+            idx, ah_line = parsed
             # Key by the signed HOME line so the complementary pair shares a key.
-            key = f"{line if idx == '1' else -line:g}"
+            key = f"{ah_line if idx == '1' else -ah_line:g}"
             return "0" if key == "-0" else key
         return None
 
@@ -456,7 +462,7 @@ class ArbitrageEngine:
             stakes=stakes,
             match_urls=_collect_match_urls(group),
             bet_urls=_collect_bet_urls(group),
-            found_at=datetime.now(),
+            found_at=datetime.now(UTC).replace(tzinfo=None),
         )
 
     def evaluate_market(self, group: MatchGroup, market_type: MarketType) -> dict | None:

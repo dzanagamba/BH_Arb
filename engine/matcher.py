@@ -256,8 +256,10 @@ class MatchMatcher:
         time_score = 1.0  # Default: same time assumed if unknown
 
         if match.kickoff and group.kickoff:
-            m_dt = match.kickoff.replace(tzinfo=None) if match.kickoff.tzinfo else match.kickoff
-            g_dt = group.kickoff.replace(tzinfo=None) if group.kickoff.tzinfo else group.kickoff
+            from datetime import UTC as _UTC
+
+            m_dt = match.kickoff.astimezone(_UTC).replace(tzinfo=None) if match.kickoff.tzinfo else match.kickoff
+            g_dt = group.kickoff.astimezone(_UTC).replace(tzinfo=None) if group.kickoff.tzinfo else group.kickoff
             diff_minutes = abs((m_dt - g_dt).total_seconds()) / 60.0
 
             # Hard gate: >KICKOFF_WINDOW_MINUTES apart (different kickoff time or date)

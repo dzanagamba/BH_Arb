@@ -292,7 +292,12 @@ class BaseScraper(ABC):
             if not match.has_markets():
                 continue
 
-            dedup_key = f"{match.home_team.strip().lower()}|{match.away_team.strip().lower()}"
+            kickoff_key = match.kickoff.date().isoformat() if match.kickoff else ""
+            league_key = (match.league or "").strip().lower()
+            dedup_key = (
+                f"{match.home_team.strip().lower()}|{match.away_team.strip().lower()}"
+                f"|{league_key}|{kickoff_key}|{(match.match_code or '').strip()}"
+            )
             if dedup_key in seen:
                 continue
 

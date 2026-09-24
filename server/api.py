@@ -63,8 +63,8 @@ def _require_api_key(x_api_key: str = Header(default="")) -> None:
 # and persisted to a JSON state file so toggles survive restarts.
 _BOOKMAKER_STATE_FILE = os.path.join(CACHE_DIR, "bookmaker_state.json")
 _bookmaker_enabled: dict[str, bool] = {bid: bool(cfg.get("enabled", True)) for bid, cfg in BOOKMAKERS.items()}
-# Per-mode locks — prematch and live scans run independently (P0-7)
-_scan_lock = asyncio.Lock()
+# Per-mode locks — prematch and live scans run independently (P0-7).
+# run_scan holds its mode lock for the whole scan so verify cannot overlap it.
 _prematch_lock = asyncio.Lock()
 _live_lock = asyncio.Lock()
 _browser_sem = asyncio.Semaphore(BROWSER_CONCURRENCY)
@@ -198,7 +198,7 @@ def _append_history(num_groups: int, mode: str) -> None:
     status, _, _, _, per_bookie = _state_for(mode)
     entry = {
         "mode": mode,
-        "scan_time": status.last_scan_time.isoformat() if status.last_scan_time else datetime.now().isoformat(),
+        "scan_time": status.last_scan_time.isoformat() if status.last_scan_time else datetime.now(UTC).replace(tzinfo=None).isoformat(),
         "total_matches": status.total_matches,
         "match_groups": num_groups,
         "surebets_found": status.surebets_found,
@@ -268,10 +268,13 @@ async def run_scan(mode: str = "prematch"):
                     return []
 
                 scraper = scraper_class()
-                # Pass uniform scan_time for window consistency; fallback to inspecting signature
+                # Pass uniform scan_time for window consistency; fallback only
+                # when the scraper signature lacks scan_time (not on internal errors)
                 try:
                     matches = await scraper.scrape(live=is_live, scan_time=scan_started_at)
-                except TypeError:
+                except TypeError as te:
+                    if "scan_time" not in str(te):
+                        raise
                     matches = await scraper.scrape(live=is_live)
                 # Stamp fetched_at if scraper missed it (defense in depth)
                 for m in matches:
@@ -309,9 +312,14 @@ async def run_scan(mode: str = "prematch"):
 
         # Age spread guard (P0-1): warn if scrapers' fetched_at diverge >90s
         if all_matches:
-            times = [m.fetched_at for m in all_matches if m.fetched_at]
+            times = [
+                m.fetched_at.astimezone(UTC).replace(tzinfo=None)
+                if m.fetched_at and m.fetched_at.tzinfo
+                else m.fetched_at
+                for m in all_matches if m.fetched_at
+            ]
             if times:
-                spread = (max(times) - min(times)).total_seconds()
+                spread = (max(times) - min(times)).total_seconds()  # type: ignore[operator]
                 if spread > 90:
                     logger.warning(f"Odds age spread {spread:.0f}s exceeds 90s — results may be stale")
                     status.errors.append(f"Odds age spread {spread:.0f}s — verify before betting")
@@ -338,7 +346,7 @@ async def run_scan(mode: str = "prematch"):
 
         # --- Update state ---
         status.surebets_found = len(surebets)
-        status.last_scan_time = datetime.now()
+        status.last_scan_time = datetime.now(UTC).replace(tzinfo=None)
 
         # Serialize to dict for JSON responses
         surebets_cache[:] = [s.model_dump(mode="json") for s in surebets]
@@ -446,6 +454,14 @@ async def trigger_scan(
 
     status, _, _, _, _ = _state_for(mode)
     mode_lock = _lock_for(mode)
+
+    # Fast-path: verify holds the mode lock during its scrape — don't block
+    # for the whole verify, return immediately instead.
+    if mode_lock.locked() or status.is_scanning:
+        return {
+            "status": "already_scanning",
+            "message": f"A {mode} scan is already in progress. Please wait.",
+        }
 
     if SCAN_RATE_LIMIT > 0:
         client_ip = request.client.host if request.client else "unknown"
@@ -769,7 +785,7 @@ async def recalculate_stakes(
 
     # Recalculate stakes
     total_margin = target["total_margin"]
-    if total_margin >= 1.0:
+    if total_margin >= 1.0 or total_margin <= 0:
         raise HTTPException(status_code=400, detail="Not a valid surebet")
 
     new_stakes = []

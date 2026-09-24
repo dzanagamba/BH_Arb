@@ -47,6 +47,12 @@ def parse_dt(raw) -> datetime | None:
                 pass
             for fmt in DT_FORMATS:
                 try:
+                    return datetime.strptime(s, fmt)
+                except ValueError:
+                    continue
+            # Fallback: truncate millis/timezone suffixes (e.g. "2026-08-20T18:00:00.000")
+            for fmt in DT_FORMATS:
+                try:
                     return datetime.strptime(s[:19], fmt[:19])
                 except ValueError:
                     continue
