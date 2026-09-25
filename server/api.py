@@ -1851,9 +1851,10 @@ async def verify_links(
         applied_note = (
             f"a {mode} scan started while this check was running, so the cached "
             "matches were left untouched; the proof is stored and the next scan "
-            "will apply it. Note the asymmetry: the store write is one-sided, so "
-            "a completed-FAIL cannot demote a stale deep_link_verified=True in the "
-            "cache until a scan rebuilds that list from the scrapers"
+            "will apply it. Note the asymmetry: the store write is two-sided — a "
+            "completed-FAIL pops the record — but _apply_deep_link_verifications "
+            "only ever SETS a flag, so a stale deep_link_verified=True survives in "
+            "the cache until a scan rebuilds that list from the scrapers"
         )
 
     logger.info(

@@ -955,10 +955,14 @@ def test_a_subframe_showing_our_own_url_is_not_evidence():
 
 
 def test_verify_links_is_throttled_with_a_429(monkeypatch):
+    # Pinned, not read from the environment: these tests assert the THROTTLE's
+    # behaviour, so they must not change meaning when a deployment sets
+    # DEEP_LINK_VERIFY_RATE_LIMIT to something else (0 disables it entirely).
+    monkeypatch.setattr(api, "DEEP_LINK_VERIFY_RATE_LIMIT", 2)
     _install_checker(monkeypatch)
     api.cached_matches.extend(_cached(_match()))
 
-    for _ in range(api.DEEP_LINK_VERIFY_RATE_LIMIT):
+    for _ in range(2):
         assert client.post("/api/verify-links?bookmaker=mozzartbet").status_code == 200
 
     r = client.post("/api/verify-links?bookmaker=mozzartbet")
@@ -968,18 +972,20 @@ def test_verify_links_is_throttled_with_a_429(monkeypatch):
 
 
 def test_a_throttled_call_does_not_run_the_checker(monkeypatch):
+    monkeypatch.setattr(api, "DEEP_LINK_VERIFY_RATE_LIMIT", 2)
     calls = _install_checker(monkeypatch)
     api.cached_matches.extend(_cached(_match()))
-    for _ in range(api.DEEP_LINK_VERIFY_RATE_LIMIT):
+    for _ in range(2):
         client.post("/api/verify-links?bookmaker=mozzartbet")
 
     client.post("/api/verify-links?bookmaker=mozzartbet")
 
-    assert len(calls) == api.DEEP_LINK_VERIFY_RATE_LIMIT
+    assert len(calls) == 2
 
 
 def test_the_scan_and_verify_link_budgets_are_separate(monkeypatch):
     """Reusing the window must not let a scan flood consume the check budget."""
+    monkeypatch.setattr(api, "DEEP_LINK_VERIFY_RATE_LIMIT", 2)
     assert api._verify_link_request_times is not api._scan_request_times
 
     class FakeRequest:
@@ -1006,7 +1012,7 @@ def test_the_scan_and_verify_link_budgets_are_separate(monkeypatch):
             api._enforce_sliding_window(
                 FakeRequest(),
                 api._verify_link_request_times,  # type: ignore[arg-type]
-                api.DEEP_LINK_VERIFY_RATE_LIMIT,
+                2,
                 "verify-links checks",
             )
     assert checks_blocked.value.status_code == 429
@@ -1157,7 +1163,10 @@ def test_a_suppressed_write_says_what_it_defers(monkeypatch):
     note = client.post("/api/verify-links?bookmaker=mozzartbet").json()["applied_note"]
 
     assert "next scan will apply it" in note
-    assert "demote" in note, "the one-sided effect of a skipped write must be stated"
+    assert "_apply_deep_link_verifications" in note, (
+        "the note must name the line that only ever sets, not the store write"
+    )
+    assert "only ever SETS" in note
 
 
 def test_a_zero_work_call_does_not_spend_the_throttle_budget(monkeypatch):
@@ -1222,9 +1231,24 @@ def test_keys_that_merely_look_like_id_keys_are_not_accepted(key):
 
 @pytest.mark.parametrize("key", ["maxTotalOdd", "displayNumberFormat", "maxStake"])
 def test_settings_keys_are_not_accepted(key):
-    """Neither of these ends in "id" either; the key rule rejected the measured
+    """None of these ends in "id"; the KEY rule rejected the measured
     `maxTotalOdd` control, not the float rule. See report §5."""
     assert json_event_paths(f'{{"settings":{{"{key}":{EVENT_ID}}}}}', EVENT_ID) == []
+
+
+def test_a_decimal_under_an_event_key_is_not_the_event():
+    """The float clause, finally exercised by a shape that reaches it.
+
+    `maxTotalOdd` is rejected by the key rule before the int/float comparison is
+    ever reached, so the float clause had no test. A decimal under a genuinely
+    event-named key is a real shape (Go/PHP backends serialise ids as floats), and
+    `"id": 9984468.0` must not be read as the event 9984468.
+    """
+    assert json_event_paths(f'{{"match":{{"id":{EVENT_ID}.0}}}}', EVENT_ID) == []
+    assert json_event_paths(f'{{"eventId":{EVENT_ID}.00,"betName":"x"}}', EVENT_ID) == []
+    # The same payload with an INT under the same key is evidence, so this test is
+    # about the decimal, not about rejecting everything.
+    assert json_event_paths(f'{{"match":{{"id":{EVENT_ID}}}}}', EVENT_ID) != []
 
 
 def test_the_key_sets_have_no_redundant_entries():
@@ -1241,11 +1265,17 @@ def test_both_rate_limits_share_one_window_constant(monkeypatch):
 
     The defect was `RATE_LIMIT_WINDOW_SECONDS = DEEP_LINK_VERIFY_RATE_WINDOW_SECONDS`,
     so tuning the check's window silently moved the scan's. The value now comes
-    from a shared setting, and the derivation is asserted absent.
+    from a shared setting, and the derivation is asserted absent. The literal is
+    pinned so a deployment that sets the env var does not fail the suite.
     """
     import inspect
 
     import config.settings as settings
+
+    # Both sides are pinned: the env-overridable value is the point, so a
+    # deployment that sets it must not change what this test asserts.
+    monkeypatch.setattr(api, "RATE_LIMIT_WINDOW_SECONDS", 60)
+    monkeypatch.setattr(settings, "RATE_LIMIT_WINDOW_SECONDS", 60)
 
     assert "RATE_LIMIT_WINDOW_SECONDS" in vars(settings)
     assert api.RATE_LIMIT_WINDOW_SECONDS == settings.RATE_LIMIT_WINDOW_SECONDS == 60
