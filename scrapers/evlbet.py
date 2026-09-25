@@ -167,6 +167,8 @@ class EvlbetScraper:
             markets=markets,
             url=f"{BASE_URL}/",
             match_code=mid,
+            event_id=mid,
+            deep_link_verified=False,
             fetched_at=datetime.now(UTC).replace(tzinfo=None),
         )
 

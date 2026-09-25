@@ -181,6 +181,8 @@ class SportPlusScraper:
             markets=markets,
             url="https://www.sportplus.ba/live",
             match_code=match_id,
+            event_id=match_id,
+            deep_link_verified=False,
             is_live=True,
             fetched_at=datetime.now(UTC).replace(tzinfo=None),
         )
@@ -353,6 +355,8 @@ class SportPlusScraper:
             markets=markets,
             url="https://www.sportplus.ba/prematch/betting",
             match_code=match_id,
+            event_id=match_id,
+            deep_link_verified=False,
             fetched_at=datetime.now(UTC).replace(tzinfo=None),
         )
 

@@ -531,6 +531,8 @@ class MBetScraper:
             markets=markets,
             url="https://mbet.ba/",
             match_code=event_id,
+            event_id=event_id,
+            deep_link_verified=False,
             is_live=live,
             fetched_at=datetime.now(UTC).replace(tzinfo=None),
         )

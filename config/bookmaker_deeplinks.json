@@ -1,0 +1,10 @@
+{
+  "mdshop":       { "supports_event_id": true,  "template": "https://www.mdshop.ba/sport-prematch?sport=Fudbal&event={event_id}" },
+  "admiralbet":   { "supports_event_id": true,  "template": "https://www.admiralbet.ba/sport-prematch?sport=Fudbal&event={event_id}" },
+  "wwin":         { "supports_event_id": false, "template": "https://wwin.ba/kladjenje/", "note": "Betradar feed exposes brid but no per-event route" },
+  "mbet":         { "supports_event_id": false, "template": "https://www.mbet.ba/", "note": "SPA has no stable per-event URL" },
+  "sportplus":    { "supports_event_id": false, "template": "https://www.sportplus.ba/prematch/betting", "note": "SPA uses in-page selection" },
+  "evlbet":       { "supports_event_id": false, "template": "https://evlbet.com/", "note": "flat feed has Id but no public route" },
+  "premier_kladionica": { "supports_event_id": false, "template": "https://www.premier-kladionica.com/ponuda/", "note": "no per-event route" },
+  "betole":       { "supports_event_id": false, "template": "https://www.betole.ba/ba/sport/S", "note": "no per-event route" }
+}

@@ -140,6 +140,7 @@ class AdmiralbetScraper:
                 bookmaker=BOOKMAKER_ID, home_team=home, away_team=away,
                 league=league, kickoff=kickoff, markets=markets,
                 url=nsoft_event_url(BASE_URL, mid, live=live), match_code=mid,
+                event_id=mid, deep_link_verified=False,
                 is_live=live,
                 fetched_at=datetime.now(UTC).replace(tzinfo=None),
             ))

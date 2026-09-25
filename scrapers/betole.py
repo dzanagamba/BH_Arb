@@ -288,6 +288,8 @@ class BetoleScraper(BaseScraper):
                         markets=markets,
                         url=OFFER_URL,
                         match_code=str(event.get("matchCode") or event_id),
+                        event_id=event_id,
+                        deep_link_verified=False,
                         is_live=live,
                         fetched_at=datetime.now(UTC).replace(tzinfo=None),
                     ))
@@ -357,6 +359,8 @@ class BetoleScraper(BaseScraper):
                         markets=markets,
                         url=OFFER_URL,
                         match_code=match_id,
+                        event_id=match_id,
+                        deep_link_verified=False,
                     ))
 
                 except Exception as e:

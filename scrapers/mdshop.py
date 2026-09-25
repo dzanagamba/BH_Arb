@@ -177,6 +177,8 @@ class MDShopScraper:
             markets=markets,
             url=nsoft_event_url("https://www.mdshop.ba", event_id, live=live),
             match_code=event_id,
+            event_id=event_id,
+            deep_link_verified=False,
             is_live=live,
             fetched_at=datetime.now(UTC).replace(tzinfo=None),
         )

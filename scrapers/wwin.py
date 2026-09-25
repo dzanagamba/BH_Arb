@@ -316,6 +316,8 @@ class WWINScraper:
                         markets=markets,
                         url=f"{BASE_URL}/kladjenje/",
                         match_code=event_id,
+                        event_id=event_id,
+                        deep_link_verified=False,
                         fetched_at=datetime.now(UTC).replace(tzinfo=None),
                     ))
         finally:
@@ -405,6 +407,8 @@ class WWINScraper:
                     markets=markets,
                     url=f"{BASE_URL}/kladjenje-uzivo/",
                     match_code=event_id,
+                    event_id=event_id,
+                    deep_link_verified=False,
                     is_live=True,
                     fetched_at=datetime.now(UTC).replace(tzinfo=None),
                 ))

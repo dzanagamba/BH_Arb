@@ -8,6 +8,8 @@ outcome normalization and datetime parsing consistent across bookmakers.
 
 from __future__ import annotations
 
+import json
+import os
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -449,3 +451,27 @@ def parse_nsoft_live_bets(
         bookmaker=bookmaker,
         mode="live",
     )
+
+
+_DEEPLINK_CONFIG_PATH = os.path.join(os.path.dirname(__file__), "..", "config", "bookmaker_deeplinks.json")
+_deeplink_cache: dict | None = None
+
+
+def _load_deeplink_config() -> dict:
+    global _deeplink_cache
+    if _deeplink_cache is None:
+        try:
+            with open(_DEEPLINK_CONFIG_PATH, encoding="utf-8") as f:
+                _deeplink_cache = json.load(f)
+        except (OSError, ValueError):
+            _deeplink_cache = {}
+    return _deeplink_cache
+
+
+def build_event_url(bookmaker: str, event_id: str, base_url: str, live: bool = False) -> str:
+    """Build a per-event URL from the declared template, or the base URL if unsupported."""
+    cfg = _load_deeplink_config().get(bookmaker, {})
+    template = cfg.get("template", f"{base_url}/")
+    if not cfg.get("supports_event_id") or not event_id:
+        return template
+    return template.format(event_id=event_id)

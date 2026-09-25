@@ -392,6 +392,7 @@ def _event_to_match(event: dict, seen: set, live: bool = False) -> Match | None:
         bookmaker=BOOKMAKER_ID, home_team=home, away_team=away, league=league,
         kickoff=kickoff, markets=markets,
         url=f"{BASE_URL}/sr/{'uzivo' if live else 'kladjenje'}/sport/1", match_code=mid,
+        event_id=mid, deep_link_verified=False,
         is_live=live,
         fetched_at=datetime.now(UTC).replace(tzinfo=None),
     )

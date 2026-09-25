@@ -138,6 +138,7 @@ SCAN_RATE_LIMIT = int(os.getenv("SCAN_RATE_LIMIT", "3"))
 
 # --- Cache ---
 CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "cache")
+DEEP_LINK_CONFIG = os.path.join(os.path.dirname(__file__), "bookmaker_deeplinks.json")
 
 # --- Match page URL templates (best-effort; scrapers may override with real per-match URLs) ---
 MATCH_URL_TEMPLATES: dict[str, str] = {

@@ -264,6 +264,8 @@ class PremierKladionicaScraper:
                     markets=markets,
                     url=f"{BASE_URL}/ponuda/",
                     match_code=str(event["id"]),
+                    event_id=str(event["id"]),
+                    deep_link_verified=False,
                     is_live=live,
                     fetched_at=datetime.now(UTC).replace(tzinfo=None),
                 ))
