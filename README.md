@@ -97,6 +97,18 @@ python main.py
 - **API Docs**: http://localhost:8000/docs
 - **Health Check**: http://localhost:8000/api/health
 
+  Two of its fields exist because a safety gate depends on a config file the
+  process reads once. `deep_link_declarations` echoes the
+  `{book: supports_event_id}` map **the gate is currently using** — the config is
+  cached in memory on first use and never invalidated, so editing
+  `config/bookmaker_deeplinks.json` needs a restart, and a book with
+  `"configured": false` is one the gate is silently failing safe on.
+  `unverified_links` counts matches whose link is unproven *and can still block*,
+  using the gate's own predicate: a book that declares no per-event route is
+  excluded, and a book with no declaration is included, because that is the case
+  where the gate refuses everything and this counter is the only thing that says
+  so.
+
 ## Configuration
 
 Edit `config/settings.py` (or `.env`) to change:
@@ -141,7 +153,8 @@ The reason strings above are the vocabulary the gate actually emits, and
 `tests/test_readme_claims.py` proves it by *running* the gate over one broken
 claim per reason and reading the results back — so a reason added or removed in
 `engine/certainty.py` fails this table. One wrinkle worth knowing:
-`HARD_REJECT_REASONS` (`engine/certainty.py:20`) also lists
+`HARD_REJECT_REASONS` — named as a symbol rather than cited by line, because a
+line number here is stale the moment the module's imports change — also lists
 `orientation_unresolved`, which the gate never emits; the unresolvable-orientation
 case is reported as `team_unresolved`. Until that entry is either produced or
 deleted, treat `rejected` as the two reasons above.

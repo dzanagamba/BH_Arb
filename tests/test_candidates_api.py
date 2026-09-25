@@ -8,13 +8,24 @@ from datetime import datetime
 import pytest
 from fastapi.testclient import TestClient
 
+from config.settings import BOOKMAKERS
 from engine import matcher as matcher_module
 from engine.matcher import MatchMatcher
 from models.schemas import CandidateReview, Match
+from scrapers import common
+from scrapers.common import declares_no_event_id, effective_deeplink_declarations
 from server import api
 from server.app import app
 
 client = TestClient(app)
+
+# Read through the loader the gate itself uses, so the expectation cannot drift
+# from the declarations it is about and needs no second copy of the config.
+_ROUTE_BOOKS = {
+    book
+    for book, entry in effective_deeplink_declarations(BOOKMAKERS).items()
+    if entry["supports_event_id"] is True
+}
 
 
 @pytest.fixture(autouse=True)
@@ -169,8 +180,94 @@ def test_health_includes_new_diagnostics():
         "prematch",
         "live",
         "odds_ttl_sec",
+        "deep_link_declarations",
     ):
         assert key in body
+
+
+def test_health_counts_an_undeclared_books_link_as_a_blocker(monkeypatch):
+    """`unverified_links` must use the gate's predicate, not `supports_event_id`.
+
+    The two agree for every book that has a declaration, which is every book
+    today, so the wrong one looked right. They part company on a book with **no**
+    declaration, and that is the case the diagnostic exists for: the gate fails
+    safe and refuses every group holding it, so an operator needs to see the
+    count. Under `supports_event_id` a removed declaration reports
+    `unverified_links: 0` while the gate blocks everything — the diagnostic goes
+    dark exactly when it is needed.
+
+    Driven by emptying the config cache the process already holds, which is the
+    shape of the accident: a declaration is removed from the JSON, the process is
+    not restarted, and both the gate and this counter are answering from the same
+    old map. `_deeplink_cache` is the one piece of state both read, so emptying it
+    takes the real code path rather than replacing the predicate under test.
+    """
+    api.cached_matches[:] = [
+        {"bookmaker": "mdshop", "event_id": "declared-route", "deep_link_verified": False},
+        {"bookmaker": "wwin", "event_id": "declared-no-route", "deep_link_verified": False},
+        {"bookmaker": "mdshop", "event_id": "already-proven", "deep_link_verified": True},
+        {"bookmaker": "mdshop", "event_id": "", "deep_link_verified": False},
+    ]
+    body = client.get("/api/health").json()
+    assert body["unverified_links"] == 1, (
+        "with the config as shipped, mdshop's unproven link is the only real blocker: "
+        "wwin declares no route and the gate settles it from that declaration"
+    )
+
+    monkeypatch.setattr(common, "_deeplink_cache", {})
+    assert not declares_no_event_id("mdshop"), "the premise: no book declares anything now"
+    dark = client.get("/api/health").json()
+    assert dark["unverified_links"] == 2, (
+        "with no declaration anywhere the gate blocks both unproven matches, so the count "
+        f"must rise from 1 to 2 and not stay at {dark['unverified_links']}: reporting 1 "
+        "here is the gate blocking everything while health says almost nothing is wrong"
+    )
+
+
+def test_health_echoes_the_declaration_map_the_gate_is_using():
+    """The operative configuration has to be observable, not just the file on disk.
+
+    `scrapers.common._deeplink_cache` is populated on first use and never
+    invalidated, and it is now load-bearing for a safety gate. Editing
+    `config/bookmaker_deeplinks.json` therefore needs a process restart — which
+    used to be nowhere stated and nowhere visible. The map below is built from the
+    same cache the gate reads, so an operator can see the value in force.
+
+    Each entry carries three fields, and the third is the reason there are three:
+    `supports_event_id` and `declared_no_event_id` are not complements, because a
+    book that declares neither must fail safe — and `declared_no_event_id` alone
+    cannot express "unconfigured", which is the state a removed declaration puts
+    a book in.
+    """
+    body = client.get("/api/health").json()
+    declarations = body["deep_link_declarations"]
+
+    assert set(declarations) == set(BOOKMAKERS), (
+        "health must report every configured book, including one the config does not "
+        "cover, or a removed declaration is invisible"
+    )
+    for bookmaker, entry in declarations.items():
+        assert set(entry) == {"configured", "supports_event_id", "declared_no_event_id"}, entry
+        assert entry["configured"] is True, f"{bookmaker} is configured and must say so"
+        assert entry["supports_event_id"] in (True, False, None)
+        if entry["supports_event_id"] is True:
+            assert entry["declared_no_event_id"] is False
+        else:
+            assert entry["declared_no_event_id"] is (entry["supports_event_id"] is False)
+
+    # The gate is reading the same thing, which is the only reason this is useful.
+    for bookmaker, entry in declarations.items():
+        assert entry["declared_no_event_id"] == declares_no_event_id(bookmaker), bookmaker
+        assert entry["supports_event_id"] is (bookmaker in _ROUTE_BOOKS), bookmaker
+
+    # And the effective map, not the file: a book the gate cannot see is reported
+    # as unconfigured rather than silently omitted.
+    unseen = effective_deeplink_declarations(["never-declared-book"])
+    assert unseen["never-declared-book"] == {
+        "configured": False,
+        "supports_event_id": None,
+        "declared_no_event_id": False,
+    }
 
 
 def test_approve_unknown_candidate_returns_404():

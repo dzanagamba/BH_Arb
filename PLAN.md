@@ -4,7 +4,7 @@
 > **Baseline:** `claudesurebet` == `dzanagamba/surebet-scanner` @ `7d2d5d8` (9 bookmakers, ~6057 prematch matches → ~802 groups → 0–2 surebets per scan, Mozzartbet degraded to 56 matches, EVLBet only 1X2).
 > **New repo:** `surebetmuse12` — https://github.com/dzanagamba/surebet-muse12 (`plan/muse12-roadmap` @ `aa33254` → `2935d90`).
 > **Status (2026-08-20):** P0 correctness + P1 yield + P2 reliability shipped. 107 tests green, ruff clean, groups 802→856 (+6.7%), WWIN 15s→~7s, Mozzart 56→800+ (projected), dust/health/TTL live.
-> **Status (2026-09-25):** Phase 4 (mapping certainty) shipped — 13 tasks, 503 tests green. **The scanner now produces zero surebets on purpose:** `verified` needs a proven deep link, and MDShop's and Admiralbet's `?event=<id>` routes are inert. See §3 *Phase 4*.
+> **Status (2026-09-26):** Phase 4 (mapping certainty) shipped — 13 tasks. `verified` requires a proven claim, and link evidence is proven two ways: a browser check opened that book's per-event URL, **or** the book declared in `config/bookmaker_deeplinks.json` that it has no per-event route. 6 of the 9 books declare `supports_event_id: false` and are verified on identity alone; the 3 that declare a route (MDShop, Admiralbet, Mozzartbet) must still have theirs proven, and MDShop's and Admiralbet's `?event=<id>` routes are **inert**, so a group holding either still cannot verify. **Zero surebets is today's expected output, and it is correct:** the shipped gate produces 0 surebets on the stored scan — a measured claim with two conditions, read in §3 *Phase 4* along with the correction that supersedes the 2026-09-25 status line.
 
 ## 0. Principles
 
@@ -157,6 +157,51 @@ it is exactly what such a book now relies on. The bookmaker-side routing fact
 above stands on its own: a group holding MDShop or Admiralbet still cannot be
 `verified` while their routes are inert.
 
+**Measured on the stored scan (2026-09-26).** `cache/last_scan.json`: 6,999
+matches, 7 books, `scan_time 2026-08-20T18:26:52Z` — 36 days old — and **0 of
+6,999 matches carry a proven link**. The matcher and the arbitrage engine are
+pure functions of that file, so the whole measurement is offline:
+
+| scenario | verified groups | surebets |
+|---|---|---|
+| **A — links exactly as cached (the state this repo is in)** | **16** | **0** |
+| B — plus Mozzartbet's link *faked* proven | 179 | 0 |
+| C — every book's link *faked* proven (the ceiling) | 516 | 0 |
+
+Before the fix, the same gate with the declaration lookup answering "nothing is
+declared", A and B are 0/0 and C is **516/0** — bit-identical, which is the
+monotonicity datum: the change only ever adds pairs, it removes none.
+
+**Conditions, and read them before quoting any of the three.**
+* **A is the only scenario the repo is actually in.** B and C require setting
+  `deep_link_verified=True` on matches no browser check has proven. **No browser
+  check has been run in this repo** — nothing in `cache/` carries a
+  `deep_link_verified` flag, and `scripts/verify_deeplinks.py` is on-demand,
+  never part of a scan. Until `/api/verify-links?bookmaker=mozzartbet` is run and
+  its result stored, B and C are arithmetic, not observations.
+* **A surebet count from this cache needs two rewrites.** Every match's
+  `fetched_at` has to be reset to now and kickoffs shifted into the future, or
+  the engine refuses every leg for reasons unrelated to the link gate. Both are
+  applied and neither touches link state. A surebet that appears only after those
+  two rewrites is not evidence that the arbitrage is still on.
+* **The group count is order-sensitive.** `MatchMatcher.group_matches` sorts with
+  a stable sort and the first match to arrive anchors its group, so the same feed
+  gives 16, 34 or 106 for scenario A depending only on the order the books are
+  fed in. Quote a group count together with the order, or do not quote it.
+* Zero surebets on a 36-day-old cache is a statement about that cache, not about
+  any book's prices today.
+
+**Superseded figure.** The whole-branch report of 2026-09-26
+(`whole-branch-fix-link-declaration.md`, §6) quotes "202 groups / 1 surebet" for
+scenario B. It does not reproduce: the shipped gate gives 179/0. Its surebet is
+`premier_kladionica` Over 2.5 at 2.15 against `sportplus` Under 2.5 at 1.9 —
+both prices are really in the capture, and 1/2.15 + 1/1.9 is 0.86% — but those
+two matches are 120 minutes apart and `VERIFIED_KICKOFF_WINDOW_MINUTES` is 15, so
+the gate refuses the pair with `kickoff_delta` at *any* link state. The matcher
+admits it as a candidate (`KICKOFF_WINDOW_MINUTES` is 120) and the gate then
+rejects it; that is the pairing working, not a link problem. The report's 26 and
+532 group figures do not reproduce either, for the order reason above.
+
 **Recorded, not fixed** (both have tripwires):
 * `premier_kladionica/live/btts` — the live BTTS block is named
   `LIVE - OBA TIMA DAJU GOL`, the parser's `NAME_BTTS` is `OBA DAJU GOL`.
@@ -169,7 +214,8 @@ above stands on its own: a group holding MDShop or Admiralbet still cannot be
   no skip-already-checked, so a per-book link sweep over 600+ events cannot
   converge. This — not the rate limit — is what blocks convergence.
 
-**Verification.** `pytest` 503 passed + 1 xfailed, `ruff` clean, `mypy` clean.
+**Verification.** `pytest` 572 passed + 1 xfailed (2026-09-26), `ruff` clean,
+`mypy` clean.
 `tests/test_e2e_certified.py` drives mbet/wwin/sportplus through their real
 parsers on the real 2026-09-25 captures and asserts the chain end to end,
 including that a spoiled claim in any one book removes the surebet. Its constants

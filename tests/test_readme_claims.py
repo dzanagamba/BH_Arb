@@ -528,12 +528,12 @@ def test_status_reason_vocabulary_matches_what_the_gate_emits():
 def test_dead_hard_reject_vocabulary_is_documented_as_dead():
     """``HARD_REJECT_REASONS`` names one reason the gate never emits; say so.
 
-    `engine/certainty.py:20` lists `orientation_unresolved`, but nothing in the
-    module ever appends it — the unresolvable-orientation case is reported as
-    `team_unresolved`. Left undocumented, a reader comparing the table with that
-    set would conclude the gate rejects something it does not. The README says
-    so, and this pins both sides: implement the reason or delete the entry, and
-    this fails until the README's wrinkle sentence is updated to match.
+    The assignment in `engine/certainty.py` lists `orientation_unresolved`, but
+    nothing in the module ever appends it — the unresolvable-orientation case is
+    reported as `team_unresolved`. Left undocumented, a reader comparing the table
+    with that set would conclude the gate rejects something it does not. The
+    README says so, and this pins both sides: implement the reason or delete the
+    entry, and this fails until the README's wrinkle sentence is updated to match.
     """
     hard, _ = _observed_reasons()
     dead = set(HARD_REJECT_REASONS) - hard
@@ -549,6 +549,43 @@ def test_dead_hard_reject_vocabulary_is_documented_as_dead():
             "longer says so"
         )
     assert "never emits" in section
+
+
+def test_readme_cites_hard_reject_reasons_by_symbol_and_not_by_line():
+    """The README must not pin `HARD_REJECT_REASONS` to a line number.
+
+    This is the same defect class the whole link-declaration change was fixing: a
+    document asserting a precise fact about the code that nothing re-checks. It
+    went stale the moment the commit added an import above the assignment — the
+    README and this file's own docstring both still cited
+    `engine/certainty.py:20` while the assignment sat on line 27.
+
+    So the check is on the *shape* of the citation, and it resolves the symbol the
+    README names. If someone reintroduces a line-number citation anywhere in the
+    file, this fails; there is no line number here that a future edit cannot
+    falsify.
+    """
+    cited = re.findall(r"`engine/certainty\.py:(\d+)`", README)
+    assert cited == [], (
+        f"README.md pins engine/certainty.py to lines {cited}; a line number goes stale "
+        "on the next import. Cite the symbol `HARD_REJECT_REASONS` instead"
+    )
+    # The assignment the README points at must still exist, found by symbol.
+    source = (REPO_ROOT / "engine" / "certainty.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    assigned = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        and any(
+            isinstance(t, ast.Name) and t.id == "HARD_REJECT_REASONS" for t in node.targets
+        )
+    ]
+    assert len(assigned) == 1, (
+        f"expected exactly one module-level HARD_REJECT_REASONS assignment, found "
+        f"{len(assigned)}; the README's pointer to it is meaningless"
+    )
+    assert "HARD_REJECT_REASONS" in _section(README, "## Match & mapping certainty")
 
 
 def test_vocabulary_check_fails_on_an_invented_and_on_a_dropped_reason():
@@ -889,9 +926,90 @@ def test_defect_check_fails_when_the_readme_drops_a_tripwire():
 
 _PHASE_HEADING = "### Phase 4 — Mapping certainty (Done)"
 
+# The phrases the 2026-09-25 status header asserted and 2026-09-26 retired. Kept
+# verbatim, because the point is to catch the *old sentence* coming back, not to
+# catch a paraphrase of it. Each is present-tense prose about what `verified`
+# requires, and each became false when the gate was taught to read
+# `config/bookmaker_deeplinks.json` on 2026-09-26.
+_RETIRED_HEADER_CLAIMS = (
+    "needs a proven deep link",
+    "on purpose",
+)
+
+
+def _plan_header_defects(plan: str) -> list[str]:
+    """Defects in PLAN.md's block-quoted status callout — the first line a reader sees.
+
+    Named ``_defects`` and not ``_problems`` on purpose: the module-wide guard
+    ``test_every_doc_predicate_is_proven_capable_of_failing`` calls every
+    ``*_problems`` predicate with ``README``, and this one reads PLAN.md, so
+    folding it into that set would fail the guard for the wrong reason.
+
+    Three things are checked, and the first is the one that regressed:
+
+    1. No retired present-tense claim. The header read "The scanner now produces
+       zero surebets on purpose: `verified` needs a proven deep link", which was
+       true on 2026-09-25 and stopped being true when the gate began consulting
+       the per-book declaration — a declared-false book is verified on identity
+       alone, and the declaration *is* the proof. §3 was corrected to past tense
+       with a dated correction paragraph; the header was not, and no test covered
+       it, so the two halves of the same claim could drift apart silently.
+    2. The header states the counts, and the counts are read out of
+       ``config/bookmaker_deeplinks.json`` rather than typed in, so flipping a
+       declaration cannot leave a stale "6 of the 9" in the first line.
+    3. The header still carries the two things that did *not* change: MDShop's
+       and Admiralbet's routes are inert, and the zero-surebet figure is a
+       measurement with conditions rather than a slogan. A header that dropped
+       either would be over-correcting the defect it was fixed for.
+    """
+    header = _callout(plan)
+    problems = [
+        f"the status header still asserts the retired claim {claim!r}"
+        for claim in _RETIRED_HEADER_CLAIMS
+        if claim in header.lower()
+    ]
+
+    declarations = json.loads(
+        (REPO_ROOT / "config" / "bookmaker_deeplinks.json").read_text(encoding="utf-8")
+    )
+    no_route = [book for book, spec in declarations.items() if spec.get("supports_event_id") is False]
+    with_route = [book for book, spec in declarations.items() if spec.get("supports_event_id") is True]
+    counts = f"{len(no_route)} of the {len(declarations)} books"
+    if counts not in header:
+        problems.append(
+            f"the status header does not state {counts!r}; the counts must come from "
+            "config/bookmaker_deeplinks.json, and a flipped declaration has to show up here"
+        )
+    for token in ("config/bookmaker_deeplinks.json", "supports_event_id: false"):
+        if token not in header:
+            problems.append(
+                f"the status header never mentions {token!r}, so it cannot explain why "
+                "the retired claim stopped being true"
+            )
+    lowered = header.lower()
+    for book in with_route:
+        if book not in lowered:
+            problems.append(
+                f"the status header drops {book!r}, one of the "
+                f"{len(with_route)} books that must still have its route proven"
+            )
+    for token in ("inert", "zero surebets", "§3"):
+        if token.lower() not in header.lower():
+            problems.append(
+                f"the status header drops {token!r}: the inertness is a bookmaker-side "
+                "fact that did not change, and the figure has to point at its conditions"
+            )
+    return problems
+
 
 def test_plan_declares_phase_four_done_with_the_headline():
-    """PLAN.md carries the phase section and repeats the headline result."""
+    """PLAN.md carries the phase section and repeats the headline result.
+
+    The header and §3 are checked by the *same* test on purpose. They make one
+    claim in two places — that zero surebets is today's correct output — and
+    checking only §3 is what let the header keep asserting the superseded
+    present-tense version. One test, one document, one claim.
+    """
     problems: list[str] = []
     if _PHASE_HEADING not in PLAN:
         problems.append(f"PLAN.md has no {_PHASE_HEADING!r} section")
@@ -900,7 +1018,44 @@ def test_plan_declares_phase_four_done_with_the_headline():
         for token in ("inert", "zero surebets", "Mozzartbet", "verified"):
             if token.lower() not in phase.lower():
                 problems.append(f"the Phase 4 section never mentions {token!r}")
+    problems.extend(_plan_header_defects(PLAN))
     assert problems == [], "; ".join(problems)
+
+
+def test_plan_header_check_fails_when_the_header_regresses_to_the_old_claim():
+    """Proves the header half of the previous test reads the header.
+
+    Restores the exact 2026-09-25 status line — present tense, "needs a proven
+    deep link", "on purpose", and no declaration counts — and asserts the check
+    notices all three ways it can fail. The second mutation is the drift this
+    item was raised for: §3 correct, header not.
+    """
+    retired = (
+        "> **Status (2026-09-25):** Phase 4 (mapping certainty) shipped — 13 tasks, "
+        "503 tests green. **The scanner now produces zero surebets on purpose:** "
+        "`verified` needs a proven deep link, and MDShop's and Admiralbet's "
+        "`?event=<id>` routes are inert. See §3 *Phase 4*."
+    )
+    current = [
+        line
+        for line in PLAN.splitlines()
+        if line.startswith("> **Status (2026-09-26):**")
+    ]
+    assert len(current) == 1, f"expected one 2026-09-26 status line, found {len(current)}"
+
+    regressed = PLAN.replace(current[0], retired, 1)
+    assert regressed != PLAN, "the first mutation did not apply; untested"
+    problems = _plan_header_defects(regressed)
+    assert problems, "the retired 2026-09-25 header passed the check"
+    assert any("needs a proven deep link" in problem for problem in problems)
+    assert any("on purpose" in problem for problem in problems)
+    assert any("6 of the 9 books" in problem for problem in problems)
+    assert any("bookmaker_deeplinks.json" in problem for problem in problems)
+
+    # The drift this item was raised for, isolated: §3 untouched, header stale.
+    section_intact = _section(regressed, _PHASE_HEADING)
+    assert "Correction (2026-09-26)" in section_intact, "the mutation touched §3; untested"
+    assert _plan_header_defects(regressed), "a correct §3 excused a stale header"
 
 
 # The pointers the headline claim must carry, and why each one matters.

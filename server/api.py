@@ -59,7 +59,7 @@ from models.schemas import (
 )
 from scrapers.admiralbet import AdmiralbetScraper
 from scrapers.betole import BetoleScraper
-from scrapers.common import supports_event_id
+from scrapers.common import declares_no_event_id, effective_deeplink_declarations
 from scrapers.evlbet import EvlbetScraper
 from scrapers.mbet import MBetScraper
 from scrapers.mdshop import MDShopScraper
@@ -1407,18 +1407,31 @@ async def health():
         ),
         "pending_candidates": len(pending_candidates),
         "suppressed_candidates": len(_suppressed_candidates),
-        # Matches whose per-event link is unproven AND can still block: a book
-        # that declares `supports_event_id: false` has no per-event route to
-        # open, so the certainty gate settles its link from that declaration and
-        # an unproven link on it is not what is holding anything back. Counting
-        # those would report thousands of blockers that block nothing.
+        # Matches whose per-event link is unproven AND can still block. The
+        # predicate is the gate's own, `not declares_no_event_id(book)`, and not
+        # `supports_event_id(book)`: those two disagree exactly on a book with no
+        # declaration at all, which is the one case where the gate blocks
+        # everything and this diagnostic is the reason an operator needs. Under
+        # `supports_event_id` a removed declaration would report 0 unverified
+        # links while the gate refused every group. A book that declares
+        # `supports_event_id: false` is excluded either way: the gate settles its
+        # link from that declaration, so counting it would report thousands of
+        # blockers that block nothing.
         "unverified_links": sum(
             1
             for match in cached_matches
             if match.get("event_id")
             and not match.get("deep_link_verified")
-            and supports_event_id(str(match.get("bookmaker", "")))
+            and not declares_no_event_id(str(match.get("bookmaker", "")))
         ),
+        # The declaration map the gate is actually reading, not the one in the
+        # file on disk. `scrapers.common._deeplink_cache` is populated once per
+        # process, so an operator who edits
+        # `config/bookmaker_deeplinks.json` and does not restart sees the old
+        # answer here; that used to be invisible. `configured: false` marks a
+        # book the gate is silently failing safe on, which is the other thing
+        # this map has to be able to say.
+        "deep_link_declarations": effective_deeplink_declarations(BOOKMAKERS),
         "ai_available": MatchAI().available,
         "prematch": {
             "last_scan_age_sec": age_sec(scan_status.last_scan_time),

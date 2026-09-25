@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 from urllib.parse import quote
@@ -528,6 +529,59 @@ def declares_no_event_id(bookmaker: str) -> bool:
     tell apart.
     """
     return _declared_config(bookmaker).get("supports_event_id") is False
+
+
+def effective_deeplink_declarations(bookmakers: Iterable[str] | None = None) -> dict:
+    """Return the declaration each book's link question is actually answered by.
+
+    Built from the same cached config the certainty gate reads, so it reports
+    what the gate is *using* rather than what the file on disk says. The two can
+    differ: ``_deeplink_cache`` is populated on first use and never invalidated,
+    so editing ``config/bookmaker_deeplinks.json`` needs a process restart, and
+    without this map nothing said so.
+
+    ``bookmakers`` defaults to the keys of the loaded config. A book the config
+    holds but the caller did not ask about is added anyway: a caller that names
+    some books and silently loses a configured one is the mistake worth surfacing.
+
+    Each entry carries three fields:
+
+    * ``configured`` — whether the config holds a declaration for this book at
+      all. It is the only field that can distinguish "declares no per-event
+      route" from "declares nothing", and those two land on opposite sides of the
+      gate.
+    * ``supports_event_id`` — the declared boolean, or ``None`` when the book is
+      unconfigured or its value is not a boolean. This is the same answer
+      :func:`supports_event_id` gives, spelled so ``false`` survives.
+    * ``declared_no_event_id`` — the gate's own predicate, and the field to read
+      for anything about what blocks. ``None`` is deliberately not available here:
+      a book that declares neither value answers False and still blocks, so this
+      field is a real two-state answer.
+
+    A caller wanting a plain ``{book: bool}`` map should read
+    ``supports_event_id`` out of this; a caller asking what can still block must
+    read ``declared_no_event_id``, because the two disagree for every book that
+    declares nothing.
+    """
+    config = _load_deeplink_config()
+    names = list(bookmakers) if bookmakers is not None else list(config)
+    for name in config:
+        if name not in names:
+            names.append(name)
+    result: dict = {}
+    for name in names:
+        declared = config.get(name)
+        raw = declared.get("supports_event_id") if isinstance(declared, dict) else None
+        result[name] = {
+            "configured": isinstance(declared, dict),
+            # `isinstance(raw, bool)` and not `raw is True`, because the
+            # declared-false case has to come back as False: mapping it to None
+            # would report a book that plainly says `false` as one that says
+            # nothing, which is the one distinction this map exists to make.
+            "supports_event_id": raw if isinstance(raw, bool) else None,
+            "declared_no_event_id": raw is False,
+        }
+    return result
 
 
 def _base_url(base_url: str) -> str:
