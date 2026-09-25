@@ -23,10 +23,24 @@ WHAT THESE TESTS DO NOT PROVE
 * **Not that a synthetic payload is right.** That is Task 9's job; a payload
   built from the parser's own constants cannot catch a wrong ID because the
   fixture and the parser would be wrong together.
-* **Not every registry row is covered.** Rows the live feed cannot supply stay
-  unexercised, and ``UNCOVERED_ROWS`` below names each one with its reason, so
-  a *new* gap fails the test instead of passing unnoticed.  EVLBet has no
-  fixture at all: its flat offer endpoint answered with an empty list.
+* **Not every registry row is covered.** The gaps are split into two lists,
+  because they mean different things and are proved differently:
+
+  - ``UNCOVERED_ROWS`` -- the feed never sent the block the market needs. The
+    payload holds no evidence, and
+    ``test_a_declared_gap_is_not_just_listed_but_forgotten`` re-proves that
+    against the capture, so a gap cannot be declared and then forgotten.
+  - ``KNOWN_DEFECT_ROWS`` -- the feed *does* send it and the code cannot read
+    it. There is exactly one today: ``premier_kladionica/live/btts``, where the
+    live block is ``LIVE - OBA TIMA DAJU GOL`` but the parser's ``NAME_BTTS`` is
+    ``OBA DAJU GOL``, so the registry's live row is unreachable. The capture
+    keeps that block as evidence and
+    ``test_premier_live_btts_is_emitted_once_name_btts_is_mode_aware`` is
+    ``xfail(strict=True)``: the suite stays green, and fixing the parser turns
+    it into an XPASS, which pytest reports as a failure. Nobody can half-fix it.
+
+  EVLBet has no fixture at all -- its flat offer endpoint answered with an empty
+  list -- and is declared in ``BOOKS_WITHOUT_FIXTURES``.
 """
 
 from __future__ import annotations
@@ -396,10 +410,21 @@ def test_a_declared_gap_is_not_just_listed_but_forgotten():
     """
     for (book, mode, market_type), reason in UNCOVERED_ROWS.items():
         path = _fixture_for(book, mode)
-        data = _load(path) if path.exists() else None
-        if data is None:
+        if not path.exists():
+            # No payload means no evidence either way, so there is nothing to
+            # re-prove. This is a DELIBERATE skip, not a silent one: a book with
+            # no capture at all is declared in BOOKS_WITHOUT_FIXTURES (checked
+            # by test_coverage_gaps_are_declared_rather_than_ignored), and the
+            # assertion below proves that list is exhaustive -- so an unproved
+            # gap can only exist for a book that is itself accounted for.
+            assert book in BOOKS_WITHOUT_FIXTURES, (
+                f"{book}/{mode}/{market_type} is declared a gap with no {path.name} "
+                f"to check it against, but {book!r} is not in BOOKS_WITHOUT_FIXTURES. "
+                "A book with a capture in one mode must have its other mode's gaps "
+                "checked too, so either capture it or declare the whole book."
+            )
             continue
-        assert not _serves_market(data, market_type), (
+        assert not _serves_market(_load(path), market_type), (
             f"{book}/{mode}/{market_type} is declared a feed gap, but the capture "
             f"in {path.name} carries the data it needs. Either the feed now serves "
             "it (add the market to expected_markets and drop this entry) or the "
@@ -478,7 +503,7 @@ def test_premier_live_fixture_carries_the_btts_block_the_defect_is_about():
         "make NAME_BTTS mode-aware (prematch and live really do spell it "
         "differently), NOT to rename the registry row, which would break prematch. "
         "strict=True so that fixing the parser fails this test until the marker and "
-        "the UNCOVERED_ROWS entry are removed together."
+        "the KNOWN_DEFECT_ROWS entry are removed together."
     ),
 )
 def test_premier_live_btts_is_emitted_once_name_btts_is_mode_aware():
