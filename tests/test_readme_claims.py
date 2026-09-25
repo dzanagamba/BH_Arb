@@ -23,8 +23,8 @@ guarding nothing. So two rules hold throughout:
    ``test_*_fails_*`` that breaks the document the way that predicate is supposed
    to catch and asserts the predicate notices. A predicate with no companion is a
    no-op wearing a test's name, and
-   ``test_this_file_checks_every_checkable_claim_it_claims_to_check`` fails on
-   any predicate that lacks one.
+   ``test_every_doc_predicate_is_proven_capable_of_failing`` fails on any
+   predicate that lacks one.
 
 Rule 2 is the structural answer to this file's own first draft, in which three
 checks were labelled doc-vs-code but only inspected the code, and the single
@@ -130,12 +130,20 @@ def _row(text: str, first_cell: str) -> list[str]:
 # ===========================================================================
 
 
-def _declaring_books() -> set[str]:
-    """The books that declare a per-event deep-link route at all."""
-    declared = json.loads(
+def _deeplink_config() -> dict[str, dict]:
+    """The whole deep-link declaration, keyed by bookmaker."""
+    raw = json.loads(
         (REPO_ROOT / "config" / "bookmaker_deeplinks.json").read_text(encoding="utf-8")
     )
-    return {book for book, cfg in declared.items() if cfg.get("supports_event_id") is True}
+    return {book: cfg for book, cfg in raw.items() if isinstance(cfg, dict)}
+
+
+def _declaring_books() -> set[str]:
+    """The books that declare a per-event deep-link route at all."""
+    return {
+        book for book, cfg in _deeplink_config().items()
+        if cfg.get("supports_event_id") is True
+    }
 
 
 def _headline_problems(text: str) -> list[str]:
@@ -167,10 +175,15 @@ def _headline_problems(text: str) -> list[str]:
     if not inert:
         problems.append("no sentence in the headline calls any route inert")
         return problems
-    named = {book for book in declaring if book.lower() in " ".join(inert).lower()}
+    spoken = " ".join(inert).lower()
+    # Over EVERY book the repo knows, not just the ones declaring a route: naming
+    # a book with no per-event route as inert is as wrong as naming the wrong
+    # pair, and a set built from `declaring` alone could never see it.
+    named = {book for book in _deeplink_config() if book.lower() in spoken}
     if named != {"mdshop", "admiralbet"}:
         problems.append(
-            f"the sentence calling routes inert names {sorted(named) or 'no book'}; the "
+            f"the sentence calling routes inert names {sorted(named) or 'no book'}; it "
+            f"must name exactly the two declared books with inert routes, and the "
             f"books declaring a route are {sorted(declaring)}"
         )
     # Every declared book must be accounted for: if a fourth book ever declares a
@@ -216,6 +229,31 @@ def test_headline_check_fails_when_a_book_is_unlinked_from_the_inertness():
     problems = _headline_problems(broken)
     assert problems, "a headline calling the routes 'active' passed the check"
     assert any("inert" in problem for problem in problems)
+
+
+def test_headline_check_fails_when_a_route_less_book_is_called_inert():
+    """A book with no per-event route cannot be named as having an inert one.
+
+    Betole declares `supports_event_id: false` — it has no `?event=<id>` route at
+    all, so there is nothing about it to be inert. The first version of the
+    headline check built its set of named books from the books that *declare* a
+    route, so a book outside that set could be named in the inertness sentence and
+    the check could not see it. This drives exactly that.
+    """
+    assert "betole" in _deeplink_config()
+    assert "betole" not in _declaring_books(), (
+        "betole now declares a route, so this companion no longer tests what it says"
+    )
+    broken = README.replace(
+        "MDShop's and Admiralbet's declared `?event=<id>` routes are **inert**",
+        "MDShop's, Admiralbet's and Betole's `?event=<id>` routes are **inert**",
+    )
+    assert broken != README, "the mutation did not apply; the check is untested"
+    problems = _headline_problems(broken)
+    assert problems, (
+        "naming a book that declares no per-event route as having an inert one passed"
+    )
+    assert any("betole" in problem for problem in problems)
 
 
 # ===========================================================================
