@@ -339,32 +339,74 @@ class CertaintyGate:
             is_swapped=is_swapped,
         )
 
-    def _group_team_orientation(self, match: Match, group: MatchGroup) -> tuple[bool, bool] | None:
+    def _group_team_reference(
+        self,
+        group_value: str,
+        anchor_home_raw: str,
+        anchor_home_normalized: str,
+        anchor_away_raw: str,
+        anchor_away_normalized: str,
+    ) -> tuple[str, str]:
+        """Resolve a group field to a raw/canonical reference without fuzzy trust."""
+        if group_value == anchor_home_normalized:
+            return anchor_home_raw, group_value
+        if group_value == anchor_away_normalized:
+            return anchor_away_raw, group_value
+        return group_value, self.normalizer.normalize_team(group_value)
+
+    def _group_team_orientation(
+        self,
+        match: Match,
+        group: MatchGroup,
+        anchor: Match,
+    ) -> tuple[bool, bool] | None:
         """Check a candidate against the group's canonical team fields."""
         if not group.canonical_home or not group.canonical_away:
             return None
-        if not (match.home_team_normalized and match.away_team_normalized):
-            return False, False
 
-        home_values = {
+        group_home_raw, group_home_normalized = self._group_team_reference(
             group.canonical_home,
-            self.normalizer.normalize_team(group.canonical_home),
-            self._raw_team_key(group.canonical_home),
-        }
-        away_values = {
+            anchor.home_team,
+            anchor.home_team_normalized,
+            anchor.away_team,
+            anchor.away_team_normalized,
+        )
+        group_away_raw, group_away_normalized = self._group_team_reference(
             group.canonical_away,
-            self.normalizer.normalize_team(group.canonical_away),
-            self._raw_team_key(group.canonical_away),
-        }
-        if (
-            match.home_team_normalized in home_values
-            and match.away_team_normalized in away_values
-        ):
+            anchor.home_team,
+            anchor.home_team_normalized,
+            anchor.away_team,
+            anchor.away_team_normalized,
+        )
+
+        direct_home_ok, _ = self._team_pair_details(
+            match.home_team,
+            match.home_team_normalized,
+            group_home_raw,
+            group_home_normalized,
+        )
+        direct_away_ok, _ = self._team_pair_details(
+            match.away_team,
+            match.away_team_normalized,
+            group_away_raw,
+            group_away_normalized,
+        )
+        if direct_home_ok and direct_away_ok:
             return True, False
-        if (
-            match.home_team_normalized in away_values
-            and match.away_team_normalized in home_values
-        ):
+
+        swapped_home_ok, _ = self._team_pair_details(
+            match.home_team,
+            match.home_team_normalized,
+            group_away_raw,
+            group_away_normalized,
+        )
+        swapped_away_ok, _ = self._team_pair_details(
+            match.away_team,
+            match.away_team_normalized,
+            group_home_raw,
+            group_home_normalized,
+        )
+        if swapped_home_ok and swapped_away_ok:
             return True, True
         return False, False
 
@@ -389,12 +431,13 @@ class CertaintyGate:
         anchor = group.matches[0]
         result = self.evaluate_pair(match, anchor)
 
-        group_teams = self._group_team_orientation(match, group)
+        group_teams = self._group_team_orientation(match, group, anchor)
         if group_teams is not None:
             group_teams_ok, group_is_swapped = group_teams
-            if group_teams_ok:
-                result.is_swapped = result.is_swapped or group_is_swapped
-            elif "team_unresolved" not in result.reasons:
+            # The group orientation is the single reference frame consumed by
+            # the matcher when it decides whether to flip a candidate.
+            result.is_swapped = group_is_swapped if group_teams_ok else False
+            if not group_teams_ok and "team_unresolved" not in result.reasons:
                 result.reasons.append("team_unresolved")
 
         group_kickoff_reason = self._group_kickoff_reason(match, group)

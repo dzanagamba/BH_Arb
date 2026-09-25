@@ -313,6 +313,41 @@ def test_allowlisted_alias_is_accepted_but_unlisted_fuzzy_is_not():
     assert r2.reasons == ["team_unresolved"]
 
 
+def test_group_canonical_fuzzy_name_requires_allowlist():
+    gate = CertaintyGate()
+    a = _m("a", "Sarajevo", "Thun", "Liga Evrope", event_id="1")
+    b = _m("b", "Sarajevo", "Thun", "Liga Evrope", event_id="2")
+    a.home_team_normalized = a.away_team_normalized = ""
+    b.home_team_normalized = b.away_team_normalized = ""
+    gate.normalize([a, b])
+    group = _g(a, league=a.league_normalized)
+    group.canonical_home = "Sarjevo"
+
+    without_allowlist = gate.evaluate(b, group)
+    assert without_allowlist.status == "suggested"
+    assert without_allowlist.reasons == ["team_unresolved"]
+
+    allowed_gate = CertaintyGate(alias_allowlist={"sarjevo|sarajevo"})
+    with_allowlist = allowed_gate.evaluate(b, group)
+    assert with_allowlist.status == "verified"
+    assert with_allowlist.is_swapped is False
+
+
+def test_allowlisted_alias_passes_pair_and_group_evaluation():
+    gate = CertaintyGate(alias_allowlist={"lech p|lech poznan"})
+    a = _m("mdshop", "Lech Poznan", "Thun", "Liga Evrope", event_id="1")
+    b = _m("mbet", "Lech P.", "Thun", "Liga Evrope", event_id="2")
+    gate.normalize([a, b])
+    b.home_team_normalized = "lech p"
+    group = _g(a, league=a.league_normalized)
+
+    pair_result = gate.evaluate_pair(b, a)
+    group_result = gate.evaluate(b, group)
+    assert pair_result.status == "verified"
+    assert group_result.status == "verified"
+    assert group_result.is_swapped is False
+
+
 def test_allowlisted_alias_swap_requires_both_team_pairs():
     gate = CertaintyGate(alias_allowlist={"alpha united|alpha"})
     a = _m(
@@ -480,6 +515,22 @@ def test_evaluate_checks_group_kickoff():
     r = gate.evaluate(b, group)
     assert r.status == "suggested"
     assert r.reasons == ["kickoff_delta"]
+
+
+def test_evaluate_swap_flag_uses_group_canonical_orientation():
+    gate = CertaintyGate()
+    a = _m("a", "Alpha", "Bravo", "BiH - Premier Liga", event_id="1")
+    b = _m("b", "Bravo", "Alpha", "BiH - Premier Liga", event_id="2")
+    gate.normalize([a, b])
+    group = _g(a, league=a.league_normalized)
+    group.canonical_home = a.away_team_normalized
+    group.canonical_away = a.home_team_normalized
+
+    pair_result = gate.evaluate_pair(b, a)
+    group_result = gate.evaluate(b, group)
+    assert pair_result.is_swapped is True
+    assert group_result.status == "verified"
+    assert group_result.is_swapped is False
 
 
 def test_fuzzy_swap_flag_requires_both_teams_to_line_up():
