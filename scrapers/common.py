@@ -12,6 +12,7 @@ import json
 import os
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
+from urllib.parse import quote
 
 from models.schemas import Market, MarketType, OddsValue
 
@@ -462,16 +463,74 @@ def _load_deeplink_config() -> dict:
     if _deeplink_cache is None:
         try:
             with open(_DEEPLINK_CONFIG_PATH, encoding="utf-8") as f:
-                _deeplink_cache = json.load(f)
+                data = json.load(f)
         except (OSError, ValueError):
-            _deeplink_cache = {}
+            data = {}
+        _deeplink_cache = data if isinstance(data, dict) else {}
     return _deeplink_cache
 
 
-def build_event_url(bookmaker: str, event_id: str, base_url: str, live: bool = False) -> str:
-    """Build a per-event URL from the declared template, or the base URL if unsupported."""
-    cfg = _load_deeplink_config().get(bookmaker, {})
-    template = cfg.get("template", f"{base_url}/")
-    if not cfg.get("supports_event_id") or not event_id:
-        return template
-    return template.format(event_id=event_id)
+def _declared_config(bookmaker: str) -> dict:
+    """Return a bookmaker's declaration, or an empty mapping when it is absent."""
+    value = _load_deeplink_config().get(bookmaker)
+    return value if isinstance(value, dict) else {}
+
+
+def has_declaration(bookmaker: str) -> bool:
+    """Return whether the configuration explicitly declares this bookmaker."""
+    return isinstance(_load_deeplink_config().get(bookmaker), dict)
+
+
+def _base_url(base_url: str) -> str:
+    """Return a normalized non-event URL for a book's base site."""
+    return f"{base_url.rstrip('/')}/"
+
+
+def _fallback_url(bookmaker: str, base_url: str) -> str:
+    """Return the declared non-event fallback, or the normalized site base."""
+    cfg = _declared_config(bookmaker)
+    fallback = cfg.get("fallback")
+    return fallback if isinstance(fallback, str) and fallback else _base_url(base_url)
+
+
+def _event_template(bookmaker: str, live: bool) -> str:
+    """Return the event template for a mode, or an empty string when none exists."""
+    cfg = _declared_config(bookmaker)
+    key = "template_live" if live else "template"
+    template = cfg.get(key)
+    if template is None and live:
+        return ""
+    if not isinstance(template, str) or not template:
+        raise ValueError(f"Deep-link config for {bookmaker} is missing {key}")
+    if "{event_id}" not in template:
+        raise ValueError(
+            f"Deep-link config for {bookmaker} must contain an event_id placeholder"
+        )
+    return template
+
+
+def build_event_url(
+    bookmaker: str,
+    event_id: str | None,
+    base_url: str,
+    live: bool = False,
+) -> str:
+    """Build a declared per-event URL, or a non-event fallback when unavailable."""
+    cfg = _declared_config(bookmaker)
+    normalized_event_id = "" if event_id is None else str(event_id)
+    if not cfg.get("supports_event_id"):
+        template = cfg.get("template")
+        return template if isinstance(template, str) and template else _base_url(base_url)
+    if not normalized_event_id:
+        return _fallback_url(bookmaker, base_url)
+
+    template = _event_template(bookmaker, live)
+    if not template:
+        return _fallback_url(bookmaker, base_url)
+    encoded_event_id = quote(normalized_event_id, safe="")
+    try:
+        return template.format(event_id=encoded_event_id)
+    except (IndexError, KeyError, ValueError) as exc:
+        raise ValueError(
+            f"Invalid deep-link template for {bookmaker}: {template!r}"
+        ) from exc

@@ -1,6 +1,7 @@
 {
-  "mdshop":       { "supports_event_id": true,  "template": "https://www.mdshop.ba/sport-prematch?sport=Fudbal&event={event_id}" },
-  "admiralbet":   { "supports_event_id": true,  "template": "https://www.admiralbet.ba/sport-prematch?sport=Fudbal&event={event_id}" },
+  "mdshop":       { "supports_event_id": true,  "template": "https://www.mdshop.ba/sport-prematch?sport=Fudbal&event={event_id}", "template_live": "https://www.mdshop.ba/sport-live?event={event_id}" },
+  "admiralbet":   { "supports_event_id": true,  "template": "https://www.admiralbet.ba/sport-prematch?sport=Fudbal&event={event_id}", "template_live": "https://www.admiralbet.ba/sport-live?event={event_id}" },
+  "mozzartbet":   { "supports_event_id": true,  "template": "https://www.mozzartbet.ba/sr/kladjenje/sport/1/match/{event_id}", "template_live": "https://www.mozzartbet.ba/sr/uzivo/mec/1/{event_id}", "note": "Public match routes verified from provider id; live route uses /uzivo/mec/1/{event_id}" },
   "wwin":         { "supports_event_id": false, "template": "https://wwin.ba/kladjenje/", "note": "Betradar feed exposes brid but no per-event route" },
   "mbet":         { "supports_event_id": false, "template": "https://www.mbet.ba/", "note": "SPA has no stable per-event URL" },
   "sportplus":    { "supports_event_id": false, "template": "https://www.sportplus.ba/prematch/betting", "note": "SPA uses in-page selection" },
