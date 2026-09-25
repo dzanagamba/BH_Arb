@@ -198,3 +198,140 @@ The live feed and `ttg_lang` definitions were checked directly.
 The scraper uses `/restapi/offer/ba/sport/S/desk`, skips live/blocked events,
 and paginates with the feed's `from` offset. Synthetic tests also cover the
 legacy reference resolver and the verified pick-code mappings.
+
+---
+
+Everything above this line is hand-written analysis of the live bookmaker
+catalogs: live-feed notes, settlement reasoning and the per-book audit tables.
+Edit it freely; the generator below never touches it.
+
+The table below is generated from `config/bookmaker_markets.json`, the same file
+`engine/market_registry.py` loads, so the documented IDs cannot drift from the
+IDs the parsers actually use. When the table and the analysis above disagree,
+the registry is authoritative.
+
+<!-- GENERATED FROM bookmaker_markets.json -->
+
+<!-- Everything between these two markers is written by
+     scripts/generate_market_mapping_doc.py.  Do not edit it by hand:
+     hand edits here are lost on the next regeneration. -->
+
+Regenerate: `python scripts/generate_market_mapping_doc.py`  
+Verify without writing: `python scripts/generate_market_mapping_doc.py --check`
+
+## Registry table (generated)
+
+Source of truth: `config/bookmaker_markets.json`, loaded by
+`engine/market_registry.py`. Values below are resolved through the loader,
+so registry defaults (outcome labels, min legs, settlement) are included.
+Covers 9 bookmakers and 85 book/mode/market rows.
+
+### Mapped markets
+
+| Bookmaker | Mode | Market | Source IDs | Outcome labels | Min legs | Line | Settlement |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `mdshop` | prematch | Full-time 1X2 | `135` | 1, 2, X | 3 | — | full_time |
+| `mdshop` | prematch | Double Chance | `152` | 12, 1X, X2 | 2 | — | full_time |
+| `mdshop` | prematch | BTTS | `151` | GG, NG | 2 | — | full_time |
+| `mdshop` | prematch | Over/Under 1.5 | `137`, `138` | Over 1.5, Under 1.5 | 2 | 1.5 | full_time |
+| `mdshop` | prematch | Over/Under 2.5 | `137`, `138` | Over 2.5, Under 2.5 | 2 | 2.5 | full_time |
+| `mdshop` | prematch | Over/Under 3.5 | `137`, `138` | Over 3.5, Under 3.5 | 2 | 3.5 | full_time |
+| `mdshop` | live | Full-time 1X2 | `6` | 1, 2, X | 3 | — | full_time |
+| `mdshop` | live | Double Chance | `18`, `42` | 12, 1X, X2 | 2 | — | full_time |
+| `mdshop` | live | BTTS | `995` | GG, NG | 2 | — | full_time |
+| `mdshop` | live | Over/Under 1.5 | `22`, `28` | Over 1.5, Under 1.5 | 2 | 1.5 | full_time |
+| `mdshop` | live | Over/Under 2.5 | `22`, `28` | Over 2.5, Under 2.5 | 2 | 2.5 | full_time |
+| `mdshop` | live | Over/Under 3.5 | `22`, `28` | Over 3.5, Under 3.5 | 2 | 3.5 | full_time |
+| `admiralbet` | prematch | Full-time 1X2 | `1639` | 1, 2, X | 3 | — | full_time |
+| `admiralbet` | prematch | Double Chance | `152` | 12, 1X, X2 | 2 | — | full_time |
+| `admiralbet` | prematch | BTTS | `151` | GG, NG | 2 | — | full_time |
+| `admiralbet` | prematch | Over/Under 1.5 | `137`, `138` | Over 1.5, Under 1.5 | 2 | 1.5 | full_time |
+| `admiralbet` | prematch | Over/Under 2.5 | `137`, `138` | Over 2.5, Under 2.5 | 2 | 2.5 | full_time |
+| `admiralbet` | prematch | Over/Under 3.5 | `137`, `138` | Over 3.5, Under 3.5 | 2 | 3.5 | full_time |
+| `admiralbet` | live | Full-time 1X2 | `6` | 1, 2, X | 3 | — | full_time |
+| `admiralbet` | live | Double Chance | `18`, `42` | 12, 1X, X2 | 2 | — | full_time |
+| `admiralbet` | live | BTTS | `995` | GG, NG | 2 | — | full_time |
+| `wwin` | prematch | Full-time 1X2 | `95` | 1, 2, X | 3 | — | full_time |
+| `wwin` | prematch | Double Chance | `6` | 12, 1X, X2 | 2 | — | full_time |
+| `wwin` | prematch | BTTS | `3` | GG, NG | 2 | — | full_time |
+| `wwin` | prematch | Over/Under 1.5 | `11` | Over 1.5, Under 1.5 | 2 | 1.5 | full_time |
+| `wwin` | prematch | Over/Under 2.5 | `11` | Over 2.5, Under 2.5 | 2 | 2.5 | full_time |
+| `wwin` | prematch | Over/Under 3.5 | `11` | Over 3.5, Under 3.5 | 2 | 3.5 | full_time |
+| `wwin` | live | Full-time 1X2 | `95` | 1, 2, X | 3 | — | full_time |
+| `wwin` | live | Double Chance | `6` | 12, 1X, X2 | 2 | — | full_time |
+| `wwin` | live | BTTS | `3` | GG, NG | 2 | — | full_time |
+| `wwin` | live | Over/Under 1.5 | `11` | Over 1.5, Under 1.5 | 2 | 1.5 | full_time |
+| `wwin` | live | Over/Under 2.5 | `11` | Over 2.5, Under 2.5 | 2 | 2.5 | full_time |
+| `wwin` | live | Over/Under 3.5 | `11` | Over 3.5, Under 3.5 | 2 | 3.5 | full_time |
+| `premier_kladionica` | prematch | Full-time 1X2 | `UTAKMICA_1X2` | 1, 2, X | 3 | — | full_time |
+| `premier_kladionica` | prematch | Double Chance | `UTAKMICA_DC` | 12, 1X, X2 | 2 | — | full_time |
+| `premier_kladionica` | prematch | BTTS | `OBA_DAJU_GOL` | GG, NG | 2 | — | full_time |
+| `premier_kladionica` | prematch | Over/Under 1.5 | `ZBROJ_GOLOVA` | Over 1.5, Under 1.5 | 2 | 1.5 | full_time |
+| `premier_kladionica` | prematch | Over/Under 2.5 | `ZBROJ_GOLOVA` | Over 2.5, Under 2.5 | 2 | 2.5 | full_time |
+| `premier_kladionica` | prematch | Over/Under 3.5 | `ZBROJ_GOLOVA` | Over 3.5, Under 3.5 | 2 | 3.5 | full_time |
+| `premier_kladionica` | live | Full-time 1X2 | `LIVE_UTAKMICA` | 1, 2, X | 3 | — | full_time |
+| `premier_kladionica` | live | Double Chance | `UTAKMICA_DC` | 12, 1X, X2 | 2 | — | full_time |
+| `premier_kladionica` | live | BTTS | `LIVE_OBA_DAJU_GOL` | GG, NG | 2 | — | full_time |
+| `mbet` | prematch | Full-time 1X2 | `ofb:fs` | 1, 2, X | 3 | — | full_time |
+| `mbet` | prematch | Double Chance | `ofb:dc` | 12, 1X, X2 | 2 | — | full_time |
+| `mbet` | prematch | BTTS | `ofb:gg` | GG, NG | 2 | — | full_time |
+| `mbet` | prematch | Over/Under 1.5 | `ofb:tg` | Over 1.5, Under 1.5 | 2 | 1.5 | full_time |
+| `mbet` | prematch | Over/Under 2.5 | `ofb:tg` | Over 2.5, Under 2.5 | 2 | 2.5 | full_time |
+| `mbet` | prematch | Over/Under 3.5 | `ofb:tg` | Over 3.5, Under 3.5 | 2 | 3.5 | full_time |
+| `mbet` | live | Full-time 1X2 | `lfb:ft` | 1, 2, X | 3 | — | full_time |
+| `mbet` | live | Double Chance | `lfb:dc` | 12, 1X, X2 | 2 | — | full_time |
+| `mbet` | live | BTTS | `lfb:bttsny` | GG, NG | 2 | — | full_time |
+| `mbet` | live | Over/Under 1.5 | `lfb:tg` | Over 1.5, Under 1.5 | 2 | 1.5 | full_time |
+| `mbet` | live | Over/Under 2.5 | `lfb:tg` | Over 2.5, Under 2.5 | 2 | 2.5 | full_time |
+| `mbet` | live | Over/Under 3.5 | `lfb:tg` | Over 3.5, Under 3.5 | 2 | 3.5 | full_time |
+| `sportplus` | prematch | Full-time 1X2 | `1` | 1, 2, X | 3 | — | full_time |
+| `sportplus` | prematch | Double Chance | `1` | 12, 1X, X2 | 2 | — | full_time |
+| `sportplus` | prematch | BTTS | `6` | GG, NG | 2 | — | full_time |
+| `sportplus` | prematch | Over/Under 1.5 | `800`, `802` | Over 1.5, Under 1.5 | 2 | 1.5 | full_time |
+| `sportplus` | prematch | Over/Under 2.5 | `768`, `800`, `802` | Over 2.5, Under 2.5 | 2 | 2.5 | full_time |
+| `sportplus` | prematch | Over/Under 3.5 | `800`, `802` | Over 3.5, Under 3.5 | 2 | 3.5 | full_time |
+| `sportplus` | live | Full-time 1X2 | `POBJEDNIK` | 1, 2, X | 3 | — | full_time |
+| `sportplus` | live | Double Chance | `DVOSTRUKA_PRILIKA` | 12, 1X, X2 | 2 | — | full_time |
+| `sportplus` | live | BTTS | `OBA_DAJU_GOL` | GG, NG | 2 | — | full_time |
+| `sportplus` | live | Over/Under 1.5 | `ZBROJ_GOLOVA` | Over 1.5, Under 1.5 | 2 | 1.5 | full_time |
+| `sportplus` | live | Over/Under 2.5 | `ZBROJ_GOLOVA` | Over 2.5, Under 2.5 | 2 | 2.5 | full_time |
+| `sportplus` | live | Over/Under 3.5 | `ZBROJ_GOLOVA` | Over 3.5, Under 3.5 | 2 | 3.5 | full_time |
+| `evlbet` | prematch | Full-time 1X2 | `12005` | 1, 2, X | 3 | — | full_time |
+| `betole` | prematch | Full-time 1X2 | `1`, `2`, `3`, `135` | 1, 2, X | 3 | — | full_time |
+| `betole` | prematch | Double Chance | `2`, `7`, `8`, `9`, `152` | 12, 1X, X2 | 2 | — | full_time |
+| `betole` | prematch | BTTS | `130`, `151`, `272`, `273` | GG, NG | 2 | — | full_time |
+| `betole` | prematch | Over/Under 1.5 | `3`, `21`, `137`, `138`, `242` | Over 1.5, Under 1.5 | 2 | 1.5 | full_time |
+| `betole` | prematch | Over/Under 2.5 | `3`, `22`, `24`, `137`, `138` | Over 2.5, Under 2.5 | 2 | 2.5 | full_time |
+| `betole` | prematch | Over/Under 3.5 | `3`, `25`, `137`, `138`, `219` | Over 3.5, Under 3.5 | 2 | 3.5 | full_time |
+| `mozzartbet` | prematch | Full-time 1X2 | `1` | 1, 2, X | 3 | — | full_time |
+| `mozzartbet` | prematch | Double Chance | `2` | 12, 1X, X2 | 2 | — | full_time |
+| `mozzartbet` | prematch | BTTS | `130` | GG, NG | 2 | — | full_time |
+| `mozzartbet` | prematch | Over/Under 1.5 | `3` | Over 1.5, Under 1.5 | 2 | 1.5 | full_time |
+| `mozzartbet` | prematch | Over/Under 2.5 | `3` | Over 2.5, Under 2.5 | 2 | 2.5 | full_time |
+| `mozzartbet` | prematch | Over/Under 3.5 | `3` | Over 3.5, Under 3.5 | 2 | 3.5 | full_time |
+| `mozzartbet` | live | Full-time 1X2 | `1` | 1, 2, X | 3 | — | full_time |
+| `mozzartbet` | live | Double Chance | `2` | 12, 1X, X2 | 2 | — | full_time |
+| `mozzartbet` | live | BTTS | `130` | GG, NG | 2 | — | full_time |
+| `mozzartbet` | live | Over/Under 1.5 | `3` | Over 1.5, Under 1.5 | 2 | 1.5 | full_time |
+| `mozzartbet` | live | Over/Under 2.5 | `3` | Over 2.5, Under 2.5 | 2 | 2.5 | full_time |
+| `mozzartbet` | live | Over/Under 3.5 | `3` | Over 3.5, Under 3.5 | 2 | 3.5 | full_time |
+
+### Deliberately unmapped source IDs
+
+The `_excluded` block of the registry. Offers listed here are recognised by
+the parsers and rejected on purpose (advance/qualification, half-time,
+handicap, period or combination markets) so they never reach the arbitrage
+engine as if they were a supported market. A name pattern applies to any
+source ID that matches it.
+
+| Bookmaker | Excluded IDs / name patterns |
+| --- | --- |
+| `admiralbet` | `1`, `10`, `11`, `14`, `17`, `24`, `30`, `39`, `41`, `43`, `56`, `136`, `140`, `143`, `144`, `148`, `149`, `153`, `154`, `161`, `162`, `166`, `174`, `261`, `303`, `304`, `437`, `1064` |
+| `betole` | `335`, `336` |
+| `mbet` | `lfb:tg1sth`, `ofb:dnb`, `ofb:fi`, `ofb:fts`, `ofb:htdc`, `ofb:sh`, `ofb:shdc` |
+| `mdshop` | `1`, `10`, `11`, `14`, `17`, `24`, `30`, `39`, `41`, `43`, `56`, `136`, `140`, `143`, `144`, `148`, `149`, `153`, `154`, `161`, `162`, `166`, `174`, `261`, `303`, `304`, `437`, `1064` |
+| `mozzartbet` | `141`, `*DALJE*`, `*KVALIFIKACIJE*`, `*PROLAZ*` |
+| `premier_kladionica` | `1435`, `1440`, `*HENDIKEP*`, `*HT/FT*`, `*KARTICE*`, `*KLAĐENJE*POBJEDU*`, `*KOMBINACIJA*`, `*KUTOVI*`, `*PAR/NEPAR*`, `*POLUVRIJEME*KRAJ*`, `*PROLAZ*`, `*RASPON*`, `*REZULTAT*`, `*STRIJELCI*`, `*TOČAN*` |
+| `sportplus` | `5`, `178`, `308`, `309`, `310`, `311`, `1285`, `*ADVANCE*`, `*DALJE*`, `*KVALIFIKACIJE*`, `*PROLAZ*`, `*QUALIF*` |
+| `wwin` | `4`, `7`, `10`, `51`, `443`, `476` |
+<!-- END GENERATED FROM bookmaker_markets.json -->
