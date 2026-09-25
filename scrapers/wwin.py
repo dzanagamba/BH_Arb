@@ -134,11 +134,20 @@ def _build_markets_from_bets(bets: list, mode: str = "prematch") -> list[Market]
             by_label = {o.label: o for o in odds}
             gg = by_label.get("Yes")
             ng = by_label.get("No")
-            if gg and ng and len({"GG", "NG"}) >= spec.min_legs:
-                markets.append(Market(
-                    market_type=MarketType.BTTS,
-                    odds=[OddsValue(label="GG", value=gg.value), OddsValue(label="NG", value=ng.value)],
-                ))
+            btts_odds = [
+                OddsValue(label=label, value=value)
+                for label, value in (("GG", gg.value if gg else None), ("NG", ng.value if ng else None))
+                if value is not None
+            ]
+            actual = {odd.label for odd in btts_odds}
+            if (
+                spec is not None
+                and gg
+                and ng
+                and len(actual) >= spec.min_legs
+                and actual.issubset(spec.labels)
+            ):
+                markets.append(Market(market_type=MarketType.BTTS, odds=btts_odds))
         elif bet_id == 2 and mode == "prematch":
             # First-half 1X2 is an experimental market retained outside the
             # core registry; keep the historical payload support.
@@ -173,14 +182,23 @@ def _build_markets_from_bets(bets: list, mode: str = "prematch") -> list[Market]
                 continue
             over = next((o for o in odds if o.label.lower() == "over"), None)
             under = next((o for o in odds if o.label.lower() == "under"), None)
-            if over and under and len({"Over", "Under"}) >= spec.min_legs:
-                markets.append(Market(
-                    market_type=market_type,
-                    odds=[
-                        OddsValue(label=f"Over {canonical_line}", value=over.value),
-                        OddsValue(label=f"Under {canonical_line}", value=under.value),
-                    ],
-                ))
+            ou_odds = [
+                OddsValue(label=label, value=value)
+                for label, value in (
+                    (f"Over {canonical_line}", over.value if over else None),
+                    (f"Under {canonical_line}", under.value if under else None),
+                )
+                if value is not None
+            ]
+            actual = {odd.label for odd in ou_odds}
+            if (
+                spec is not None
+                and over
+                and under
+                and len(actual) >= spec.min_legs
+                and actual.issubset(spec.labels)
+            ):
+                markets.append(Market(market_type=market_type, odds=ou_odds))
         else:
             if bet_id is not None:
                 record_unmapped("wwin", bet_id)

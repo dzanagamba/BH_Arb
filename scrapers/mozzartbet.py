@@ -155,21 +155,26 @@ def _map_outcome_label(label: str, market_type: MarketType) -> str:
 
 
 def _registered_spec(
+    bookmaker: str,
     mode: str,
     source_id: int | str,
     market_type: MarketType,
     line: float | None = None,
 ):
     spec = MARKET_REGISTRY.lookup_type(
-        "mozzartbet", mode, source_id, market_type, line=line
+        bookmaker, mode, source_id, market_type, line=line
     )
     known = getattr(MARKET_REGISTRY, "has_source_id", None)
-    if spec is None and (known is None or not known("mozzartbet", mode, source_id)):
-        record_unmapped("mozzartbet", source_id)
+    if spec is None and (known is None or not known(bookmaker, mode, source_id)):
+        record_unmapped(bookmaker, source_id)
     return spec
 
 
-def _parse_markets(event: dict, mode: str = "prematch") -> list[Market]:
+def _parse_markets(
+    event: dict,
+    mode: str = "prematch",
+    bookmaker: str = BOOKMAKER_ID,
+) -> list[Market]:
     markets: list[Market] = []
     raw_odds = event.get("odds")
     if not raw_odds or not isinstance(raw_odds, list):
@@ -200,7 +205,7 @@ def _parse_markets(event: dict, mode: str = "prematch") -> list[Market]:
         # match results — always exclude them.
         if any(w in f"{gshort} {gname}" for w in ("dalje", "prolaz", "kvalifikacije")):
             if gid is not None:
-                record_unmapped("mozzartbet", gid)
+                record_unmapped(bookmaker, gid, context=f"{gshort} {gname}")
             continue
 
         sname = str(subgame.get("name", "") if isinstance(subgame, dict) else "").strip()
@@ -214,21 +219,27 @@ def _parse_markets(event: dict, mode: str = "prematch") -> list[Market]:
 
         # 1X2 (Game id=1 or ki / konačan ishod)
         if gid == 1 or gshort == "ki" or "konačan ishod" in gname or "konacan ishod" in gname:
-            spec = _registered_spec(mode, gid if gid is not None else gname, MarketType.MATCH_RESULT)
+            spec = _registered_spec(
+                bookmaker, mode, gid if gid is not None else gname, MarketType.MATCH_RESULT
+            )
             label = _map_outcome_label(sname, MarketType.MATCH_RESULT)
             if spec is not None and label in spec.labels:
                 mr_odds.append(OddsValue(label=label, value=val))
 
         # Double Chance (Game id=2 or ds / dupla šansa)
         elif gid == 2 or gshort == "ds" or "dupla šansa" in gname or "dupla sansa" in gname:
-            spec = _registered_spec(mode, gid if gid is not None else gname, MarketType.DOUBLE_CHANCE)
+            spec = _registered_spec(
+                bookmaker, mode, gid if gid is not None else gname, MarketType.DOUBLE_CHANCE
+            )
             label = _map_outcome_label(sname, MarketType.DOUBLE_CHANCE)
             if spec is not None and label in spec.labels:
                 dc_odds.append(OddsValue(label=label, value=val))
 
         # BTTS (Game id=130 or tgg / oba tima daju gol)
         elif gid == 130 or gshort == "tgg" or "oba tima daju gol" in gname:
-            spec = _registered_spec(mode, gid if gid is not None else gname, MarketType.BTTS)
+            spec = _registered_spec(
+                bookmaker, mode, gid if gid is not None else gname, MarketType.BTTS
+            )
             s_lower = sname.lower()
             if spec is not None and s_lower in ("gg", "da"):
                 btts_dict["GG"] = val
@@ -249,7 +260,11 @@ def _parse_markets(event: dict, mode: str = "prematch") -> list[Market]:
             }.get(line_name or "")
             spec = (
                 _registered_spec(
-                    mode, gid if gid is not None else gname, market_type, line=float(line_name)
+                    bookmaker,
+                    mode,
+                    gid if gid is not None else gname,
+                    market_type,
+                    line=float(line_name),
                 )
                 if market_type is not None and line_name is not None
                 else None
@@ -263,10 +278,10 @@ def _parse_markets(event: dict, mode: str = "prematch") -> list[Market]:
                     ou_dict[line_name][label] = val
         else:
             if gid is not None:
-                record_unmapped("mozzartbet", gid)
+                record_unmapped(bookmaker, gid, context=f"{gshort} {gname}")
 
     # Only accept 1X2 when the registered minimum and label set are satisfied.
-    mr_spec = MARKET_REGISTRY.lookup_type("mozzartbet", mode, 1, MarketType.MATCH_RESULT)
+    mr_spec = MARKET_REGISTRY.lookup_type(bookmaker, mode, 1, MarketType.MATCH_RESULT)
     if (
         mr_spec is not None
         and len({o.label for o in mr_odds}) >= mr_spec.min_legs
@@ -274,7 +289,7 @@ def _parse_markets(event: dict, mode: str = "prematch") -> list[Market]:
     ):
         markets.append(Market(market_type=MarketType.MATCH_RESULT, odds=mr_odds))
 
-    dc_spec = MARKET_REGISTRY.lookup_type("mozzartbet", mode, 2, MarketType.DOUBLE_CHANCE)
+    dc_spec = MARKET_REGISTRY.lookup_type(bookmaker, mode, 2, MarketType.DOUBLE_CHANCE)
     if (
         dc_spec is not None
         and len({o.label for o in dc_odds}) >= dc_spec.min_legs
@@ -282,21 +297,19 @@ def _parse_markets(event: dict, mode: str = "prematch") -> list[Market]:
     ):
         markets.append(Market(market_type=MarketType.DOUBLE_CHANCE, odds=dc_odds))
 
-    btts_spec = MARKET_REGISTRY.lookup_type("mozzartbet", mode, 130, MarketType.BTTS)
+    btts_spec = MARKET_REGISTRY.lookup_type(bookmaker, mode, 130, MarketType.BTTS)
+    btts_odds = [
+        OddsValue(label=label, value=btts_dict[label])
+        for label in ("GG", "NG")
+        if label in btts_dict
+    ]
+    actual = {odd.label for odd in btts_odds}
     if (
         btts_spec is not None
-        and "GG" in btts_dict
-        and "NG" in btts_dict
-        and len({"GG", "NG"}) >= btts_spec.min_legs
-        and {"GG", "NG"}.issubset(btts_spec.labels)
+        and len(actual) >= btts_spec.min_legs
+        and actual.issubset(btts_spec.labels)
     ):
-        markets.append(Market(
-            market_type=MarketType.BTTS,
-            odds=[
-                OddsValue(label="GG", value=btts_dict["GG"]),
-                OddsValue(label="NG", value=btts_dict["NG"])
-            ]
-        ))
+        markets.append(Market(market_type=MarketType.BTTS, odds=btts_odds))
 
     mt_map = {
         "1.5": MarketType.OVER_UNDER_1_5,
@@ -308,21 +321,20 @@ def _parse_markets(event: dict, mode: str = "prematch") -> list[Market]:
         under_label = f"Under {thresh}"
         market_type = mt_map[thresh]
         spec = MARKET_REGISTRY.lookup_type(
-            "mozzartbet", mode, 3, market_type, line=float(thresh)
+            bookmaker, mode, 3, market_type, line=float(thresh)
         )
+        ou_odds = [
+            OddsValue(label=label, value=odds_map[label])
+            for label in (over_label, under_label)
+            if label in odds_map
+        ]
+        actual = {odd.label for odd in ou_odds}
         if (
             spec is not None
-            and over_label in odds_map
-            and under_label in odds_map
-            and len({over_label, under_label}) >= spec.min_legs
+            and len(actual) >= spec.min_legs
+            and actual.issubset(spec.labels)
         ):
-            markets.append(Market(
-                market_type=market_type,
-                odds=[
-                    OddsValue(label=over_label, value=odds_map[over_label]),
-                    OddsValue(label=under_label, value=odds_map[under_label])
-                ]
-            ))
+            markets.append(Market(market_type=market_type, odds=ou_odds))
 
     return markets
 

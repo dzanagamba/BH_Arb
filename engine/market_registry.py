@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fnmatch
 import json
 import os
 from dataclasses import dataclass, field
@@ -18,6 +19,42 @@ REGISTRY_PATH = os.path.abspath(
 # lets scrapers loaded independently by the API and worker processes publish the
 # same health signal without threading a mutable counter through every parser.
 unmapped_markets: dict[str, int] = {}
+EXCLUDED_MARKETS: dict[str, set[str]] = {}
+
+
+def _normalise_exclusion(value: object) -> str:
+    return str(value).strip().casefold()
+
+
+def _matches_exclusion(value: int | str, patterns: set[str]) -> bool:
+    normalized = _normalise_exclusion(value)
+    return any(
+        fnmatch.fnmatchcase(normalized, pattern)
+        for pattern in patterns
+    )
+
+
+def _is_excluded(
+    bookmaker: str,
+    source_id: int | str,
+    context: int | str | None = None,
+) -> bool:
+    patterns = EXCLUDED_MARKETS.get(bookmaker, set())
+    if _matches_exclusion(source_id, patterns):
+        return True
+    return context is not None and _matches_exclusion(context, patterns)
+
+
+def record_unmapped(
+    bookmaker: str,
+    source_id: int | str,
+    context: int | str | None = None,
+) -> None:
+    """Record a genuinely unknown source ID, ignoring declared exclusions."""
+    if _is_excluded(bookmaker, source_id, context):
+        return
+    key = f"{bookmaker}:{source_id}"
+    unmapped_markets[key] = unmapped_markets.get(key, 0) + 1
 
 
 _DEFAULT_LABELS: dict[MarketType, set[str]] = {
@@ -28,12 +65,6 @@ _DEFAULT_LABELS: dict[MarketType, set[str]] = {
     MarketType.OVER_UNDER_2_5: {"Over 2.5", "Under 2.5"},
     MarketType.OVER_UNDER_3_5: {"Over 3.5", "Under 3.5"},
 }
-
-
-def record_unmapped(bookmaker: str, source_id: int | str) -> None:
-    """Record a source market ID that is not present in the registry."""
-    key = f"{bookmaker}:{source_id}"
-    unmapped_markets[key] = unmapped_markets.get(key, 0) + 1
 
 
 @dataclass
@@ -71,6 +102,17 @@ class MarketRegistry:
             data: Any = json.load(file)
         if not isinstance(data, dict):
             raise ValueError("market registry must contain a JSON object")
+
+        raw_excluded = data.get("_excluded", {})
+        if not isinstance(raw_excluded, dict):
+            raise ValueError("registry _excluded must be an object")
+        self.excluded: dict[str, set[str]] = {}
+        for bookmaker, values in raw_excluded.items():
+            if not isinstance(values, list):
+                raise ValueError(f"excluded IDs for {bookmaker!r} must be a list")
+            normalized = {_normalise_exclusion(value) for value in values}
+            self.excluded[str(bookmaker)] = normalized
+            EXCLUDED_MARKETS.setdefault(str(bookmaker), set()).update(normalized)
 
         for bookmaker, modes in data.items():
             if str(bookmaker).startswith("_"):
@@ -120,6 +162,25 @@ class MarketRegistry:
     def has_source_id(self, bookmaker: str, mode: str, source_id: int | str) -> bool:
         """Return whether an ID is registered for this bookmaker/mode."""
         return (bookmaker, mode, str(source_id)) in self._index
+
+    def is_excluded(
+        self,
+        bookmaker: str,
+        mode: str,
+        source_id: int | str,
+        context: int | str | None = None,
+    ) -> bool:
+        """Return whether a source ID/name is explicitly excluded.
+
+        ``mode`` is accepted for symmetry with the lookup API and for future
+        mode-specific exclusions; the current JSON namespace is book-scoped.
+        """
+        del mode
+        patterns = self.excluded.get(bookmaker, set())
+        return (
+            _matches_exclusion(source_id, patterns)
+            or (context is not None and _matches_exclusion(context, patterns))
+        )
 
     def specs_for(
         self, bookmaker: str, mode: str, source_id: int | str

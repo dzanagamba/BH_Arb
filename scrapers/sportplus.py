@@ -258,11 +258,14 @@ class SportPlusScraper:
                         gg = max(gg or 0.0, value)
                     elif alias in ("2(N)", "2N", "Ne", "NG"):
                         ng = max(ng or 0.0, value)
-                if gg and ng and len({"GG", "NG"}) >= spec.min_legs:
-                    append_market(MarketType.BTTS, [
-                        OddsValue(label="GG", value=gg),
-                        OddsValue(label="NG", value=ng),
-                    ])
+                btts_odds = [
+                    OddsValue(label=label, value=value)
+                    for label, value in (("GG", gg), ("NG", ng))
+                    if value is not None
+                ]
+                actual = {odd.label for odd in btts_odds}
+                if len(actual) >= spec.min_legs and actual.issubset(spec.labels):
+                    append_market(MarketType.BTTS, btts_odds)
             elif name.startswith("Zbroj golova "):
                 import re as _re
                 match_line = _re.search(r"(\d+[.,]\d+)", name)
@@ -285,11 +288,17 @@ class SportPlusScraper:
                         over = max(over or 0.0, value)
                     elif "M" in alias:
                         under = max(under or 0.0, value)
-                if over and under and len({"Over", "Under"}) >= spec.min_legs:
-                    append_market(market_type, [
-                        OddsValue(label=f"Over {line}", value=over),
-                        OddsValue(label=f"Under {line}", value=under),
-                    ])
+                ou_odds = [
+                    OddsValue(label=label, value=value)
+                    for label, value in (
+                        (f"Over {line}", over),
+                        (f"Under {line}", under),
+                    )
+                    if value is not None
+                ]
+                actual = {odd.label for odd in ou_odds}
+                if len(actual) >= spec.min_legs and actual.issubset(spec.labels):
+                    append_market(market_type, ou_odds)
         return result
 
     def _parse_match(self, m: dict, seen_codes: set) -> Match | None:
@@ -383,7 +392,7 @@ class SportPlusScraper:
             market_name = str(market.get("name", "")).upper().strip()
             if any(w in market_name for w in ADVANCE_KEYWORDS):
                 if isinstance(market_id, int | str):
-                    record_unmapped("sportplus", market_id)
+                    record_unmapped("sportplus", market_id, context=market_name)
                 continue
 
             odds_raw = market.get("odds", [])
@@ -521,7 +530,7 @@ class SportPlusScraper:
                     "PRVO POLUVRIJEME",
                     "AZIJSKI HENDIKEP",
                 }:
-                    record_unmapped("sportplus", market_id)
+                    record_unmapped("sportplus", market_id, context=market_name)
 
         for market_type, over_label, under_label in (
             (MarketType.OVER_UNDER_1_5, "Over 1.5", "Under 1.5"),
@@ -534,7 +543,14 @@ class SportPlusScraper:
             spec = _registered_spec(
                 "prematch", source_id, market_type, line=float(over_label.split()[-1])
             )
-            if spec is not None and over and under and len({over.label, under.label}) >= spec.min_legs:
+            if over is None or under is None:
+                continue
+            actual = {over.label, under.label}
+            if (
+                spec is not None
+                and len(actual) >= spec.min_legs
+                and actual.issubset(spec.labels)
+            ):
                 add_market(market_type, [over, under])
 
         return [

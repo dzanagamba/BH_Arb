@@ -56,6 +56,7 @@ def test_intentionally_unavailable_modes_are_empty():
 
 
 def test_nsoft_parser_uses_registry_min_legs(monkeypatch):
+    import engine.market_registry as registry_module
     from engine.market_registry import MarketSpec
     from scrapers import common
 
@@ -75,7 +76,7 @@ def test_nsoft_parser_uses_registry_min_legs(monkeypatch):
         def has_source_id(self, bookmaker, mode, source_id):
             return True
 
-    monkeypatch.setattr(common, "_NSOFT_REGISTRY", CustomRegistry())
+    monkeypatch.setattr(registry_module, "MARKET_REGISTRY", CustomRegistry())
     bets = [{
         "betTypeId": 135,
         "betOutcomes": [
@@ -86,6 +87,15 @@ def test_nsoft_parser_uses_registry_min_legs(monkeypatch):
     markets = common.parse_nsoft_bets(bets)
     assert len(markets) == 1
     assert {o.label for o in markets[0].odds} == {"1", "2"}
+
+
+def test_nsoft_accessor_uses_shared_module_registry(monkeypatch):
+    import engine.market_registry as registry_module
+    from scrapers import common
+
+    sentinel = object()
+    monkeypatch.setattr(registry_module, "MARKET_REGISTRY", sentinel)
+    assert common._nsoft_registry() is sentinel
 
 
 def test_known_nsoft_ou_id_with_unsupported_line_is_not_unmapped():
@@ -102,6 +112,45 @@ def test_known_nsoft_ou_id_with_unsupported_line_is_not_unmapped():
     }])
     assert markets == []
     assert "mdshop:137" not in unmapped_markets
+
+
+def test_declared_exclusions_are_not_counted_as_unmapped():
+    from engine.market_registry import record_unmapped
+
+    unmapped_markets.pop("mdshop:136", None)
+    unmapped_markets.pop("mdshop:987654", None)
+    record_unmapped("mdshop", 136)
+    record_unmapped("mdshop", 987654)
+    assert "mdshop:136" not in unmapped_markets
+    assert "mdshop:987654" in unmapped_markets
+
+
+def test_supported_experimental_ids_are_not_declared_excluded():
+    r = MarketRegistry()
+    assert not r.is_excluded("mbet", "prematch", "ofb:ht")
+    assert not r.is_excluded("mbet", "prematch", "ofb:hc")
+    assert not r.is_excluded("wwin", "prematch", 2)
+    assert not r.is_excluded("sportplus", "prematch", 4)
+    assert not r.is_excluded("sportplus", "prematch", 25)
+    assert not r.is_excluded("betole", "prematch", 4)
+    assert not r.is_excluded("betole", "prematch", 5)
+    assert not r.is_excluded("betole", "prematch", 6)
+
+
+def test_name_exclusions_cover_advance_and_premier_templates():
+    r = MarketRegistry()
+    assert r.is_excluded(
+        "mozzartbet", "prematch", 999, context="Ko ide dalje"
+    )
+    assert r.is_excluded(
+        "premier_kladionica", "prematch", 999, context="HENDIKEP"
+    )
+    assert r.is_excluded(
+        "sportplus", "prematch", 999, context="NAČIN PROLAZA"
+    )
+    assert not r.is_excluded(
+        "premier_kladionica", "prematch", 999, context="UTAKMICA"
+    )
 
 
 def test_unknown_id_is_recorded_not_silently_dropped():
@@ -197,3 +246,111 @@ def test_registry_can_reject_a_bookmakers_core_market_id(monkeypatch):
         {"1": 2.0, "2": 2.0, "3": 2.0}
     )
     assert betole_markets == []
+
+
+def test_wwin_live_request_includes_every_supported_live_market_id():
+    from scrapers.wwin import _request_market_ids
+
+    assert set(_request_market_ids("live")) == {95, 6, 3, 11}
+
+
+def test_wwin_live_parser_keeps_dc_btts_and_ou():
+    from scrapers.wwin import _build_markets_from_bets
+
+    markets = _build_markets_from_bets([
+        {"idBt": 6, "odds": [
+            {"t": label, "va": 2.0, "isv": 1} for label in ("1X", "12", "X2")
+        ]},
+        {"idBt": 3, "odds": [
+            {"t": "Yes", "va": 2.0, "isv": 1},
+            {"t": "No", "va": 1.8, "isv": 1},
+        ]},
+        {"idBt": 11, "spec": "total=2,5", "odds": [
+            {"t": "Over", "va": 1.9, "isv": 1},
+            {"t": "Under", "va": 1.9, "isv": 1},
+        ]},
+    ], mode="live")
+    assert {market.market_type for market in markets} == {
+        MarketType.DOUBLE_CHANCE,
+        MarketType.BTTS,
+        MarketType.OVER_UNDER_2_5,
+    }
+
+
+def test_premier_live_double_chance_resolves_and_is_not_unmapped():
+    from scrapers.premier_kladionica import PremierKladionicaScraper
+
+    unmapped_markets.pop("premier_kladionica:UTAKMICA_DC", None)
+    scraper = PremierKladionicaScraper()
+    set_tip = {(2, 2338): "LIVE - UTAKMICA"}
+    set_tip_tip = {
+        (2, 2338, 1): "1",
+        (2, 2338, 2): "X",
+        (2, 2338, 3): "2",
+        (2, 2338, 4): "1X",
+        (2, 2338, 5): "X2",
+        (2, 2338, 6): "12",
+    }
+    rows = [
+        [1, 2, 2338, 1, tip_id, odd, 1, 0, 1]
+        for tip_id, odd in (
+            (1, 2.0), (2, 3.0), (3, 3.5), (4, 1.4), (5, 1.6), (6, 1.3)
+        )
+    ]
+    markets = scraper._build_markets(rows, set_tip, {}, set_tip_tip, live=True)
+    assert any(market.market_type == MarketType.DOUBLE_CHANCE for market in markets)
+    assert "premier_kladionica:UTAKMICA_DC" not in unmapped_markets
+
+
+def test_betole_shared_parser_files_unknown_ids_under_betole():
+    from scrapers.mozzartbet import _parse_markets
+
+    unmapped_markets.pop("mozzartbet:999", None)
+    unmapped_markets.pop("betole:999", None)
+    event = {
+        "odds": [{
+            "game": {"id": 999, "name": "Nepoznat"},
+            "subgame": {"name": "1"},
+            "value": 2.0,
+        }]
+    }
+    assert _parse_markets(event, bookmaker="betole", mode="prematch") == []
+    assert "betole:999" in unmapped_markets
+    assert "mozzartbet:999" not in unmapped_markets
+
+
+def test_label_checks_reject_incomplete_registered_label_sets(monkeypatch):
+    import scrapers.wwin as wwin_module
+    from engine.market_registry import MarketSpec
+
+    class IncompleteLabelsRegistry:
+        def lookup_type(self, bookmaker, mode, source_id, market_type, line=None):
+            if market_type == MarketType.BTTS:
+                return MarketSpec(
+                    bookmaker=bookmaker,
+                    mode=mode,
+                    market_type=market_type,
+                    labels={"GG"},
+                    min_legs=2,
+                )
+            return MarketSpec(
+                bookmaker=bookmaker,
+                mode=mode,
+                market_type=market_type,
+                labels={f"Over {line}"},
+                line=line,
+                min_legs=2,
+            )
+
+    monkeypatch.setattr(wwin_module, "MARKET_REGISTRY", IncompleteLabelsRegistry())
+    markets = wwin_module._build_markets_from_bets([
+        {"idBt": 3, "odds": [
+            {"t": "Yes", "va": 2.0, "isv": 1},
+            {"t": "No", "va": 1.8, "isv": 1},
+        ]},
+        {"idBt": 11, "spec": "total=2,5", "odds": [
+            {"t": "Over", "va": 1.9, "isv": 1},
+            {"t": "Under", "va": 1.9, "isv": 1},
+        ]},
+    ])
+    assert markets == []

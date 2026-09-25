@@ -282,16 +282,10 @@ NSOFT_LIVE_OU_BET_IDS = {22, 28}    # live O/U goals, threshold in sbv
 
 # Registry loading is lazy so importing shared scraper helpers remains cheap
 # for callers that do not parse an NSoft payload.
-_NSOFT_REGISTRY: MarketRegistry | None = None
-
-
 def _nsoft_registry() -> MarketRegistry:
-    global _NSOFT_REGISTRY
-    if _NSOFT_REGISTRY is None:
-        from engine.market_registry import MarketRegistry
+    from engine.market_registry import MARKET_REGISTRY
 
-        _NSOFT_REGISTRY = MarketRegistry()
-    return _NSOFT_REGISTRY
+    return MARKET_REGISTRY
 
 
 # Outcome label sets required to accept a market (defense against

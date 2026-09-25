@@ -333,11 +333,15 @@ class BetoleScraper(BaseScraper):
                     league = _extract_league(event)
                     kickoff = _extract_kickoff(event)
 
-                    markets = _parse_markets(event)
+                    markets = _parse_markets(
+                        event, mode="prematch", bookmaker=BOOKMAKER_ID
+                    )
                     raw_bets = event.get("bets")
                     if not markets and isinstance(raw_bets, list):
                         # NSoft-style bets array (ExeFeed under the hood is NSoft)
-                        markets = parse_nsoft_bets(raw_bets)
+                        markets = parse_nsoft_bets(
+                            raw_bets, bookmaker=BOOKMAKER_ID, mode="prematch"
+                        )
 
                     if not markets:
                         continue

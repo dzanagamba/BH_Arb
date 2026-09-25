@@ -194,17 +194,20 @@ def _resolve_mbet_market(raw_sport_id: str, odds_dict: dict) -> dict[str, list[O
     spec = _registered_spec("prematch", source_id, MarketType.BTTS)
     gg_val = _get_active_value(odds_dict.get(f"o{s}:gg:GG"))
     ng_val = _get_active_value(odds_dict.get(f"o{s}:gg:NG"))
+    btts_odds = [
+        OddsValue(label=label, value=value)
+        for label, value in (("GG", gg_val), ("NG", ng_val))
+        if value is not None
+    ]
+    actual = {odd.label for odd in btts_odds}
     if (
         spec is not None
         and gg_val
         and ng_val
-        and len({"GG", "NG"}) >= spec.min_legs
-        and {"GG", "NG"}.issubset(spec.labels)
+        and len(actual) >= spec.min_legs
+        and actual.issubset(spec.labels)
     ):
-        markets["BTTS"] = [
-            OddsValue(label="GG", value=gg_val),
-            OddsValue(label="NG", value=ng_val),
-        ]
+        markets["BTTS"] = btts_odds
 
     # Over/Under markets — special keys
     # O/U 2.5: tg:3+ (over), tg:0-2 (under)
@@ -256,19 +259,25 @@ def _resolve_mbet_market(raw_sport_id: str, odds_dict: dict) -> dict[str, list[O
                     under_val = float(entry) if entry else 0
                 except (ValueError, TypeError):
                     pass
+        ou_odds = [
+            OddsValue(label=label, value=value)
+            for label, value in (
+                (f"Over {threshold}", over_val),
+                (f"Under {threshold}", under_val),
+            )
+            if value is not None
+        ]
+        actual = {odd.label for odd in ou_odds}
         if (
             spec is not None
             and over_val
             and under_val
             and over_val >= 1.01
             and under_val >= 1.01
-            and len({"Over", "Under"}) >= spec.min_legs
-            and {f"Over {threshold}", f"Under {threshold}"}.issubset(spec.labels)
+            and len(actual) >= spec.min_legs
+            and actual.issubset(spec.labels)
         ):
-            markets[mt.value] = [
-                OddsValue(label=f"Over {threshold}", value=over_val),
-                OddsValue(label=f"Under {threshold}", value=under_val),
-            ]
+            markets[mt.value] = ou_odds
 
     return markets
 
@@ -314,11 +323,20 @@ def _resolve_mbet_live_market(odds_dict: dict) -> dict[str, list[OddsValue]]:
     spec = _registered_spec("live", "lfb:bttsny", MarketType.BTTS)
     btts_yes = _get_active_value(odds_dict.get("lfb:bttsny:Yes"))
     btts_no = _get_active_value(odds_dict.get("lfb:bttsny:No"))
-    if spec is not None and btts_yes and btts_no and len({"GG", "NG"}) >= spec.min_legs:
-        markets["BTTS"] = [
-            OddsValue(label="GG", value=btts_yes),
-            OddsValue(label="NG", value=btts_no),
-        ]
+    btts_odds = [
+        OddsValue(label=label, value=value)
+        for label, value in (("GG", btts_yes), ("NG", btts_no))
+        if value is not None
+    ]
+    actual = {odd.label for odd in btts_odds}
+    if (
+        spec is not None
+        and btts_yes
+        and btts_no
+        and len(actual) >= spec.min_legs
+        and actual.issubset(spec.labels)
+    ):
+        markets["BTTS"] = btts_odds
 
     ou_mappings = {
         "1.5": (MarketType.OVER_UNDER_1_5, "Over 1.5", "Under 1.5"),

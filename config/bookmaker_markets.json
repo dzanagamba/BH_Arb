@@ -1,4 +1,28 @@
 {
+  "_excluded": {
+    "mdshop": [
+      136, 140, 143, 144, 148, 149, 153, 154, 161, 162, 166, 174,
+      1, 14, 17, 24, 261, 10, 30, 39, 43, 303, 304, 11, 437, 1064, 56, 41
+    ],
+    "admiralbet": [
+      136, 140, 143, 144, 148, 149, 153, 154, 161, 162, 166, 174,
+      1, 14, 17, 24, 261, 10, 30, 39, 43, 303, 304, 11, 437, 1064, 56, 41
+    ],
+    "mozzartbet": [141, "*DALJE*", "*PROLAZ*", "*KVALIFIKACIJE*"],
+    "wwin": [7, 10, 4, 476, 443, 51],
+    "premier_kladionica": [
+      1435, 1440, "*HENDIKEP*", "*HT/FT*", "*KUTOVI*", "*KARTICE*",
+      "*STRIJELCI*", "*KOMBINACIJA*", "*PROLAZ*", "*REZULTAT*",
+      "*KLAĐENJE*POBJEDU*", "*POLUVRIJEME*KRAJ*", "*TOČAN*", "*RASPON*",
+      "*PAR/NEPAR*"
+    ],
+    "mbet": ["ofb:fts", "ofb:sh", "ofb:htdc", "ofb:shdc", "ofb:dnb", "ofb:fi", "lfb:tg1sth"],
+    "betole": [335, 336],
+    "sportplus": [
+      5, 178, 308, 309, 310, 311, 1285,
+      "*DALJE*", "*PROLAZ*", "*KVALIFIKACIJE*", "*ADVANCE*", "*QUALIF*"
+    ]
+  },
   "mdshop": {
     "prematch": {
       "1x2": { "ids": [135], "labels": ["1", "X", "2"], "min_legs": 3, "settlement": "full_time" },
@@ -42,7 +66,12 @@
       "over_under_3_5": { "ids": [11], "line": 3.5, "min_legs": 2 }
     },
     "live": {
-      "1x2": { "ids": [95], "labels": ["1", "X", "2"], "min_legs": 3 }
+      "1x2": { "ids": [95], "labels": ["1", "X", "2"], "min_legs": 3 },
+      "double_chance": { "ids": [6], "labels": ["1X", "12", "X2"], "min_legs": 2 },
+      "btts": { "ids": [3], "labels": ["GG", "NG"], "min_legs": 2 },
+      "over_under_1_5": { "ids": [11], "line": 1.5, "min_legs": 2 },
+      "over_under_2_5": { "ids": [11], "line": 2.5, "min_legs": 2 },
+      "over_under_3_5": { "ids": [11], "line": 3.5, "min_legs": 2 }
     }
   },
   "premier_kladionica": {
@@ -56,6 +85,7 @@
     },
     "live": {
       "1x2": { "ids": ["LIVE_UTAKMICA"], "labels": ["1", "X", "2"], "min_legs": 3 },
+      "double_chance": { "ids": ["UTAKMICA_DC"], "labels": ["1X", "12", "X2"], "min_legs": 2 },
       "btts": { "ids": ["LIVE_OBA_DAJU_GOL"], "labels": ["GG", "NG"], "min_legs": 2 }
     }
   },
@@ -103,12 +133,12 @@
   },
   "betole": {
     "prematch": {
-      "1x2": { "ids": [1, 2, 3], "labels": ["1", "X", "2"], "min_legs": 3, "settlement": "full_time" },
-      "double_chance": { "ids": [7, 8, 9], "labels": ["1X", "12", "X2"], "min_legs": 2, "settlement": "full_time" },
-      "btts": { "ids": [272, 273], "labels": ["GG", "NG"], "min_legs": 2, "settlement": "full_time" },
-      "over_under_1_5": { "ids": [242, 21], "line": 1.5, "min_legs": 2 },
-      "over_under_2_5": { "ids": [24, 22], "line": 2.5, "min_legs": 2 },
-      "over_under_3_5": { "ids": [25, 219], "line": 3.5, "min_legs": 2 }
+      "1x2": { "ids": [1, 2, 3, 135], "labels": ["1", "X", "2"], "min_legs": 3, "settlement": "full_time" },
+      "double_chance": { "ids": [7, 8, 9, 152, 2], "labels": ["1X", "12", "X2"], "min_legs": 2, "settlement": "full_time" },
+      "btts": { "ids": [272, 273, 151, 130], "labels": ["GG", "NG"], "min_legs": 2, "settlement": "full_time" },
+      "over_under_1_5": { "ids": [242, 21, 137, 138, 3], "line": 1.5, "min_legs": 2 },
+      "over_under_2_5": { "ids": [24, 22, 137, 138, 3], "line": 2.5, "min_legs": 2 },
+      "over_under_3_5": { "ids": [25, 219, 137, 138, 3], "line": 3.5, "min_legs": 2 }
     },
     "live": {}
   },
