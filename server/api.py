@@ -9,6 +9,7 @@ Endpoints:
   GET  /api/debug/report — Get match grouping debug report
   POST /api/recalculate — Recalculate stakes for a given investment
   POST /api/verify     — Re-verify a surebet's odds against fresh bookmaker data
+  POST /api/verify-links — On-demand deep-link proof for one bookmaker
   GET  /api/history    — Recent scan history
 """
 
@@ -265,6 +266,162 @@ def _state_for(mode: str) -> tuple[ScanStatus, list, list, list, dict]:
                 cached_live_match_groups_report, cached_live_per_bookie)
     return (scan_status, cached_surebets, cached_matches,
             cached_match_groups_report, cached_per_bookie)
+
+
+# ---------------------------------------------------------------------------
+# Deep-link verifications (Task 12)
+#
+# `deep_link_verified` is the only flag that lets a pair reach `verified`, and
+# it may only be set from a real check. The check itself costs a browser
+# navigation per event, so it is on-demand and never part of a scan; its RESULT
+# is stored here so the next scan's gate can see it without scraping again.
+#
+# A scan rebuilds every match from the scrapers, which all hardcode
+# `deep_link_verified=False`, so a write into the cached matches alone would be
+# wiped by the next scan within minutes. The store is therefore the durable
+# record, keyed per mode (a live event id is not a prematch one) and bounded by
+# a TTL: a bookmaker can retire an event at any time, and a dead link must stop
+# unblocking `verified` on its own.
+# ---------------------------------------------------------------------------
+DEEP_LINK_VERIFICATIONS_FILE = os.path.join(CACHE_DIR, "deep_link_verifications.json")
+DEEP_LINK_VERIFICATION_TTL_SECONDS = 3600
+DEEP_LINK_VERIFY_DEFAULT_LIMIT = 5
+DEEP_LINK_VERIFY_MAX_LIMIT = 20
+_deep_link_verifications: dict[str, dict[str, dict]] = {}
+_DEEP_LINK_LOCK = threading.Lock()
+# One browser at a time: the check is the most expensive thing this server does.
+_deep_link_check_lock = asyncio.Lock()
+
+
+def _deep_link_key(bookmaker: str, event_id: str) -> str:
+    """Return the store key for one bookmaker's one event."""
+    return f"{bookmaker}|{event_id}"
+
+
+def _deep_link_record_is_fresh(record: dict, now: datetime | None = None) -> bool:
+    """Return whether a stored verification is still inside its TTL."""
+    if not isinstance(record, dict) or record.get("verified") is not True:
+        return False
+    raw = record.get("checked_at")
+    if not isinstance(raw, str):
+        return False
+    try:
+        checked_at = datetime.fromisoformat(raw)
+    except ValueError:
+        return False
+    if checked_at.tzinfo is not None:
+        checked_at = checked_at.astimezone(UTC).replace(tzinfo=None)
+    reference = now or datetime.now(UTC).replace(tzinfo=None)
+    age = (reference - checked_at).total_seconds()
+    return 0 <= age <= DEEP_LINK_VERIFICATION_TTL_SECONDS
+
+
+def _load_deep_link_verifications() -> dict[str, dict[str, dict]]:
+    """Load the store, dropping entries that are malformed or past their TTL."""
+    state: dict[str, dict[str, dict]] = {}
+    try:
+        with open(DEEP_LINK_VERIFICATIONS_FILE, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, TypeError, ValueError):
+        return state
+    if not isinstance(data, dict):
+        return state
+    for mode, entries in data.items():
+        if not isinstance(mode, str) or not isinstance(entries, dict):
+            continue
+        fresh = {k: v for k, v in entries.items() if isinstance(k, str)
+                 and _deep_link_record_is_fresh(v)}
+        if fresh:
+            state[mode] = fresh
+    return state
+
+
+def _save_deep_link_verifications(state: dict[str, dict[str, dict]]) -> None:
+    _atomic_write_json(DEEP_LINK_VERIFICATIONS_FILE, state, "deep_link_verifications")
+
+
+def _record_deep_link_outcomes(mode: str, bookmaker: str, outcomes: list) -> None:
+    """Store what a verification run proved, per mode.
+
+    A proven link is recorded with a timestamp. A COMPLETED check that found
+    nothing removes the entry, which is how a stale verification is cleared. A
+    check that errored is ignored: absence of evidence is not evidence of
+    absence, so a timeout must never revoke a proof.
+    """
+    now = datetime.now(UTC).replace(tzinfo=None).isoformat()
+    with _DEEP_LINK_LOCK:
+        entries = _deep_link_verifications.setdefault(mode, {})
+        for outcome in outcomes:
+            if outcome.error:
+                continue
+            if outcome.verified:
+                entries[_deep_link_key(bookmaker, outcome.event_id)] = {
+                    "verified": True,
+                    "checked_at": now,
+                    "url": outcome.url,
+                }
+            else:
+                key = _deep_link_key(bookmaker, outcome.event_id)
+                entries.pop(key, None)
+        _save_deep_link_verifications(_deep_link_verifications)
+
+
+def _apply_deep_link_verifications(
+    matches: list, mode: str, now: datetime | None = None
+) -> int:
+    """Mark matches whose link has a fresh stored verification; return the count.
+
+    Only ever SETS the flag. Clearing happens where a completed check said the
+    link is dead, so an unrelated stale store entry can never silently demote a
+    match that a check has just proven. Entries that have aged past their TTL
+    are pruned here, so a proof cannot outlive its window just because the
+    server stayed up.
+    """
+    reference = now or datetime.now(UTC).replace(tzinfo=None)
+    with _DEEP_LINK_LOCK:
+        entries = _deep_link_verifications.get(mode)
+        if not entries:
+            return 0
+        fresh = {k: v for k, v in entries.items() if _deep_link_record_is_fresh(v, reference)}
+        pruned = len(fresh) != len(entries)
+        entries.clear()
+        entries.update(fresh)
+    applied = 0
+    for match in matches:
+        is_dict = isinstance(match, dict)
+        bookmaker = match.get("bookmaker") if is_dict else getattr(match, "bookmaker", "")
+        raw_id = match.get("event_id") if is_dict else getattr(match, "event_id", "")
+        event_id = "" if raw_id is None else str(raw_id)
+        if not bookmaker or not event_id:
+            continue
+        record = fresh.get(_deep_link_key(str(bookmaker), event_id))
+        if record is None:
+            continue
+        current = bool(match.get("deep_link_verified") if is_dict
+                       else getattr(match, "deep_link_verified", False))
+        if current:
+            continue
+        if is_dict:
+            match["deep_link_verified"] = True
+        else:
+            match.deep_link_verified = True
+        applied += 1
+    if pruned:
+        _save_deep_link_verifications(_deep_link_verifications)
+    return applied
+
+
+async def _run_link_verification(
+    bookmaker: str,
+    matches: list,
+    mode: str = "prematch",
+    live: bool = False,
+    limit: int | None = None,
+):
+    """Run the Playwright deep-link check. The endpoint's only browser seam."""
+    from scripts.verify_deeplinks import verify_bookmaker
+
+    return await verify_bookmaker(bookmaker, matches, mode=mode, live=live, limit=limit)
 
 
 def _load_history() -> None:
@@ -903,6 +1060,14 @@ async def run_scan(mode: str = "prematch"):
         status.current_bookmaker = "Analysing matches..."
         logger.info(f"Total {'live' if is_live else 'prematch'} matches collected: {len(all_matches)}. Running matcher...")
 
+        # Links already proven by an on-demand check are re-applied here. This
+        # is a dict lookup, never a browser: the check itself stays out of the
+        # scan path, but its proof must survive into the gate, or every group
+        # would be `link_unverified` again on the very next scan.
+        proven = _apply_deep_link_verifications(all_matches, mode)
+        if proven:
+            logger.info(f"Applied {proven} stored deep-link verification(s) to {mode} matches")
+
         matcher = MatchMatcher()
         groups = matcher.group_matches(all_matches)
         report_cache.clear()
@@ -1011,6 +1176,9 @@ def _load_cache():
                     pass
             surebets_cache[:] = data.get("surebets", [])
             matches_cache[:] = data.get("matches", [])
+            # A restored cache is re-stamped with any link proof that is still
+            # inside its TTL, so a restart does not silently demote every group.
+            _apply_deep_link_verifications(matches_cache, mode)
             status.total_matches = len(matches_cache)
             status.surebets_found = len(surebets_cache)
             logger.info(
@@ -1518,4 +1686,129 @@ async def recalculate_stakes(
         "investment": req.investment,
         "guaranteed_return": guaranteed_return,
         "guaranteed_profit": profit,
+    }
+
+
+@router.post("/verify-links")
+async def verify_links(
+    bookmaker: str = "",
+    mode: str = "prematch",
+    limit: int = DEEP_LINK_VERIFY_DEFAULT_LIMIT,
+    _auth: None = Depends(_require_api_key),
+):
+    """Prove — or fail to prove — one bookmaker's per-event deep links.
+
+    ON-DEMAND BY DESIGN. This navigates a real browser to real bookmaker pages,
+    seconds per event, so it is never triggered from `run_scan` and never runs
+    while a scan holds the mode. The response states what it cost and what it
+    did NOT cover, because a check that silently skipped events would read as a
+    clean bill of health.
+
+    A bookmaker that declares no per-event route (`supports_event_id: false`)
+    has nothing to check and is reported as skipped, never as a failure.
+    """
+    from scripts.verify_deeplinks import (
+        CRITERION,
+        apply_report,
+        build_targets,
+        supports_event_id,
+    )
+
+    if not bookmaker or not bookmaker.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="bookmaker is required, e.g. /api/verify-links?bookmaker=mozzartbet",
+        )
+    bookmaker = bookmaker.strip()
+    if bookmaker not in BOOKMAKERS:
+        raise HTTPException(status_code=404, detail=f"Unknown bookmaker: {bookmaker}")
+    if mode not in ("prematch", "live"):
+        raise HTTPException(status_code=400, detail="mode must be 'prematch' or 'live'")
+    if limit is None:
+        limit = DEEP_LINK_VERIFY_DEFAULT_LIMIT
+    if limit < 1:
+        raise HTTPException(status_code=400, detail="limit must be at least 1")
+    limit = min(limit, DEEP_LINK_VERIFY_MAX_LIMIT)
+
+    status, _, matches_cache, _, _ = _state_for(mode)
+    if _lock_for(mode).locked() or status.is_scanning:
+        raise HTTPException(
+            status_code=409,
+            detail=f"A {mode} scan is in progress — retry after it finishes",
+        )
+
+    base_url = str(BOOKMAKERS[bookmaker]["base_url"])
+    if not supports_event_id(bookmaker):
+        return {
+            "bookmaker": bookmaker,
+            "mode": mode,
+            "status": "skipped",
+            "skip_reason": f"{bookmaker} declares no declared event route — nothing to verify",
+            "criterion": CRITERION,
+            "available": 0,
+            "checked": 0,
+            "verified": 0,
+            "failed": 0,
+            "unchecked": 0,
+            "duration_seconds": 0.0,
+            "details": [],
+        }
+
+    available = len(build_targets(matches_cache, bookmaker, base_url, live=mode == "live"))
+    if available == 0:
+        return {
+            "bookmaker": bookmaker,
+            "mode": mode,
+            "status": "checked",
+            "skip_reason": (
+                f"no {bookmaker} match in the {mode} cache carries an event id — "
+                "run a scan first"
+            ),
+            "criterion": CRITERION,
+            "available": 0,
+            "checked": 0,
+            "verified": 0,
+            "failed": 0,
+            "unchecked": 0,
+            "duration_seconds": 0.0,
+            "details": [],
+        }
+
+    async with _deep_link_check_lock:
+        report = await _run_link_verification(
+            bookmaker, matches_cache, mode=mode, live=mode == "live", limit=limit
+        )
+
+    _record_deep_link_outcomes(mode, bookmaker, report.outcomes)
+    apply_report(matches_cache, report)
+    _apply_deep_link_verifications(matches_cache, mode)
+    _save_cache(mode)
+
+    logger.info(
+        f"Deep-link check {bookmaker}/{mode}: {report.verified} verified, "
+        f"{report.failed} failed of {report.checked} checked "
+        f"({report.unchecked} of {available} not checked) in {report.duration_seconds}s"
+    )
+    return {
+        "bookmaker": bookmaker,
+        "mode": mode,
+        "status": report.status,
+        "skip_reason": report.skip_reason,
+        "criterion": CRITERION,
+        "available": available,
+        "checked": report.checked,
+        "verified": report.verified,
+        "failed": report.failed,
+        "unchecked": report.unchecked,
+        "duration_seconds": report.duration_seconds,
+        "details": [
+            {
+                "event_id": outcome.event_id,
+                "url": outcome.url,
+                "verified": outcome.verified,
+                "evidence": outcome.evidence,
+                "error": outcome.error,
+            }
+            for outcome in report.outcomes
+        ],
     }

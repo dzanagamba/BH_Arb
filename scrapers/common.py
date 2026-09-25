@@ -505,6 +505,17 @@ def has_declaration(bookmaker: str) -> bool:
     return isinstance(_load_deeplink_config().get(bookmaker), dict)
 
 
+def supports_event_id(bookmaker: str) -> bool:
+    """Return whether a bookmaker declares a per-event deep-link route.
+
+    A book that declares ``supports_event_id: false`` has no per-event route by
+    definition, so a link check for it is meaningless: it must be reported as
+    "no declared event route", never as a failure. Undeclared books are treated
+    the same way — the route is unknown, which is not the same as proven.
+    """
+    return _declared_config(bookmaker).get("supports_event_id") is True
+
+
 def _base_url(base_url: str) -> str:
     """Return a normalized non-event URL for a book's base site."""
     return f"{base_url.rstrip('/')}/"

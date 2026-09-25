@@ -8,8 +8,10 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from server.api import (
+    _deep_link_verifications,
     _load_bookmaker_state,
     _load_cache,
+    _load_deep_link_verifications,
     _load_history,
     _load_market_state,
     _load_suppressed_candidates,
@@ -43,6 +45,10 @@ app.include_router(router, prefix="/api")
 @app.on_event("startup")
 async def on_startup() -> None:
     """Restore last scan results, runtime toggles, and scan history on boot."""
+    # Proven deep links first: `_load_cache` re-stamps the restored matches
+    # with them, so without them every group reads `link_unverified` until the
+    # next on-demand check.
+    _deep_link_verifications.update(_load_deep_link_verifications())
     _load_cache()
     _load_bookmaker_state()
     _load_market_state()
