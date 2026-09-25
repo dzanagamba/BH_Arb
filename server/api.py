@@ -36,10 +36,11 @@ from config.settings import (
     ODDS_TTL_SECONDS,
     SCAN_RATE_LIMIT,
 )
+from engine.ai import MatchAI
 from engine.arbitrage import ArbitrageEngine
 from engine.market_registry import unmapped_markets
 from engine.matcher import MatchMatcher
-from models.schemas import MarketType, Match, ScanStatus
+from models.schemas import CandidateReview, MarketType, Match, ScanStatus
 from scrapers.admiralbet import AdmiralbetScraper
 from scrapers.betole import BetoleScraper
 from scrapers.evlbet import EvlbetScraper
@@ -156,6 +157,32 @@ cached_live_matches: list[dict] = []
 cached_live_match_groups_report: list[dict] = []
 cached_live_per_bookie: dict[str, int] = {}
 scan_history: list[dict] = []           # recent scan entries (newest first)
+
+pending_candidates: dict[str, CandidateReview] = {}
+candidate_reviews: list[CandidateReview] = []
+ALLOWLIST_FILE = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "config",
+    "team_alias_allowlist.json",
+)
+
+
+def _load_allowlist() -> set[str]:
+    try:
+        with open(ALLOWLIST_FILE, encoding="utf-8") as file:
+            data = json.load(file)
+        if not isinstance(data, dict) or not isinstance(data.get("aliases"), list):
+            return set()
+        return {alias for alias in data["aliases"] if isinstance(alias, str)}
+    except (OSError, TypeError, ValueError):
+        return set()
+
+
+def _save_allowlist(aliases: set[str]) -> None:
+    os.makedirs(os.path.dirname(ALLOWLIST_FILE), exist_ok=True)
+    with open(ALLOWLIST_FILE, "w", encoding="utf-8") as file:
+        json.dump({"aliases": sorted(aliases)}, file, ensure_ascii=False, indent=2)
+
 
 _HISTORY_FILE = os.path.join(CACHE_DIR, "scan_history.json")
 _HISTORY_MAX = 50
@@ -513,6 +540,18 @@ async def health():
         "live_surebets_cached": len(cached_live_surebets),
         "live_matches_cached": len(cached_live_matches),
         "unmapped_markets": dict(unmapped_markets),
+        "verified_groups": sum(
+            1
+            for report in cached_match_groups_report
+            if report.get("status") == "verified"
+        ),
+        "pending_candidates": len(pending_candidates),
+        "unverified_links": sum(
+            1
+            for match in cached_matches
+            if match.get("event_id") and not match.get("deep_link_verified")
+        ),
+        "ai_available": MatchAI().available,
         "prematch": {
             "last_scan_age_sec": age_sec(scan_status.last_scan_time),
             "per_bookie": dict(cached_per_bookie),
@@ -651,6 +690,56 @@ class RecalculateRequest(BaseModel):
 class VerifyRequest(BaseModel):
     surebet_id: str
     mode: str = "prematch"
+
+
+@router.get("/candidates")
+async def get_candidates(mode: str = "prematch"):
+    """List match candidates awaiting human review."""
+    return {
+        "count": len(pending_candidates),
+        "candidates": [candidate.model_dump(mode="json") for candidate in pending_candidates.values()],
+    }
+
+
+@router.post("/candidates/{candidate_id}/approve")
+async def approve_candidate(
+    candidate_id: str,
+    _auth: None = Depends(_require_api_key),
+):
+    """Approve a candidate as a human-reviewed team alias."""
+    candidate = pending_candidates.get(candidate_id)
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    alias = "|".join(sorted({candidate.home_team, candidate.away_team}))
+    aliases = _load_allowlist()
+    aliases.add(alias)
+    _save_allowlist(aliases)
+
+    candidate.status = "approved"
+    candidate.resolved_at = datetime.now(UTC).replace(tzinfo=None)
+    candidate.resolved_by = "human"
+    pending_candidates.pop(candidate_id, None)
+    candidate_reviews.insert(0, candidate.model_copy(deep=True))
+    return {"status": "approved", "allowlist_entries": [alias]}
+
+
+@router.post("/candidates/{candidate_id}/reject")
+async def reject_candidate(
+    candidate_id: str,
+    _auth: None = Depends(_require_api_key),
+):
+    """Reject a pending match candidate without changing alias mappings."""
+    candidate = pending_candidates.get(candidate_id)
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    candidate.status = "rejected"
+    candidate.resolved_at = datetime.now(UTC).replace(tzinfo=None)
+    candidate.resolved_by = "human"
+    pending_candidates.pop(candidate_id, None)
+    candidate_reviews.insert(0, candidate.model_copy(deep=True))
+    return {"status": "rejected"}
 
 
 @router.get("/history")
