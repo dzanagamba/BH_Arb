@@ -4,6 +4,7 @@
 > **Baseline:** `claudesurebet` == `dzanagamba/surebet-scanner` @ `7d2d5d8` (9 bookmakers, ~6057 prematch matches → ~802 groups → 0–2 surebets per scan, Mozzartbet degraded to 56 matches, EVLBet only 1X2).
 > **New repo:** `surebetmuse12` — https://github.com/dzanagamba/surebet-muse12 (`plan/muse12-roadmap` @ `aa33254` → `2935d90`).
 > **Status (2026-08-20):** P0 correctness + P1 yield + P2 reliability shipped. 107 tests green, ruff clean, groups 802→856 (+6.7%), WWIN 15s→~7s, Mozzart 56→800+ (projected), dust/health/TTL live.
+> **Status (2026-09-25):** Phase 4 (mapping certainty) shipped — 13 tasks, 503 tests green. **The scanner now produces zero surebets on purpose:** `verified` needs a proven deep link, and MDShop's and Admiralbet's `?event=<id>` routes are inert. See §3 *Phase 4*.
 
 ## 0. Principles
 
@@ -110,6 +111,60 @@ Live suspicious arbs: `maardu-tallinn` Over1.5 1.27 vs Under 7.32 (8.22%), `baye
 * **Notifications:** Telegram/Discord webhook on `profit>1.5%` new `surebetSignature` `frontend/js/app.js:30` mirrored server-side.
 * **New books:** Evaluate 2–3 BiH books beyond 9 (e.g., MaxBet BiH, Meridianbet) — same NSoft/Alea audit as `MARKET_MAPPING.md`.
 * **Sim/sim-paper trading:** Small-stakes probe on `dust` arbs to measure realized vs displayed odds (books often limit).
+
+### Phase 4 — Mapping certainty (Done)
+
+Shipped in `.superpowers/sdd/2026-09-25-match-and-game-mapping/`, 13 tasks.
+The premise: the old matcher decided "same match" with a fuzzy score and a
+threshold, so a wrong pairing and a right one looked alike. Phase 4 replaces the
+score with a claim that has to be proven.
+
+**Task list (all shipped).** Data model (`MatchEventStatus`, `MatchEvidence`,
+`MatchGroup`, `CandidateReview`) · the `CertaintyGate` and its reason vocabulary ·
+league equivalence restricted to declared pairs · the shared market registry
+(`config/bookmaker_markets.json`) · declared deep links
+(`config/bookmaker_deeplinks.json` + `build_event_url`) · the AI candidate layer
+(`engine/ai.py`) · the review queue and its API · candidate suppression and
+human approval · captured-payload fixture tests for every registry entry · the
+deep-link verification endpoint and Playwright checker · the end-to-end guard
+(`tests/test_e2e_certified.py`) · docs (`README.md` § *Match & mapping certainty*).
+
+**The invariant everything else serves:** a `verified` group requires ZERO
+reasons, links included. Allowlisted fuzzy aliases are the only auto-accepted
+fuzzy path. The AI never auto-approves a pair — a human approval grants team
+identity only, never `deep_link_verified`, which is a machine fact.
+
+**HEADLINE RESULT, and it is not a good-looking one.** `verified` groups are
+unreachable in production. MDShop's and Admiralbet's declared `?event=<id>`
+routes are **inert**: the served page is byte-identical to the plain football
+prematch page, the id appears in none of ~250 captured response bodies or in
+rendered text, and `?event=` provokes no event-scoped request. Only Mozzartbet
+verifies (15/15, via `$.match.id`; a dead id answers 200 with 14 bytes instead of
+328 KB). Consequence, measured on a real 1,592-match three-book feed: **0 of 197
+candidate groups verified, so zero surebets are produced.** The gate, the
+registry and the parsers are correct and tested; the blocker is a bookmaker-side
+routing fact. The route was deliberately NOT flipped to
+`supports_event_id: false` — that would change nothing in the gate and would
+make the user-facing links worse.
+
+**Recorded, not fixed** (both have tripwires):
+* `premier_kladionica/live/btts` — the live BTTS block is named
+  `LIVE - OBA TIMA DAJU GOL`, the parser's `NAME_BTTS` is `OBA DAJU GOL`.
+  `xfail(strict=True)`, so fixing the parser fails the suite until the marker is
+  removed. The fix is mode-awareness, not a registry rename.
+* NSoft live window (`mdshop`, `admiralbet`) — `dateFrom=now` excludes every
+  already-started in-play game, so both books most likely return no live matches
+  at all today. `KNOWN DEFECT` comment in `scrapers/mdshop.py`.
+* `build_targets` (`scripts/verify_deeplinks.py`) has no offset, no cursor and
+  no skip-already-checked, so a per-book link sweep over 600+ events cannot
+  converge. This — not the rate limit — is what blocks convergence.
+
+**Verification.** `pytest` 503 passed + 1 xfailed, `ruff` clean, `mypy` clean.
+`tests/test_e2e_certified.py` drives mbet/wwin/sportplus through their real
+parsers on the real 2026-09-25 captures and asserts the chain end to end,
+including that a spoiled claim in any one book removes the surebet. Its constants
+are tied to the captured prices, so re-running `scripts/capture_market_fixtures.py`
+requires re-deriving `EXPECTED_LEGS` / `EXPECTED_MARGIN` / `UNSWAPPED_COMBINATIONS`.
 
 ---
 

@@ -124,6 +124,13 @@ FLIPPED_BOOKS = ("wwin", "sportplus")
 # The leg each book must win, and at which of its OWN captured prices. Spelled
 # out rather than read back from the engine, so a relabelling regression is
 # reported as "sportplus must supply leg 2" and not as a changed percentage.
+#
+# These three constants are tied to the prices in the captures as they stand
+# today. Re-running scripts/capture_market_fixtures.py changes those prices, and
+# EXPECTED_LEGS, EXPECTED_MARGIN, EXPECTED_PROFIT and UNSWAPPED_COMBINATIONS all
+# have to be re-derived from the new 1X2 legs. That is intended coupling -- a new
+# capture must break this test -- but it surfaces as a leg-mapping failure, not
+# as "re-capture the fixtures".
 EXPECTED_LEGS = {"1": ("mbet", 5.0), "X": ("wwin", 3.5), "2": ("sportplus", 2.6)}
 # 1/5.00 + 1/3.50 + 1/2.60 == 0.87027. Written out rather than taken from the
 # engine's own output, so the expectation and the measurement stay independent.
@@ -341,22 +348,36 @@ def test_captured_markets_reach_the_verified_group_through_the_registry():
             f"{book} publishes the fixture reversed, so the group must record the flip"
         )
 
-    # The gate's own evidence, not just the flag. WWIN spells both teams
-    # differently, so its pairing is only acceptable through the reviewed
-    # allowlist -- the only auto-accepted fuzzy path, and one whose entries the
-    # evidence must actually name.
-    alias_evidence = [
-        evidence
-        for evidence in group.evidence
-        if evidence.rule == "team_identity" and evidence.source == "allowlist"
-    ]
-    assert alias_evidence, (
-        "WWIN's two reviewed aliases must be recorded as allowlist evidence, not "
-        "as a silent fuzzy hit"
+    # The gate's own evidence, not just the flag. Each accepted pairing appends
+    # one `team_identity` record, and the gate attributes the allowlist to the
+    # pairing that needed it: WWIN spells both teams differently, so its record
+    # is `source="allowlist"` with `reason="swapped"`, while SportPlus's
+    # byte-identical names are `source="rule"`. That attribution is the claim.
+    # The entry list alone is NOT: `certainty.py` dumps the whole configured
+    # allowlist into `allowlist_entries` for any allowlist-sourced record, so
+    # naming an entry proves it is configured, not that it was consulted. So
+    # this asserts which pairing used the allowlist, and separately that both
+    # of WWIN's spellings are on the list the evidence names.
+    team_evidence = [e for e in group.evidence if e.rule == "team_identity"]
+    allowlist_evidence = [e for e in team_evidence if e.source == "allowlist"]
+    rule_evidence = [e for e in team_evidence if e.source == "rule"]
+    assert len(allowlist_evidence) == 1, (
+        f"exactly one pairing here needs the reviewed aliases, but "
+        f"{len(allowlist_evidence)} of {len(team_evidence)} records credit the allowlist"
     )
-    for evidence in alias_evidence:
-        assert "zeljeznicar|željezničar" in evidence.allowlist_entries
-        assert "fk sarajevo|sarajevo" in evidence.allowlist_entries
+    assert len(rule_evidence) == len(team_evidence) - 1
+    for evidence in rule_evidence:
+        assert not evidence.allowlist_entries, (
+            "a pairing whose raw names agree needs no alias, so the gate must not "
+            "credit the allowlist for it"
+        )
+    assert allowlist_evidence[0].reason == "swapped"
+    assert allowlist_evidence[0].confidence == 1.0
+    for entry in ("zeljeznicar|željezničar", "fk sarajevo|sarajevo"):
+        assert entry in allowlist_evidence[0].allowlist_entries, (
+            f"{entry!r} is one of WWIN's two spellings and must be on the reviewed "
+            "list the gate credited"
+        )
 
 
 # --- seam 2: the gate's orientation -> find_surebets --------------------------
@@ -492,19 +513,28 @@ def _break_link(matches: list[Match]) -> list[Match]:
 # is then expected to return; ``gate_reason`` is the deterministic reason the
 # gate must give, or ``None`` when the scorer's own hard gates never propose the
 # pairing and so the certainty gate is never asked.
+#
+# ``group_books`` is the exact set of bookmakers the matcher must then return,
+# and is ``None`` for the one case where the exact answer would be an artefact
+# rather than a claim: an unlinked book is still a *candidate* for the other
+# two, and which of them it pairs with depends on the matcher's strict
+# `confidence > best_conf` tie-break and on input order. That case asserts the
+# safety claim instead -- see the test body.
 BREAKERS = [
     pytest.param(_break_league, "mbet", {"wwin", "sportplus"}, None, id="wrong_league"),
     pytest.param(_break_league_name, "wwin", {"mbet", "sportplus"}, "league_mismatch",
                  id="unnamed_league"),
     pytest.param(_break_kickoff, "mbet", {"wwin", "sportplus"}, "kickoff_delta",
                  id="kickoff_16min"),
-    pytest.param(_break_link, "mbet", set(), None, id="link_unverified"),
+    pytest.param(_break_link, "mbet", None, None, id="link_unverified"),
 ]
 
 
-@pytest.mark.parametrize(("break_it", "spoiled_book", "group_books", "gate_reason"), BREAKERS)
+@pytest.mark.parametrize(
+    ("break_it", "spoiled_book", "group_books", "gate_reason"), BREAKERS
+)
 def test_one_broken_claim_removes_the_pairing_and_the_surebet(
-    break_it, spoiled_book: str, group_books: set[str], gate_reason: str | None
+    break_it, spoiled_book: str, group_books: set[str] | None, gate_reason: str | None
 ):
     """One unsound part of one book's claim is enough to lose the surebet.
 
@@ -520,9 +550,18 @@ def test_one_broken_claim_removes_the_pairing_and_the_surebet(
 
     spoiled = break_it(_linked())
     groups = MatchMatcher().group_matches(spoiled)
-    assert {m.bookmaker for g in groups for m in g.matches} == group_books, (
-        "the spoiled book's claim must not reach a returned group"
-    )
+    if group_books is None:
+        # The safety claim, deliberately not an exact set: no returned group may
+        # hold all three books, which is precisely why no 1X2 surebet can exist.
+        for group in groups:
+            assert len({m.bookmaker for m in group.matches}) < len(BOOKS), (
+                f"{spoiled_book}: an unverified link must keep its book out of every "
+                "group that could be priced"
+            )
+    else:
+        assert {m.bookmaker for g in groups for m in g.matches} == group_books, (
+            "the spoiled book's claim must not reach a returned group"
+        )
     assert all(g.status == "verified" for g in groups)
     assert _match_result_surebet(groups) is None, (
         "a 1X2 surebet out of a group that does not hold three proven books would "
@@ -760,7 +799,9 @@ def test_scan_refuses_a_link_proof_that_aged_out(isolated_server_state, stubbed_
     assert body["group_statuses"] == {}
 
     # What the server does instead of dropping the pairing silently: queue it for
-    # review, blocked on the link, which a human approval explicitly cannot clear.
+    # review, blocked on the link. (That an approval cannot clear the link is
+    # `approve_candidate`'s own contract, asserted in
+    # tests/test_scan_candidates.py -- not something a scan-level test can see.)
     assert api.pending_candidates, "an unproven pair must be queued for review"
     for candidate in api.pending_candidates.values():
         assert candidate.status == "pending"
