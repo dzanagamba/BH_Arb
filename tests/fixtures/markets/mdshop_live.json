@@ -1,0 +1,310 @@
+{
+  "bookmaker": "mdshop",
+  "mode": "live",
+  "captured_at": "2026-09-25",
+  "endpoint": "https://mdoffer.mdshop.ba/api/offer/getwebevents?sportId=1&isLive=true&dateFrom=2026-09-25T05:04:54.000&dateTo=2026-09-25T17:04:54.000&eventMappingTypes=1,2,3,4,5",
+  "source": "live_api_response",
+  "payload_kind": "nsoft_event_bets",
+  "provenance": "bets[] of one football event (id 6847371) from the live NSoft getwebevents response for mdshop in live mode, hand-trimmed to the registry's betTypeIds, the three declared O/U lines, and one excluded betTypeId that must not produce a market.",
+  "dropped_bet_fields": [
+    "id",
+    "eventId",
+    "competitionId",
+    "regionId",
+    "sportId",
+    "betTypeValueType",
+    "isPlayable",
+    "isInOffer",
+    "isMostBalanced",
+    "cashBackEnabled",
+    "profitMargin",
+    "externalId",
+    "externalSpecifiers",
+    "contextNote",
+    "marketConstraint"
+  ],
+  "dropped_outcome_fields": [
+    "id",
+    "betId",
+    "eventId",
+    "competitionId",
+    "regionId",
+    "sportId",
+    "betTypeId",
+    "betTypeOutcomeId",
+    "sBV",
+    "isPlayable",
+    "isInOffer",
+    "cashBackEnabled",
+    "useParticipiantName",
+    "resultStatus",
+    "isEarlyPayoutPossible",
+    "externalId"
+  ],
+  "excluded_ids_present": [
+    {
+      "id": 24,
+      "context": "Tacan rezultat"
+    }
+  ],
+  "bets": [
+    {
+      "betTypeId": 6,
+      "sBV": "0-0",
+      "betTypeName": "Pobednik ostatka meča",
+      "betOutcomes": [
+        {
+          "name": "1",
+          "odd": 3.35,
+          "orderNo": 1
+        },
+        {
+          "name": "X",
+          "odd": 3.45,
+          "orderNo": 2
+        },
+        {
+          "name": "2",
+          "odd": 2.02,
+          "orderNo": 3
+        }
+      ]
+    },
+    {
+      "betTypeId": 42,
+      "sBV": "",
+      "betTypeName": "Dupla šansa",
+      "betOutcomes": [
+        {
+          "name": "1X",
+          "odd": 1.78,
+          "orderNo": 1
+        },
+        {
+          "name": "12",
+          "odd": 1.25,
+          "orderNo": 2
+        },
+        {
+          "name": "X2",
+          "odd": 1.3,
+          "orderNo": 3
+        }
+      ]
+    },
+    {
+      "betTypeId": 995,
+      "sBV": "0-0",
+      "betTypeName": "Ostatak meca - Oba daju gol",
+      "betOutcomes": [
+        {
+          "name": "GG",
+          "odd": 1.6,
+          "orderNo": 1
+        },
+        {
+          "name": "NG",
+          "odd": 2.17,
+          "orderNo": 2
+        }
+      ]
+    },
+    {
+      "betTypeId": 28,
+      "sBV": "1.5",
+      "betTypeName": "Domaćin ukupno",
+      "betOutcomes": [
+        {
+          "name": "Manje",
+          "odd": 1.42,
+          "orderNo": 1
+        },
+        {
+          "name": "Vise",
+          "odd": 2.55,
+          "orderNo": 2
+        }
+      ]
+    },
+    {
+      "betTypeId": 28,
+      "sBV": "2.5",
+      "betTypeName": "Domaćin ukupno",
+      "betOutcomes": [
+        {
+          "name": "Manje",
+          "odd": 1.07,
+          "orderNo": 1
+        },
+        {
+          "name": "Vise",
+          "odd": 6.1,
+          "orderNo": 2
+        }
+      ]
+    },
+    {
+      "betTypeId": 22,
+      "sBV": "3.5",
+      "betTypeName": "Ukupno golova",
+      "betOutcomes": [
+        {
+          "name": "Manje",
+          "odd": 1.4,
+          "orderNo": 1
+        },
+        {
+          "name": "Vise",
+          "odd": 2.7,
+          "orderNo": 2
+        }
+      ]
+    },
+    {
+      "betTypeId": 24,
+      "sBV": "",
+      "betTypeName": "Tacan rezultat",
+      "betOutcomes": [
+        {
+          "name": "0:0",
+          "odd": 12.5,
+          "orderNo": 11
+        },
+        {
+          "name": "0:1",
+          "odd": 9.4,
+          "orderNo": 16
+        },
+        {
+          "name": "0:2",
+          "odd": 11.0,
+          "orderNo": 17
+        },
+        {
+          "name": "0:3",
+          "odd": 18.0,
+          "orderNo": 19
+        },
+        {
+          "name": "0:4",
+          "odd": 38.0,
+          "orderNo": 22
+        },
+        {
+          "name": "1:0",
+          "odd": 12.0,
+          "orderNo": 1
+        },
+        {
+          "name": "1:1",
+          "odd": 7.7,
+          "orderNo": 12
+        },
+        {
+          "name": "1:2",
+          "odd": 9.1,
+          "orderNo": 18
+        },
+        {
+          "name": "1:3",
+          "odd": 15.0,
+          "orderNo": 20
+        },
+        {
+          "name": "1:4",
+          "odd": 28.0,
+          "orderNo": 23
+        },
+        {
+          "name": "2:0",
+          "odd": 18.0,
+          "orderNo": 2
+        },
+        {
+          "name": "2:1",
+          "odd": 11.5,
+          "orderNo": 3
+        },
+        {
+          "name": "2:2",
+          "odd": 13.5,
+          "orderNo": 13
+        },
+        {
+          "name": "2:3",
+          "odd": 22.0,
+          "orderNo": 21
+        },
+        {
+          "name": "2:4",
+          "odd": 40.0,
+          "orderNo": 24
+        },
+        {
+          "name": "3:0",
+          "odd": 34.0,
+          "orderNo": 4
+        },
+        {
+          "name": "3:1",
+          "odd": 24.0,
+          "orderNo": 5
+        },
+        {
+          "name": "3:2",
+          "odd": 28.0,
+          "orderNo": 6
+        },
+        {
+          "name": "3:3",
+          "odd": 46.0,
+          "orderNo": 14
+        },
+        {
+          "name": "3:4",
+          "odd": 76.0,
+          "orderNo": 25
+        },
+        {
+          "name": "4:0",
+          "odd": 78.0,
+          "orderNo": 7
+        },
+        {
+          "name": "4:1",
+          "odd": 50.0,
+          "orderNo": 8
+        },
+        {
+          "name": "4:2",
+          "odd": 54.0,
+          "orderNo": 9
+        },
+        {
+          "name": "4:3",
+          "odd": 86.0,
+          "orderNo": 10
+        },
+        {
+          "name": "4:4",
+          "odd": 99,
+          "orderNo": 15
+        },
+        {
+          "name": "ostali rezultati",
+          "odd": 20.0,
+          "orderNo": 26
+        }
+      ]
+    }
+  ],
+  "expected_markets": [
+    "1x2",
+    "btts",
+    "double_chance",
+    "over_under_1_5",
+    "over_under_2_5",
+    "over_under_3_5"
+  ],
+  "uncovered_registry_rows": []
+}

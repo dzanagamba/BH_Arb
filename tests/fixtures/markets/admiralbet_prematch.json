@@ -1,0 +1,195 @@
+{
+  "bookmaker": "admiralbet",
+  "mode": "prematch",
+  "captured_at": "2026-09-25",
+  "endpoint": "https://bihoffer.admiralbet.ba/api/offer/getwebevents?sportId=1&isLive=false&dateFrom=2026-09-25T17:04:55.000&dateTo=2026-10-09T17:04:55.000&eventMappingTypes=1,2,3,4,5",
+  "source": "live_api_response",
+  "payload_kind": "nsoft_event_bets",
+  "provenance": "bets[] of one football event (id 6828117) from the live NSoft getwebevents response for admiralbet in prematch mode, hand-trimmed to the registry's betTypeIds, the three declared O/U lines, and one excluded betTypeId that must not produce a market.",
+  "dropped_bet_fields": [
+    "id",
+    "eventId",
+    "competitionId",
+    "regionId",
+    "sportId",
+    "betTypeValueType",
+    "isPlayable",
+    "isInOffer",
+    "isMostBalanced",
+    "cashBackEnabled",
+    "profitMargin",
+    "externalId",
+    "externalSpecifiers",
+    "contextNote",
+    "marketConstraint"
+  ],
+  "dropped_outcome_fields": [
+    "id",
+    "betId",
+    "eventId",
+    "competitionId",
+    "regionId",
+    "sportId",
+    "betTypeId",
+    "betTypeOutcomeId",
+    "sBV",
+    "isPlayable",
+    "isInOffer",
+    "cashBackEnabled",
+    "useParticipiantName",
+    "resultStatus",
+    "isEarlyPayoutPossible",
+    "externalId"
+  ],
+  "excluded_ids_present": [
+    {
+      "id": 148,
+      "context": "1.pol - 1X2"
+    }
+  ],
+  "bets": [
+    {
+      "betTypeId": 1639,
+      "sBV": null,
+      "betTypeName": "Konačan ishod",
+      "betOutcomes": [
+        {
+          "name": "1",
+          "odd": 1.56,
+          "orderNo": 1
+        },
+        {
+          "name": "X",
+          "odd": 4.3,
+          "orderNo": 2
+        },
+        {
+          "name": "2",
+          "odd": 5.4,
+          "orderNo": 3
+        }
+      ]
+    },
+    {
+      "betTypeId": 152,
+      "sBV": null,
+      "betTypeName": "Dupla Šansa",
+      "betOutcomes": [
+        {
+          "name": "1X",
+          "odd": 1.14,
+          "orderNo": 1
+        },
+        {
+          "name": "12",
+          "odd": 1.21,
+          "orderNo": 2
+        },
+        {
+          "name": "X2",
+          "odd": 2.4,
+          "orderNo": 3
+        }
+      ]
+    },
+    {
+      "betTypeId": 151,
+      "sBV": null,
+      "betTypeName": "Oba tima daju gol",
+      "betOutcomes": [
+        {
+          "name": "GG",
+          "odd": 1.75,
+          "orderNo": 1
+        },
+        {
+          "name": "NG",
+          "odd": 2.07,
+          "orderNo": 2
+        }
+      ]
+    },
+    {
+      "betTypeId": 137,
+      "sBV": "1.5",
+      "betTypeName": "Ukupno golova",
+      "betOutcomes": [
+        {
+          "name": "Manje",
+          "odd": 4.55,
+          "orderNo": 1
+        },
+        {
+          "name": "Više",
+          "odd": 1.21,
+          "orderNo": 2
+        }
+      ]
+    },
+    {
+      "betTypeId": 137,
+      "sBV": "2.5",
+      "betTypeName": "Ukupno golova",
+      "betOutcomes": [
+        {
+          "name": "Manje",
+          "odd": 2.25,
+          "orderNo": 1
+        },
+        {
+          "name": "Više",
+          "odd": 1.66,
+          "orderNo": 2
+        }
+      ]
+    },
+    {
+      "betTypeId": 137,
+      "sBV": "3.5",
+      "betTypeName": "Ukupno golova",
+      "betOutcomes": [
+        {
+          "name": "Manje",
+          "odd": 1.48,
+          "orderNo": 1
+        },
+        {
+          "name": "Više",
+          "odd": 2.66,
+          "orderNo": 2
+        }
+      ]
+    },
+    {
+      "betTypeId": 148,
+      "sBV": null,
+      "betTypeName": "1.pol - 1X2",
+      "betOutcomes": [
+        {
+          "name": "1",
+          "odd": 2.12,
+          "orderNo": 1
+        },
+        {
+          "name": "X",
+          "odd": 2.36,
+          "orderNo": 2
+        },
+        {
+          "name": "2",
+          "odd": 5.3,
+          "orderNo": 3
+        }
+      ]
+    }
+  ],
+  "expected_markets": [
+    "1x2",
+    "btts",
+    "double_chance",
+    "over_under_1_5",
+    "over_under_2_5",
+    "over_under_3_5"
+  ],
+  "uncovered_registry_rows": []
+}
