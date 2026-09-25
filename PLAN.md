@@ -134,18 +134,28 @@ reasons, links included. Allowlisted fuzzy aliases are the only auto-accepted
 fuzzy path. The AI never auto-approves a pair — a human approval grants team
 identity only, never `deep_link_verified`, which is a machine fact.
 
-**HEADLINE RESULT, and it is not a good-looking one.** `verified` groups are
+**HEADLINE RESULT, and it is not a good-looking one.** `verified` groups were
 unreachable in production. MDShop's and Admiralbet's declared `?event=<id>`
 routes are **inert**: the served page is byte-identical to the plain football
 prematch page, the id appears in none of ~250 captured response bodies or in
 rendered text, and `?event=` provokes no event-scoped request. Only Mozzartbet
 verifies (15/15, via `$.match.id`; a dead id answers 200 with 14 bytes instead of
 328 KB). Consequence, measured on a real 1,592-match three-book feed: **0 of 197
-candidate groups verified, so zero surebets are produced.** The gate, the
-registry and the parsers are correct and tested; the blocker is a bookmaker-side
-routing fact. The route was deliberately NOT flipped to
-`supports_event_id: false` — that would change nothing in the gate and would
-make the user-facing links worse.
+candidate groups verified, so zero surebets were produced.** The gate, the
+registry and the parsers are correct and tested.
+
+**Correction (2026-09-26): that measurement was the gate being stricter than the
+design specified, not only a bookmaker-side routing fact.** The gate never read
+`supports_event_id`, so the six books that declare no per-event route were refused
+for the links they never claimed to have — the declaration was documented in
+§4 of the design spec and wired to nothing. The gate now consults
+`config/bookmaker_deeplinks.json`: a declared-false book is verified on identity
+alone with a `no_event_link` evidence note, a declared-true book still needs its
+route proven, and a book with no declaration fails safe. So "flipping the route to
+`supports_event_id: false`" is no longer the no-op this section used to call it —
+it is exactly what such a book now relies on. The bookmaker-side routing fact
+above stands on its own: a group holding MDShop or Admiralbet still cannot be
+`verified` while their routes are inert.
 
 **Recorded, not fixed** (both have tripwires):
 * `premier_kladionica/live/btts` — the live BTTS block is named

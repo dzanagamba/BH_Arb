@@ -114,8 +114,11 @@ def test_unreviewed_mapping_variation_is_not_verified():
 
 def test_gate_rejected_singleton_cannot_later_merge_into_wrong_group():
     anchor = _m("mdshop", "Sarajevo", "Zeljeznicar", "BiH - Premier Liga", event_id="1")
+    # Admiralbet, not a book that declares `supports_event_id: false`: this test
+    # needs a match the gate actually refuses, and a book that has declared it
+    # has no per-event route is accepted with that declaration as evidence.
     rejected = _m(
-        "mbet",
+        "admiralbet",
         "Sarajevo",
         "Zeljeznicar",
         "Premijer Liga BiH",
@@ -128,4 +131,4 @@ def test_gate_rejected_singleton_cannot_later_merge_into_wrong_group():
 
     assert len(groups) == 1
     assert {m.bookmaker for m in groups[0].matches} == {"mdshop", "sportplus"}
-    assert all(m.bookmaker != "mbet" for m in groups[0].matches)
+    assert all(m.bookmaker != "admiralbet" for m in groups[0].matches)

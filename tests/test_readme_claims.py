@@ -147,29 +147,24 @@ def _declaring_books() -> set[str]:
 
 
 def _headline_problems(text: str) -> list[str]:
-    """Everything wrong with the callout claim that states the current end state.
+    """Everything wrong with the callout claim about the declared-route books.
 
-    Scoped to the single callout claim that says zero surebets are produced, and
-    within it to the *sentence* that calls the routes inert. The callout also holds
-    a "how to re-check this" claim that names all three declared books, and the
-    headline claim itself names Mozzartbet as the exception, so scoping to the
-    claim or the file would credit the inertness to a mention meant for something
-    else.
+    Scoped to the single callout claim that says the routes are inert, and within
+    it to the *sentence* that says so. The callout also holds a "how to re-check
+    this" claim that names all three declared books, so scoping to the callout or
+    the file would credit the inertness to a mention meant for something else.
     """
     problems: list[str] = []
     callout = _callout(text)
     headline = next(
-        (claim for claim in _claims(callout) if "zero surebets are produced" in claim), ""
+        (claim for claim in _claims(callout) if "inert" in claim.lower()), ""
     )
     if not headline:
-        return ["no callout claim states that zero surebets are produced in production"]
+        return ["no callout claim states that the declared routes are inert"]
     if not re.search(r"[Oo]nly Mozzartbet", headline):
         problems.append("the headline never names Mozzartbet as the one verifying link")
 
     declaring = _declaring_books()
-    # Tolerate markdown emphasis after the period, or "…produced.** Only
-    # Mozzartbet…" stays one sentence and the exception is credited to the
-    # sentence that calls the routes inert.
     sentences = re.split(r"(?<=[.!?])\**\s+", headline)
     inert = [s for s in sentences if "inert" in s.lower()]
     if not inert:
@@ -254,6 +249,111 @@ def test_headline_check_fails_when_a_route_less_book_is_called_inert():
         "naming a book that declares no per-event route as having an inert one passed"
     )
     assert any("betole" in problem for problem in problems)
+
+
+# The callout's statement of what the link half of `verified` requires, checked
+# against the gate instead of against the prose. Both books are read from
+# `config/bookmaker_deeplinks.json`, so this cannot drift from the config, and
+# both matches carry an unproven link, so the only thing being compared is the
+# declaration.
+_ROUTE_LESS_BOOK = "mbet"      # config: supports_event_id false
+_ROUTE_BEARING_BOOK = "mdshop"  # config: supports_event_id true
+
+
+def _gate_status_for(bookmaker: str) -> str:
+    """The gate's answer for one book's unproven link, as the callout describes it."""
+    gate = CertaintyGate()
+    pair = [_match(), _match(bookmaker=bookmaker, deep_link_verified=False)]
+    gate.normalize(pair)
+    return gate.evaluate_pair(*pair).status
+
+
+def _link_policy_problems(text: str) -> list[str]:
+    """Whether the callout states the link policy the gate actually implements.
+
+    The claim is about the code, so it is settled by running the code: one book
+    that declares a per-event route and one that declares it has none, both with
+    an unproven link. Whichever way the gate answers, the callout has to say it —
+    and the sentence that was true only while the gate ignored the declarations
+    is rejected outright, because "a proven deep link on both sides" is the exact
+    claim that was wrong.
+    """
+    callout = _callout(text)
+    problems: list[str] = []
+    route_less, route_bearing = _ROUTE_LESS_BOOK, _ROUTE_BEARING_BOOK
+    less_status = _gate_status_for(route_less)
+    bearing_status = _gate_status_for(route_bearing)
+    if less_status != "verified":
+        problems.append(
+            f"{route_less} declares no per-event route and the gate answers "
+            f"{less_status!r} for its unproven link, so the callout must not claim "
+            "the gate refuses it"
+        )
+    if bearing_status == "verified":
+        problems.append(
+            f"{route_bearing} declares a per-event route and the gate answers "
+            f"{bearing_status!r} for its unproven link, so the callout must not "
+            "claim a declared route is optional"
+        )
+    if not re.search(r"no per-event (?:URL|url|route)", callout):
+        problems.append("the callout never says what a book without a per-event route gets")
+    if "verified on identity alone" not in callout:
+        problems.append(
+            "the callout never says a book that declares no per-event route is "
+            "verified on identity alone"
+        )
+    if "fails safe" not in callout:
+        problems.append(
+            "the callout never says that a book with no declaration is not accepted, "
+            "which is the fail-safe the gate implements"
+        )
+    if re.search(r"proven deep link", callout, re.IGNORECASE):
+        problems.append(
+            "the callout still demands a proven deep link, which the gate stopped "
+            "requiring of a book that declares it has no per-event route"
+        )
+    return problems
+
+
+def test_callout_states_the_link_policy_the_gate_implements():
+    """The callout's link claim, checked by running the gate on both branches."""
+    problems = _link_policy_problems(README)
+    assert problems == [], "; ".join(problems)
+
+
+def test_link_policy_fails_when_the_callout_demands_a_link_on_both_sides():
+    """Proves the previous test can see the sentence that used to be there.
+
+    The old callout said ``verified`` "requires a proven deep link on *both*
+    sides" and attributed the whole outcome to the books' routing. That sentence
+    was the defect described in prose: the gate never consulted the declaration,
+    so a book that has none was refused for a link it never offered.
+    """
+    broken = README.replace(
+        "and `verified` includes the link half of the claim",
+        "and `verified` requires a proven deep link on *both* sides",
+    )
+    assert broken != README, "the mutation did not apply; the check is untested"
+    assert "proven deep link on *both* sides" in broken, "the mutation left no copy"
+    problems = _link_policy_problems(broken)
+    assert problems, "a callout demanding a link on both sides passed the check"
+    assert any("proven deep link" in problem for problem in problems)
+
+
+def test_link_policy_fails_when_the_callout_drops_the_route_less_branch():
+    """The accepted branch is the one the callout has to state, so removing it fails."""
+    broken = re.sub(
+        r"`no_event_link` evidence note and is verified on identity alone[^.]*\.",
+        "the group is verified like any other.",
+        README,
+    )
+    assert broken != README, "the mutation did not apply; the check is untested"
+    assert "verified on identity alone" not in _callout(broken), (
+        "the mutation left a copy in the callout; untested"
+    )
+    problems = _link_policy_problems(broken)
+    assert problems, "a callout that dropped the route-less branch passed the check"
+    assert any("identity alone" in problem for problem in problems)
 
 
 # ===========================================================================
@@ -358,10 +458,16 @@ def _observed_reasons() -> tuple[set[str], set[str]]:
         _match(bookmaker="mbet", event_id="e2", kickoff=None),
         _match(bookmaker="mbet", event_id="e2", kickoff=kickoff + timedelta(minutes=30)),
         _match(bookmaker="mbet", event_id="e2", home_team="Gamma SC", away_team="Delta Club"),
-        _match(bookmaker="mbet", event_id="e2", deep_link_verified=False),
-        # `no_event_link` needs the link UNPROVEN as well as absent: _link_evidence
-        # returns verified_link first, so a bare empty url/event_id never reaches it.
-        _match(bookmaker="mbet", url="", event_id="", deep_link_verified=False),
+        # `link_unverified` needs a book that DECLARES a per-event route: the six
+        # books declaring `supports_event_id: false` are accepted with a
+        # `no_event_link` evidence note instead, so mbet can no longer produce
+        # this reason. The default bookmaker is mdshop, which declares a route.
+        _match(deep_link_verified=False),
+        # ...and `no_event_link` is now reachable only through a book that has
+        # declared nothing at all, which is the fail-safe branch. It also needs
+        # the link UNPROVEN as well as absent: _link_evidence returns
+        # verified_link first, so a bare empty url/event_id never reaches it.
+        _match(bookmaker="undeclared_book", url="", event_id="", deep_link_verified=False),
         _match(bookmaker="mbet", event_id="e3", category_tags=["women"]),
     ]
     observed: set[str] = set()

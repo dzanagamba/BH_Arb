@@ -516,6 +516,20 @@ def supports_event_id(bookmaker: str) -> bool:
     return _declared_config(bookmaker).get("supports_event_id") is True
 
 
+def declares_no_event_id(bookmaker: str) -> bool:
+    """Return whether a bookmaker explicitly declares ``supports_event_id: false``.
+
+    Only the boolean ``False`` counts, and that strictness is the point: the
+    certainty gate accepts this declaration as proof that there is no per-event
+    link to prove, so a missing key, a typo, a quoted ``"false"`` or a config file
+    that failed to load must all answer False here and leave the book blocking.
+    ``supports_event_id`` cannot be used for the question — it answers False for
+    a declaration that is absent, which is the opposite of what the gate needs to
+    tell apart.
+    """
+    return _declared_config(bookmaker).get("supports_event_id") is False
+
+
 def _base_url(base_url: str) -> str:
     """Return a normalized non-event URL for a book's base site."""
     return f"{base_url.rstrip('/')}/"

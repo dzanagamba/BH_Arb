@@ -59,6 +59,7 @@ from models.schemas import (
 )
 from scrapers.admiralbet import AdmiralbetScraper
 from scrapers.betole import BetoleScraper
+from scrapers.common import supports_event_id
 from scrapers.evlbet import EvlbetScraper
 from scrapers.mbet import MBetScraper
 from scrapers.mdshop import MDShopScraper
@@ -1406,10 +1407,17 @@ async def health():
         ),
         "pending_candidates": len(pending_candidates),
         "suppressed_candidates": len(_suppressed_candidates),
+        # Matches whose per-event link is unproven AND can still block: a book
+        # that declares `supports_event_id: false` has no per-event route to
+        # open, so the certainty gate settles its link from that declaration and
+        # an unproven link on it is not what is holding anything back. Counting
+        # those would report thousands of blockers that block nothing.
         "unverified_links": sum(
             1
             for match in cached_matches
-            if match.get("event_id") and not match.get("deep_link_verified")
+            if match.get("event_id")
+            and not match.get("deep_link_verified")
+            and supports_event_id(str(match.get("bookmaker", "")))
         ),
         "ai_available": MatchAI().available,
         "prematch": {

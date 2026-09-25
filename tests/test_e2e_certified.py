@@ -50,18 +50,20 @@ asserts exactly that, using the unswapped group as its own control.
 
 HONESTY NOTE ON LINKS
 ---------------------
-In normal operation every scraper hardcodes ``deep_link_verified=False``
-(Task 12 proved MDShop's and Admiralbet's declared ``?event=`` routes are inert;
-only Mozzartbet's verifies), so **no** group is ``verified`` in production and
-no surebet is ever produced. That is documented state, not a bug, and it is
-deliberately NOT asserted here. A test that pinned "zero surebets ever" would
-pass today and break the day the links are fixed, while proving nothing.
+Every scraper hardcodes ``deep_link_verified=False``, and Task 12 proved
+MDShop's and Admiralbet's declared ``?event=`` routes are inert; only
+Mozzartbet's verifies. What that means for the three books used here changed
+when the gate was taught to read ``config/bookmaker_deeplinks.json``: **all
+three declare ``supports_event_id: false``**, so for them the absence of a
+per-event route is a declared fact rather than an unproven link, and they verify
+as scraped. ``test_the_captured_books_verify_and_price_with_no_stored_proof`` is
+that claim, end to end.
 
-Instead the positive tests inject link proofs the way production does -- through
-the server's durable store, applied by ``_apply_deep_link_verifications`` during
-the scan -- and the negative tests remove exactly one proof at a time and show
-the surebet disappears. The assertions are about the gates being honoured, not
-about a currently unreachable end state.
+The inert routes are still a bookmaker-side fact about MDShop and Admiralbet and
+this file does not contradict them: a book that declares a route must still have
+it proven, and the negative cases below remove exactly one such proof and show the
+surebet disappear. The assertions are about the gates being honoured, not about a
+currently unreachable end state.
 
 NOT COVERED HERE
 ----------------
@@ -95,11 +97,12 @@ from typing import Any
 
 import pytest
 
-from config.settings import MAX_SUREBET_PROFIT_PERCENT, ODDS_TTL_SECONDS
+from config.settings import BOOKMAKERS, MAX_SUREBET_PROFIT_PERCENT, ODDS_TTL_SECONDS
 from engine.arbitrage import ArbitrageEngine
 from engine.market_registry import MarketRegistry
 from engine.matcher import MatchMatcher
 from models.schemas import MarketType, Match, MatchGroup, Surebet
+from scrapers.common import build_event_url, parse_nsoft_bets
 from scrapers.mbet import MBetScraper
 from scrapers.sportplus import SportPlusScraper
 from scrapers.wwin import _build_markets_from_bets
@@ -120,6 +123,11 @@ LEAGUE = "BiH - Premier Liga"
 # league becomes the group's canonical frame.
 BOOKS = ("mbet", "wwin", "sportplus")
 FLIPPED_BOOKS = ("wwin", "sportplus")
+
+# The two books that DECLARE a per-event route, used where a link has to be
+# load-bearing. Both prematch captures are the same real NSoft event.
+ROUTE_BOOKS = ("mdshop", "admiralbet")
+ROUTE_EVENT_ID = "6828117"
 
 # The leg each book must win, and at which of its OWN captured prices. Spelled
 # out rather than read back from the engine, so a relabelling regression is
@@ -250,12 +258,21 @@ _PARSERS = {"mbet": _mbet_match, "wwin": _wwin_match, "sportplus": _sportplus_ma
 
 
 def _scraped() -> list[Match]:
-    """The three books exactly as a scan receives them: links unproven."""
+    """The three books exactly as a scan receives them: links unproven.
+
+    All three declare ``supports_event_id: false``, so the gate settles their
+    link from the declaration and this state verifies -- which is the point of
+    ``test_the_captured_books_verify_and_price_with_no_stored_proof``.
+    """
     return [_PARSERS[book]() for book in BOOKS]
 
 
 def _linked() -> list[Match]:
-    """The same three books with their links proven, as the store would mark them."""
+    """The same three books with their links proven, as the store would mark them.
+
+    Kept because the store still applies and its proofs are still what a declared
+    book would get; for these three the gate no longer needs them.
+    """
     return [m.model_copy(update={"deep_link_verified": True}) for m in _scraped()]
 
 
@@ -503,9 +520,26 @@ def _break_kickoff(matches: list[Match]) -> list[Match]:
 
 
 def _break_link(matches: list[Match]) -> list[Match]:
-    """The state every scraped match is actually in."""
-    return [m.model_copy(update={"deep_link_verified": False}) if m.bookmaker == "mbet" else m
-            for m in matches]
+    """A book that DECLARES a per-event route and has not proven it.
+
+    This used to be "the state every scraped match is actually in", which was
+    true of all three books until the gate was taught to read the declarations:
+    all three declare ``supports_event_id: false``, so an unproven link among
+    them settles nothing and costs no pairing. What still costs the pairing is a
+    book that claims a route and does not prove it, so the breaker relabels one
+    book onto a declared-route id. SportPlus, not MBet: MBet anchors the group, and
+    with the anchor gone the scorer's own name-similarity tie-break leaves the
+    other two too far apart to pair, which would make the case a claim about the
+    scorer instead of about the gate. Only the declaration lookup and the
+    bookmaker field read the relabelling -- every market, label and odd stays the
+    captured one, and no surebet is ever priced from a group that holds this book.
+    """
+    return [
+        m.model_copy(update={"bookmaker": "mdshop", "deep_link_verified": False})
+        if m.bookmaker == "sportplus"
+        else m
+        for m in matches
+    ]
 
 
 # Each breaker spoils exactly one of the three claims and leaves the other two
@@ -516,7 +550,7 @@ def _break_link(matches: list[Match]) -> list[Match]:
 #
 # ``group_books`` is the exact set of bookmakers the matcher must then return,
 # and is ``None`` for the one case where the exact answer would be an artefact
-# rather than a claim: an unlinked book is still a *candidate* for the other
+# rather than a claim: a link-blocked book is still a *candidate* for the other
 # two, and which of them it pairs with depends on the matcher's strict
 # `confidence > best_conf` tie-break and on input order. That case asserts the
 # safety claim instead -- see the test body.
@@ -526,7 +560,7 @@ BREAKERS = [
                  id="unnamed_league"),
     pytest.param(_break_kickoff, "mbet", {"wwin", "sportplus"}, "kickoff_delta",
                  id="kickoff_16min"),
-    pytest.param(_break_link, "mbet", None, None, id="link_unverified"),
+    pytest.param(_break_link, "mdshop", None, "link_unverified", id="link_unverified"),
 ]
 
 
@@ -555,8 +589,8 @@ def test_one_broken_claim_removes_the_pairing_and_the_surebet(
         # hold all three books, which is precisely why no 1X2 surebet can exist.
         for group in groups:
             assert len({m.bookmaker for m in group.matches}) < len(BOOKS), (
-                f"{spoiled_book}: an unverified link must keep its book out of every "
-                "group that could be priced"
+                f"{spoiled_book}: a book whose per-event link is unproven must keep "
+                "its book out of every group that could be priced"
             )
     else:
         assert {m.bookmaker for g in groups for m in g.matches} == group_books, (
@@ -670,9 +704,11 @@ def stubbed_scrapers(monkeypatch):
     """Replace the three books' scrapers with their real parses, links unproven.
 
     The returned matches carry ``deep_link_verified=False`` because that is what
-    every scraper ships; the link proof arrives through the store, as it does in
-    production. Every other book is switched off by ``isolated_server_state``, so
-    ``run_scan`` cannot reach a real scraper and no browser is launched.
+    every scraper ships. All three books declare ``supports_event_id: false``, so
+    the gate settles their link from the declaration; the store still applies, and
+    ``test_scan_applies_stored_link_proofs_and_serves_the_surebet`` still pins
+    that it does. Every other book is switched off by ``isolated_server_state``,
+    so ``run_scan`` cannot reach a real scraper and no browser is launched.
     """
 
     def make(matches: list[Match]) -> type:
@@ -691,17 +727,80 @@ def stubbed_scrapers(monkeypatch):
     return scraped
 
 
-def _store_links(age_seconds: int = 0) -> None:
+def _route_book_match(bookmaker: str) -> Match:
+    """One DECLARED-ROUTE book's real captured markets, in the certified shell.
+
+    The TTL case needs a book whose link is load-bearing, and none of ``BOOKS``
+    is one: all three declare ``supports_event_id: false``, so a stale proof costs
+    them nothing. These two are the real NSoft capture of one real event — both
+    captures are event 6828117 — driven through the same registry parser the
+    scrapers use. The event shell is filled in here for the reason the three
+    parsers above document: three books' captures are three different real
+    fixtures and the gate can only judge a claim about one.
+
+    No surebet is ever claimed from this pair: a 1X2 market needs three distinct
+    books, and these odds are used for nothing except "does this group exist".
+    """
+    data = _capture(bookmaker)
+    return Match(
+        bookmaker=bookmaker,
+        home_team=HOME,
+        away_team=AWAY,
+        league=LEAGUE,
+        kickoff=KICKOFF,
+        markets=parse_nsoft_bets(data["bets"], bookmaker=bookmaker, mode="prematch"),
+        # The real declared route for this book and this captured event id, built
+        # by the same builder the scrapers use.
+        url=build_event_url(bookmaker, ROUTE_EVENT_ID, str(BOOKMAKERS[bookmaker]["base_url"])),
+        event_id=ROUTE_EVENT_ID,
+        deep_link_verified=False,
+        fetched_at=datetime.now(UTC).replace(tzinfo=None),
+    )
+
+
+def _route_books() -> list[Match]:
+    return [_route_book_match(book) for book in ROUTE_BOOKS]
+
+
+@pytest.fixture
+def stubbed_route_scrapers(monkeypatch):
+    """The same fakes, over the two books whose declared link is load-bearing.
+
+    The books ``isolated_server_state`` switched off are switched back on, and the
+    three certified ones are switched off, so this scan is exactly these two.
+    """
+
+    def make(matches: list[Match]) -> type:
+        class _Scraper:
+            def __init__(self, *args: Any, **kwargs: Any) -> None:
+                self._matches = matches
+
+            async def scrape(self, live: bool = False, scan_time: Any = None) -> list[Match]:
+                return [m.model_copy(deep=True) for m in self._matches]
+
+        return _Scraper
+
+    for book in ROUTE_BOOKS:
+        api._bookmaker_enabled[book] = True
+    for book in BOOKS:
+        api._bookmaker_enabled[book] = False
+    route = {m.bookmaker: m for m in _route_books()}
+    for book in ROUTE_BOOKS:
+        monkeypatch.setitem(api.SCRAPERS, book, make([route[book]]))
+    return route
+
+
+def _store_links(matches: list[Match], age_seconds: int = 0) -> None:
     """Seed the durable deep-link store the way a verification run would."""
     checked_at = datetime.now(UTC).replace(tzinfo=None) - timedelta(seconds=age_seconds)
     api._deep_link_verifications.clear()
     api._deep_link_verifications["prematch"] = {
-        f"{book}|{match.event_id}": {
+        f"{match.bookmaker}|{match.event_id}": {
             "verified": True,
             "checked_at": checked_at.isoformat(),
             "url": match.url,
         }
-        for book, match in zip(BOOKS, _scraped(), strict=True)
+        for match in matches
     }
 
 
@@ -716,10 +815,11 @@ def test_scan_applies_stored_link_proofs_and_serves_the_surebet(
     the matches, stops grouping, or serves a cache the matcher never filled.
 
     The links are NOT set on the scraped matches -- they come from the store, at
-    the moment the scan reads it, which is the only way a real deployment ever
-    gets them.
+    the moment the scan reads it, which is how a real deployment gets them for a
+    book that has a per-event route. For these three books it is no longer what
+    makes the group verify; see the next test, which drops the store entirely.
     """
-    _store_links()
+    _store_links(_scraped())
 
     asyncio.run(api.run_scan("prematch"))
 
@@ -739,8 +839,8 @@ def test_scan_applies_stored_link_proofs_and_serves_the_surebet(
     for book, match in served_matches.items():
         assert match["event_id"] == stubbed_scrapers[book].event_id
         assert match["deep_link_verified"] is True, (
-            f"{book}: the scan did not apply the stored link proof, so no group "
-            "can be verified in production either"
+            f"{book}: the scan did not apply the stored link proof, so the store is "
+            "not doing what a deployment relies on it for"
         )
         assert len(match["markets"]) == len(stubbed_scrapers[book].markets)
 
@@ -766,31 +866,120 @@ def test_scan_applies_stored_link_proofs_and_serves_the_surebet(
     } == EXPECTED_LEGS
 
 
-def test_scan_refuses_a_link_proof_that_aged_out(isolated_server_state, stubbed_scrapers):
-    """A link proof past its TTL stops unblocking the gate, and the surebet with it.
+def test_scan_verifies_a_declared_no_link_book_with_no_stored_proof_at_all(
+    isolated_server_state, stubbed_scrapers
+):
+    """The declared absence, end to end, with the store empty.
+
+    ``BOOKS`` are three books that all declare ``supports_event_id: false``. Their
+    scanned matches carry a feed id and a site URL and no link proof, which is
+    every scraped match in production. Before the gate read
+    ``config/bookmaker_deeplinks.json`` that state was ``link_unverified`` for
+    every one of them, so no group was ever ``verified`` and no surebet was ever
+    produced -- and the reason was the code, not the books' routing.
+
+    So: the store holds nothing at all, and the scan must still verify the group
+    and price the surebet. If this ever fails, the six declared-false books have
+    gone back to being structurally unpriceable.
+    """
+    assert api._deep_link_verifications == {} or all(
+        not entries for entries in api._deep_link_verifications.values()
+    ), "the store must start empty for this claim to be about the declaration"
+
+    asyncio.run(api.run_scan("prematch"))
+
+    assert api.scan_status.errors == [], "the scan reported an error"
+    assert all(m["deep_link_verified"] is False for m in api.cached_matches), (
+        "no proof was stored, so nothing may claim one"
+    )
+    assert len(api.cached_match_groups_report) == 1
+    report = api.cached_match_groups_report[0]
+    assert report["status"] == "verified", (
+        "three books that each declare `supports_event_id: false` leave no link to "
+        "prove; the group is verified on identity alone"
+    )
+    assert {b["bookmaker"] for b in report["bookmakers"]} == set(BOOKS)
+
+    body = asyncio.run(api.get_results("prematch"))
+    assert body["group_statuses"] == {"verified": 1}
+    served = [s for s in body["surebets"] if s["market_type"] == "1x2"]
+    assert len(served) == 1
+    assert served[0]["profit_percent"] == pytest.approx(EXPECTED_PROFIT, abs=0.01)
+
+
+def test_a_verified_group_records_the_declared_absence_as_evidence(
+    isolated_server_state, stubbed_scrapers
+):
+    """`verified` means every part of the claim is proven, links included.
+
+    So the statement that a link is deliberately absent has to be *in* the
+    evidence trail rather than in a comment: a `link_evidence` row per gate
+    evaluation, reading `no_event_link` with full confidence. A group that
+    verified with no such row would be a group whose link half was never
+    accounted for, and the only remaining trace of the decision would be the
+    absence of a complaint.
+    """
+    assert not _AI_CONSTRUCTIONS  # the AI never gets a say in a decision
+
+    groups = MatchMatcher().group_matches(_scraped())
+    assert len(groups) == 1
+    group = groups[0]
+    assert group.status == "verified"
+
+    links = [e for e in group.evidence if e.rule == "link_evidence"]
+    assert links, "a verified group must record what it decided about its links"
+    assert {e.reason for e in links} == {"no_event_link"}, (
+        f"unexpected link evidence: {sorted({e.reason for e in links})}"
+    )
+    assert {e.source for e in links} == {"rule"}
+    assert {e.confidence for e in links} == {1.0}, (
+        "a declared absence is as certain as a proven link; 0.0 would read as an "
+        "unproven claim in the trail"
+    )
+
+
+def test_scan_refuses_a_link_proof_that_aged_out(
+    isolated_server_state, stubbed_route_scrapers
+):
+    """A link proof past its TTL stops unblocking the gate, for a book that has a route.
 
     A bookmaker can retire an event at any time, so a stored proof must not be
-    allowed to unblock ``verified`` forever. Without this the previous test's
-    positive claim would be a claim about a flag nothing can revoke.
+    allowed to unblock ``verified`` forever. Without this the positive claims
+    above would be claims about a flag nothing can revoke.
 
-    The intact run is repeated first: same three books, same store, one TTL of
-    age difference, so ``surebets_found == 0`` cannot be a property of the
-    fixtures.
+    The books are ``ROUTE_BOOKS``, not ``BOOKS``, and that is the point of the
+    rewrite. All three certified books declare ``supports_event_id: false``, so
+    their link is settled by the declaration and a stale proof costs them
+    nothing: this case is no longer demonstrable on them at all, and pretending
+    otherwise would assert a mechanism that no longer exists. These two books
+    declare a per-event route, so the proof is the only thing that can verify
+    them.
+
+    The pair is two books, so a 1X2 surebet is impossible either way and the
+    assertions are about the group and the review queue — the two things a scan
+    actually decides here. The intact run is repeated first, same books and same
+    store with one TTL of age difference, so ``match_groups == 0`` cannot be a
+    property of the fixtures. The store-level TTL is pinned independently by
+    ``tests/test_verify_links.py::test_an_expired_verification_is_ignored_and_dropped``.
     """
-    _store_links()
+    route = _route_books()
+    _store_links(route)
     asyncio.run(api.run_scan("prematch"))
-    assert api.scan_status.surebets_found > 0, "the control scan must find the surebet"
+    assert [r["status"] for r in api.cached_match_groups_report] == ["verified"], (
+        "the control scan must verify the pair, or the aged-out run proves nothing"
+    )
+    assert len(api.cached_match_groups_report[0]["bookmakers"]) == 2
 
-    _store_links(age_seconds=api.DEEP_LINK_VERIFICATION_TTL_SECONDS + 60)
+    _store_links(route, age_seconds=api.DEEP_LINK_VERIFICATION_TTL_SECONDS + 60)
     asyncio.run(api.run_scan("prematch"))
 
     assert api.scan_status.surebets_found == 0
     assert api.cached_surebets == []
     assert api.cached_match_groups_report == [], (
-        "a group whose only member has an unproven link must not be reported as a "
+        "a group whose only members have unproven links must not be reported as a "
         "match group at all"
     )
-    assert len(api.cached_matches) == 3, "the matches are still cached, just not grouped"
+    assert len(api.cached_matches) == 2, "the matches are still cached, just not grouped"
     assert all(m["deep_link_verified"] is False for m in api.cached_matches)
 
     body = asyncio.run(api.get_results("prematch"))

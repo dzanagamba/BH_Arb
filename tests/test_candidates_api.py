@@ -127,8 +127,25 @@ def test_health_includes_new_diagnostics():
     api.cached_match_groups_report[:] = report
     api.cached_matches.extend(
         [
-            {"event_id": "verified", "deep_link_verified": True},
-            {"event_id": "unverified", "deep_link_verified": False},
+            {
+                "bookmaker": "mdshop",
+                "event_id": "verified",
+                "deep_link_verified": True,
+            },
+            {
+                "bookmaker": "mdshop",
+                "event_id": "unverified",
+                "deep_link_verified": False,
+            },
+            # A book that declares `supports_event_id: false` has no per-event
+            # link to prove, so its unproven link is not what is holding a group
+            # back. Counting it would report thousands of blockers that block
+            # nothing.
+            {
+                "bookmaker": "wwin",
+                "event_id": "no-route",
+                "deep_link_verified": False,
+            },
         ]
     )
     api.unmapped_markets["mdshop:424242"] = 2

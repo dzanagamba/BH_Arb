@@ -4,6 +4,12 @@ The rule stage of the mapping pipeline. Produces ``verified`` only when league,
 kickoff, category, team identity, orientation, and link evidence all hold.
 Ambiguous pairs get ``suggested`` with explicit reasons; ``rejected`` when a
 hard gate contradicts the claim.
+
+"Link evidence holds" means one of two proven things per book, never a
+presumption: a browser check opened that book's per-event URL and found the
+event, or the bookmaker's own declaration in ``config/bookmaker_deeplinks.json``
+says it has no per-event route, so there is no URL to open. A book that has
+declared neither is not accepted — see :meth:`CertaintyGate._link_evidence`.
 """
 
 import unicodedata
@@ -16,6 +22,7 @@ from rapidfuzz import fuzz
 from config.settings import VERIFIED_KICKOFF_WINDOW_MINUTES
 from engine.normalizer import TeamNormalizer
 from models.schemas import Match, MatchEventStatus, MatchEvidence, MatchGroup
+from scrapers.common import declares_no_event_id, supports_event_id
 
 HARD_REJECT_REASONS = frozenset({"league_mismatch", "category_mismatch", "orientation_unresolved"})
 
@@ -217,26 +224,74 @@ class CertaintyGate:
         return entries
 
     @staticmethod
-    def _link_evidence(m: Match) -> MatchEvidence:
+    def _link_evidence(m: Match) -> tuple[MatchEvidence, bool]:
+        """Return this match's link evidence record and whether it settles the link.
+
+        One method, so the record and the decision cannot drift apart: every
+        branch states its own record *and* whether that record is a settled fact
+        (the second element is True) or an open one (False, and therefore a
+        reason).
+
+        Four cases, in this order:
+
+        1. ``deep_link_verified`` — a browser check proved the URL opens the
+           intended event. Settled; nothing here can pre-empt it.
+        2. The book declares ``supports_event_id: false`` in
+           ``config/bookmaker_deeplinks.json`` — it has no per-event route, so
+           there is no link to prove. The declaration IS the proof, and the
+           absence is recorded as evidence rather than raised as a reason. This
+           is the spec's accepted case, and it is why a feed id or a site URL on
+           such a book is not read as an unproven link: neither is a route, and
+           the book has said so.
+        3. The book declares a route it has not proven — whether it captured a
+           URL or not. ``link_unverified``, and it blocks. An empty URL for such a
+           book is a capture gap, not an absence: reporting it as
+           ``no_event_link`` would claim the book has no per-event page when its
+           own declaration says it has one, and it would tell the next engineer
+           that emptying the URL is a way to unblock a group. It is not.
+        4. The book has said nothing at all. A captured URL or id is
+           ``link_unverified``; with nothing captured it is ``no_event_link``. Both
+           block: an absent declaration is silence, and silence is not proof of
+           absence.
+        """
         if m.deep_link_verified:
-            return MatchEvidence(
-                rule="link_evidence",
-                source="rule",
-                confidence=1.0,
-                reason="verified_link",
+            return (
+                MatchEvidence(
+                    rule="link_evidence",
+                    source="rule",
+                    confidence=1.0,
+                    reason="verified_link",
+                ),
+                True,
             )
-        if m.event_id or m.url:
-            return MatchEvidence(
+        if declares_no_event_id(m.bookmaker):
+            return (
+                MatchEvidence(
+                    rule="link_evidence",
+                    source="rule",
+                    confidence=1.0,
+                    reason="no_event_link",
+                ),
+                True,
+            )
+        if supports_event_id(m.bookmaker) or m.event_id or m.url:
+            return (
+                MatchEvidence(
+                    rule="link_evidence",
+                    source="rule",
+                    confidence=0.0,
+                    reason="link_unverified",
+                ),
+                False,
+            )
+        return (
+            MatchEvidence(
                 rule="link_evidence",
                 source="rule",
                 confidence=0.0,
-                reason="link_unverified",
-            )
-        return MatchEvidence(
-            rule="link_evidence",
-            source="rule",
-            confidence=0.5,
-            reason="no_event_link",
+                reason="no_event_link",
+            ),
+            False,
         )
 
     def evaluate_pair(self, a: Match, b: Match) -> GateResult:
@@ -326,14 +381,20 @@ class CertaintyGate:
             )
         )
 
-        # Link evidence. A pair is verified only when both sides are proven.
+        # Link evidence. A pair is verified only when both sides are settled.
         link_reasons: set[str] = set()
         for m in (a, b):
-            link_evidence = self._link_evidence(m)
+            link_evidence, settled = self._link_evidence(m)
+            # The record is appended either way: a verified group's evidence
+            # trail is where a reviewer reads that a link was deliberately
+            # absent, so dropping it for the accepted case would erase the only
+            # statement of it.
             evidence.append(link_evidence)
+            if settled:
+                continue
             if link_evidence.reason == "link_unverified":
                 link_reasons.add("link_unverified")
-            elif link_evidence.reason == "no_event_link":
+            else:
                 link_reasons.add("no_event_link")
         reasons.extend(sorted(link_reasons))
 

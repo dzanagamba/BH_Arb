@@ -4,18 +4,31 @@
 
 A web-based arbitrage betting detection tool for the Bosnian market.
 
-> ### ⚠️ Current state: the scanner finds zero surebets, by design
+> ### ⚠️ Current state: which groups reach `verified`, and what still blocks them
 >
 > A surebet is only ever shown for a match group the certainty gate has
-> **`verified`**, and `verified` requires a proven deep link on *both* sides.
-> MDShop's and Admiralbet's declared `?event=<id>` routes are **inert** — the
-> served page is byte-identical to the plain football page and the id appears
-> nowhere in it — so their links can never be proven and **in production zero
-> groups reach `verified` and zero surebets are produced.** Only Mozzartbet's
-> link verifies.
+> **`verified`**, and `verified` includes the link half of the claim. Which
+> proofs satisfy that half is decided per book, by the book's own declaration in
+> `config/bookmaker_deeplinks.json`:
 >
-> This is a bookmaker-side routing fact, not a bug in the code: the gate, the
-> registry and the parsers are correct and tested. Read
+> * **The book declares a per-event route** (`supports_event_id: true`) — then
+>   the route has to be opened and proven by a real browser check.
+>   MDShop's and Admiralbet's declared `?event=<id>` routes are **inert** — the
+>   served page is byte-identical to the plain football page and the id appears
+>   nowhere in it — so their links can never be proven, and any group holding
+>   either of them stays out of `verified`. Only Mozzartbet's link verifies.
+> * **The book declares that it has no per-event route**
+>   (`supports_event_id: false`) — the other six books. There is no per-event URL
+>   to prove, so the declaration is itself the proof: the group records a
+>   `no_event_link` evidence note and is verified on identity alone — league,
+>   kickoff, category, teams, orientation. A book with no declaration at all is
+>   *not* accepted this way: the gate fails safe and treats its link as unproven.
+>
+> So a group of route-less books is no longer refused for the links those books
+> never claimed to have. What still blocks `verified` is a declared-route book
+> whose link is unproven, and for MDShop and Admiralbet that is a bookmaker-side
+> routing fact, not a code path: the gate, the registry and the parsers are
+> correct and tested. Read
 > [Match & mapping certainty](#match--mapping-certainty) before concluding
 > anything about yield from a scan.
 >
@@ -142,6 +155,13 @@ Two rules inside stage 1 matter more than the rest:
 * **Links are a machine fact, not a human one.** `deep_link_verified` may only be
   set by an actual browser check (`scripts/verify_deeplinks.py`), never by a
   human approval.
+* **A book that declares no per-event route is verified on identity alone.**
+  The six books declaring `supports_event_id: false` in
+  `config/bookmaker_deeplinks.json` have no per-event URL to prove, so the
+  declaration is the proof and the group carries a `no_event_link` evidence note
+  instead of a reason. A book with **no declaration at all** is refused: the gate
+  fails safe, because an absent declaration is silence rather than proof of
+  absence.
 
 **Stage 2 — AI proposals (`engine/ai.py`, used by `server/api.py`).** The AI is
 consulted only about pairings the rules could not settle, and only to **rank**
