@@ -1,5 +1,6 @@
 from datetime import datetime
 from enum import Enum
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -44,6 +45,8 @@ class Match(BaseModel):
     url: str = ""
     bet_url: str = ""  # deep link that prefills a new bet slip/ticket for this match
     match_code: str = ""
+    event_id: str = ""
+    deep_link_verified: bool = False
     category_tags: list[str] = []
     low_confidence: bool = False
     is_swapped: bool = False
@@ -54,6 +57,37 @@ class Match(BaseModel):
         return len(self.markets) > 0
 
 
+MatchEventStatus = Literal["verified", "suggested", "rejected"]
+
+
+class MatchEvidence(BaseModel):
+    """One reason why a match group was grouped, or why a candidate was rejected."""
+    rule: str
+    source: Literal["rule", "ai", "human", "allowlist"]
+    confidence: float = 0.0
+    reason: str = ""
+    league_pair: list[str] = []
+    kickoff_delta_minutes: float | None = None
+    allowlist_entries: list[str] = []
+
+
+class CandidateReview(BaseModel):
+    """An ambiguous pairing awaiting human/AI resolution."""
+    id: str
+    home_team: str
+    away_team: str
+    league: str
+    kickoff: datetime | None = None
+    bookmakers: list[str] = []
+    ai_confidence: float = 0.0
+    ai_reason: str = ""
+    rule_rejections: list[str] = []
+    status: Literal["pending", "approved", "rejected"] = "pending"
+    created_at: datetime
+    resolved_at: datetime | None = None
+    resolved_by: str = ""
+
+
 class MatchGroup(BaseModel):
     """Same real-world match found across multiple bookmakers."""
     canonical_home: str
@@ -61,6 +95,8 @@ class MatchGroup(BaseModel):
     league: str = ""
     kickoff: datetime | None = None
     matches: list[Match] = []
+    status: MatchEventStatus = "suggested"
+    evidence: list[MatchEvidence] = []
 
 
 class SurebetStake(BaseModel):
