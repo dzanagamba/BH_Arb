@@ -296,6 +296,12 @@ body::before {
 }
 .btn-mute:hover { color: var(--text); border-color: var(--accent-border); }
 
+.btn:focus-visible,
+.tab-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
 .btn-copy {
     font-size: 11.5px;
     font-weight: 600;
@@ -666,6 +672,150 @@ body::before {
 .no-results h3 { font-size: 18px; font-weight: 800; color: var(--text); }
 
 /* ============================================================
+   RESULTS TABS
+   ============================================================ */
+.results-tabs {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin: 4px 0 16px;
+    border-bottom: 1px solid var(--border);
+}
+
+.tab-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: var(--text-3);
+    font: 700 12px var(--font);
+    cursor: pointer;
+    transition: 0.15s ease;
+}
+
+.tab-btn:hover { color: var(--text); background: var(--bg-hover); }
+.tab-btn.active { color: var(--accent-2); border-bottom-color: var(--accent); }
+.tab-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.tab-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: var(--bg-cell);
+    color: var(--text-2);
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+}
+.tab-btn.active .tab-count { background: var(--accent-soft); color: var(--accent-2); }
+.tab-panel[hidden] { display: none; }
+
+/* ============================================================
+   CANDIDATE REVIEW
+   ============================================================ */
+.candidates-list { display: flex; flex-direction: column; gap: 12px; }
+
+.candidate-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--red);
+    border-radius: var(--radius);
+    padding: 16px;
+}
+
+.candidate-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.candidate-teams {
+    color: var(--text);
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: -0.2px;
+    line-height: 1.35;
+}
+
+.candidate-vs {
+    display: inline-block;
+    margin: 0 5px;
+    color: var(--text-3);
+    font-size: 10px;
+    text-transform: uppercase;
+}
+
+.candidate-meta {
+    margin-top: 5px;
+    color: var(--text-2);
+    font-size: 11.5px;
+    line-height: 1.5;
+}
+
+.candidate-ai-confidence {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    align-items: flex-end;
+    min-width: 112px;
+    padding: 8px 11px;
+    background: var(--accent-soft);
+    border: 1px solid var(--accent-border);
+    border-radius: var(--radius-sm);
+}
+
+.candidate-ai-confidence strong {
+    color: var(--accent-2);
+    font-size: 20px;
+    font-weight: 800;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+}
+.candidate-ai-confidence span { color: var(--text-2); font-size: 10px; font-weight: 700; }
+
+.candidate-reasons {
+    margin-top: 14px;
+    padding: 12px;
+    background: var(--red-soft);
+    border: 1px solid rgba(255, 90, 110, 0.25);
+    border-radius: var(--radius-sm);
+}
+.candidate-section-label {
+    color: var(--red);
+    font-size: 9.5px;
+    font-weight: 800;
+    letter-spacing: 0.7px;
+    text-transform: uppercase;
+}
+.candidate-reasons ul { display: grid; gap: 6px; margin-top: 8px; padding: 0; list-style: none; }
+.candidate-reason { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.candidate-reason-label { color: var(--text); font-size: 12.5px; font-weight: 700; }
+.candidate-reason-code { color: var(--text-3); font: 10px ui-monospace, SFMono-Regular, Consolas, monospace; }
+.candidate-reason-none { color: var(--text-2); font-size: 12.5px; }
+
+.candidate-ai {
+    margin-top: 12px;
+    padding: 10px 12px;
+    color: var(--text-2);
+    background: var(--bg-cell);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    line-height: 1.5;
+}
+.candidate-ai strong { color: var(--text); }
+.candidate-ai-note { display: block; margin-top: 4px; color: var(--text-3); font-size: 10.5px; }
+
+.candidate-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.candidate-action-error { margin-top: 10px; color: var(--red); font-size: 11.5px; }
+
+/* ============================================================
    RESULTS GRID
    ============================================================ */
 .results-grid {
@@ -740,7 +890,13 @@ body::before {
     margin-top: 3px;
 }
 
-.card-market { margin-left: auto; }
+.card-market {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    margin-left: auto;
+}
 
 .market-badge {
     display: inline-block;
@@ -754,6 +910,21 @@ body::before {
     border: 1px solid var(--accent-border);
     white-space: nowrap;
 }
+
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 7px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 9.5px;
+    font-weight: 800;
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+}
+.status-verified { color: var(--green); background: var(--green-soft); border-color: rgba(47, 214, 127, 0.3); }
+.status-suggested { color: var(--gold); background: var(--gold-soft); border-color: rgba(255, 194, 75, 0.3); }
+.status-rejected { color: var(--red); background: var(--red-soft); border-color: rgba(255, 90, 110, 0.3); }
 
 .card-meta {
     display: flex;
@@ -1136,6 +1307,9 @@ body::before {
     .stats-ribbon { overflow-x: auto; }
     .card-teams { font-size: 13px; }
     .profit-value { font-size: 26px; }
+    .candidate-card-header { flex-direction: column; }
+    .candidate-ai-confidence { width: 100%; flex-direction: row; align-items: center; justify-content: space-between; }
+    .candidate-reason { align-items: flex-start; flex-direction: column; gap: 2px; }
 }
 
 /* ============================================================

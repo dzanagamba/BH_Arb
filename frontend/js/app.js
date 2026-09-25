@@ -17,6 +17,7 @@
 // ─── State ────────────────────────────────────────────────────────────────────
 let currentMode = 'prematch';       // 'prematch' (future) | 'live' (in-play)
 let activeScanMode = null;          // mode of the currently running scan
+let activeTab = 'surebets';         // 'surebets' (results) | 'review' (human queue)
 let allSurebets = [];          // Full list from server
 let filteredSurebets = [];     // After client-side filtering
 let pollingInterval = null;
@@ -28,6 +29,19 @@ let soundMuted = false;
 let audioContext = null;       // shared AudioContext (reused, no per-alert leak)
 let autoRescanTimer = null;    // auto-rescan countdown interval
 let knownSurebetSignatures = new Set();  // fingerprints of previously seen surebets
+
+// Reviewer-facing wording for deterministic gate codes. Keep the raw code in
+// the rendered title attribute so diagnostics remain available to operators.
+const REASON_LABELS = Object.freeze({
+    league_mismatch: 'Different league',
+    kickoff_delta: 'Kickoff too far apart',
+    link_unverified: 'Link not verified',
+    team_unresolved: 'Teams do not match',
+    category_mismatch: 'Different match category',
+    kickoff_missing: 'Kickoff time missing',
+    orientation_unresolved: 'Home/away order unclear',
+    no_event_link: 'No event link',
+});
 
 function restoreMode() {
     try {
@@ -44,6 +58,54 @@ function updateModeToggleUI() {
     const liveBtn = document.getElementById('mode-live');
     if (prematchBtn) prematchBtn.classList.toggle('active', currentMode === 'prematch');
     if (liveBtn) liveBtn.classList.toggle('active', currentMode === 'live');
+}
+
+function switchTab(tab) {
+    const target = tab === 'review' ? 'review' : 'surebets';
+    activeTab = target;
+
+    document.querySelectorAll('.results-tabs [role="tab"]').forEach(button => {
+        const isActive = button.dataset.tab === target;
+        button.classList.toggle('active', isActive);
+        button.setAttribute('aria-selected', String(isActive));
+        button.tabIndex = isActive ? 0 : -1;
+    });
+
+    document.querySelectorAll('[data-tab-panel]').forEach(panel => {
+        const isActive = panel.dataset.tabPanel === target;
+        panel.hidden = !isActive;
+        panel.setAttribute('aria-hidden', String(!isActive));
+    });
+
+    // The queue is small and inexpensive, but fetch on demand so a reviewer
+    // sees fresh candidates when opening the tab.
+    if (target === 'review') loadCandidates();
+}
+
+function handleTabKeydown(event) {
+    const tab = event.target.closest('[role="tab"]');
+    if (!tab) return;
+
+    const tabs = [...document.querySelectorAll('.results-tabs [role="tab"]')];
+    const currentIndex = tabs.indexOf(tab);
+    if (currentIndex < 0) return;
+
+    let nextIndex = null;
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+        nextIndex = (currentIndex + 1) % tabs.length;
+    } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+        nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+    } else if (event.key === 'Home') {
+        nextIndex = 0;
+    } else if (event.key === 'End') {
+        nextIndex = tabs.length - 1;
+    }
+
+    if (nextIndex !== null) {
+        event.preventDefault();
+        tabs[nextIndex].focus();
+        switchTab(tabs[nextIndex].dataset.tab);
+    }
 }
 
 function switchMode(mode) {
@@ -97,8 +159,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadConfig();
     initBookmakerChips();
     await loadResults(true);  // Load any cached results from previous scan (no alert sound)
-    loadHealth();
-    setInterval(loadHealth, 30000);
+    const tabs = document.querySelector('.results-tabs');
+    if (tabs) tabs.addEventListener('keydown', handleTabKeydown);
+    // Health and review-queue refresh share the existing 30-second cadence.
+    refreshDiagnostics();
+    setInterval(refreshDiagnostics, 30000);
 });
 
 function restoreDashboardTheme() {
@@ -398,6 +463,8 @@ async function onScanComplete(status) {
     }
 
     await loadResults();
+    // A new scan can create more refused pairings; refresh the human queue too.
+    loadCandidates();
 }
 // ─── Results ──────────────────────────────────────────────────────────────────
 async function loadResults(silent = false) {
@@ -519,17 +586,21 @@ function renderSurebets(surebets) {
     const grid = document.getElementById('results-grid');
     const emptyState = document.getElementById('empty-state');
     const noResults = document.getElementById('no-results');
+    const surebetsCount = document.getElementById('surebets-count');
 
+    if (surebetsCount) surebetsCount.textContent = surebets.length;
     grid.innerHTML = '';
 
     // Mode-aware empty state copy
+    const emptyTitle = emptyState.querySelector('.empty-state-title');
+    const emptyDescription = emptyState.querySelector('.empty-state-desc');
     if (currentMode === 'live') {
-        document.querySelector('.empty-state-title').textContent = 'No Live Matches Scanned';
-        document.querySelector('.empty-state-desc').innerHTML =
+        if (emptyTitle) emptyTitle.textContent = 'No Live Matches Scanned';
+        if (emptyDescription) emptyDescription.innerHTML =
             'Click <strong>Scan Now</strong> to scan all bookmakers for <strong>in-play</strong> arbitrage opportunities. Live odds change fast — rescan often.';
     } else {
-        document.querySelector('.empty-state-title').textContent = 'Ready to Hunt Surebets';
-        document.querySelector('.empty-state-desc').innerHTML =
+        if (emptyTitle) emptyTitle.textContent = 'Ready to Hunt Surebets';
+        if (emptyDescription) emptyDescription.innerHTML =
             'Click <strong>Scan Now</strong> to start scanning all 9 bookmakers for arbitrage opportunities. Browser windows will open — solve any CAPTCHA if prompted.';
     }
 
@@ -581,6 +652,27 @@ function buildSurebetCard(sb, idx) {
     // Market badge
     card.querySelector('.market-badge').textContent =
         MARKET_LABELS[sb.market_type] || sb.market_type;
+
+    // Surebets are emitted only from verified match groups. If a future
+    // response carries an explicit status, expose it without relying on color.
+    const reportedStatus = sb.status || sb.match_status || 'verified';
+    const matchStatus = ['verified', 'suggested', 'rejected'].includes(reportedStatus)
+        ? reportedStatus
+        : 'verified';
+    const statusEl = card.querySelector('.status-badge');
+    if (statusEl) {
+        statusEl.className = `status-badge status-${matchStatus}`;
+        statusEl.textContent = matchStatus === 'verified'
+            ? '✓ Verified'
+            : matchStatus === 'suggested' ? '! Suggested' : '✕ Rejected';
+        statusEl.setAttribute(
+            'aria-label',
+            matchStatus === 'verified'
+                ? 'Verified match pairing'
+                : matchStatus === 'suggested' ? 'Suggested match pairing' : 'Rejected match pairing',
+        );
+        statusEl.title = `Match pairing status: ${matchStatus}`;
+    }
 
     // League
     card.querySelector('.card-league').textContent =
@@ -658,6 +750,166 @@ function buildStakeRow(stake, marketType, matchUrls, betUrls) {
         <div class="stake-amount">Bet: <strong data-stake="${stake.stake}">${stakeFormat(stake.stake)} KM</strong></div>
     `;
     return div;
+}
+
+// ─── Candidate review ──────────────────────────────────────────────────────────
+const REASON_UNKNOWN_LABEL = 'Unrecognised gate reason';
+
+function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, character => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;',
+    })[character]);
+}
+
+function candidateConfidence(value) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return 0;
+    const normalized = numeric > 1 ? numeric / 100 : numeric;
+    return Math.min(1, Math.max(0, normalized));
+}
+
+function renderCandidatesMessage(message) {
+    const list = document.getElementById('candidates-list');
+    if (!list) return;
+    list.innerHTML = `
+        <div class="empty-state">
+            <div class="empty-state-icon">⌁</div>
+            <h2 class="empty-state-title">${escapeHtml(message)}</h2>
+            <p class="empty-state-desc">The review queue could not be refreshed. Try again in a moment.</p>
+        </div>
+    `;
+}
+
+async function loadCandidates() {
+    try {
+        const response = await fetch('/api/candidates');
+        if (response.ok === false) throw new Error(`Candidate request failed (${response.status})`);
+        const data = await response.json();
+        renderCandidates(Array.isArray(data.candidates) ? data.candidates : []);
+    } catch (error) {
+        console.error('Candidates load failed:', error);
+        renderCandidatesMessage('Could not load candidates.');
+    }
+}
+
+function renderCandidates(candidates) {
+    const list = document.getElementById('candidates-list');
+    const count = document.getElementById('review-count');
+    const queue = Array.isArray(candidates) ? candidates : [];
+    if (!list) return;
+    if (count) count.textContent = queue.length;
+
+    if (!queue.length) {
+        list.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-state-icon">✓</div>
+                <h2 class="empty-state-title">No pending candidates.</h2>
+                <p class="empty-state-desc">Candidates refused by the certainty gate will appear here for a human decision.</p>
+            </div>
+        `;
+        return;
+    }
+
+    // AI confidence helps a reviewer prioritise the queue; it never grants trust.
+    const orderedCandidates = [...queue].sort(
+        (left, right) => candidateConfidence(right.ai_confidence) - candidateConfidence(left.ai_confidence),
+    );
+
+    list.innerHTML = orderedCandidates.map((candidate) => {
+        const id = escapeHtml(candidate.id || '');
+        const homeTeam = escapeHtml(formatTeamName(candidate.home_team || 'Unknown'));
+        const awayTeam = escapeHtml(formatTeamName(candidate.away_team || 'Unknown'));
+        const league = escapeHtml(formatLeague(candidate.league || 'Unknown league'));
+        const kickoffDate = candidate.kickoff ? parseKickoff(candidate.kickoff) : null;
+        const kickoff = kickoffDate ? escapeHtml(formatKickoff(kickoffDate)) : 'Kickoff unknown';
+        const bookmakers = (Array.isArray(candidate.bookmakers) ? candidate.bookmakers : [])
+            .map(bookmaker => escapeHtml(bookmakersConfig[bookmaker]?.name || capitalize(bookmaker)))
+            .join(' / ') || 'No bookmakers recorded';
+        const confidence = Math.round(candidateConfidence(candidate.ai_confidence) * 100);
+        const aiReason = escapeHtml(candidate.ai_reason || 'No AI explanation provided.');
+        const reasons = Array.isArray(candidate.rule_rejections) ? candidate.rule_rejections : [];
+        const reasonItems = reasons.length
+            ? reasons.map(reason => {
+                const rawCode = String(reason);
+                const label = REASON_LABELS[rawCode] || rawCode || REASON_UNKNOWN_LABEL;
+                return `
+                    <li class="candidate-reason" title="${escapeHtml(rawCode)}">
+                        <span class="candidate-reason-label">${escapeHtml(label)}</span>
+                        <code class="candidate-reason-code">${escapeHtml(rawCode)}</code>
+                    </li>
+                `;
+            }).join('')
+            : '<li class="candidate-reason candidate-reason-none">No rejection reason recorded</li>';
+
+        return `
+            <article class="candidate-card" data-id="${id}" data-confidence="${confidence}">
+                <div class="candidate-card-header">
+                    <div>
+                        <div class="candidate-teams"><span>${homeTeam}</span> <span class="candidate-vs">vs</span> <span>${awayTeam}</span></div>
+                        <div class="candidate-meta">${league} <span aria-hidden="true">·</span> ${kickoff} <span aria-hidden="true">·</span> ${bookmakers}</div>
+                    </div>
+                    <div class="candidate-ai-confidence" title="AI confidence is a suggestion only; it does not approve a pairing">
+                        <strong>${confidence}%</strong>
+                        <span>AI confidence</span>
+                    </div>
+                </div>
+                <div class="candidate-reasons" role="group" aria-label="Reasons the certainty gate refused this pairing">
+                    <div class="candidate-section-label">Why the certainty gate refused</div>
+                    <ul>${reasonItems}</ul>
+                </div>
+                <div class="candidate-ai" title="AI explanation">
+                    <strong>AI suggestion:</strong> ${aiReason} <span class="candidate-ai-note">Suggestion only — a human must decide.</span>
+                </div>
+                <div class="candidate-actions">
+                    <button type="button" class="btn btn-primary" aria-label="Approve pairing ${homeTeam} versus ${awayTeam}"
+                            onclick="approveCandidate(this.closest('.candidate-card').dataset.id)">Approve pairing</button>
+                    <button type="button" class="btn btn-mute" aria-label="Reject pairing ${homeTeam} versus ${awayTeam}"
+                            onclick="rejectCandidate(this.closest('.candidate-card').dataset.id)">Reject pairing</button>
+                </div>
+            </article>
+        `;
+    }).join('');
+}
+
+async function submitCandidateDecision(id, action, card) {
+    const buttons = card ? [...card.querySelectorAll('button')] : [];
+    buttons.forEach(button => { button.disabled = true; });
+    try {
+        const response = await fetch(`/api/candidates/${encodeURIComponent(id)}/${action}`, { method: 'POST' });
+        if (response.ok === false) throw new Error(`Candidate ${action} failed (${response.status})`);
+        await loadCandidates();
+    } catch (error) {
+        console.error(`Candidate ${action} failed:`, error);
+        if (card) {
+            const message = document.createElement('div');
+            message.className = 'candidate-action-error';
+            message.setAttribute('role', 'alert');
+            message.textContent = `Could not ${action} this candidate. Try again.`;
+            card.appendChild(message);
+        }
+        buttons.forEach(button => { button.disabled = false; });
+    }
+}
+
+async function approveCandidate(id) {
+    const card = [...document.querySelectorAll('.candidate-card')]
+        .find(item => item.dataset.id === String(id));
+    const teams = card?.querySelector('.candidate-teams')?.textContent?.trim() || 'this pairing';
+    const confirmed = window.confirm(
+        `Approve ${teams}? This writes a reviewed team alias to the trading allowlist.`,
+    );
+    if (!confirmed) return;
+    await submitCandidateDecision(id, 'approve', card);
+}
+
+async function rejectCandidate(id) {
+    const card = [...document.querySelectorAll('.candidate-card')]
+        .find(item => item.dataset.id === String(id));
+    await submitCandidateDecision(id, 'reject', card);
 }
 
 // ─── Recalculate Stakes ───────────────────────────────────────────────────────
@@ -907,6 +1159,11 @@ function formatLeague(league) {
 function capitalize(str) {
     if (!str) return '';
     return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+async function refreshDiagnostics() {
+    // Keep the review queue on the same cadence as the existing health poll.
+    await Promise.all([loadHealth(), loadCandidates()]);
 }
 
 async function loadHealth() {

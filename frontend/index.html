@@ -220,37 +220,63 @@
         <button class="error-banner-close" onclick="hideError()">✕</button>
     </div>
 
-    <!-- Empty state -->
-    <div class="empty-state" id="empty-state">
-        <div class="empty-state-icon">🔍</div>
-        <h2 class="empty-state-title">Ready to Hunt Surebets</h2>
-        <p class="empty-state-desc">
-            Click <strong>Scan Now</strong> to start scanning all 7 bookmakers for arbitrage opportunities.
-            Browser windows will open — solve any CAPTCHA if prompted.
-        </p>
-        <div class="empty-state-bookies">
-            <div class="bookie-badge" style="--color: #FF6B00">Mozzartbet</div>
-            <div class="bookie-badge" style="--color: #22c55e">MDShop</div>
-            <div class="bookie-badge" style="--color: #3b82f6">Admiralbet</div>
-            <div class="bookie-badge" style="--color: #ef4444">Betole</div>
-            <div class="bookie-badge" style="--color: #E91E63">MBet</div>
-            <div class="bookie-badge" style="--color: #FF5722">SportPlus</div>
-            <div class="bookie-badge" style="--color: #9C27B0">EVLBet</div>
-            <div class="bookie-badge" style="--color: #16A34A">Premier Kladionica</div>
-            <div class="bookie-badge" style="--color: #EF4444">WWIN</div>
+    <!-- Results tabs -->
+    <div class="results-tabs" role="tablist" aria-label="Dashboard views">
+        <button class="tab-btn active" id="surebets-tab" data-tab="surebets" role="tab"
+                aria-selected="true" aria-controls="surebets-panel" tabindex="0"
+                onclick="switchTab('surebets')">Surebets <span id="surebets-count" class="tab-count">0</span></button>
+        <button class="tab-btn" id="review-tab" data-tab="review" role="tab"
+                aria-selected="false" aria-controls="review-panel" tabindex="-1"
+                onclick="switchTab('review')">Review <span id="review-count" class="tab-count">0</span></button>
+    </div>
+
+    <!-- Surebets panel -->
+    <section id="surebets-panel" class="tab-panel" role="tabpanel" aria-labelledby="surebets-tab"
+             aria-hidden="false" data-tab-panel="surebets">
+        <!-- Empty state -->
+        <div class="empty-state" id="empty-state">
+            <div class="empty-state-icon">🔍</div>
+            <h2 class="empty-state-title">Ready to Hunt Surebets</h2>
+            <p class="empty-state-desc">
+                Click <strong>Scan Now</strong> to start scanning all 7 bookmakers for arbitrage opportunities.
+                Browser windows will open — solve any CAPTCHA if prompted.
+            </p>
+            <div class="empty-state-bookies">
+                <div class="bookie-badge" style="--color: #FF6B00">Mozzartbet</div>
+                <div class="bookie-badge" style="--color: #22c55e">MDShop</div>
+                <div class="bookie-badge" style="--color: #3b82f6">Admiralbet</div>
+                <div class="bookie-badge" style="--color: #ef4444">Betole</div>
+                <div class="bookie-badge" style="--color: #E91E63">MBet</div>
+                <div class="bookie-badge" style="--color: #FF5722">SportPlus</div>
+                <div class="bookie-badge" style="--color: #9C27B0">EVLBet</div>
+                <div class="bookie-badge" style="--color: #16A34A">Premier Kladionica</div>
+                <div class="bookie-badge" style="--color: #EF4444">WWIN</div>
+            </div>
         </div>
-    </div>
 
-    <!-- No results state -->
-    <div class="no-results" id="no-results" style="display:none;">
-        <div class="no-results-icon">📭</div>
-        <h3>No Surebets Found</h3>
-        <p>No arbitrage opportunities match your current filters. Try reducing the minimum profit threshold or checking all markets.</p>
-        <button class="btn btn-secondary" onclick="resetFilters()">Reset Filters</button>
-    </div>
+        <!-- No results state -->
+        <div class="no-results" id="no-results" style="display:none;">
+            <div class="no-results-icon">📭</div>
+            <h3>No Surebets Found</h3>
+            <p>No arbitrage opportunities match your current filters. Try reducing the minimum profit threshold or checking all markets.</p>
+            <button class="btn btn-secondary" onclick="resetFilters()">Reset Filters</button>
+        </div>
 
-    <!-- Results grid -->
-    <div class="results-grid" id="results-grid"></div>
+        <!-- Results grid -->
+        <div class="results-grid" id="results-grid"></div>
+    </section>
+
+    <!-- Review panel -->
+    <section id="review-panel" class="tab-panel" role="tabpanel" aria-labelledby="review-tab"
+             aria-hidden="true" data-tab-panel="review" hidden>
+        <div id="candidates-list" class="candidates-list">
+            <div class="empty-state">
+                <div class="empty-state-icon">✓</div>
+                <h2 class="empty-state-title">No pending candidates.</h2>
+                <p class="empty-state-desc">Candidates refused by the certainty gate will appear here for a human decision.</p>
+            </div>
+        </div>
+    </section>
 
 </main>
 
@@ -264,6 +290,7 @@
             </div>
             <div class="card-market">
                 <span class="market-badge"></span>
+                <span class="status-badge status-verified" aria-label="Verified match pairing">✓ Verified</span>
             </div>
             <div class="card-meta">
                 <span class="card-live-badge" style="display:none;">● LIVE</span>
