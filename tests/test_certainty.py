@@ -1,6 +1,6 @@
 """CertaintyGate: hard gates for verified same-event claims."""
 
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 
 from engine.certainty import CertaintyGate
 from models.schemas import Market, MarketType, Match, MatchGroup, OddsValue
@@ -70,31 +70,30 @@ def test_verified_when_all_gates_pass():
     assert any(e.rule == "team_identity" for e in r.evidence)
 
 
-def test_aware_and_naive_kickoffs_compare_equal():
+def test_aware_and_naive_kickoffs_compare_equal_in_both_orders():
     gate = CertaintyGate()
     aware = K.replace(tzinfo=timezone(timedelta(hours=2))) + timedelta(hours=2)
     a = _m("mdshop", "Sarajevo", "Zeljeznicar", "BiH - Premier Liga", kickoff=K, event_id="1")
-    b = _m(
-        "mbet",
-        "Sarajevo",
-        "Zeljeznicar",
-        "Premijer Liga BiH",
-        kickoff=aware.astimezone(UTC).replace(tzinfo=None),
-        event_id="2",
-    )
+    b = _m("mbet", "Sarajevo", "Zeljeznicar", "Premijer Liga BiH", kickoff=aware, event_id="2")
     gate.normalize([a, b])
-    r = gate.evaluate_pair(a, b)
-    assert "kickoff_delta" not in r.reasons
+
+    r_naive_aware = gate.evaluate_pair(a, b)
+    assert r_naive_aware.status == "verified"
+    assert r_naive_aware.reasons == []
+
+    r_aware_naive = gate.evaluate_pair(b, a)
+    assert r_aware_naive.status == "verified"
+    assert r_aware_naive.reasons == []
 
 
-def test_missing_kickoff_never_verified():
+def test_missing_kickoff_is_suggested_with_exact_reason():
     gate = CertaintyGate()
     a = _m("mdshop", "Sarajevo", "Zeljeznicar", "BiH - Premier Liga", event_id="1")
     b = _m("mbet", "Sarajevo", "Zeljeznicar", "Premijer Liga BiH", kickoff=None, event_id="2")
     gate.normalize([a, b])
     r = gate.evaluate_pair(a, b)
-    assert r.status != "verified"
-    assert "kickoff_missing" in r.reasons
+    assert r.status == "suggested"
+    assert r.reasons == ["kickoff_missing"]
 
 
 def test_verified_kickoff_window_boundary_is_inclusive():
@@ -117,7 +116,7 @@ def test_verified_kickoff_window_boundary_is_inclusive():
     assert "kickoff_delta" in over_result.reasons
 
 
-def test_kickoff_delta_over_15_minutes_rejected():
+def test_kickoff_delta_over_15_minutes_is_suggested_with_exact_reason():
     gate = CertaintyGate()
     a = _m("mdshop", "Sarajevo", "Zeljeznicar", "BiH - Premier Liga", event_id="1")
     b = _m(
@@ -130,26 +129,28 @@ def test_kickoff_delta_over_15_minutes_rejected():
     )
     gate.normalize([a, b])
     r = gate.evaluate_pair(a, b)
-    assert r.status != "verified"
-    assert "kickoff_delta" in r.reasons
+    assert r.status == "suggested"
+    assert r.reasons == ["kickoff_delta"]
 
 
-def test_league_mismatch_rejected():
+def test_league_mismatch_is_rejected_with_exact_reason():
     gate = CertaintyGate()
     a = _m("mdshop", "Sarajevo", "Zeljeznicar", "BiH - Premier Liga", event_id="1")
-    b = _m("mbet", "Arsenal", "Chelsea", "Engleska - Premier liga", event_id="2")
+    b = _m("mbet", "Sarajevo", "Zeljeznicar", "Engleska - Premier liga", event_id="2")
     gate.normalize([a, b])
     r = gate.evaluate_pair(a, b)
-    assert "league_mismatch" in r.reasons
+    assert r.status == "rejected"
+    assert r.reasons == ["league_mismatch"]
 
 
-def test_category_mismatch_rejected():
+def test_category_mismatch_is_rejected_with_exact_reason():
     gate = CertaintyGate()
     a = _m("mdshop", "Sarajevo", "Zeljeznicar", "BiH - Premier Liga", tags=[], event_id="1")
-    b = _m("mbet", "Sarajevo U21", "Zeljeznicar U21", "Premijer Liga BiH", tags=["U21"], event_id="2")
+    b = _m("mbet", "Sarajevo", "Zeljeznicar", "Premijer Liga BiH", tags=["U21"], event_id="2")
     gate.normalize([a, b])
     r = gate.evaluate_pair(a, b)
-    assert "category_mismatch" in r.reasons
+    assert r.status == "rejected"
+    assert r.reasons == ["category_mismatch"]
 
 
 def test_home_away_swap_is_provable():
@@ -177,7 +178,81 @@ def test_link_unverified_blocks_verified():
     gate.normalize([a, b])
     r = gate.evaluate_pair(a, b)
     assert r.status == "suggested"
-    assert "link_unverified" in r.reasons
+    assert r.reasons == ["link_unverified"]
+
+
+def test_team_unresolved_is_suggested_with_exact_reason():
+    gate = CertaintyGate()
+    a = _m("a", "Sarajevo", "Zeljeznicar", "BiH - Premier Liga", event_id="1")
+    b = _m("b", "Arsenal", "Chelsea", "Premijer Liga BiH", event_id="2")
+    gate.normalize([a, b])
+    r = gate.evaluate_pair(a, b)
+    assert r.status == "suggested"
+    assert r.reasons == ["team_unresolved"]
+
+
+def test_reason_vocabulary_except_orientation_is_reachable():
+    gate = CertaintyGate()
+
+    league_a = _m("a", "Sarajevo", "Zeljeznicar", "BiH - Premier Liga", event_id="1")
+    league_b = _m("b", "Sarajevo", "Zeljeznicar", "Other League", event_id="2")
+    missing_a = _m("a", "Sarajevo", "Zeljeznicar", "BiH - Premier Liga", event_id="1")
+    missing_b = _m(
+        "b", "Sarajevo", "Zeljeznicar", "Premijer Liga BiH", kickoff=None, event_id="2"
+    )
+    delta_a = _m("a", "Sarajevo", "Zeljeznicar", "BiH - Premier Liga", event_id="1")
+    delta_b = _m(
+        "b",
+        "Sarajevo",
+        "Zeljeznicar",
+        "Premijer Liga BiH",
+        kickoff=K + timedelta(minutes=45),
+        event_id="2",
+    )
+    category_a = _m("a", "Sarajevo", "Zeljeznicar", "BiH - Premier Liga", event_id="1")
+    category_b = _m(
+        "b", "Sarajevo", "Zeljeznicar", "Premijer Liga BiH", tags=["U21"], event_id="2"
+    )
+    team_a = _m("a", "Sarajevo", "Zeljeznicar", "BiH - Premier Liga", event_id="1")
+    team_b = _m("b", "Arsenal", "Chelsea", "Premijer Liga BiH", event_id="2")
+    link_a = _m(
+        "a",
+        "Sarajevo",
+        "Zeljeznicar",
+        "BiH - Premier Liga",
+        url="https://bookmaker.test/match",
+        link_ok=False,
+    )
+    link_b = _m("b", "Sarajevo", "Zeljeznicar", "Premijer Liga BiH", event_id="2")
+    no_link_a = _m(
+        "a", "Sarajevo", "Zeljeznicar", "BiH - Premier Liga", link_ok=False
+    )
+    no_link_b = _m("b", "Sarajevo", "Zeljeznicar", "Premijer Liga BiH", link_ok=False)
+
+    results = []
+    for left, right in (
+        (league_a, league_b),
+        (missing_a, missing_b),
+        (delta_a, delta_b),
+        (category_a, category_b),
+        (team_a, team_b),
+        (link_a, link_b),
+        (no_link_a, no_link_b),
+    ):
+        gate.normalize([left, right])
+        results.append(gate.evaluate_pair(left, right))
+
+    observed = {reason for result in results for reason in result.reasons}
+    assert observed == {
+        "league_mismatch",
+        "kickoff_missing",
+        "kickoff_delta",
+        "category_mismatch",
+        "team_unresolved",
+        "link_unverified",
+        "no_event_link",
+    }
+    assert "orientation_unresolved" not in observed
 
 
 def test_missing_event_link_is_reported_separately():
@@ -187,8 +262,7 @@ def test_missing_event_link_is_reported_separately():
     gate.normalize([a, b])
     r = gate.evaluate_pair(a, b)
     assert r.status == "suggested"
-    assert "no_event_link" in r.reasons
-    assert "link_unverified" not in r.reasons
+    assert r.reasons == ["no_event_link"]
 
 
 def test_explicit_equivalence_allows_different_leagues():
@@ -199,6 +273,27 @@ def test_explicit_equivalence_allows_different_leagues():
     gate.normalize([a, b])
     r = gate.evaluate_pair(a, b)
     assert "league_mismatch" not in r.reasons
+
+
+def test_fuzzy_normalizer_result_requires_raw_allowlist():
+    a = _m("a", "Sarajevo", "Thun", "Liga Evrope", event_id="1")
+    b = _m("b", "Sarjevo", "Thun", "Liga Evrope", event_id="2")
+    a.home_team_normalized = a.away_team_normalized = ""
+    b.home_team_normalized = b.away_team_normalized = ""
+
+    gate = CertaintyGate()
+    gate.normalize([a, b])
+    assert a.home_team_normalized == b.home_team_normalized
+    without_allowlist = gate.evaluate_pair(a, b)
+    assert without_allowlist.status == "suggested"
+    assert without_allowlist.reasons == ["team_unresolved"]
+
+    allowed_gate = CertaintyGate(alias_allowlist={"sarjevo|sarajevo"})
+    with_allowlist = allowed_gate.evaluate_pair(a, b)
+    assert with_allowlist.status == "verified"
+    team_evidence = next(e for e in with_allowlist.evidence if e.rule == "team_identity")
+    assert team_evidence.source == "allowlist"
+    assert team_evidence.reason == "allowlisted_alias"
 
 
 def test_allowlisted_alias_is_accepted_but_unlisted_fuzzy_is_not():
@@ -214,8 +309,8 @@ def test_allowlisted_alias_is_accepted_but_unlisted_fuzzy_is_not():
 
     gate2 = CertaintyGate()  # no allowlist
     r2 = gate2.evaluate_pair(a, b)
-    assert r2.status != "verified"
-    assert "team_unresolved" in r2.reasons
+    assert r2.status == "suggested"
+    assert r2.reasons == ["team_unresolved"]
 
 
 def test_allowlisted_alias_swap_requires_both_team_pairs():
@@ -343,6 +438,50 @@ def test_evaluate_against_group_uses_group_as_canonical():
     assert "league_mismatch" in r2.reasons
 
 
+def test_evaluate_records_group_league_mismatch_with_soft_pair_failure():
+    gate = CertaintyGate()
+    a = _m("mdshop", "Sarajevo", "Zeljeznicar", "BiH - Premier Liga", event_id="1")
+    b = _m(
+        "mbet",
+        "Sarajevo",
+        "Zeljeznicar",
+        "Premijer Liga BiH",
+        url="https://bookmaker.test/match",
+        link_ok=False,
+    )
+    gate.normalize([a, b])
+    group = _g(a)
+    group.league = "different_group_league"
+    r = gate.evaluate(b, group)
+    assert r.status == "rejected"
+    assert r.reasons == ["link_unverified", "league_mismatch"]
+
+
+def test_evaluate_checks_group_canonical_team_fields():
+    gate = CertaintyGate()
+    a = _m("mdshop", "Sarajevo", "Zeljeznicar", "BiH - Premier Liga", event_id="1")
+    b = _m("mbet", "Sarajevo", "Zeljeznicar", "Premijer Liga BiH", event_id="2")
+    gate.normalize([a, b])
+    group = _g(a)
+    group.canonical_home = "different_home"
+    group.canonical_away = "different_away"
+    r = gate.evaluate(b, group)
+    assert r.status == "suggested"
+    assert r.reasons == ["team_unresolved"]
+
+
+def test_evaluate_checks_group_kickoff():
+    gate = CertaintyGate()
+    a = _m("mdshop", "Sarajevo", "Zeljeznicar", "BiH - Premier Liga", event_id="1")
+    b = _m("mbet", "Sarajevo", "Zeljeznicar", "Premijer Liga BiH", event_id="2")
+    gate.normalize([a, b])
+    group = _g(a)
+    group.kickoff = K + timedelta(minutes=45)
+    r = gate.evaluate(b, group)
+    assert r.status == "suggested"
+    assert r.reasons == ["kickoff_delta"]
+
+
 def test_fuzzy_swap_flag_requires_both_teams_to_line_up():
     gate = CertaintyGate(alias_allowlist={"alpha united|alpha"})
     a = _m(
@@ -365,6 +504,6 @@ def test_fuzzy_swap_flag_requires_both_teams_to_line_up():
     )
     gate.normalize([a, b])
     r = gate.evaluate_pair(a, b)
-    assert r.status != "verified"
+    assert r.status == "suggested"
     assert r.is_swapped is False
-    assert "team_unresolved" in r.reasons
+    assert r.reasons == ["team_unresolved"]

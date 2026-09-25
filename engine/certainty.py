@@ -82,56 +82,95 @@ class CertaintyGate:
             (self._as_naive_utc(a.kickoff) - self._as_naive_utc(b.kickoff)).total_seconds()
         ) / 60.0
 
-    def _team_pair_ok(self, left: str, right: str) -> bool:
-        """Match one team only by exact identity or an allowlisted fuzzy alias."""
-        if left == right:
-            return True
-        if not self._is_allowlisted(left, right):
-            return False
-        # Reviewed aliases may be abbreviations (for example, ``lech p``);
-        # partial_ratio keeps that reviewed form usable while token_set_ratio
-        # still governs ordinary word-order variants.
-        fuzzy_score = max(
-            fuzz.token_set_ratio(left, right),
-            fuzz.partial_ratio(left, right),
+    @staticmethod
+    def _raw_team_key(name: str) -> str:
+        """Make only lossless superficial raw-name comparisons.
+
+        This deliberately does not call the normalizer's fuzzy fallback. Team
+        identity decisions that see different raw forms must go through the
+        explicit alias allowlist.
+        """
+        return " ".join(name.strip().casefold().split()).rstrip(".")
+
+    def _team_pair_details(
+        self,
+        left_raw: str,
+        left_normalized: str,
+        right_raw: str,
+        right_normalized: str,
+    ) -> tuple[bool, bool]:
+        """Return ``(ok, allowlist_used)`` for one raw/canonical team pair."""
+        if not (left_raw and left_normalized and right_raw and right_normalized):
+            return False, False
+
+        left_key = self._raw_team_key(left_raw)
+        right_key = self._raw_team_key(right_raw)
+        if left_key and left_key == right_key:
+            return left_normalized == right_normalized, False
+
+        # A canonical collision alone is never enough. If the raw forms differ,
+        # the pair is an alias candidate and must be explicitly reviewed.
+        allowlisted = self._is_allowlisted(left_raw, right_raw) or self._is_allowlisted(
+            left_normalized, right_normalized
         )
-        return fuzzy_score >= 90
+        if not allowlisted:
+            return False, False
+
+        fuzzy_score = max(
+            fuzz.token_set_ratio(left_key, right_key),
+            fuzz.partial_ratio(left_key, right_key),
+        )
+        return fuzzy_score >= 90, True
+
+    def _team_pair_ok(self, left: str, right: str) -> bool:
+        """Backward-compatible helper for matching two already-normalized names."""
+        ok, _ = self._team_pair_details(left, left, right, right)
+        return ok
 
     def _team_pair_uses_allowlist(self, left: str, right: str) -> bool:
-        """Return whether a non-exact team pair uses the reviewed alias path."""
-        return left != right and self._team_pair_ok(left, right)
+        """Return whether two normalized names use the reviewed alias path."""
+        _, used = self._team_pair_details(left, left, right, right)
+        return used
 
     def _teams_match_details(self, a: Match, b: Match) -> tuple[bool, bool, bool]:
-        """Return ``(ok, is_swapped, allowlist_used)`` for normalized teams."""
+        """Return ``(ok, is_swapped, allowlist_used)`` for raw/canonical teams."""
         ah, aa = a.home_team_normalized, a.away_team_normalized
         bh, ba = b.home_team_normalized, b.away_team_normalized
         if not (ah and aa and bh and ba):
             return False, False, False
 
-        if ah == bh and aa == ba:
+        if (
+            self._raw_team_key(a.home_team) == self._raw_team_key(b.home_team)
+            and self._raw_team_key(a.away_team) == self._raw_team_key(b.away_team)
+            and ah == bh
+            and aa == ba
+        ):
             return True, False, False
-        if ah == ba and aa == bh:
+        if (
+            self._raw_team_key(a.home_team) == self._raw_team_key(b.away_team)
+            and self._raw_team_key(a.away_team) == self._raw_team_key(b.home_team)
+            and ah == ba
+            and aa == bh
+        ):
             return True, True, False
 
-        direct_home_ok = self._team_pair_ok(ah, bh)
-        direct_away_ok = self._team_pair_ok(aa, ba)
+        direct_home_ok, direct_home_alias = self._team_pair_details(
+            a.home_team, ah, b.home_team, bh
+        )
+        direct_away_ok, direct_away_alias = self._team_pair_details(
+            a.away_team, aa, b.away_team, ba
+        )
         if direct_home_ok and direct_away_ok:
-            return (
-                True,
-                False,
-                self._team_pair_uses_allowlist(ah, bh)
-                or self._team_pair_uses_allowlist(aa, ba),
-            )
+            return True, False, direct_home_alias or direct_away_alias
 
-        swapped_home_ok = self._team_pair_ok(ah, ba)
-        swapped_away_ok = self._team_pair_ok(aa, bh)
+        swapped_home_ok, swapped_home_alias = self._team_pair_details(
+            a.home_team, ah, b.away_team, ba
+        )
+        swapped_away_ok, swapped_away_alias = self._team_pair_details(
+            a.away_team, aa, b.home_team, bh
+        )
         if swapped_home_ok and swapped_away_ok:
-            return (
-                True,
-                True,
-                self._team_pair_uses_allowlist(ah, ba)
-                or self._team_pair_uses_allowlist(aa, bh),
-            )
+            return True, True, swapped_home_alias or swapped_away_alias
 
         return False, False, False
 
@@ -151,10 +190,10 @@ class CertaintyGate:
         return allowlist_used
 
     def _is_allowlisted(self, left: str, right: str) -> bool:
-        """Return whether the unordered normalized pair is explicitly reviewed."""
+        """Return whether the unordered raw/canonical pair is explicitly reviewed."""
         if not self.alias_allowlist:
             return False
-        pair = {left.strip().lower(), right.strip().lower()}
+        pair = {self._raw_team_key(left), self._raw_team_key(right)}
         return any(entry == pair for entry in self.alias_allowlist_entries)
 
     @property
@@ -162,7 +201,7 @@ class CertaintyGate:
         """Return normalized unordered sets parsed from pipe-delimited allowlist entries."""
         entries: list[set[str]] = []
         for entry in self.alias_allowlist:
-            parts = {part.strip().lower() for part in entry.split("|") if part.strip()}
+            parts = {self._raw_team_key(part) for part in entry.split("|") if part.strip()}
             if len(parts) == 2:
                 entries.append(parts)
         return entries
@@ -300,18 +339,81 @@ class CertaintyGate:
             is_swapped=is_swapped,
         )
 
+    def _group_team_orientation(self, match: Match, group: MatchGroup) -> tuple[bool, bool] | None:
+        """Check a candidate against the group's canonical team fields."""
+        if not group.canonical_home or not group.canonical_away:
+            return None
+        if not (match.home_team_normalized and match.away_team_normalized):
+            return False, False
+
+        home_values = {
+            group.canonical_home,
+            self.normalizer.normalize_team(group.canonical_home),
+            self._raw_team_key(group.canonical_home),
+        }
+        away_values = {
+            group.canonical_away,
+            self.normalizer.normalize_team(group.canonical_away),
+            self._raw_team_key(group.canonical_away),
+        }
+        if (
+            match.home_team_normalized in home_values
+            and match.away_team_normalized in away_values
+        ):
+            return True, False
+        if (
+            match.home_team_normalized in away_values
+            and match.away_team_normalized in home_values
+        ):
+            return True, True
+        return False, False
+
+    def _group_kickoff_reason(self, match: Match, group: MatchGroup) -> str | None:
+        """Return an additional kickoff reason for the group's canonical time."""
+        if group.kickoff is None:
+            return None
+        if match.kickoff is None:
+            return "kickoff_missing"
+        delta = abs(
+            (self._as_naive_utc(match.kickoff) - self._as_naive_utc(group.kickoff)).total_seconds()
+        ) / 60.0
+        if delta > self.kickoff_window_minutes:
+            return "kickoff_delta"
+        return None
+
     def evaluate(self, match: Match, group: MatchGroup) -> GateResult:
-        """Evaluate a match against the canonical member of an existing group."""
+        """Evaluate a match against the canonical fields of an existing group."""
         if not group.matches:
             return GateResult(status="rejected", reasons=["team_unresolved"])
 
         anchor = group.matches[0]
         result = self.evaluate_pair(match, anchor)
-        if result.status == "verified" and group.league:
+
+        group_teams = self._group_team_orientation(match, group)
+        if group_teams is not None:
+            group_teams_ok, group_is_swapped = group_teams
+            if group_teams_ok:
+                result.is_swapped = result.is_swapped or group_is_swapped
+            elif "team_unresolved" not in result.reasons:
+                result.reasons.append("team_unresolved")
+
+        group_kickoff_reason = self._group_kickoff_reason(match, group)
+        if group_kickoff_reason and group_kickoff_reason not in result.reasons:
+            result.reasons.append(group_kickoff_reason)
+
+        if group.league:
             match_league = match.league_normalized or ""
             if match_league and match_league != group.league and not self._league_ok(
                 match_league, group.league
             ):
-                result.status = "rejected"
-                result.reasons.append("league_mismatch")
+                if "league_mismatch" not in result.reasons:
+                    result.reasons.append("league_mismatch")
+
+        hard = [reason for reason in result.reasons if reason in HARD_REJECT_REASONS]
+        if hard:
+            result.status = "rejected"
+        elif result.reasons:
+            result.status = "suggested"
+        else:
+            result.status = "verified"
         return result
