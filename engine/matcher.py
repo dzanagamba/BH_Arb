@@ -47,6 +47,9 @@ logger = logging.getLogger(__name__)
 _LEAGUE_EQUIV_FILE = os.path.join(
     os.path.dirname(__file__), "..", "config", "league_equivalences.json"
 )
+_TEAM_ALIAS_FILE = os.path.join(
+    os.path.dirname(__file__), "..", "config", "team_alias_allowlist.json"
+)
 
 # Generic fallback leagues that are too vague to enforce a league gate on
 # Expanded in muse12 (P1-3): friendlies/cups/superliga are vague — keep permissive
@@ -100,16 +103,25 @@ class MatchMatcher:
                 "league_equivalences.json not found or invalid — no cross-league merging"
             )
 
-        # The curated team mapping is the reviewed alias allowlist.  The gate
-        # still rejects any name collision that is not present in this data.
+        # Only explicitly reviewed aliases may authorize fuzzy identity.
         self._alias_allowlist: set[str] = set()
-        for canonical_id, variations in self.normalizer.team_mappings.items():
-            if canonical_id.startswith("_") or not isinstance(variations, list):
-                continue
-            for index, left in enumerate(variations):
-                for right in variations[index + 1 :]:
-                    if left.strip() and right.strip():
-                        self._alias_allowlist.add(f"{left}|{right}")
+        try:
+            with open(_TEAM_ALIAS_FILE, encoding="utf-8") as f:
+                alias_data = json.load(f)
+            if not isinstance(alias_data, dict) or not isinstance(
+                alias_data.get("aliases"), list
+            ):
+                raise ValueError("team alias allowlist must contain an aliases list")
+            for alias in alias_data["aliases"]:
+                if not isinstance(alias, str) or alias.count("|") != 1:
+                    continue
+                left, right = (part.strip() for part in alias.split("|", 1))
+                if left and right:
+                    self._alias_allowlist.add(f"{left}|{right}")
+        except (OSError, TypeError, ValueError):
+            logger.warning(
+                "team_alias_allowlist.json not found or invalid — no fuzzy aliases"
+            )
 
         self.gate = CertaintyGate(
             alias_allowlist=self._alias_allowlist,

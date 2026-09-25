@@ -55,12 +55,12 @@ def test_europa_conference_merge_only_via_declared_equivalence():
     assert not hasattr(matcher_mod, "EUROPEAN_COMPATIBLE_LEAGUES"), (
         "blanket European merging must be removed"
     )
-    # With the shipped league_equivalences.json this may group, but only as `verified`
-    # when every hard gate (kickoff, teams, link) also passes.
     groups = MatchMatcher().group_matches([a, b])
-    for g in groups:
-        assert g.status == "verified"
-        assert any(e.rule == "league_identity" and e.league_pair for e in g.evidence)
+    assert len(groups) == 1
+    group = groups[0]
+    assert group.status == "verified"
+    league_evidence = next(e for e in group.evidence if e.rule == "league_identity")
+    assert set(league_evidence.league_pair) == {"europa_league", "conference_league"}
 
 
 def test_kickoff_gap_of_16_minutes_is_not_verified():
@@ -74,7 +74,7 @@ def test_kickoff_gap_of_16_minutes_is_not_verified():
         event_id="2",
     )
     groups = MatchMatcher().group_matches([a, b])
-    assert all(g.status != "verified" for g in groups)
+    assert groups == []
 
 
 def test_same_teams_three_hours_apart_never_group():
@@ -102,5 +102,30 @@ def test_unverified_link_yields_suggested_or_dropped_not_verified():
     )
     b = _m("mbet", "Sarajevo", "Zeljeznicar", "Premijer Liga BiH", event_id="2")
     groups = MatchMatcher().group_matches([a, b])
-    for g in groups:
-        assert g.status != "verified"
+    assert groups == []
+
+
+def test_unreviewed_mapping_variation_is_not_verified():
+    a = _m("mdshop", "Sporting", "Alverca", "Primeira Liga", event_id="1")
+    b = _m("mbet", "Sporting CP", "Alverca", "Liga Portugal", event_id="2")
+    groups = MatchMatcher().group_matches([a, b])
+    assert groups == []
+
+
+def test_gate_rejected_singleton_cannot_later_merge_into_wrong_group():
+    anchor = _m("mdshop", "Sarajevo", "Zeljeznicar", "BiH - Premier Liga", event_id="1")
+    rejected = _m(
+        "mbet",
+        "Sarajevo",
+        "Zeljeznicar",
+        "Premijer Liga BiH",
+        event_id="2",
+        link_ok=False,
+    )
+    later = _m("sportplus", "Sarajevo", "Zeljeznicar", "Premijer Liga BiH", event_id="3")
+
+    groups = MatchMatcher().group_matches([anchor, rejected, later])
+
+    assert len(groups) == 1
+    assert {m.bookmaker for m in groups[0].matches} == {"mdshop", "sportplus"}
+    assert all(m.bookmaker != "mbet" for m in groups[0].matches)

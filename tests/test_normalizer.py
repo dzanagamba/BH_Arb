@@ -39,4 +39,15 @@ def test_league_normalization():
     n = TeamNormalizer()
     assert n.normalize_league("BiH - Premier Liga") == "premier_liga_bih"
     assert n.normalize_league("Premijer Liga BiH") == "premier_liga_bih"
+    assert n.normalize_league("Liga Portugal") == "primeira_liga"
     assert n.normalize_league("Engleska - Premier liga") == "premier_league"
+
+
+def test_german_tier_two_has_one_reachable_canonical_id():
+    n = TeamNormalizer()
+    assert n.normalize_league("2. Bundesliga") == "bundesliga_2"
+
+
+def test_bulgarian_second_league_is_not_treated_as_generic():
+    n = TeamNormalizer()
+    assert n.normalize_league("Vtora Liga") == "bugarian_second_league"

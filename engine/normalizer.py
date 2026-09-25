@@ -310,7 +310,7 @@ class TeamNormalizer:
         "1. liga", "1.liga", "2. liga", "2.liga", "3. liga", "3.liga",
         "kup", "klubovi", "fudbal", "football", "soccer",
         # Added after live leak analysis 2026-08-20: short names ambiguous across countries
-        "bundesliga", "prva liga", "vtora liga",
+        "bundesliga", "prva liga",
     }
 
     def normalize_league(self, league_name: str) -> str:
