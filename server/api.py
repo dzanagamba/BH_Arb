@@ -188,6 +188,9 @@ _ALLOWLIST_LOCK = threading.Lock()
 # approved again forever, so the review loop could never converge.
 SUPPRESSED_CANDIDATES_FILE = os.path.join(CACHE_DIR, "suppressed_candidates.json")
 _suppressed_candidates: dict[str, str] = {}
+# The system-owned state each decision above was made on, so a record stops
+# applying when the system moves that state on its own. See `_decision_premise`.
+_suppressed_premises: dict[str, str] = {}
 _SUPPRESSED_LOCK = threading.Lock()
 
 
@@ -230,12 +233,37 @@ def _load_suppressed_candidates() -> dict[str, str]:
     try:
         with open(SUPPRESSED_CANDIDATES_FILE, encoding="utf-8") as file:
             data = json.load(file)
-        if not isinstance(data, dict):
+        decisions = data.get("decisions") if isinstance(data, dict) else None
+        if not isinstance(decisions, dict):
+            # A file written before premises existed: a flat id -> decision map.
+            decisions = data
+        if not isinstance(decisions, dict):
             return {}
         return {
             candidate_id: decision
-            for candidate_id, decision in data.items()
+            for candidate_id, decision in decisions.items()
             if isinstance(candidate_id, str) and decision in ("approved", "rejected")
+        }
+    except (OSError, TypeError, ValueError):
+        return {}
+
+
+def _load_suppressed_premises() -> dict[str, str]:
+    """Return the premise each recorded decision was made on, where one was kept.
+
+    Empty for a file written before premises existed, and such a record is then
+    honoured exactly as it was written.
+    """
+    try:
+        with open(SUPPRESSED_CANDIDATES_FILE, encoding="utf-8") as file:
+            data = json.load(file)
+        premises = data.get("premises") if isinstance(data, dict) else None
+        if not isinstance(premises, dict):
+            return {}
+        return {
+            candidate_id: premise
+            for candidate_id, premise in premises.items()
+            if isinstance(candidate_id, str) and isinstance(premise, str)
         }
     except (OSError, TypeError, ValueError):
         return {}
@@ -243,15 +271,28 @@ def _load_suppressed_candidates() -> dict[str, str]:
 
 def _save_suppressed_candidates() -> None:
     _atomic_write_json(
-        SUPPRESSED_CANDIDATES_FILE, dict(sorted(_suppressed_candidates.items())),
+        SUPPRESSED_CANDIDATES_FILE,
+        {
+            "decisions": dict(sorted(_suppressed_candidates.items())),
+            "premises": dict(sorted(_suppressed_premises.items())),
+        },
         "suppressed_candidates",
     )
 
 
-def _suppress_candidate(candidate_id: str, decision: str) -> None:
-    """Record a human decision so the pair is not re-queued on the next scan."""
+def _suppress_candidate(candidate_id: str, decision: str, premise: str = "") -> None:
+    """Record a human decision so the pair is not re-queued on the next scan.
+
+    `premise` is the system-owned state the decision was taken on, so the record
+    stops applying once that state moves on its own. Pass "" to record a decision
+    that holds unconditionally.
+    """
     with _SUPPRESSED_LOCK:
         _suppressed_candidates[candidate_id] = decision
+        if premise:
+            _suppressed_premises[candidate_id] = premise
+        else:
+            _suppressed_premises.pop(candidate_id, None)
         _save_suppressed_candidates()
 
 
@@ -511,6 +552,34 @@ CANDIDATE_REVIEW_HISTORY_MAX = 200   # in-memory log; the allowlist file is the 
 LINK_REJECTION_REASONS = frozenset({"link_unverified", "no_event_link"})
 
 
+def _decision_premise(link_blocked: bool) -> str:
+    """The system-owned state a human decision about a pair was taken on.
+
+    Only state the system changes by itself belongs here. Anything the decision
+    itself changes must stay out: an approval grants the team aliases, which
+    clears `team_unresolved` from the next scan's reason list, so recording that
+    would make every approval contradict its own record and the pair would never
+    leave the queue.
+
+    `link_blocked` is the opposite case. It moves when the per-book deep-link
+    check passes, with no human involved, and it is the state a reviewer is most
+    likely to have decided against — a card that said only the system check could
+    clear the pair. Once the check has passed, the pair is one an approval really
+    does clear, so the old decision no longer describes it.
+    """
+    return f"link_blocked={int(link_blocked)}"
+
+
+def _decision_still_stands(candidate_id: str, link_blocked: bool) -> bool:
+    """Whether a recorded decision still describes the claim the pair makes now.
+
+    A record with no premise was written before this check existed; it is honoured
+    exactly as it was.
+    """
+    recorded = _suppressed_premises.get(candidate_id)
+    return recorded is None or recorded == _decision_premise(link_blocked)
+
+
 class _TeamTokens(NamedTuple):
     """Pre-computed team strings and their token sets for the cheap prefilter."""
 
@@ -741,11 +810,19 @@ def _alias_actionable(
 ) -> bool:
     """Would the aliases this candidate implies clear every blocker a human owns?
 
-    Asked of the certainty gate itself rather than of a copy of its rules: the
-    pair is re-evaluated with only those aliases granted and with both links
-    marked verified, which is the state the per-book deep-link system check
-    (Task 12) produces. Anything short of ``verified`` is not something an
-    approval can fix, so the candidate is not advertised as actionable.
+    Asked of `gate` itself rather than of a copy of its rules, with only those
+    aliases granted and with both links marked verified, which is the state the
+    per-book deep-link system check produces. True means the gate answers
+    ``verified`` for that state, so the human sees the same verdict the next scan
+    gives. Anything short of ``verified`` — a kickoff no approval can move, a
+    league mismatch, a name pair the reviewed-alias similarity cannot carry — is
+    not something an approval fixes, so the candidate is not advertised as
+    actionable.
+
+    `gate` must therefore be built by `_what_if_gate`, which is configured exactly
+    as the gate the scan decides with — same kickoff window, same league
+    equivalences. A wider window here would answer "yes" for a pair the real gate
+    still refuses, and the card would promise a fix that does not exist.
     """
     if not set(reasons) <= LINK_REJECTION_REASONS | {"team_unresolved"}:
         return False
@@ -755,6 +832,28 @@ def _alias_actionable(
     gate.alias_allowlist = set(entries)
     linked = [match.model_copy(update={"deep_link_verified": True}) for match in (left, right)]
     return gate.evaluate_pair(linked[0], linked[1]).status == "verified"
+
+
+def _what_if_gate(matcher: MatchMatcher) -> CertaintyGate:
+    """Build the gate that answers "would an approval clear this pair?".
+
+    It has to be configured exactly as the gate the scan decides with, because
+    its verdict is the one the reviewer will live with, so the kickoff window is
+    left at the `CertaintyGate` default — `VERIFIED_KICKOFF_WINDOW_MINUTES`, the
+    same value `MatchMatcher` takes. The wider `CANDIDATE_KICKOFF_WINDOW_MIN`
+    exists to *find* near-misses and says nothing about whether a human can close
+    one: nothing an approval grants can move a kickoff.
+
+    A second instance, not the collection gate itself, for two reasons. The two
+    jobs want different windows. And `_alias_actionable` overwrites
+    `alias_allowlist` on the gate it is handed, so a shared gate would judge the
+    next pair spelling the same two clubs with the previous candidate's aliases
+    already granted: its recorded reasons would lose `team_unresolved`, and once
+    the deep-link check has passed it would verify itself and never reach the
+    queue. Both are pinned by
+    `test_a_candidate_never_inherits_another_candidate_s_approved_aliases`.
+    """
+    return CertaintyGate(league_equivalences=getattr(matcher, "_equivalences", set()))
 
 
 def _shared_client_ai() -> MatchAI | None:
@@ -833,18 +932,16 @@ async def _collect_candidates(
 
     Pairs are discovered with a kickoff-bucket index (not an O(n^2) sweep) and a
     cheap team-token prefilter before the full gate runs. AI only ranks; it never
-    approves. A pair a human already decided on is never re-queued.
+    approves. A pair a human already decided on is not re-queued while the state
+    that decision was taken on still holds.
     """
     gate = CertaintyGate(
         kickoff_window_minutes=CANDIDATE_KICKOFF_WINDOW_MIN,
         league_equivalences=getattr(matcher, "_equivalences", set()),
     )
-    # Second gate, reused for the "would an approval fix this?" question. It only
-    # ever answers with the aliases of the candidate under test.
-    what_if_gate = CertaintyGate(
-        kickoff_window_minutes=CANDIDATE_KICKOFF_WINDOW_MIN,
-        league_equivalences=getattr(matcher, "_equivalences", set()),
-    )
+    # Second gate, reused for the "would an approval fix this?" question. Built by
+    # `_what_if_gate` so it decides with the verified window, not this wider one.
+    what_if_gate = _what_if_gate(matcher)
     gate.normalize(all_matches)
 
     buckets: dict[int, list[Match]] = {}
@@ -878,8 +975,6 @@ async def _collect_candidates(
                     continue
                 seen_pairs.add(pair_key)
                 candidate_id = _candidate_id(pair_key)
-                if candidate_id in decided:
-                    continue  # a human already decided this exact pair
                 left_group = verified_in_group.get(_match_side_key(left))
                 if left_group is not None and left_group == verified_in_group.get(
                     _match_side_key(right)
@@ -888,6 +983,13 @@ async def _collect_candidates(
                 result = gate.evaluate_pair(left, right)
                 if result.status == "verified":
                     continue  # already handled by the matcher's verified group
+                # Read the premise off the verdict rather than off the card, so a
+                # decided pair is judged on the same facts the card showed.
+                link_blocked = bool(set(result.reasons) & LINK_REJECTION_REASONS)
+                if candidate_id in decided and _decision_still_stands(
+                    candidate_id, link_blocked
+                ):
+                    continue  # a human already decided this exact pair
                 positions = _team_positions(left, right)
                 actionable = _alias_actionable(
                     result.reasons, positions, left, right, what_if_gate
@@ -916,7 +1018,7 @@ async def _collect_candidates(
                         ),
                         team_positions=positions,
                         alias_actionable=actionable,
-                        link_blocked=bool(set(result.reasons) & LINK_REJECTION_REASONS),
+                        link_blocked=link_blocked,
                         ai_confidence=0.0,
                         ai_reason="",
                         rule_rejections=result.reasons,
@@ -1483,14 +1585,21 @@ async def get_candidates(
 def _resolve_candidate(
     candidate: CandidateReview, decision: Literal["approved", "rejected"]
 ) -> None:
-    """Record a human decision and take the candidate out of the queue for good."""
+    """Record a human decision and take the candidate out of the queue for good.
+
+    "For good" is as long as the state the decision was taken on still holds: the
+    record carries that premise, so a decision made while the pair was blocked on
+    an unproven link does not outlive the deep-link check that proves it.
+    """
     candidate.status = decision
     candidate.resolved_at = datetime.now(UTC).replace(tzinfo=None)
     candidate.resolved_by = "human"
     pending_candidates.pop(candidate.id, None)
     candidate_reviews.insert(0, candidate.model_copy(deep=True))
     del candidate_reviews[CANDIDATE_REVIEW_HISTORY_MAX:]
-    _suppress_candidate(candidate.id, decision)
+    _suppress_candidate(
+        candidate.id, decision, _decision_premise(candidate.link_blocked)
+    )
 
 
 @router.post("/candidates/{candidate_id}/approve")

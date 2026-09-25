@@ -18,6 +18,8 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from rapidfuzz import fuzz
 
+from config.settings import VERIFIED_KICKOFF_WINDOW_MINUTES
+from engine import matcher as matcher_module
 from engine.ai import PairProposal
 from engine.certainty import CertaintyGate
 from engine.matcher import MatchMatcher
@@ -138,6 +140,7 @@ def isolate_scan_state(monkeypatch, tmp_path):
         "per_bookie": dict(api.cached_per_bookie),
         "status": api.scan_status.model_dump(),
         "suppressed": dict(api._suppressed_candidates),
+        "premises": dict(api._suppressed_premises),
     }
     monkeypatch.setattr(api, "_save_cache", lambda *a, **k: None)
     monkeypatch.setattr(api, "_append_history", lambda *a, **k: None)
@@ -160,6 +163,8 @@ def isolate_scan_state(monkeypatch, tmp_path):
     api.cached_per_bookie.update(snapshot["per_bookie"])
     api._suppressed_candidates.clear()
     api._suppressed_candidates.update(snapshot["suppressed"])
+    api._suppressed_premises.clear()
+    api._suppressed_premises.update(snapshot["premises"])
     for key, value in snapshot["status"].items():
         setattr(api.scan_status, key, value)
 
@@ -484,6 +489,35 @@ def test_suppression_is_persisted_and_reloaded_from_disk(monkeypatch):
     assert reloaded == {candidate.id: "approved"}
 
 
+def test_a_decision_recorded_with_its_premise_survives_a_restart(monkeypatch):
+    _fake_ai(monkeypatch, [], available=False)
+    candidate = _one_candidate()
+    api.pending_candidates[candidate.id] = candidate
+    run(api.reject_candidate(candidate.id, _auth=None))
+
+    api._suppressed_candidates.clear()
+    api._suppressed_premises.clear()
+    api._suppressed_candidates.update(api._load_suppressed_candidates())
+    api._suppressed_premises.update(api._load_suppressed_premises())
+
+    # Still link-blocked, so the decision it was made on is still the case.
+    assert api._decision_still_stands(candidate.id, True) is True
+    assert _collect(list(_ambiguous_pair())) == {}
+
+
+def test_a_suppression_file_written_before_premises_still_loads(monkeypatch):
+    """The deployed cache is a flat id -> decision map; it must not be discarded."""
+    _fake_ai(monkeypatch, [], available=False)
+    with open(api.SUPPRESSED_CANDIDATES_FILE, "w", encoding="utf-8") as file:
+        json.dump({"legacy-id": "rejected"}, file)
+
+    assert api._load_suppressed_candidates() == {"legacy-id": "rejected"}
+    assert api._load_suppressed_premises() == {}
+    # A record with no premise is honoured exactly as written.
+    assert api._decision_still_stands("legacy-id", True) is True
+    assert api._decision_still_stands("legacy-id", False) is True
+
+
 def test_suppression_does_not_hide_a_pair_under_a_new_bookmaker_event_id(monkeypatch):
     _fake_ai(monkeypatch, [], available=False)
     left, right = _ambiguous_pair()
@@ -496,6 +530,55 @@ def test_suppression_does_not_hide_a_pair_under_a_new_bookmaker_event_id(monkeyp
 
     assert len(out) == 1
     assert candidate.id not in out
+
+
+# ─── A decision is a decision about the claim it was made on ───────────────────
+# Suppression is durable and id-keyed, so anything the system learns after the
+# decision would otherwise be lost for good. Only state the system changes on its
+# own belongs in the premise a decision is held against.
+
+
+def test_a_decision_does_not_outlive_the_deep_link_result_it_was_made_on(monkeypatch):
+    """A pair rejected while its link was unproven returns once the link is proven.
+
+    `deep_link_verified` is moved by the per-book deep-link system check, with no
+    human involved. A decision recorded against its old value was taken on a claim
+    that no longer holds, and the pair is now one an approval genuinely clears.
+    """
+    _fake_ai(monkeypatch, [], available=False)
+    left, right = _ambiguous_pair()
+    candidate = _one_candidate([left, right])
+    assert candidate.link_blocked is True
+    api.pending_candidates[candidate.id] = candidate
+    run(api.reject_candidate(candidate.id, _auth=None))
+
+    proven = [m.model_copy(update={"deep_link_verified": True}) for m in (left, right)]
+    out = _collect(proven)
+
+    assert list(out) == [candidate.id]  # same id, so suppression is what let it go
+    assert out[candidate.id].alias_actionable is True
+    assert out[candidate.id].link_blocked is False
+
+
+def test_an_approval_does_not_contradict_its_own_record(monkeypatch):
+    """The premise must ignore the facts the decision itself changed.
+
+    An approval grants the aliases, which clears `team_unresolved` from the next
+    scan's reason list. If that counted as the premise moving, every approval
+    would re-queue the pair it had just resolved and the review loop would never
+    converge — so `link_blocked` is the premise, and it has not moved here.
+    """
+    _fake_ai(monkeypatch, [], available=False)
+    monkeypatch.setattr(matcher_module, "_TEAM_ALIAS_FILE", api.ALLOWLIST_FILE)
+    left, right = _ambiguous_pair()
+    candidate = _one_candidate([left, right])
+    api.pending_candidates[candidate.id] = candidate
+    run(api.approve_candidate(candidate.id, _auth=None))
+    assert "team_unresolved" in candidate.rule_rejections
+
+    out = _collect([left, right])
+
+    assert out == {}  # the granted aliases cleared the team reason; the link did not
 
 
 # ─── Actionability decides what the reviewer sees first (Important 4) ────────────
@@ -539,6 +622,136 @@ def test_alias_actionable_is_false_when_the_gate_would_refuse_the_alias(monkeypa
 
     assert candidate.rule_rejections == ["team_unresolved", "link_unverified"]
     assert candidate.alias_actionable is False
+
+
+# ─── Actionability is judged with the gate that decides `verified` ──────────────
+# An approval grants the team aliases and nothing else, so it cannot move a
+# kickoff. The candidate window is deliberately wider than the verified window so
+# a near-miss reaches the queue; that wider window must never be the yardstick
+# for "an approval clears this", because the gate that produces `verified` — and
+# therefore the only gate whose verdict the reviewer will ever live with — uses
+# the narrower one.
+
+
+def _band_pair(minutes: int) -> tuple[Match, Match]:
+    """A distinct fixture whose two books' kickoffs are `minutes` apart.
+
+    Distinct teams and event ids on purpose: `_canonical_pair_key` covers
+    bookmakers, event refs and team names but not the kickoff, so a shifted copy
+    of another fixture's two books would collapse into the same candidate and one
+    of the two would be swallowed by `seen_pairs`.
+    """
+    return (
+        _match("mdshop", "Zrinjski", "Rudar", "Liga Evrope", "5",
+               kickoff=KICKOFF + timedelta(minutes=minutes)),
+        _match("mbet", "Zrinjski Mostar", "Rudar Prijedor", "Liga Konferencija", "6"),
+    )
+
+
+def _verdict_after_approval(left: Match, right: Match) -> tuple[str, list[str]]:
+    """Ask the gate that produces `verified` groups, in the state an approval leaves.
+
+    Built the way the scan builds it — a real `MatchMatcher`, so the real gate and
+    its verified kickoff window — then the candidate's own aliases granted and
+    both links marked verified, which is the state the per-book deep-link system
+    check produces. This is the promise `_alias_actionable` has to keep.
+    """
+    matcher = MatchMatcher()
+    matcher.normalize_matches([left, right])
+    matcher.gate.alias_allowlist = set(
+        api._alias_entries(api._team_positions(left, right))
+    )
+    linked = [match.model_copy(update={"deep_link_verified": True}) for match in (left, right)]
+    result = matcher.gate.evaluate_pair(*linked)
+    return result.status, list(result.reasons)
+
+
+def test_an_approval_cannot_clear_a_kickoff_delta_the_verified_window_refuses(monkeypatch):
+    """The (verified, candidate] band is queued for review and called unfixable.
+
+    `CANDIDATE_KICKOFF_WINDOW_MIN` is 30 and the verified window is 15, so a
+    16-to-30-minute delta is found and refused by the real gate alike. Nothing a
+    human approves changes a kickoff, so the card must not promise otherwise.
+    """
+    _fake_ai(monkeypatch, [], available=False)
+    left, right = _band_pair(20)
+
+    candidate = _one_candidate([left, right])  # the wider window still queues it
+
+    assert candidate.alias_actionable is False
+    assert _verdict_after_approval(left, right)[0] != "verified"
+
+
+@pytest.mark.parametrize("minutes", [16, 20, 25, 30])
+def test_the_whole_band_above_the_verified_window_is_not_actionable(monkeypatch, minutes):
+    _fake_ai(monkeypatch, [], available=False)
+
+    candidate = _one_candidate(list(_band_pair(minutes)))
+
+    assert candidate.alias_actionable is False
+
+
+def test_the_verified_kickoff_window_is_the_exact_edge_of_actionability(monkeypatch):
+    """15 minutes still clears; one minute more does not."""
+    _fake_ai(monkeypatch, [], available=False)
+    at_edge = _band_pair(VERIFIED_KICKOFF_WINDOW_MINUTES)
+    past_edge = _band_pair(VERIFIED_KICKOFF_WINDOW_MINUTES + 1)
+
+    assert _one_candidate(list(at_edge)).alias_actionable is True
+    assert _one_candidate(list(past_edge)).alias_actionable is False
+
+
+def test_every_actionable_candidate_is_one_an_approval_actually_verifies(monkeypatch):
+    """The promise as a property of the whole queue, not of one hand-picked pair.
+
+    `alias_actionable` is what puts a card on top of the review order, so the set
+    the queue advertises must be exactly the set the real gate verifies once the
+    human has approved it.
+    """
+    _fake_ai(monkeypatch, [], available=False)
+    band = _band_pair(20)
+    tight = _ambiguous_pair()
+    league_blocked = _league_blocked_pair()
+    out = _collect([*league_blocked, *tight, *band])
+
+    verified = {
+        api._candidate_id(api._canonical_pair_key(left, right))
+        for left, right in (league_blocked, tight, band)
+        if _verdict_after_approval(left, right)[0] == "verified"
+    }
+    # Sanity: the fixture really is one an approval would clear, were the kickoff
+    # not in the way — otherwise this test would pass for the wrong reason.
+    assert len(verified) == 1
+    assert {c.id for c in out.values() if c.alias_actionable} == verified
+    assert len(out) == 3  # all three pairs still reach the review queue
+    # The only pair the queue advertises is the one an approval really clears.
+    assert [c.alias_actionable for c in out.values()] == [True, False, False]
+
+
+def test_a_candidate_never_inherits_another_candidate_s_approved_aliases(monkeypatch):
+    """The two gates are separate instances, and this is what keeps them that way.
+
+    `_alias_actionable` writes the candidate's aliases onto the gate it is handed.
+    Were that the collection gate, the next pair spelling the same two clubs would
+    be judged with those aliases already granted: its recorded reasons would lose
+    `team_unresolved`, and once the deep-link check has passed it would verify
+    itself and never reach the queue at all.
+    """
+    _fake_ai(monkeypatch, [], available=False)
+    left, right = _ambiguous_pair()
+    # The same two clubs, republished under fresh event ids, links now proven.
+    republished = (
+        left.model_copy(update={"event_id": "7", "deep_link_verified": True}),
+        right.model_copy(update={"event_id": "8", "deep_link_verified": True}),
+    )
+
+    out = _collect([*_ambiguous_pair(), *republished])
+
+    by_id = {c.id: c for c in out.values()}
+    republished_id = api._candidate_id(api._canonical_pair_key(*republished))
+    assert republished_id in by_id  # reached a human
+    assert by_id[republished_id].rule_rejections == ["team_unresolved"]
+    assert by_id[republished_id].alias_actionable is True
 
 
 # ─── The AI ranks, it never approves, and a negative verdict is not confidence ────

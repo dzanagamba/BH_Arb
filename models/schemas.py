@@ -112,8 +112,12 @@ class CandidateReview(BaseModel):
     side_a: PairSide | None = None
     side_b: PairSide | None = None
     team_positions: list[TeamPositionPair] = []
-    # True when the aliases implied by team_positions would clear every blocker
-    # a human owns — measured with the certainty gate, links assumed verified.
+    # True when the certainty gate answers `verified` for this pair once the
+    # aliases implied by team_positions are granted and both links are proven —
+    # measured with `_what_if_gate`, configured exactly as the gate the scan
+    # decides with, so the answer is the verdict the reviewer will actually get.
+    # A kickoff, a league or a name pair no alias can carry is not something an
+    # approval clears, and leaves this False.
     alias_actionable: bool = False
     # True when the gate refused partly because a deep link is unproven. That is
     # a system check, so an approval cannot clear it.

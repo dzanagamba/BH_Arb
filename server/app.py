@@ -15,7 +15,9 @@ from server.api import (
     _load_history,
     _load_market_state,
     _load_suppressed_candidates,
+    _load_suppressed_premises,
     _suppressed_candidates,
+    _suppressed_premises,
     router,
 )
 
@@ -54,6 +56,7 @@ async def on_startup() -> None:
     _load_market_state()
     _load_history()
     _suppressed_candidates.update(_load_suppressed_candidates())
+    _suppressed_premises.update(_load_suppressed_premises())
 
 # Serve frontend static files
 FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
