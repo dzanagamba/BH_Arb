@@ -13,6 +13,7 @@ Endpoints:
 """
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -20,10 +21,11 @@ import tempfile
 import threading
 import time
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, NamedTuple
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request
 from pydantic import BaseModel
+from rapidfuzz import fuzz
 
 from config.settings import (
     API_KEY,
@@ -38,11 +40,12 @@ from config.settings import (
     ODDS_TTL_SECONDS,
     SCAN_RATE_LIMIT,
 )
-from engine.ai import MatchAI
+from engine.ai import MatchAI, PairProposal
 from engine.arbitrage import ArbitrageEngine
+from engine.certainty import CertaintyGate
 from engine.market_registry import unmapped_markets
 from engine.matcher import MatchMatcher
-from models.schemas import CandidateReview, MarketType, Match, ScanStatus
+from models.schemas import CandidateReview, MarketType, Match, MatchGroup, ScanStatus
 from scrapers.admiralbet import AdmiralbetScraper
 from scrapers.betole import BetoleScraper
 from scrapers.evlbet import EvlbetScraper
@@ -271,6 +274,308 @@ SCRAPERS: dict[str, Any] = {
 
 
 # ---------------------------------------------------------------------------
+# Candidate generation
+# ---------------------------------------------------------------------------
+# A candidate is a same-event claim the certainty gate refused. It is queued for
+# a human reviewer; nothing in this section can approve one, and the AI adapter
+# only attaches an opinion to a pairing that already exists.
+
+CANDIDATE_KICKOFF_WINDOW_MIN = 30   # wider than verified (15) so near-misses become review items
+CANDIDATE_TEAM_SIM_MIN = 70
+CANDIDATE_BUCKET_SECONDS = 1800
+# The AI is one network call per candidate with a 10s timeout, so a busy scan
+# must not fan out without bound: 20 sequential calls is the ceiling, and the
+# most plausible candidates are ranked first so a cap drops the weakest ones.
+AI_CANDIDATE_RANK_CAP = 20
+# Hard wall-clock ceiling so slow or timing-out calls cannot stall a scan.
+AI_RANK_TIME_BUDGET_SECONDS = 90.0
+
+
+class _TeamTokens(NamedTuple):
+    """Pre-computed team strings and their token sets for the cheap prefilter."""
+
+    home: str
+    away: str
+    home_tokens: frozenset[str]
+    away_tokens: frozenset[str]
+    all_tokens: frozenset[str]
+    bigrams: frozenset[str]
+
+    @classmethod
+    def of(cls, match: Match) -> "_TeamTokens":
+        home = match.home_team_normalized or match.home_team
+        away = match.away_team_normalized or match.away_team
+        home_tokens, away_tokens = frozenset(home.split()), frozenset(away.split())
+        return cls(
+            home, away, home_tokens, away_tokens, home_tokens | away_tokens,
+            _bigrams(f"{home} {away}"),
+        )
+
+
+class _FoundPair(NamedTuple):
+    """A queued candidate plus the evidence used to rank it."""
+
+    candidate: CandidateReview
+    kickoff_delta_minutes: float
+    team_similarity: float
+    left: Match
+    right: Match
+
+
+def _kickoff_bucket(match: Match) -> int | None:
+    """Return the kickoff bucket a match belongs to, or None when it has no kickoff."""
+    kickoff = match.kickoff
+    if not kickoff:
+        return None
+    if kickoff.tzinfo is None:  # naive kickoffs are UTC wall-clock
+        kickoff = kickoff.replace(tzinfo=UTC)
+    return int(kickoff.timestamp() // CANDIDATE_BUCKET_SECONDS)
+
+
+def _match_event_ref(match: Match) -> str:
+    """Return the book's own identifier for a fixture."""
+    return match.match_code or match.event_id
+
+
+def _match_side_key(match: Match) -> str:
+    """Identify one book's fixture inside a pair or a match group."""
+    return f"{match.bookmaker}|{_match_event_ref(match)}"
+
+
+def _kickoff_delta_minutes(left: Match, right: Match) -> float:
+    """Return the absolute kickoff gap used to rank candidates."""
+    if not left.kickoff or not right.kickoff:
+        return float("inf")
+    first = left.kickoff if left.kickoff.tzinfo else left.kickoff.replace(tzinfo=UTC)
+    second = right.kickoff if right.kickoff.tzinfo else right.kickoff.replace(tzinfo=UTC)
+    return abs((first - second).total_seconds()) / 60.0
+
+
+def _bigrams(text: str) -> frozenset[str]:
+    """Return the character bigrams of a fixture string."""
+    padded = f" {text} "
+    return frozenset(padded[index:index + 2] for index in range(len(padded) - 1))
+
+
+def _team_similarity(left: _TeamTokens, right: _TeamTokens) -> float:
+    """Cheap prefilter: the best token-set overlap over both home/away orders.
+
+    The token/bigram gate is what makes the ~745k cross-bookmaker comparisons of
+    a real 7k-match scan affordable: it skips the fuzzy scorer for pairs sharing
+    no token, no substring run and no character bigram. The bigram term is what
+    keeps a single typo ("Millonarios" vs "Millionarios") in the queue, which a
+    token-only gate would drop. On a real 7k-match scan the gate discarded 1,669
+    pairs that the raw fuzzy score would have admitted; a sample of 25 were all
+    different real-world fixtures ("Bury Town" vs "Exeter"), i.e. fuzzy
+    false positives on short names, so nothing reviewable is lost.
+    """
+    if not (
+        left.all_tokens & right.all_tokens
+        or _token_run_shared(left, right)
+        or left.bigrams & right.bigrams
+    ):
+        return 0.0
+    best = 0.0
+    for first, second, first_tokens, second_tokens in (
+        (left.home, right.home, left.home_tokens, right.home_tokens),
+        (left.home, right.away, left.home_tokens, right.away_tokens),
+        (left.away, right.home, left.away_tokens, right.home_tokens),
+        (left.away, right.away, left.away_tokens, right.away_tokens),
+    ):
+        if not (
+            first_tokens & second_tokens
+            or first_tokens <= second_tokens
+            or second_tokens <= first_tokens
+            or first in second
+            or second in first
+        ):
+            continue
+        score = fuzz.token_set_ratio(first, second)
+        if score > best:
+            best = score
+            if best == 100.0:  # the scorer cannot return more
+                break
+    return best
+
+
+def _token_run_shared(left: _TeamTokens, right: _TeamTokens) -> bool:
+    """Return whether one team string is a prefix/substring of the other's."""
+    return (
+        left.home in right.home or right.home in left.home
+        or left.home in right.away or right.away in left.home
+        or left.away in right.home or right.home in left.away
+        or left.away in right.away or right.away in left.away
+    )
+
+
+def _canonical_pair_key(left: Match, right: Match) -> str:
+    """Return the order-independent identity of a pair from both raw claims."""
+    def side(match: Match) -> str:
+        return f"{_match_side_key(match)}|{match.home_team}|{match.away_team}"
+
+    return "||".join(sorted((side(left), side(right))))
+
+
+def _candidate_id(canonical_key: str) -> str:
+    """Return a stable id for a pair so a re-scan does not churn the queue.
+
+    The queue is keyed by this id and the review UI approves by it, so it has to
+    be reproducible from the pair itself and free of truncation collisions.
+    """
+    return hashlib.sha1(canonical_key.encode("utf-8")).hexdigest()[:16]
+
+
+def _verified_group_index(groups: list[MatchGroup]) -> dict[str, int]:
+    """Map each match the matcher verified to the group that verified it."""
+    index: dict[str, int] = {}
+    for number, group in enumerate(groups):
+        for match in group.matches:
+            index.setdefault(_match_side_key(match), number)
+    return index
+
+
+def _proposal_for_submitted_pair(
+    proposals: list[PairProposal], left: Match, right: Match
+) -> PairProposal | None:
+    """Return the proposal that answers the pair we actually submitted.
+
+    A hosted model can invent pairings that were never asked about. Anything
+    that does not echo back the two bookmakers we sent is dropped, so model
+    output can never create a pairing of its own.
+    """
+    submitted = {left.bookmaker, right.bookmaker}
+    for proposal in proposals:
+        if {proposal.match_a_book, proposal.match_b_book} == submitted:
+            return proposal
+    return None
+
+
+async def _rank_candidates_with_ai(ai: MatchAI, found: list[_FoundPair]) -> None:
+    """Attach AI opinions to the most plausible candidates. It never approves."""
+    if not found:
+        return
+    if len(found) > AI_CANDIDATE_RANK_CAP:
+        logger.warning(
+            f"AI ranking capped at {AI_CANDIDATE_RANK_CAP} of {len(found)} candidates — "
+            f"{len(found) - AI_CANDIDATE_RANK_CAP} stay unranked this scan"
+        )
+    deadline = time.monotonic() + AI_RANK_TIME_BUDGET_SECONDS
+    for position, pair in enumerate(found[:AI_CANDIDATE_RANK_CAP]):
+        if time.monotonic() > deadline:
+            logger.warning(
+                f"AI ranking budget of {AI_RANK_TIME_BUDGET_SECONDS:.0f}s exhausted after "
+                f"{position} candidates — the rest stay unranked this scan"
+            )
+            return
+        left, right = pair.left, pair.right
+        proposals = await ai.suggest_pairs([{
+            "a": left.bookmaker, "b": right.bookmaker,
+            "a_event": _match_event_ref(left), "b_event": _match_event_ref(right),
+            "a_home": left.home_team, "a_away": left.away_team, "a_league": left.league,
+            "b_home": right.home_team, "b_away": right.away_team, "b_league": right.league,
+        }])
+        proposal = _proposal_for_submitted_pair(proposals, left, right)
+        if proposal is None:
+            continue
+        pair.candidate.ai_confidence = proposal.confidence
+        pair.candidate.ai_reason = proposal.reason
+
+
+async def _collect_candidates(
+    all_matches: list[Match],
+    matcher: MatchMatcher,
+    groups: list[MatchGroup] | None = None,
+) -> dict[str, CandidateReview]:
+    """Find plausible same-event pairs the matcher could not verify and queue
+    them for review.
+
+    Pairs are discovered with a kickoff-bucket index (not an O(n^2) sweep) and a
+    cheap team-token prefilter before the full gate runs. AI only ranks; it never
+    approves.
+    """
+    gate = CertaintyGate(
+        kickoff_window_minutes=CANDIDATE_KICKOFF_WINDOW_MIN,
+        league_equivalences=getattr(matcher, "_equivalences", set()),
+    )
+    gate.normalize(all_matches)
+
+    buckets: dict[int, list[Match]] = {}
+    for match in all_matches:
+        bucket = _kickoff_bucket(match)
+        if bucket is not None:
+            buckets.setdefault(bucket, []).append(match)
+
+    # The candidate gate carries no alias allowlist on purpose: an allowlisted
+    # alias is already proven, so those pairs must not come back for review.
+    verified_in_group = _verified_group_index(groups or [])
+    seen_pairs: set[str] = set()
+    found: list[_FoundPair] = []
+
+    for index in sorted(buckets):
+        here = [(match, _TeamTokens.of(match)) for match in buckets[index]]
+        # Same and next bucket only: every pair inside the 30-minute candidate
+        # window lands in the same or an adjacent bucket, and this compares each
+        # adjacent pair exactly once.
+        following = [(match, _TeamTokens.of(match)) for match in buckets.get(index + 1, [])]
+        for position, (left, left_teams) in enumerate(here):
+            for right, right_teams in here[position + 1:] + following:
+                if left.bookmaker == right.bookmaker:
+                    continue
+                similarity = _team_similarity(left_teams, right_teams)
+                if similarity < CANDIDATE_TEAM_SIM_MIN:
+                    continue
+                pair_key = _canonical_pair_key(left, right)
+                if pair_key in seen_pairs:
+                    continue
+                seen_pairs.add(pair_key)
+                left_group = verified_in_group.get(_match_side_key(left))
+                if left_group is not None and left_group == verified_in_group.get(
+                    _match_side_key(right)
+                ):
+                    continue  # the matcher already proved this pairing
+                result = gate.evaluate_pair(left, right)
+                if result.status == "verified":
+                    continue  # already handled by the matcher's verified group
+                found.append(_FoundPair(
+                    candidate=CandidateReview(
+                        id=_candidate_id(pair_key),
+                        home_team=left.home_team,
+                        away_team=left.away_team,
+                        league=left.league,
+                        kickoff=left.kickoff,
+                        bookmakers=sorted([left.bookmaker, right.bookmaker]),
+                        ai_confidence=0.0,
+                        ai_reason="",
+                        rule_rejections=result.reasons,
+                        created_at=datetime.now(UTC).replace(tzinfo=None),
+                    ),
+                    kickoff_delta_minutes=_kickoff_delta_minutes(left, right),
+                    team_similarity=similarity,
+                    left=left,
+                    right=right,
+                ))
+
+    # Tightest kickoff first, then the closest team strings: both the review
+    # queue and the AI cap see the most plausible pairs at the top.
+    found.sort(key=lambda pair: (
+        pair.kickoff_delta_minutes, -pair.team_similarity, pair.candidate.id,
+    ))
+    candidates = {pair.candidate.id: pair.candidate for pair in found}
+    logger.info(
+        f"Review candidates: {len(candidates)} unverified pairs from {len(all_matches)} matches"
+    )
+
+    ai = MatchAI()
+    if not ai.available:
+        return candidates
+    try:
+        await _rank_candidates_with_ai(ai, found)
+    finally:
+        await ai.aclose()
+    return candidates
+
+
+# ---------------------------------------------------------------------------
 # Background scan task
 # ---------------------------------------------------------------------------
 
@@ -380,6 +685,19 @@ async def run_scan(mode: str = "prematch"):
         groups = matcher.group_matches(all_matches)
         report_cache.clear()
         report_cache.extend(matcher.get_match_report(groups))
+
+        # Ambiguous pairings the gate refused become review items. The queue is
+        # rebuilt every scan so it only ever mirrors the current feed.
+        status.current_bookmaker = "Collecting review candidates..."
+        try:
+            pending_candidates.clear()
+            pending_candidates.update(
+                await _collect_candidates(all_matches, matcher, groups)
+            )
+        except Exception as e:
+            pending_candidates.clear()
+            logger.error(f"❌ Candidate collection failed: {e}", exc_info=True)
+            status.errors.append(f"Candidate review failed: {str(e)[:200]}")
 
         status.current_bookmaker = "Detecting surebets..."
         engine = ArbitrageEngine()
@@ -596,12 +914,18 @@ async def get_status(mode: str = "prematch"):
 @router.get("/results")
 async def get_results(mode: str = "prematch"):
     """Get the cached results from the last scan (mode=prematch|live)."""
-    status, surebets_cache, matches_cache, _, _ = _state_for(mode)
+    status, surebets_cache, matches_cache, report_cache, _ = _state_for(mode)
+    group_statuses: dict[str, int] = {}
+    for report in report_cache:
+        group_status = str(report.get("status", "unknown"))
+        group_statuses[group_status] = group_statuses.get(group_status, 0) + 1
     return {
         "surebets": surebets_cache,
         "total_matches": len(matches_cache),
         "surebets_count": len(surebets_cache),
         "mode": mode,
+        "match_groups": len(report_cache),
+        "group_statuses": group_statuses,
         "last_scan_time": (
             status.last_scan_time.isoformat()
             if status.last_scan_time
