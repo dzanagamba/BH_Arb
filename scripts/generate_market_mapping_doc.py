@@ -154,9 +154,12 @@ def build_section(registry_path: str = REGISTRY_PATH) -> str:
                         "loader disagree"
                     )
                 spec = specs[0]
+                # Both the human label and the MarketType value: an operator
+                # reads "Over/Under 2.5", a developer greps "over_under_2_5".
                 label = MARKET_TYPE_LABEL.get(market_type, market_type.value)
                 market_lines.append(
-                    f"| `{book}` | {mode} | {label} | {_code_list(spec.ids)} | "
+                    f"| `{book}` | {mode} | {label} (`{market_type.value}`) | "
+                    f"{_code_list(spec.ids)} | "
                     f"{_label_list(spec.labels)} | {spec.min_legs} | "
                     f"{_line_cell(spec.line)} | {spec.settlement} |"
                 )
@@ -190,11 +193,14 @@ def build_section(registry_path: str = REGISTRY_PATH) -> str:
         "",
         "### Deliberately unmapped source IDs",
         "",
-        "The `_excluded` block of the registry. Offers listed here are recognised by",
-        "the parsers and rejected on purpose (advance/qualification, half-time,",
-        "handicap, period or combination markets) so they never reach the arbitrage",
-        "engine as if they were a supported market. A name pattern applies to any",
-        "source ID that matches it.",
+        "The `_excluded` block of the registry: offers that are recognised and",
+        "deliberately not mapped, mostly advance/qualification, half-time,",
+        "handicap, period and combination markets. Listing an ID here suppresses",
+        "the unmapped-market health diagnostic for it, so an operator does not",
+        "chase a market the project intends to ignore. It is a declaration of",
+        "intent, not a rejection mechanism: a parser still has to decline the",
+        "offer on its own, and no ID may appear both here and in the table above.",
+        "A name pattern applies to any source ID that matches it.",
         "",
         EXCLUDED_HEADER,
         "| --- | --- |",

@@ -74,6 +74,24 @@ WWIN_OU_LINES = {
 }
 
 
+def wwin_registered_spec(
+    mode: str,
+    bet_id: int | str,
+    market_type: MarketType,
+    line: float | None = None,
+):
+    """Resolve a WWIN ``idBt`` through the registry.
+
+    The single registry-resolution step of :func:`_build_markets_from_bets`, at
+    module scope so the WWIN resolution path is directly testable.
+    """
+    spec = MARKET_REGISTRY.lookup_type("wwin", mode, bet_id, market_type, line=line)
+    known = getattr(MARKET_REGISTRY, "has_source_id", None)
+    if spec is None and (known is None or not known("wwin", mode, bet_id)):
+        record_unmapped("wwin", bet_id)
+    return spec
+
+
 def _build_markets_from_bets(bets: list, mode: str = "prematch") -> list[Market]:
     """Map registered WWIN bet IDs into internal markets."""
     markets: list[Market] = []
@@ -93,13 +111,7 @@ def _build_markets_from_bets(bets: list, mode: str = "prematch") -> list[Market]
         return odds
 
     def registered_spec(bet_id, market_type: MarketType, line: float | None = None):
-        spec = MARKET_REGISTRY.lookup_type(
-            "wwin", mode, bet_id, market_type, line=line
-        )
-        known = getattr(MARKET_REGISTRY, "has_source_id", None)
-        if spec is None and (known is None or not known("wwin", mode, bet_id)):
-            record_unmapped("wwin", bet_id)
-        return spec
+        return wwin_registered_spec(mode, bet_id, market_type, line=line)
 
     for bet in bets:
         if not isinstance(bet, dict):

@@ -47,6 +47,24 @@ API_HEADERS = {
 PAGE_SIZE = 1500
 
 
+def betole_registered_spec(
+    mode: str,
+    code: int | str,
+    market_type: MarketType,
+    line: float | None = None,
+):
+    """Resolve a Betole pick code through the registry.
+
+    The single registry-resolution step of :func:`_parse_betole_markets`, at
+    module scope so the Betole resolution path is directly testable.
+    """
+    spec = MARKET_REGISTRY.lookup_type("betole", mode, code, market_type, line=line)
+    known = getattr(MARKET_REGISTRY, "has_source_id", None)
+    if spec is None and (known is None or not known("betole", mode, code)):
+        record_unmapped("betole", code)
+    return spec
+
+
 def _parse_betole_markets(raw_odds: dict, mode: str = "prematch") -> list[Market]:
     """Map registered Betole pick-code groups into supported markets."""
     if not isinstance(raw_odds, dict):
@@ -62,13 +80,7 @@ def _parse_betole_markets(raw_odds: dict, mode: str = "prematch") -> list[Market
     def registered_spec(
         code: str, market_type: MarketType, line: float | None = None
     ):
-        spec = MARKET_REGISTRY.lookup_type(
-            "betole", mode, code, market_type, line=line
-        )
-        known = getattr(MARKET_REGISTRY, "has_source_id", None)
-        if spec is None and (known is None or not known("betole", mode, code)):
-            record_unmapped("betole", code)
-        return spec
+        return betole_registered_spec(mode, code, market_type, line=line)
 
     def build_market(
         market_type: MarketType,

@@ -17,7 +17,7 @@ from urllib.parse import quote
 from models.schemas import Market, MarketType, OddsValue
 
 if TYPE_CHECKING:
-    from engine.market_registry import MarketRegistry
+    from engine.market_registry import MarketRegistry, MarketSpec
 
 # Formats accepted when parsing datetime strings.
 DT_FORMATS = [
@@ -291,6 +291,35 @@ def _nsoft_registry() -> MarketRegistry:
     return MARKET_REGISTRY
 
 
+def nsoft_registered_spec(
+    bookmaker: str,
+    mode: str,
+    betid: int | str,
+    sbv: float | None = None,
+) -> MarketSpec | None:
+    """Resolve an NSoft ``betTypeId`` through the registry.
+
+    This is the single registry-resolution step of :func:`parse_nsoft_bets`,
+    lifted to module scope so the NSoft resolution path can be exercised
+    directly (see ``tests/test_registry_parser_consistency.py``) instead of
+    only from inside a payload parse.  ``sbv`` is the bet's threshold: NSoft
+    shares one ID pair across every Over/Under line, so the line is part of the
+    lookup key.
+
+    An ID absent from a registered mode is recorded as unmapped, exactly as the
+    parser does.
+    """
+    from engine.market_registry import record_unmapped
+
+    registry = _nsoft_registry()
+    spec = registry.lookup(bookmaker, mode, betid, line=sbv)
+    if spec is None:
+        known = getattr(registry, "has_source_id", None)
+        if known is None or not known(bookmaker, mode, betid):
+            record_unmapped(bookmaker, betid)
+    return spec
+
+
 # Outcome label sets required to accept a market (defense against
 # misclassified markets like "Ide dalje" leaking into 1X2).
 _MARKET_LABEL_SETS: dict[MarketType, set[str]] = {
@@ -341,8 +370,6 @@ def parse_nsoft_bets(
     This is the defense that keeps an NSoft 2-way "Ide dalje" market out of the
     1X2 pool.
     """
-    from engine.market_registry import record_unmapped
-
     registry = _nsoft_registry()
     has_mode = getattr(registry, "has_mode", None)
     has_registry = (
@@ -379,11 +406,8 @@ def parse_nsoft_bets(
         required_legs = 3
 
         if has_registry:
-            spec = registry.lookup(bookmaker, mode, btid, line=sbv_val)
+            spec = nsoft_registered_spec(bookmaker, mode, btid, sbv_val)
             if spec is None:
-                known = getattr(registry, "has_source_id", None)
-                if known is None or not known(bookmaker, mode, btid):
-                    record_unmapped(bookmaker, btid)
                 continue
             market_type = spec.market_type
             expected_labels = set(spec.labels)

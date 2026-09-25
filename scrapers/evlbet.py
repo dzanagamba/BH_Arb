@@ -22,6 +22,29 @@ BOOKMAKER_ID = "evlbet"
 BASE_URL = "https://evlbet.com"
 API_URL = "https://sportapis.evlbet.com/SportsOfferApi/api/sport/offer/v3/matches/flat"
 
+# EVLBet's single registered full-time result ID, used when a BasicOffer omits
+# both BetTypeKey and GameId.
+DEFAULT_BASIC_OFFER_ID = "12005"
+
+
+def evlbet_registered_spec(
+    mode: str,
+    source_id: int | str,
+    market_type: MarketType,
+    line: float | None = None,
+):
+    """Resolve an EVLBet ``BasicOffer`` ID through the registry.
+
+    The single registry-resolution step of ``EvlbetScraper._parse_event``, at
+    module scope so the EVLBet resolution path is directly testable.
+    """
+    spec = MARKET_REGISTRY.lookup_type(
+        BOOKMAKER_ID, mode, source_id, market_type, line=line
+    )
+    if spec is None:
+        record_unmapped(BOOKMAKER_ID, source_id)
+    return spec
+
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -116,26 +139,18 @@ class EvlbetScraper:
         basic_offer = ev.get("BasicOffer") or {}
         if not isinstance(basic_offer, dict):
             return None
+        source_id = (
+            basic_offer.get("BetTypeKey")
+            or basic_offer.get("GameId")
+            or DEFAULT_BASIC_OFFER_ID
+        )
         if basic_offer.get("HasSbv") or basic_offer.get("Sbv") is not None:
-            source_id = (
-                basic_offer.get("BetTypeKey")
-                or basic_offer.get("GameId")
-                or "12005"
-            )
             known = getattr(MARKET_REGISTRY, "has_source_id", None)
             if known is None or not known("evlbet", "prematch", source_id):
                 record_unmapped("evlbet", source_id)
             return None
-        source_id = (
-            basic_offer.get("BetTypeKey")
-            or basic_offer.get("GameId")
-            or "12005"
-        )
-        spec = MARKET_REGISTRY.lookup_type(
-            "evlbet", "prematch", source_id, MarketType.MATCH_RESULT
-        )
+        spec = evlbet_registered_spec("prematch", source_id, MarketType.MATCH_RESULT)
         if spec is None:
-            record_unmapped("evlbet", source_id)
             return None
         odds_list = basic_offer.get("Odds", [])
         mr_odds: list[OddsValue] = []
