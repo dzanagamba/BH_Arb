@@ -16,6 +16,8 @@ import asyncio
 import json
 import logging
 import os
+import tempfile
+import threading
 import time
 from datetime import UTC, datetime
 from typing import Any
@@ -165,6 +167,7 @@ ALLOWLIST_FILE = os.path.join(
     "config",
     "team_alias_allowlist.json",
 )
+_ALLOWLIST_LOCK = threading.Lock()
 
 
 def _load_allowlist() -> set[str]:
@@ -179,9 +182,26 @@ def _load_allowlist() -> set[str]:
 
 
 def _save_allowlist(aliases: set[str]) -> None:
-    os.makedirs(os.path.dirname(ALLOWLIST_FILE), exist_ok=True)
-    with open(ALLOWLIST_FILE, "w", encoding="utf-8") as file:
-        json.dump({"aliases": sorted(aliases)}, file, ensure_ascii=False, indent=2)
+    directory = os.path.dirname(ALLOWLIST_FILE) or "."
+    os.makedirs(directory, exist_ok=True)
+    fd, temp_path = tempfile.mkstemp(
+        prefix=".team_alias_allowlist.",
+        suffix=".tmp",
+        dir=directory,
+        text=True,
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as file:
+            json.dump({"aliases": sorted(aliases)}, file, ensure_ascii=False, indent=2)
+            file.flush()
+            os.fsync(file.fileno())
+        os.replace(temp_path, ALLOWLIST_FILE)
+    finally:
+        if os.path.exists(temp_path):
+            try:
+                os.unlink(temp_path)
+            except OSError:
+                pass
 
 
 _HISTORY_FILE = os.path.join(CACHE_DIR, "scan_history.json")
@@ -712,9 +732,10 @@ async def approve_candidate(
         raise HTTPException(status_code=404, detail="Candidate not found")
 
     alias = "|".join(sorted({candidate.home_team, candidate.away_team}))
-    aliases = _load_allowlist()
-    aliases.add(alias)
-    _save_allowlist(aliases)
+    with _ALLOWLIST_LOCK:
+        aliases = _load_allowlist()
+        aliases.add(alias)
+        _save_allowlist(aliases)
 
     candidate.status = "approved"
     candidate.resolved_at = datetime.now(UTC).replace(tzinfo=None)

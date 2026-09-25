@@ -1,12 +1,16 @@
 """Candidates review endpoints and health diagnostics."""
 
+import asyncio
 import json
+import threading
 from datetime import datetime
 
 import pytest
 from fastapi.testclient import TestClient
 
-from models.schemas import CandidateReview
+from engine import matcher as matcher_module
+from engine.matcher import MatchMatcher
+from models.schemas import CandidateReview, Match
 from server import api
 from server.app import app
 
@@ -33,15 +37,38 @@ def reset_candidate_state(monkeypatch, tmp_path):
     api.unmapped_markets.update(original_unmapped)
 
 
-def _candidate(candidate_id: str = "candidate-1") -> CandidateReview:
+def _candidate(
+    candidate_id: str = "candidate-1",
+    home_team: str = "Lech Poznan",
+    away_team: str = "Lech P.",
+) -> CandidateReview:
     return CandidateReview(
         id=candidate_id,
-        home_team="Lech Poznan",
-        away_team="Lech P.",
+        home_team=home_team,
+        away_team=away_team,
         league="Liga Evrope",
         kickoff=datetime(2026, 9, 25, 18, 0),
         bookmakers=["mdshop", "mbet"],
         created_at=datetime(2026, 9, 25, 12, 0),
+    )
+
+
+def _mapping_match(
+    bookmaker: str,
+    home_team: str,
+    away_team: str,
+    event_id: str,
+) -> Match:
+    kickoff = datetime(2026, 9, 25, 18, 0)
+    return Match(
+        bookmaker=bookmaker,
+        home_team=home_team,
+        away_team=away_team,
+        league="Liga Evrope",
+        kickoff=kickoff,
+        event_id=event_id,
+        url=f"https://example.test/{bookmaker}/{event_id}",
+        deep_link_verified=True,
     )
 
 
@@ -66,7 +93,17 @@ def test_candidates_list_serializes_pending_candidates():
 
 
 def test_health_includes_new_diagnostics():
-    api.cached_match_groups_report.extend([{"status": "verified"}, {"status": "suggested"}])
+    matcher = MatchMatcher()
+    groups = matcher.group_matches(
+        [
+            _mapping_match("mdshop", "Lech Poznan", "Opponent", "mdshop-1"),
+            _mapping_match("mbet", "Lech P.", "Opponent", "mbet-1"),
+        ]
+    )
+    report = matcher.get_match_report(groups)
+    assert groups and groups[0].status == "verified"
+    assert report and report[0]["status"] == "verified"
+    api.cached_match_groups_report[:] = report
     api.cached_matches.extend(
         [
             {"event_id": "verified", "deep_link_verified": True},
@@ -103,6 +140,11 @@ def test_approve_unknown_candidate_returns_404():
     assert r.status_code == 404
 
 
+def test_reject_unknown_candidate_returns_404():
+    r = client.post("/api/candidates/does-not-exist/reject")
+    assert r.status_code == 404
+
+
 def test_approve_candidate_writes_reviewed_alias_and_resolves_it():
     candidate = _candidate()
     api.pending_candidates[candidate.id] = candidate
@@ -123,6 +165,123 @@ def test_approve_candidate_writes_reviewed_alias_and_resolves_it():
     with open(api.ALLOWLIST_FILE, encoding="utf-8") as file:
         saved = json.load(file)
     assert saved == {"aliases": ["Lech P.|Lech Poznan"]}
+
+
+def test_approved_alias_is_loaded_by_real_matcher(monkeypatch):
+    candidate = _candidate()
+    api.pending_candidates[candidate.id] = candidate
+    monkeypatch.setattr(matcher_module, "_TEAM_ALIAS_FILE", api.ALLOWLIST_FILE)
+
+    response = client.post(f"/api/candidates/{candidate.id}/approve")
+    groups = MatchMatcher().group_matches(
+        [
+            _mapping_match("mdshop", "Lech Poznan", "Opponent", "mdshop-1"),
+            _mapping_match("mbet", "Lech P.", "Opponent", "mbet-1"),
+        ]
+    )
+
+    assert response.status_code == 200
+    assert len(groups) == 1
+    assert groups[0].status == "verified"
+
+
+def test_duplicate_approval_returns_404():
+    candidate = _candidate()
+    api.pending_candidates[candidate.id] = candidate
+
+    first = client.post(f"/api/candidates/{candidate.id}/approve")
+    second = client.post(f"/api/candidates/{candidate.id}/approve")
+
+    assert first.status_code == 200
+    assert second.status_code == 404
+
+
+def test_allowlist_replace_is_atomic_for_concurrent_reader(monkeypatch):
+    api._save_allowlist({"before"})
+    original_dump = json.dump
+    dump_started = threading.Event()
+    release_dump = threading.Event()
+    errors: list[BaseException] = []
+
+    def paused_dump(payload, file, *args, **kwargs):
+        file.flush()
+        dump_started.set()
+        release_dump.wait(5)
+        return original_dump(payload, file, *args, **kwargs)
+
+    monkeypatch.setattr(api.json, "dump", paused_dump)
+
+    def write_allowlist():
+        try:
+            api._save_allowlist({"after"})
+        except BaseException as exc:  # pragma: no cover - surfaced by assertion below
+            errors.append(exc)
+
+    writer = threading.Thread(target=write_allowlist)
+    writer.start()
+    try:
+        assert dump_started.wait(5)
+        for _ in range(20):
+            with open(api.ALLOWLIST_FILE, encoding="utf-8") as file:
+                observed = json.load(file)
+            assert observed == {"aliases": ["before"]}
+    finally:
+        release_dump.set()
+        writer.join(5)
+
+    assert not writer.is_alive()
+    assert not errors
+    with open(api.ALLOWLIST_FILE, encoding="utf-8") as file:
+        assert json.load(file) == {"aliases": ["after"]}
+
+
+def test_concurrent_approvals_preserve_both_aliases(monkeypatch):
+    first_candidate = _candidate("candidate-1", "Alpha Town", "Alpha")
+    second_candidate = _candidate("candidate-2", "Beta Town", "Beta")
+    api.pending_candidates[first_candidate.id] = first_candidate
+    api.pending_candidates[second_candidate.id] = second_candidate
+
+    real_save = api._save_allowlist
+    save_count = 0
+    save_count_lock = threading.Lock()
+    first_save_entered = threading.Event()
+    release_first_save = threading.Event()
+    errors: list[BaseException] = []
+
+    def controlled_save(aliases):
+        nonlocal save_count
+        with save_count_lock:
+            save_count += 1
+            number = save_count
+        if number == 1:
+            first_save_entered.set()
+            release_first_save.wait(1.0)
+        elif number == 2:
+            release_first_save.set()
+        real_save(aliases)
+
+    def approve(candidate_id: str):
+        try:
+            asyncio.run(api.approve_candidate(candidate_id, _auth=None))
+        except BaseException as exc:  # pragma: no cover - surfaced by assertion below
+            errors.append(exc)
+
+    monkeypatch.setattr(api, "_save_allowlist", controlled_save)
+    first_thread = threading.Thread(target=approve, args=(first_candidate.id,))
+    first_thread.start()
+    assert first_save_entered.wait(5)
+
+    second_thread = threading.Thread(target=approve, args=(second_candidate.id,))
+    second_thread.start()
+    first_thread.join(5)
+    second_thread.join(5)
+
+    assert not first_thread.is_alive()
+    assert not second_thread.is_alive()
+    assert not errors
+    with open(api.ALLOWLIST_FILE, encoding="utf-8") as file:
+        aliases = set(json.load(file)["aliases"])
+    assert aliases == {"Alpha|Alpha Town", "Beta|Beta Town"}
 
 
 def test_reject_candidate_records_human_rejection():

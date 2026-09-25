@@ -388,6 +388,7 @@ class MatchMatcher:
                 "canonical_match": f"{group.canonical_home} vs {group.canonical_away}",
                 "league": group.league,
                 "kickoff": group.kickoff.isoformat() if group.kickoff else "unknown",
+                "status": group.status,
                 "bookmakers": bookmakers,
             }
             for match in group.matches:
