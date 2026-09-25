@@ -122,6 +122,7 @@ BLOCKED_URL_FRAGMENTS = [
 
 # --- Matching Settings ---
 KICKOFF_WINDOW_MINUTES = 120   # Max kickoff time diff (minutes) to consider same match — HARD gate
+VERIFIED_KICKOFF_WINDOW_MINUTES = 15  # Max kickoff delta for a `verified` group
 FUZZY_MATCH_THRESHOLD = 80     # Min similarity score (0-100) for a team pairing to group (overall confidence)
 TEAM_MATCH_MIN_PERCENT = 70    # Min similarity (0-100) required for EACH team in a pairing
 BROWSER_CONCURRENCY = 2        # Max concurrent Playwright browsers (P2)
