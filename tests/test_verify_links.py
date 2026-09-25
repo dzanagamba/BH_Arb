@@ -183,6 +183,8 @@ def isolate_state(monkeypatch, tmp_path):
     for key, value in snapshot["live_status"].items():
         setattr(api.live_status, key, value)
     api._deep_link_verifications = snapshot["verifications"]
+    api._verify_link_request_times.clear()
+    api._scan_request_times.clear()
 
 
 def _install_checker(monkeypatch, report: LinkReport | None = None, outcome=None):
@@ -776,12 +778,15 @@ class FakePage:
         main_frame: FakeFrame,
         responses: list[FakeResponse] | None = None,
         subframes: list[FakeFrame] | None = None,
+        fail_urls: set[str] | None = None,
     ):
         self.main_frame = main_frame
         self.frames = [main_frame, *(subframes or [])]
         self._responses = responses or []
         self._handlers: list = []
         self.goto_calls: list[str] = []
+        self.fail_urls = fail_urls or set()
+        self.closed = False
 
     def on(self, event: str, handler) -> None:
         if event == "response":
@@ -791,10 +796,15 @@ class FakePage:
         if event == "response" and handler in self._handlers:
             self._handlers.remove(handler)
 
+    def set_default_navigation_timeout(self, ms: int) -> None:
+        return None
+
     async def goto(
         self, url: str, wait_until: str = "load", timeout: int = 0
     ) -> FakeResponse:
         self.goto_calls.append(url)
+        if url in self.fail_urls:
+            raise TimeoutError(f"Timeout {timeout}ms exceeded")
         # Playwright's async event emitter schedules a coroutine handler, so the
         # fake does the same rather than calling it synchronously.
         scheduled = [
@@ -808,6 +818,48 @@ class FakePage:
 
     async def wait_for_timeout(self, ms: int) -> None:
         return None
+
+
+class FakeContext:
+    def __init__(self, page: FakePage):
+        self._page = page
+        self.closed = False
+
+    async def new_page(self) -> FakePage:
+        return self._page
+
+    async def close(self) -> None:
+        self.closed = True
+
+
+class FakeBrowser:
+    def __init__(self, context: FakeContext):
+        self._context = context
+        self.closed = False
+
+    async def close(self) -> None:
+        self.closed = True
+
+
+class FakePlaywright:
+    def __init__(self):
+        self.stopped = False
+
+    async def stop(self) -> None:
+        self.stopped = True
+
+
+def _install_fake_browser(monkeypatch, page: FakePage) -> FakePlaywright:
+    """Point `launch_browser` at a fake page so a real `verify_bookmaker` runs."""
+    context = FakeContext(page)
+    browser = FakeBrowser(context)
+    playwright = FakePlaywright()
+
+    async def fake_launch():
+        return playwright, browser, context
+
+    monkeypatch.setattr("scrapers.base.launch_browser", fake_launch)
+    return playwright
 
 
 def _check(page: FakePage, event_id: str = EVENT_ID, url: str = EVENT_URL, base: str | None = None):
@@ -1059,6 +1111,95 @@ def test_a_normal_run_reports_that_it_applied(monkeypatch):
     assert body["applied_note"] == ""
 
 
+# `applied` has three states and they must be distinguishable: None = there was
+# nothing to write, False = a write was suppressed, True = it happened.
+
+
+def test_nothing_to_check_is_not_reported_as_a_suppressed_write(monkeypatch):
+    """A skipped book did no work; that is not a write somebody suppressed."""
+    monkeypatch.setattr(api, "_run_link_verification", lambda *a, **k: pytest.fail("ran"))
+    api.cached_matches.extend(_cached(_match("wwin", "1")))
+
+    body = client.post("/api/verify-links?bookmaker=wwin").json()
+
+    assert body["status"] == "skipped"
+    assert body["applied"] is None
+    assert body["applied_note"] == ""
+
+
+def test_an_empty_cache_is_not_reported_as_a_suppressed_write(monkeypatch):
+    """Same for a declared book with no event ids in the cache: nothing to write."""
+    monkeypatch.setattr(api, "_run_link_verification", lambda *a, **k: pytest.fail("ran"))
+    api.cached_matches.extend(_cached(_match(event_id="")))
+
+    body = client.post("/api/verify-links?bookmaker=mozzartbet").json()
+
+    assert body["checked"] == 0
+    assert body["applied"] is None
+
+
+def test_a_suppressed_write_says_what_it_defers(monkeypatch):
+    """`applied: False` is a real suppression, and it is not symmetric.
+
+    `_apply_deep_link_verifications` only ever SETS a flag, so skipping the write
+    defers a positive verdict to the next scan (the record is durable) — but a
+    completed-FAIL pops the record and leaves a stale `True` in the cache until a
+    scan rebuilds the list from the scrapers. The note must say both.
+    """
+
+    async def fake(bookmaker, matches, *, mode, live, limit):
+        api.scan_status.is_scanning = True
+        return _report(outcomes=[_verified_outcome()])
+
+    monkeypatch.setattr(api, "_run_link_verification", fake)
+    api.cached_matches.extend(_cached(_match()))
+
+    note = client.post("/api/verify-links?bookmaker=mozzartbet").json()["applied_note"]
+
+    assert "next scan will apply it" in note
+    assert "demote" in note, "the one-sided effect of a skipped write must be stated"
+
+
+def test_a_zero_work_call_does_not_spend_the_throttle_budget(monkeypatch):
+    """B4: `?bookmaker=wwin` costs nothing, so it must not burn the budget.
+
+    A UI that probes which books are checkable would otherwise self-DoS.
+    """
+    monkeypatch.setattr(api, "DEEP_LINK_VERIFY_RATE_LIMIT", 1)
+    monkeypatch.setattr(api, "_run_link_verification", lambda *a, **k: pytest.fail("ran"))
+    api.cached_matches.extend(_cached(_match("wwin", "1")))
+
+    for _ in range(5):
+        assert client.post("/api/verify-links?bookmaker=wwin").status_code == 200
+
+    _install_checker(monkeypatch, _report(outcomes=[_verified_outcome()]))
+    api.cached_matches.append(_cached(_match())[0])
+    assert client.post("/api/verify-links?bookmaker=mozzartbet").status_code == 200
+
+
+def test_an_empty_cache_call_does_not_spend_the_throttle_budget(monkeypatch):
+    """B4 again, for the other zero-work early return."""
+    monkeypatch.setattr(api, "DEEP_LINK_VERIFY_RATE_LIMIT", 1)
+    monkeypatch.setattr(api, "_run_link_verification", lambda *a, **k: pytest.fail("ran"))
+    api.cached_matches.extend(_cached(_match(event_id="")))
+
+    for _ in range(5):
+        assert client.post("/api/verify-links?bookmaker=mozzartbet").status_code == 200
+
+
+def test_a_zero_limit_disables_the_throttle(monkeypatch):
+    """B8: `DEEP_LINK_VERIFY_RATE_LIMIT=0` is documented as disabling the limit,
+    so the disabled path must actually work rather than 429 on the first call."""
+    monkeypatch.setattr(api, "DEEP_LINK_VERIFY_RATE_LIMIT", 0)
+    calls = _install_checker(monkeypatch)
+    api.cached_matches.extend(_cached(_match()))
+
+    for _ in range(6):
+        assert client.post("/api/verify-links?bookmaker=mozzartbet").status_code == 200
+
+    assert len(calls) == 6
+
+
 # ─── 10. The event-id key rule, and the arithmetic of the summary ─────────────
 
 
@@ -1072,23 +1213,77 @@ def test_keys_that_name_an_event_are_accepted(key):
 
 
 @pytest.mark.parametrize(
-    "key", ["paid", "valid", "grid", "void", "uuid", "maxTotalOdd", "displayNumberFormat",
-            "selectionId", "oddsId"],
+    "key", ["paid", "valid", "grid", "void", "uuid", "selectionId", "oddsId"]
 )
-def test_keys_that_merely_end_in_id_are_not_accepted(key):
+def test_keys_that_merely_look_like_id_keys_are_not_accepted(key):
+    """`paid`/`valid`/`grid`/`void`/`uuid` all end in "id" and none is an event."""
     assert json_event_paths(f'{{"{key}":{EVENT_ID}}}', EVENT_ID) == []
 
 
-def test_errored_checks_are_counted_separately():
-    outcomes = [_verified_outcome(), _failed_outcome(event_id="1", url="u1"),
-                _error_outcome(event_id="2", url="u2")]
-    report = _report(outcomes=outcomes)
+@pytest.mark.parametrize("key", ["maxTotalOdd", "displayNumberFormat", "maxStake"])
+def test_settings_keys_are_not_accepted(key):
+    """Neither of these ends in "id" either; the key rule rejected the measured
+    `maxTotalOdd` control, not the float rule. See report §5."""
+    assert json_event_paths(f'{{"settings":{{"{key}":{EVENT_ID}}}}}', EVENT_ID) == []
 
-    report.errored = sum(1 for o in outcomes if o.error)
 
-    assert report.checked == 3
-    assert (report.verified, report.failed, report.errored) == (1, 1, 1)
+def test_the_key_sets_have_no_redundant_entries():
+    """`EVENT_ID_KEYS` and `EVENT_ID_KEY_SUFFIXES` must not overlap: an entry in
+    both is dead weight that reads as if it does something."""
+    suffixes = set(verify_deeplinks.EVENT_ID_KEY_SUFFIXES)
+    assert not (set(verify_deeplinks.EVENT_ID_KEYS) & suffixes)
+    for entry in set(verify_deeplinks.EVENT_ID_KEYS) | suffixes:
+        assert verify_deeplinks.is_event_id_key(entry), entry
+
+
+def test_both_rate_limits_share_one_window_constant(monkeypatch):
+    """B3: the SCAN window length must not be derived from a deep-link knob.
+
+    The defect was `RATE_LIMIT_WINDOW_SECONDS = DEEP_LINK_VERIFY_RATE_WINDOW_SECONDS`,
+    so tuning the check's window silently moved the scan's. The value now comes
+    from a shared setting, and the derivation is asserted absent.
+    """
+    import inspect
+
+    import config.settings as settings
+
+    assert "RATE_LIMIT_WINDOW_SECONDS" in vars(settings)
+    assert api.RATE_LIMIT_WINDOW_SECONDS == settings.RATE_LIMIT_WINDOW_SECONDS == 60
+    assert (
+        "RATE_LIMIT_WINDOW_SECONDS = DEEP_LINK_VERIFY_RATE_WINDOW_SECONDS"
+        not in inspect.getsource(api)
+    )
+
+
+def test_errored_checks_are_counted_by_a_real_verify_bookmaker_run(monkeypatch):
+    """The ONLY test of the line that computes `errored` in the browser path.
+
+    It runs the real `verify_bookmaker` against the fake page — one link that
+    serves the event and one whose navigation never completes — so deleting
+    `report.errored = ...` from `verify_deeplinks.py` fails this test. The
+    arithmetic is asserted on the object the function actually returned.
+    """
+    good = EVENT_URL
+    bad = "https://www.mozzartbet.ba/sr/kladjenje/sport/1/match/1"
+    shell = FakeFrame(good)
+    body = f'{{"match":{{"id":{EVENT_ID}}}}}'
+    page = FakePage(
+        shell,
+        [FakeResponse(f"https://www.mozzartbet.ba/betting/match/{EVENT_ID}", body, shell)],
+        fail_urls={bad},
+    )
+    playwright = _install_fake_browser(monkeypatch, page)
+    matches = _cached(_match(), _match(event_id="1"))
+
+    report = run(verify_deeplinks.verify_bookmaker("mozzartbet", matches, limit=2))
+
+    assert report.checked == 2
+    assert report.verified == 1
+    assert report.failed == 0
+    assert report.errored == 1, "the navigation error was not counted as errored"
     assert report.checked == report.verified + report.failed + report.errored
+    assert [o.error for o in report.outcomes if o.error]  # the reason is reported
+    assert playwright.stopped is True, "the browser was not shut down"
 
 
 def test_the_response_reports_errored_checks(monkeypatch):
@@ -1102,13 +1297,6 @@ def test_the_response_reports_errored_checks(monkeypatch):
     assert body["checked"] == 2
     assert body["errored"] == 1
     assert body["checked"] == body["verified"] + body["failed"] + body["errored"]
-
-
-def test_verify_bookmaker_counts_errored_outcomes():
-    report = _report(outcomes=[_verified_outcome(), _error_outcome()])
-    report.checked = len(report.outcomes)
-    report.errored = sum(1 for o in report.outcomes if o.error)
-    assert report.errored == 1
 
 
 # ─── helpers ──────────────────────────────────────────────────────────────────

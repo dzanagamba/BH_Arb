@@ -34,13 +34,13 @@ from config.settings import (
     BROWSER_CONCURRENCY,
     CACHE_DIR,
     DEEP_LINK_VERIFY_RATE_LIMIT,
-    DEEP_LINK_VERIFY_RATE_WINDOW_SECONDS,
     DEFAULT_INVESTMENT,
     DUST_PROFIT_PERCENT,
     ENABLED_MARKETS,
     EXPERIMENTAL_MARKETS,
     MIN_PROFIT_PERCENT,
     ODDS_TTL_SECONDS,
+    RATE_LIMIT_WINDOW_SECONDS,
     SCAN_RATE_LIMIT,
 )
 from engine.ai import MatchAI, PairProposal
@@ -1199,8 +1199,9 @@ def _load_cache():
 # ---------------------------------------------------------------------------
 
 # Per-client-IP rate limiting (in-memory, sliding window). The scan window and
-# the deep-link window are separate buckets so one cannot exhaust the other.
-RATE_LIMIT_WINDOW_SECONDS = DEEP_LINK_VERIFY_RATE_WINDOW_SECONDS
+# the deep-link window are separate buckets so one cannot exhaust the other, and
+# they share ONE window length, which is a setting in its own right rather than
+# something derived from an endpoint-specific knob.
 _scan_request_times: dict[str, list[float]] = {}
 
 
@@ -1769,10 +1770,6 @@ async def verify_links(
             status_code=409,
             detail=f"A {mode} scan is in progress — retry after it finishes",
         )
-    # Refuse a flood BEFORE paying for a browser. Throttling, not serialising.
-    _enforce_sliding_window(
-        request, _verify_link_request_times, DEEP_LINK_VERIFY_RATE_LIMIT, "verify-links checks"
-    )
 
     base_url = str(BOOKMAKERS[bookmaker]["base_url"])
     if not supports_event_id(bookmaker):
@@ -1789,7 +1786,9 @@ async def verify_links(
             "errored": 0,
             "unchecked": 0,
             "duration_seconds": 0.0,
-            "applied": False,
+            # None, not False: nothing was written because nothing needed to be,
+            # which is not the same as a write being suppressed.
+            "applied": None,
             "applied_note": "",
             "details": [],
         }
@@ -1812,10 +1811,17 @@ async def verify_links(
             "errored": 0,
             "unchecked": 0,
             "duration_seconds": 0.0,
-            "applied": False,
+            "applied": None,
             "applied_note": "",
             "details": [],
         }
+
+    # Charged here, not above: a book that declares no route and a cache with no
+    # event ids both return without touching a browser, and a UI that probes
+    # either would otherwise spend the budget doing nothing.
+    _enforce_sliding_window(
+        request, _verify_link_request_times, DEEP_LINK_VERIFY_RATE_LIMIT, "verify-links checks"
+    )
 
     # One browser at a time, and never more than BROWSER_CONCURRENCY across the
     # whole server: a scan that starts after the 409 check above still finds its
@@ -1845,7 +1851,9 @@ async def verify_links(
         applied_note = (
             f"a {mode} scan started while this check was running, so the cached "
             "matches were left untouched; the proof is stored and the next scan "
-            "will apply it"
+            "will apply it. Note the asymmetry: the store write is one-sided, so "
+            "a completed-FAIL cannot demote a stale deep_link_verified=True in the "
+            "cache until a scan rebuilds that list from the scrapers"
         )
 
     logger.info(

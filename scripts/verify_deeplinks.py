@@ -15,13 +15,15 @@ when the bookmaker's own site resolved the id as data **because of our request**
 
 * a JSON payload served by a book-owned host, requested for that id (the request
   URL itself carries it), carrying the id as the value of a key that names an
-  event — an int or a string, never a float, never under a settings key, or
+  event — `id`/`eventId`/`matchId` and their compound forms, never a settings key
+  such as `maxTotalOdd` — and as an int or a string, never as a float, or
 * the rendered text of the page shows the id as a standalone value, never as
   part of a URL.
 
 Four controls decided that shape, all measured live and all in the report: a dead
 event id still gets HTTP 200 and a byte-identical page from the NSoft shells;
-MDShop's ``businessModel`` payload carries ``"maxTotalOdd": 999999999999.00``;
+MDShop's ``businessModel`` payload carries ``"maxTotalOdd": 999999999999.00``,
+a settings key that the KEY rule rejects (the float rule never sees it);
 Admiralbet serves the same 29 KB ``bonus-tickets-with-details`` payload on every
 load, so an id inside it proves nothing about our link; and the Mozzartbet route
 for a dead id answers 200 with 14 bytes instead of 328 KB. Against those controls
@@ -172,11 +174,13 @@ def whole_token_span(haystack: str, event_id: str) -> tuple[int, int] | None:
 
 
 # Keys that name an EVENT. A plain `endswith("id")` would also accept `paid`,
-# `valid`, `grid`, `void` and `uuid`, so the rule is an explicit set plus the
-# compound forms (`eventId`, `match_id`, `originalEventId`). Everything else —
-# including `maxTotalOdd` and `displayNumberFormat`, both measured on live
-# payloads — is not allowed to speak for an event.
-EVENT_ID_KEYS = frozenset({"id", "eventid", "matchid", "gameid", "fixtureid"})
+# `valid`, `grid`, `void` and `uuid`, so the rule is an exact-name set for the
+# bare `id` plus the compound forms (`eventId`, `match_id`, `originalEventId`).
+# The two sets do not overlap: an entry in both would be dead weight that reads
+# as if it did something. Everything else — including `maxTotalOdd` and
+# `displayNumberFormat`, both measured on live payloads — may not speak for an
+# event, and it is THIS rule that rejected them, not the float rule below.
+EVENT_ID_KEYS = frozenset({"id"})
 EVENT_ID_KEY_SUFFIXES = ("eventid", "matchid", "gameid", "fixtureid")
 
 
@@ -189,16 +193,19 @@ def is_event_id_key(key: str) -> bool:
 def json_event_paths(body: str, event_id: str, max_hits: int = 3) -> list[str]:
     """Return the JSON paths where a key that names an event holds exactly ``event_id``.
 
-    Structural, not lexical, on purpose. A dead id measured as "verified"
+    Structural, not lexical, on purpose — a dead id once measured as "verified"
     against MDShop's ``businessModel`` payload, which carries
-    ``"maxTotalOdd": 999999999999.00`` — a settings value that merely *contains*
-    the digits. So a hit requires all three of:
+    ``"maxTotalOdd": 999999999999.00``. Three rules, and the FIRST is the one
+    that stopped that control:
 
-    * a key that names an event (:func:`is_event_id_key`), so a settings key can
-      never speak for an event,
+    * a key that names an event (:func:`is_event_id_key`). ``maxTotalOdd`` and
+      ``displayNumberFormat`` do not end in ``id``, so a settings key is rejected
+      here and the int/float comparison is never reached,
     * a value that IS the id (``1234567`` is not ``9984468``), and
-    * an integer or string value — never a float, because a decimal amount is
-      the exact shape of that false pass.
+    * an integer or string value, never a float. The float rule is a second
+      line of defence for the same shape of false pass (a decimal amount that
+      happens to equal the id under a key that does name an event), not the
+      defence that ran.
     """
     try:
         data = json.loads(body)

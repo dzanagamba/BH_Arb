@@ -140,7 +140,9 @@ SCAN_RATE_LIMIT = int(os.getenv("SCAN_RATE_LIMIT", "3"))
 # and API_KEY is empty by default, so the endpoint throttles itself: a lock only
 # serialises runs, it does not refuse them.
 DEEP_LINK_VERIFY_RATE_LIMIT = int(os.getenv("DEEP_LINK_VERIFY_RATE_LIMIT", "2"))
-DEEP_LINK_VERIFY_RATE_WINDOW_SECONDS = 60
+# Sliding window shared by every per-client-IP rate limit, so tuning one endpoint
+# cannot silently move another's. It is NOT a per-endpoint knob.
+RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
 
 # --- Cache ---
 CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "cache")
