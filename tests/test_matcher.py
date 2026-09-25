@@ -19,6 +19,9 @@ def _match(bookmaker, home, away, league, kickoff, odds=None):
         away_team=away,
         league=league,
         kickoff=kickoff,
+        event_id=f"{bookmaker}-{home}",
+        deep_link_verified=True,
+        url=f"https://example.test/{bookmaker}",
         markets=[Market(market_type=MarketType.MATCH_RESULT, odds=odds)],
     )
 
@@ -32,6 +35,7 @@ def test_same_match_groups_across_bookmakers():
     m2 = _match("mbet", "Zeljeznicar", "FK Sarajevo", "Premijer Liga BiH", _kickoff())
     groups = MatchMatcher().group_matches([m1, m2])
     assert len(groups) == 1
+    assert groups[0].status == "verified"
     assert len(groups[0].matches) == 2
 
 
@@ -60,6 +64,7 @@ def test_home_away_swap_detection():
                 ])
     groups = MatchMatcher().group_matches([m1, m2])
     assert len(groups) == 1
+    assert groups[0].status == "verified"
     swapped = next(m for m in groups[0].matches if m.bookmaker == "mbet")
     assert swapped.is_swapped is True
     # After swap, bookmaker B's "1" (2.0) must now be labelled "2"

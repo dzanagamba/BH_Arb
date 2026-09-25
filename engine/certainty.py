@@ -6,6 +6,7 @@ Ambiguous pairs get ``suggested`` with explicit reasons; ``rejected`` when a
 hard gate contradicts the claim.
 """
 
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Literal
@@ -92,6 +93,13 @@ class CertaintyGate:
         """
         return " ".join(name.strip().casefold().split()).rstrip(".")
 
+    @staticmethod
+    def _surface_team_key(name: str) -> str:
+        """Normalize lossless spelling differences for an allowlisted score."""
+        key = " ".join(name.strip().casefold().split()).rstrip(".")
+        decomposed = unicodedata.normalize("NFKD", key)
+        return "".join(char for char in decomposed if not unicodedata.combining(char))
+
     def _team_pair_details(
         self,
         left_raw: str,
@@ -116,9 +124,11 @@ class CertaintyGate:
         if not allowlisted:
             return False, False
 
+        left_surface = self._surface_team_key(left_raw)
+        right_surface = self._surface_team_key(right_raw)
         fuzzy_score = max(
-            fuzz.token_set_ratio(left_key, right_key),
-            fuzz.partial_ratio(left_key, right_key),
+            fuzz.token_set_ratio(left_surface, right_surface),
+            fuzz.partial_ratio(left_surface, right_surface),
         )
         return fuzzy_score >= 90, True
 

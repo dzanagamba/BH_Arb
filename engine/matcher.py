@@ -7,11 +7,11 @@ the same real-world event using multi-dimensional composite fingerprinting:
   FINGERPRINT = League × Date × Teams × Time
 
 Gates & Matching Rules:
-  1. League Gate    — Same normalized league ID (hard gate; generic leagues match any)
-  2. Category Gate  — Special categories (U21, Women, Reserves, Esports) must agree (hard gate)
-  3. Time/Date Gate — Kickoff within 120 minutes (hard reject beyond 2 hours / different dates)
-  4. Team Match     — Evaluates both direct & swapped home/away team orientations (token_set_ratio ≥ 70%)
-  5. Non-Greedy     — Selects the candidate group with the highest overall confidence score
+  1. League Gate    — Same normalized league ID or an explicit equivalence
+  2. Category Gate  — Special categories (U21, Women, Reserves, Esports) must agree
+  3. Time/Date Gate — Candidate scoring uses 120 minutes; verified claims use 15 minutes
+  4. Team Match     — Candidate scoring evaluates both home/away orientations
+  5. Certainty Gate  — Final authority for verified status, links, and orientation
 
 Weighted composite confidence score:
   team_similarity_avg  × 0.80
@@ -22,10 +22,13 @@ Automatic Swap Handling:
   If a bookmaker flips home/away order, the match is auto-swapped and market odds
   labels (1↔2, 1X↔X2) are normalized to the group's canonical orientation.
 
-A match group is only returned if it contains matches from 2+ distinct bookmakers.
+A match group is only returned when the certainty gate verifies it and it contains
+matches from 2+ distinct bookmakers.
 """
 
+import json
 import logging
+import os
 
 from rapidfuzz import fuzz
 
@@ -34,11 +37,16 @@ from config.settings import (
     KICKOFF_WINDOW_MINUTES,
     TEAM_MATCH_MIN_PERCENT,
 )
+from engine.certainty import CertaintyGate, GateResult
 from engine.normalizer import TeamNormalizer
-from models.schemas import Market, MarketType, Match, MatchGroup, OddsValue
+from models.schemas import Market, MarketType, Match, MatchEvidence, MatchGroup, OddsValue
 from scrapers.common import flip_ah_label
 
 logger = logging.getLogger(__name__)
+
+_LEAGUE_EQUIV_FILE = os.path.join(
+    os.path.dirname(__file__), "..", "config", "league_equivalences.json"
+)
 
 # Generic fallback leagues that are too vague to enforce a league gate on
 # Expanded in muse12 (P1-3): friendlies/cups/superliga are vague — keep permissive
@@ -53,13 +61,6 @@ GENERIC_LEAGUES = {
     # (e.g. "Premier Liga" appears for both BIH and ENG; country gate + teams decide)
     "premier liga", "premijer liga", "premier league",
     "bundesliga", "prva liga", "vtora liga",
-}
-
-# European competitions that are considered compatible for same-team same-time fixtures
-# (same two clubs cannot play two different UEFA competitions at identical kickoff)
-EUROPEAN_COMPATIBLE_LEAGUES = {
-    "europa_league", "conference_league", "champions_league",
-    "europa", "conference", "champions",
 }
 
 # Derived thresholds (from config.settings)
@@ -79,8 +80,41 @@ class MatchMatcher:
     - Kickoff time adds a confidence bonus but hard-rejects > KICKOFF_WINDOW_MINUTES diff
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.normalizer = TeamNormalizer()
+        self._equivalences: set[tuple[str, str]] = set()
+        try:
+            with open(_LEAGUE_EQUIV_FILE, encoding="utf-8") as f:
+                data = json.load(f)
+            if not isinstance(data, dict):
+                raise ValueError("league equivalences must be a JSON object")
+            for pair in data.get("pairs", []):
+                if (
+                    isinstance(pair, list | tuple)
+                    and len(pair) == 2
+                    and all(isinstance(value, str) for value in pair)
+                ):
+                    self._equivalences.add((pair[0], pair[1]))
+        except (OSError, TypeError, ValueError):
+            logger.warning(
+                "league_equivalences.json not found or invalid — no cross-league merging"
+            )
+
+        # The curated team mapping is the reviewed alias allowlist.  The gate
+        # still rejects any name collision that is not present in this data.
+        self._alias_allowlist: set[str] = set()
+        for canonical_id, variations in self.normalizer.team_mappings.items():
+            if canonical_id.startswith("_") or not isinstance(variations, list):
+                continue
+            for index, left in enumerate(variations):
+                for right in variations[index + 1 :]:
+                    if left.strip() and right.strip():
+                        self._alias_allowlist.add(f"{left}|{right}")
+
+        self.gate = CertaintyGate(
+            alias_allowlist=self._alias_allowlist,
+            league_equivalences=self._equivalences,
+        )
 
     def normalize_matches(self, matches: list[Match]) -> list[Match]:
         """
@@ -132,21 +166,24 @@ class MatchMatcher:
         for match in sorted_matches:
             best_group: MatchGroup | None = None
             best_conf = 0.0
-            best_is_swapped = False
 
             m_league = match.league_normalized or match.league or ""
+            candidate_groups: list[MatchGroup]
             if m_league in GENERIC_LEAGUES:
                 # Generic league — eligible against every group
                 candidate_groups = list(groups)
             else:
-                # Specific league — only its bucket plus generic groups
-                candidate_groups = list(groups_by_league.get(m_league, []))
-                candidate_groups.extend(groups_by_league.get("", []))
-                # European cross-label: Europa/Conference/Champions at same time are same match
-                if m_league in EUROPEAN_COMPATIBLE_LEAGUES:
-                    for euro in EUROPEAN_COMPATIBLE_LEAGUES:
-                        if euro != m_league:
-                            candidate_groups.extend(groups_by_league.get(euro, []))
+                # Specific leagues are candidate buckets only when they are
+                # identical or explicitly declared equivalent.
+                league_keys = [m_league, ""]
+                for left, right in self._equivalences:
+                    if left == m_league and right not in league_keys:
+                        league_keys.append(right)
+                    elif right == m_league and left not in league_keys:
+                        league_keys.append(left)
+                candidate_groups = []
+                for league_key in league_keys:
+                    candidate_groups.extend(groups_by_league.get(league_key, []))
 
             for group in candidate_groups:
                 # Skip if this bookmaker already contributed a match to this group
@@ -154,50 +191,84 @@ class MatchMatcher:
                 if match.bookmaker in group_bookmakers:
                     continue
 
-                confidence, is_swapped = self._calculate_confidence(match, group)
+                confidence, _ = self._calculate_confidence(match, group)
 
                 if confidence >= GROUP_MIN_CONFIDENCE and confidence > best_conf:
                     best_conf = confidence
                     best_group = group
-                    best_is_swapped = is_swapped
 
+            accepted = False
             if best_group and best_conf >= GROUP_MIN_CONFIDENCE:
-                match_to_add = swap_match_teams_and_odds(match) if best_is_swapped else match
-                best_group.matches.append(match_to_add)
+                gate_result: GateResult = self.gate.evaluate(match, best_group)
+                if gate_result.status == "verified":
+                    # The gate owns orientation; the scorer only prunes candidates.
+                    match_to_add = (
+                        swap_match_teams_and_odds(match)
+                        if gate_result.is_swapped
+                        else match
+                    )
+                    best_group.matches.append(match_to_add)
+                    best_group.evidence.extend(gate_result.evidence)
+                    if len({m.bookmaker for m in best_group.matches}) >= 2:
+                        best_group.status = "verified"
 
-                # Upgrade group's canonical league/kickoff if generic
-                if best_group.league in GENERIC_LEAGUES and match.league_normalized not in GENERIC_LEAGUES:
-                    old_key = ""
-                    best_group.league = match.league_normalized
-                    # Re-index the upgraded group into its new league bucket
-                    if old_key in groups_by_league and best_group in groups_by_league[old_key]:
-                        groups_by_league[old_key].remove(best_group)
-                    groups_by_league.setdefault(best_group.league, []).append(best_group)
-                if not best_group.kickoff and match.kickoff:
-                    best_group.kickoff = match.kickoff
+                    # Upgrade group's canonical league/kickoff if generic.
+                    if (
+                        best_group.league in GENERIC_LEAGUES
+                        and match.league_normalized not in GENERIC_LEAGUES
+                    ):
+                        old_key = ""
+                        best_group.league = match.league_normalized
+                        # Re-index the upgraded group into its new league bucket
+                        if old_key in groups_by_league and best_group in groups_by_league[old_key]:
+                            groups_by_league[old_key].remove(best_group)
+                        groups_by_league.setdefault(best_group.league, []).append(best_group)
+                    if not best_group.kickoff and match.kickoff:
+                        best_group.kickoff = match.kickoff
 
-                logger.debug(
-                    f"✅ MATCHED [{match.bookmaker}] "
-                    f"'{match.home_team}' vs '{match.away_team}' "
-                    f"→ group ('{best_group.canonical_home}' vs '{best_group.canonical_away}') "
-                    f"[conf={best_conf:.2f}, swapped={best_is_swapped}]"
-                )
-            else:
+                    logger.debug(
+                        f"✅ MATCHED [{match.bookmaker}] "
+                        f"'{match.home_team}' vs '{match.away_team}' "
+                        f"→ group ('{best_group.canonical_home}' vs '{best_group.canonical_away}') "
+                        f"[conf={best_conf:.2f}, swapped={gate_result.is_swapped}]"
+                    )
+                    accepted = True
+                else:
+                    logger.debug(
+                        f"⛔ GATE REJECTED [{match.bookmaker}] "
+                        f"'{match.home_team}' vs '{match.away_team}' "
+                        f"→ reasons={gate_result.reasons}"
+                    )
+
+            if not accepted:
                 new_group = MatchGroup(
                     canonical_home=match.home_team_normalized or match.home_team,
                     canonical_away=match.away_team_normalized or match.away_team,
                     league=match.league_normalized or match.league,
                     kickoff=match.kickoff,
                     matches=[match],
+                    status="suggested",
+                    evidence=[
+                        MatchEvidence(
+                            rule="rule_stage",
+                            source="rule",
+                            reason="new_group",
+                        )
+                    ],
                 )
                 groups.append(new_group)
-                bucket_key = new_group.league if new_group.league not in GENERIC_LEAGUES else ""
+                bucket_key = (
+                    new_group.league if new_group.league not in GENERIC_LEAGUES else ""
+                )
                 groups_by_league.setdefault(bucket_key, []).append(new_group)
 
-        # Only return groups with 2+ different bookmakers
+        # Only return groups whose every accepted addition passed the gate and
+        # that contain at least two distinct bookmakers.
         multi_bookie_groups = [
-            g for g in groups
-            if len(set(m.bookmaker for m in g.matches)) >= 2
+            g
+            for g in groups
+            if g.status == "verified"
+            and len({m.bookmaker for m in g.matches}) >= 2
         ]
 
         logger.info(
@@ -226,19 +297,17 @@ class MatchMatcher:
         if match_tags != group_tags:
             return 0.0, False
 
-        # Hard gate: If both match and group have specific (non-generic) leagues, they MUST match
-        # Exception: European competitions at same kickoff with same teams are same match even if labeled differently
+        # Hard gate: specific leagues must be identical or explicitly
+        # equivalent; no blanket competition compatibility is allowed.
         if (
             m_league and g_league
             and m_league not in GENERIC_LEAGUES
             and g_league not in GENERIC_LEAGUES
             and m_league != g_league
+            and (m_league, g_league) not in self._equivalences
+            and (g_league, m_league) not in self._equivalences
         ):
-            # Allow cross-label European fixtures (e.g. Europa vs Conference at identical time)
-            if m_league in EUROPEAN_COMPATIBLE_LEAGUES and g_league in EUROPEAN_COMPATIBLE_LEAGUES:
-                pass  # compat — don't reject, rely on team/time gates
-            else:
-                return 0.0, False
+            return 0.0, False
 
         # Country soft gate (P1-3): if both have normalized country and mismatch, reject
         # Prevents Borac BL (BiH) vs Borac Cacak (Serbia) when league is generic/fuzzy

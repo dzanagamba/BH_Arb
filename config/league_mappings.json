@@ -132,7 +132,6 @@
         "Njemacka Bundesliga"
     ],
     "bundesliga_2": [
-        "Bundesliga 2",
         "Njemačka - 2. Bundesliga",
         "2. Bundesliga"
     ],
@@ -383,12 +382,11 @@
         "ARGENTINSKA 1.LIGA",
         "Argentina - Argentina 1",
         "Primera Division, Apertura",
-        "Primera Nacional",
         "ARGENTINA 1",
-        "Argentina Primera",
-        "Argentina 2",
-        "ARGENTINA 2",
-        "Primera B Nacional"
+        "Argentina Primera"
+    ],
+    "argentine_primera_b_nacional": [
+        "Argentina 2", "ARGENTINA 2", "Primera B Nacional", "Primera Nacional"
     ],
     "copa_do_brasil": [
         "BRAZIL Copa do Brasil",
@@ -520,6 +518,9 @@
         "bulgaria 1",
         "Bugarska 1",
         "bugarska 1"
+    ],
+    "bugarian_second_league": [
+        "Bugarska 2", "BULGARIA 2", "bulgaria 2", "Vtora Liga", "vtora liga"
     ],
     "chinese_super_league": [
         "kina 1",

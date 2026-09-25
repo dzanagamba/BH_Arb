@@ -15,6 +15,9 @@ def _match(bookmaker, home, away, league, kickoff, odds, country=""):
         league=league,
         country=country,
         kickoff=kickoff,
+        event_id=f"{bookmaker}-{home}-{away}",
+        deep_link_verified=True,
+        url=f"https://example.test/{bookmaker}",
         markets=[Market(market_type=MarketType.MATCH_RESULT, odds=[
             OddsValue(label="1", value=odds[0]),
             OddsValue(label="X", value=odds[1]),
