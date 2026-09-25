@@ -6,7 +6,6 @@
         "BiH - Premier Liga",
         "Bosna - Premier Liga",
         "Bosna - Premijer Liga",
-        "Premijer Liga",
         "PREMIER LIGA",
         "Bosnia - Premier League",
         "Premier Liga BiH",
@@ -37,7 +36,6 @@
         "Engleska - Premijer Liga",
         "England Premier League",
         "ENGLESKA 1",
-        "Premijer Liga",
         "Engleska - Premier League",
         "Engleska 1.Liga",
         "EPL",
@@ -132,8 +130,14 @@
         "Njemacka Bundesliga"
     ],
     "bundesliga_2": [
-        "Njemačka - 2. Bundesliga",
-        "2. Bundesliga"
+        "Bundesliga 2",
+        "2. Bundesliga",
+        "Germany 2",
+        "Njemacka 2",
+        "Njemačka 2",
+        "Nemacka 2",
+        "Njemacka - 2. Bundesliga",
+        "Njemačka - 2. Bundesliga"
     ],
     "ligue_1": [
         "Ligue1",
@@ -606,13 +610,5 @@
         "Austrija - Bundesliga",
         "Austrian Bundesliga",
         "Austrija 1. Liga"
-    ],
-    "nemacka_2": [
-        "Njemacka 2",
-        "Njemačka 2",
-        "Nemacka 2",
-        "Nemacka 2",
-        "Germany 2",
-        "Bundesliga 2"
     ]
 }

@@ -1,5 +1,8 @@
 """Tests for team/league name normalization."""
 
+import json
+from pathlib import Path
+
 from engine.normalizer import TeamNormalizer
 
 
@@ -51,3 +54,24 @@ def test_german_tier_two_has_one_reachable_canonical_id():
 def test_bulgarian_second_league_is_not_treated_as_generic():
     n = TeamNormalizer()
     assert n.normalize_league("Vtora Liga") == "bugarian_second_league"
+
+
+def test_league_mappings_have_no_cleaned_name_collisions():
+    mapping_path = Path(__file__).parents[1] / "config" / "league_mappings.json"
+    mappings = json.loads(mapping_path.read_text(encoding="utf-8"))
+    normalizer = TeamNormalizer()
+    owners_by_cleaned: dict[str, set[str]] = {}
+
+    for canonical_id, variations in mappings.items():
+        if canonical_id.startswith("_"):
+            continue
+        for variation in variations:
+            cleaned = normalizer._full_clean(variation)
+            owners_by_cleaned.setdefault(cleaned, set()).add(canonical_id)
+
+    duplicates = {
+        cleaned: sorted(canonical_ids)
+        for cleaned, canonical_ids in owners_by_cleaned.items()
+        if len(canonical_ids) > 1
+    }
+    assert not duplicates, f"cleaned league names map to multiple canonical ids: {duplicates}"
