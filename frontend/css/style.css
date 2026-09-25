@@ -922,6 +922,7 @@ body::before {
     letter-spacing: 0.2px;
     white-space: nowrap;
 }
+.status-badge[hidden] { display: none; }
 .status-verified { color: var(--green); background: var(--green-soft); border-color: rgba(47, 214, 127, 0.3); }
 .status-suggested { color: var(--gold); background: var(--gold-soft); border-color: rgba(255, 194, 75, 0.3); }
 .status-rejected { color: var(--red); background: var(--red-soft); border-color: rgba(255, 90, 110, 0.3); }

@@ -18,6 +18,7 @@
 let currentMode = 'prematch';       // 'prematch' (future) | 'live' (in-play)
 let activeScanMode = null;          // mode of the currently running scan
 let activeTab = 'surebets';         // 'surebets' (results) | 'review' (human queue)
+let candidateApiKey = '';            // in-memory key for configured review mutations
 let allSurebets = [];          // Full list from server
 let filteredSurebets = [];     // After client-side filtering
 let pollingInterval = null;
@@ -41,6 +42,12 @@ const REASON_LABELS = Object.freeze({
     kickoff_missing: 'Kickoff time missing',
     orientation_unresolved: 'Home/away order unclear',
     no_event_link: 'No event link',
+});
+
+const SUREBET_STATUS_LABELS = Object.freeze({
+    verified: { label: '✓ Verified', ariaLabel: 'Verified match pairing' },
+    suggested: { label: '! Suggested', ariaLabel: 'Suggested match pairing' },
+    rejected: { label: '✕ Rejected', ariaLabel: 'Rejected match pairing' },
 });
 
 function restoreMode() {
@@ -653,25 +660,27 @@ function buildSurebetCard(sb, idx) {
     card.querySelector('.market-badge').textContent =
         MARKET_LABELS[sb.market_type] || sb.market_type;
 
-    // Surebets are emitted only from verified match groups. If a future
-    // response carries an explicit status, expose it without relying on color.
-    const reportedStatus = sb.status || sb.match_status || 'verified';
-    const matchStatus = ['verified', 'suggested', 'rejected'].includes(reportedStatus)
-        ? reportedStatus
-        : 'verified';
+    // Only show a status the backend explicitly sent; never infer safety from
+    // the fact that a surebet is present in the results payload.
+    const reportedStatus = sb.status || sb.match_status;
     const statusEl = card.querySelector('.status-badge');
     if (statusEl) {
-        statusEl.className = `status-badge status-${matchStatus}`;
-        statusEl.textContent = matchStatus === 'verified'
-            ? '✓ Verified'
-            : matchStatus === 'suggested' ? '! Suggested' : '✕ Rejected';
-        statusEl.setAttribute(
-            'aria-label',
-            matchStatus === 'verified'
-                ? 'Verified match pairing'
-                : matchStatus === 'suggested' ? 'Suggested match pairing' : 'Rejected match pairing',
-        );
-        statusEl.title = `Match pairing status: ${matchStatus}`;
+        statusEl.hidden = true;
+        statusEl.className = 'status-badge';
+        statusEl.textContent = '';
+        statusEl.removeAttribute('aria-label');
+        statusEl.removeAttribute('title');
+
+        const statusInfo = Object.prototype.hasOwnProperty.call(SUREBET_STATUS_LABELS, reportedStatus)
+            ? SUREBET_STATUS_LABELS[reportedStatus]
+            : null;
+        if (statusInfo) {
+            statusEl.hidden = false;
+            statusEl.classList.add(`status-${reportedStatus}`);
+            statusEl.textContent = statusInfo.label;
+            statusEl.setAttribute('aria-label', statusInfo.ariaLabel);
+            statusEl.title = `Match pairing status: ${reportedStatus}`;
+        }
     }
 
     // League
@@ -807,8 +816,8 @@ function renderCandidates(candidates) {
         list.innerHTML = `
             <div class="empty-state">
                 <div class="empty-state-icon">✓</div>
-                <h2 class="empty-state-title">No pending candidates.</h2>
-                <p class="empty-state-desc">Candidates refused by the certainty gate will appear here for a human decision.</p>
+                <h2 class="empty-state-title">Nothing to review yet.</h2>
+                <p class="empty-state-desc">No pairing candidates are queued for human review.</p>
             </div>
         `;
         return;
@@ -875,11 +884,28 @@ function renderCandidates(candidates) {
     }).join('');
 }
 
+function candidateActionHeaders() {
+    return candidateApiKey ? { 'X-API-Key': candidateApiKey } : {};
+}
+
+async function candidateActionFetch(url) {
+    const send = () => fetch(url, { method: 'POST', headers: candidateActionHeaders() });
+    let response = await send();
+    if (response.status === 401 && !candidateApiKey) {
+        const entered = window.prompt('This SureBet deployment requires an API key for review actions.');
+        if (entered && entered.trim()) {
+            candidateApiKey = entered.trim();
+            response = await send();
+        }
+    }
+    return response;
+}
+
 async function submitCandidateDecision(id, action, card) {
     const buttons = card ? [...card.querySelectorAll('button')] : [];
     buttons.forEach(button => { button.disabled = true; });
     try {
-        const response = await fetch(`/api/candidates/${encodeURIComponent(id)}/${action}`, { method: 'POST' });
+        const response = await candidateActionFetch(`/api/candidates/${encodeURIComponent(id)}/${action}`);
         if (response.ok === false) throw new Error(`Candidate ${action} failed (${response.status})`);
         await loadCandidates();
     } catch (error) {
