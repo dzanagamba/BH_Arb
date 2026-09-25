@@ -7,7 +7,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from server.api import _load_bookmaker_state, _load_cache, _load_history, _load_market_state, router
+from server.api import (
+    _load_bookmaker_state,
+    _load_cache,
+    _load_history,
+    _load_market_state,
+    _load_suppressed_candidates,
+    _suppressed_candidates,
+    router,
+)
 
 # Fix Windows ProactorEventLoop policy for Playwright when running via uvicorn/fastapi CLI
 if sys.platform == "win32":
@@ -39,6 +47,7 @@ async def on_startup() -> None:
     _load_bookmaker_state()
     _load_market_state()
     _load_history()
+    _suppressed_candidates.update(_load_suppressed_candidates())
 
 # Serve frontend static files
 FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")

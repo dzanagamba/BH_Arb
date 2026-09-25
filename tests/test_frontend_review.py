@@ -118,6 +118,41 @@ def test_candidate_actions_use_the_existing_api_key_header():
     assert "candidateActionFetch" in JS
 
 
+def test_candidate_queue_is_read_as_a_bounded_page():
+    """A full scan queues five figures; the tab polls every 30s."""
+    assert "CANDIDATE_PAGE_SIZE" in JS
+    assert "limit=${CANDIDATE_PAGE_SIZE}" in JS
+    assert "offset=0" in JS
+    assert "data.total" in JS
+    assert "most actionable of" in JS
+
+
+def test_candidate_queue_read_requires_the_api_key_when_configured():
+    assert "candidateListFetch" in JS
+    assert "candidateActionHeaders()" in JS
+    read_call = JS[JS.index("async function candidateListFetch"):JS.index("async function loadCandidates")]
+    assert "401" in read_call
+
+
+def test_candidate_card_shows_both_spellings_and_what_approval_does():
+    assert "candidate.team_positions" in JS
+    assert "position.team_a" in JS and "position.team_b" in JS
+    assert "candidate.link_blocked" in JS
+    assert "candidate.alias_actionable" in JS
+    assert "deep-link check is a separate system verification" in JS
+
+
+def test_candidate_card_disables_approval_when_there_is_no_alias_to_write():
+    assert "writesAlias" in JS
+    assert "Nothing to alias" in JS
+    assert "position.team_a !== position.team_b" in JS
+
+
+def test_negative_ai_verdict_sorts_last_regardless_of_confidence():
+    assert "ai_same_event === false" in JS
+    assert "return leftNegative ? 1 : -1" in JS
+
+
 def test_source_reason_extraction_is_nonempty():
     reason_codes = _source_reason_codes()
     assert reason_codes

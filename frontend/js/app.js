@@ -793,24 +793,44 @@ function renderCandidatesMessage(message) {
     `;
 }
 
+// The queue is served one bounded page at a time: a full scan can queue five
+// figures, and this tab re-renders every poll.
+const CANDIDATE_PAGE_SIZE = 100;
+
+async function candidateListFetch(url) {
+    const send = () => fetch(url, { headers: candidateActionHeaders() });
+    let response = await send();
+    if (response.status === 401 && !candidateApiKey) {
+        const entered = window.prompt('This SureBet deployment requires an API key to read the review queue.');
+        if (entered && entered.trim()) {
+            candidateApiKey = entered.trim();
+            response = await send();
+        }
+    }
+    return response;
+}
+
 async function loadCandidates() {
     try {
-        const response = await fetch('/api/candidates');
+        const response = await candidateListFetch(`/api/candidates?limit=${CANDIDATE_PAGE_SIZE}&offset=0`);
         if (response.ok === false) throw new Error(`Candidate request failed (${response.status})`);
         const data = await response.json();
-        renderCandidates(Array.isArray(data.candidates) ? data.candidates : []);
+        renderCandidates(
+            Array.isArray(data.candidates) ? data.candidates : [],
+            Number(data.total) || 0,
+        );
     } catch (error) {
         console.error('Candidates load failed:', error);
         renderCandidatesMessage('Could not load candidates.');
     }
 }
 
-function renderCandidates(candidates) {
+function renderCandidates(candidates, total) {
     const list = document.getElementById('candidates-list');
     const count = document.getElementById('review-count');
     const queue = Array.isArray(candidates) ? candidates : [];
     if (!list) return;
-    if (count) count.textContent = queue.length;
+    if (count) count.textContent = total || 0;
 
     if (!queue.length) {
         list.innerHTML = `
@@ -824,11 +844,20 @@ function renderCandidates(candidates) {
     }
 
     // AI confidence helps a reviewer prioritise the queue; it never grants trust.
-    const orderedCandidates = [...queue].sort(
-        (left, right) => candidateConfidence(right.ai_confidence) - candidateConfidence(left.ai_confidence),
-    );
+    // A negative AI verdict sorts last whatever its confidence — the model said
+    // these are not the same event, so a high score must not float it upward.
+    const orderedCandidates = [...queue].sort((left, right) => {
+        const leftNegative = left.ai_same_event === false;
+        const rightNegative = right.ai_same_event === false;
+        if (leftNegative !== rightNegative) return leftNegative ? 1 : -1;
+        return candidateConfidence(right.ai_confidence) - candidateConfidence(left.ai_confidence);
+    });
 
-    list.innerHTML = orderedCandidates.map((candidate) => {
+    const pageNote = total > queue.length
+        ? `<p class="candidates-page-note">Showing the ${queue.length} most actionable of ${total} queued. Start a scan to refresh the queue.</p>`
+        : '';
+
+    list.innerHTML = pageNote + orderedCandidates.map((candidate) => {
         const id = escapeHtml(candidate.id || '');
         const homeTeam = escapeHtml(formatTeamName(candidate.home_team || 'Unknown'));
         const awayTeam = escapeHtml(formatTeamName(candidate.away_team || 'Unknown'));
@@ -840,6 +869,37 @@ function renderCandidates(candidates) {
             .join(' / ') || 'No bookmakers recorded';
         const confidence = Math.round(candidateConfidence(candidate.ai_confidence) * 100);
         const aiReason = escapeHtml(candidate.ai_reason || 'No AI explanation provided.');
+        const aiNegative = candidate.ai_same_event === false;
+        const aiVerdict = aiNegative
+            ? `<strong>AI verdict:</strong> <span class="candidate-ai-negative">not the same event</span> ${aiReason}`
+            : `<strong>AI suggestion:</strong> ${aiReason} <span class="candidate-ai-note">Suggestion only — a human must decide.</span>`;
+        // What approval actually does, stated on the card. A team alias is a
+        // human judgement; the deep-link check is a system verification.
+        const positions = Array.isArray(candidate.team_positions) ? candidate.team_positions : [];
+        const positionItems = positions.length
+            ? positions.map(position => `
+                <li class="candidate-position">
+                    <span class="candidate-position-slot">${escapeHtml(position.position)}</span>
+                    <span>${escapeHtml(formatTeamName(position.team_a))}</span>
+                    <span aria-hidden="true">≈</span>
+                    <span>${escapeHtml(formatTeamName(position.team_b))}</span>
+                </li>
+            `).join('')
+            : '<li class="candidate-position candidate-position-none">No cross-bookmaker names recorded — run a scan to regenerate this candidate</li>';
+        const approvalNote = candidate.link_blocked
+            ? 'Approving writes the reviewed team alias for each name the two books spell differently. The deep-link check is a separate system verification, so this pair stays unverified until that check runs.'
+            : 'Approving writes the reviewed team alias for each name the two books spell differently.';
+        // Nothing to alias means nothing to approve: the endpoint refuses rather
+        // than write a self-alias, so the button says so instead of failing.
+        const writesAlias = positions.some(position => position.team_a !== position.team_b);
+        const approveButton = writesAlias
+            ? `<button type="button" class="btn btn-primary" aria-label="Approve pairing ${homeTeam} versus ${awayTeam}"
+                            onclick="approveCandidate(this.closest('.candidate-card').dataset.id)">Approve pairing</button>`
+            : `<button type="button" class="btn btn-primary" disabled
+                            title="Both books already spell these teams identically, so there is no alias to write — reject this pairing instead">Nothing to alias</button>`;
+        const actionability = candidate.alias_actionable
+            ? '<span class="candidate-actionable">An approval clears every remaining blocker here.</span>'
+            : '<span class="candidate-blocked">An approval alone cannot clear the remaining blockers here.</span>';
         const reasons = Array.isArray(candidate.rule_rejections) ? candidate.rule_rejections : [];
         const reasonItems = reasons.length
             ? reasons.map(reason => {
@@ -855,7 +915,7 @@ function renderCandidates(candidates) {
             : '<li class="candidate-reason candidate-reason-none">No rejection reason recorded</li>';
 
         return `
-            <article class="candidate-card" data-id="${id}" data-confidence="${confidence}">
+            <article class="candidate-card" data-id="${id}" data-confidence="${confidence}"${aiNegative ? ' data-ai-verdict="negative"' : ''}>
                 <div class="candidate-card-header">
                     <div>
                         <div class="candidate-teams"><span>${homeTeam}</span> <span class="candidate-vs">vs</span> <span>${awayTeam}</span></div>
@@ -870,12 +930,16 @@ function renderCandidates(candidates) {
                     <div class="candidate-section-label">Why the certainty gate refused</div>
                     <ul>${reasonItems}</ul>
                 </div>
+                <div class="candidate-positions" role="group" aria-label="How the two bookmakers spell each team">
+                    <div class="candidate-section-label">Names the two books disagree on</div>
+                    <ul>${positionItems}</ul>
+                    <p class="candidate-approval-note">${escapeHtml(approvalNote)} ${actionability}</p>
+                </div>
                 <div class="candidate-ai" title="AI explanation">
-                    <strong>AI suggestion:</strong> ${aiReason} <span class="candidate-ai-note">Suggestion only — a human must decide.</span>
+                    ${aiVerdict}
                 </div>
                 <div class="candidate-actions">
-                    <button type="button" class="btn btn-primary" aria-label="Approve pairing ${homeTeam} versus ${awayTeam}"
-                            onclick="approveCandidate(this.closest('.candidate-card').dataset.id)">Approve pairing</button>
+                    ${approveButton}
                     <button type="button" class="btn btn-mute" aria-label="Reject pairing ${homeTeam} versus ${awayTeam}"
                             onclick="rejectCandidate(this.closest('.candidate-card').dataset.id)">Reject pairing</button>
                 </div>

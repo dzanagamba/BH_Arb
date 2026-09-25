@@ -171,3 +171,49 @@ def test_injected_client_has_lifecycle_seam():
     run(exercise())
     assert client.post_calls == 1
     assert client.closed is True
+
+
+def test_shared_client_serves_every_call_and_aclose_closes_it(monkeypatch):
+    """A batch of N calls must cost one TLS handshake, not N."""
+    import engine.ai as ai_module
+    from config.settings import VERIFY_SSL
+
+    created = []
+
+    class Client(RecordingClient):
+        def __init__(self, **kwargs):
+            super().__init__('{"proposals": []}', **kwargs)
+            created.append(self)
+
+    monkeypatch.setattr(ai_module.httpx, "AsyncClient", Client)
+
+    async def exercise():
+        shared = MatchAI(
+            api_key="test", base_url="http://test", model="test"
+        ).with_shared_client()
+        await shared.suggest_pairs([{"a": "x", "b": "y"}])
+        await shared.suggest_pairs([{"a": "x", "b": "z"}])
+        await shared.aclose()
+
+    run(exercise())
+    assert len(created) == 1
+    assert created[0].post_calls == 2
+    assert created[0].closed is True
+    assert created[0].kwargs.get("verify") is VERIFY_SSL
+    assert created[0].kwargs.get("timeout") == 10.0
+
+
+def test_shared_client_keeps_the_configured_endpoint(monkeypatch):
+    import engine.ai as ai_module
+
+    monkeypatch.setattr(ai_module.httpx, "AsyncClient", RecordingClient)
+    shared = MatchAI(
+        api_key="test", base_url="https://example.test/v1/", model="m1", timeout=3.0
+    ).with_shared_client()
+
+    assert shared.api_key == "test"
+    assert shared.base_url == "https://example.test/v1"
+    assert shared.model == "m1"
+    assert shared.timeout == 3.0
+    assert shared.available is True
+    run(shared.aclose())

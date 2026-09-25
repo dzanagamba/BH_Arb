@@ -24,9 +24,14 @@ def reset_candidate_state(monkeypatch, tmp_path):
     original_report = api.cached_match_groups_report.copy()
     original_matches = api.cached_matches.copy()
     original_unmapped = api.unmapped_markets.copy()
+    original_suppressed = dict(api._suppressed_candidates)
     api.pending_candidates.clear()
     api.candidate_reviews.clear()
+    api._suppressed_candidates.clear()
     monkeypatch.setattr(api, "ALLOWLIST_FILE", str(tmp_path / "team_alias_allowlist.json"))
+    monkeypatch.setattr(
+        api, "SUPPRESSED_CANDIDATES_FILE", str(tmp_path / "suppressed_candidates.json")
+    )
     yield
     api.pending_candidates.clear()
     api.pending_candidates.update(original_pending)
@@ -35,22 +40,38 @@ def reset_candidate_state(monkeypatch, tmp_path):
     api.cached_matches[:] = original_matches
     api.unmapped_markets.clear()
     api.unmapped_markets.update(original_unmapped)
+    api._suppressed_candidates.clear()
+    api._suppressed_candidates.update(original_suppressed)
 
 
 def _candidate(
     candidate_id: str = "candidate-1",
-    home_team: str = "Lech Poznan",
-    away_team: str = "Lech P.",
+    left_home: str = "Lech Poznan",
+    left_away: str = "Thun",
+    right_home: str = "Lech P.",
+    right_away: str = "FC Thun",
 ) -> CandidateReview:
-    return CandidateReview(
-        id=candidate_id,
-        home_team=home_team,
-        away_team=away_team,
-        league="Liga Evrope",
-        kickoff=datetime(2026, 9, 25, 18, 0),
-        bookmakers=["mdshop", "mbet"],
-        created_at=datetime(2026, 9, 25, 12, 0),
-    )
+    """A candidate exactly as `run_scan` produces it: both sides, both spellings."""
+    return _produced_candidate(candidate_id, left_home, left_away, right_home, right_away)
+
+
+def _produced_candidate(
+    candidate_id: str,
+    left_home: str,
+    left_away: str,
+    right_home: str,
+    right_away: str,
+) -> CandidateReview:
+    """Run the real producer so the endpoint tests never invent a shape."""
+    matches = [
+        _mapping_match("mdshop", left_home, left_away, "mdshop-1"),
+        _mapping_match("mbet", right_home, right_away, "mbet-1"),
+    ]
+    produced = asyncio.run(api._collect_candidates(matches, MatchMatcher()))
+    assert len(produced) == 1, produced
+    candidate = next(iter(produced.values()))
+    candidate.id = candidate_id
+    return candidate
 
 
 def _mapping_match(
@@ -152,19 +173,23 @@ def test_approve_candidate_writes_reviewed_alias_and_resolves_it():
     r = client.post(f"/api/candidates/{candidate.id}/approve")
 
     assert r.status_code == 200
-    assert r.json() == {
-        "status": "approved",
-        "allowlist_entries": ["Lech P.|Lech Poznan"],
-    }
+    body = r.json()
+    # One entry per team slot the two books spell differently — never a pair of
+    # the two halves of one fixture, which would alias a club to its opponent.
+    assert body["status"] == "approved"
+    assert body["allowlist_entries"] == ["FC Thun|Thun", "Lech P.|Lech Poznan"]
+    assert body["link_state"] == "verified"
+    with open(api.ALLOWLIST_FILE, encoding="utf-8") as file:
+        saved = json.load(file)
+    assert saved == {"aliases": ["FC Thun|Thun", "Lech P.|Lech Poznan"]}
     assert candidate.status == "approved"
     assert candidate.resolved_by == "human"
     assert candidate.resolved_at is not None
     assert candidate.resolved_at.tzinfo is None
     assert candidate.id not in api.pending_candidates
     assert api.candidate_reviews[0].id == candidate.id
-    with open(api.ALLOWLIST_FILE, encoding="utf-8") as file:
-        saved = json.load(file)
-    assert saved == {"aliases": ["Lech P.|Lech Poznan"]}
+    # A decided pair is not re-queued on the next scan.
+    assert api._suppressed_candidates == {candidate.id: "approved"}
 
 
 def test_approved_alias_is_loaded_by_real_matcher(monkeypatch):
@@ -175,8 +200,8 @@ def test_approved_alias_is_loaded_by_real_matcher(monkeypatch):
     response = client.post(f"/api/candidates/{candidate.id}/approve")
     groups = MatchMatcher().group_matches(
         [
-            _mapping_match("mdshop", "Lech Poznan", "Opponent", "mdshop-1"),
-            _mapping_match("mbet", "Lech P.", "Opponent", "mbet-1"),
+            _mapping_match("mdshop", "Lech Poznan", "Thun", "mdshop-1"),
+            _mapping_match("mbet", "Lech P.", "FC Thun", "mbet-1"),
         ]
     )
 
@@ -236,8 +261,8 @@ def test_allowlist_replace_is_atomic_for_concurrent_reader(monkeypatch):
 
 
 def test_concurrent_approvals_preserve_both_aliases(monkeypatch):
-    first_candidate = _candidate("candidate-1", "Alpha Town", "Alpha")
-    second_candidate = _candidate("candidate-2", "Beta Town", "Beta")
+    first_candidate = _candidate("candidate-1", "Alpha Town", "Beta", "Alpha", "Beta")
+    second_candidate = _candidate("candidate-2", "Gamma Town", "Delta", "Gamma", "Delta")
     api.pending_candidates[first_candidate.id] = first_candidate
     api.pending_candidates[second_candidate.id] = second_candidate
 
@@ -281,7 +306,7 @@ def test_concurrent_approvals_preserve_both_aliases(monkeypatch):
     assert not errors
     with open(api.ALLOWLIST_FILE, encoding="utf-8") as file:
         aliases = set(json.load(file)["aliases"])
-    assert aliases == {"Alpha|Alpha Town", "Beta|Beta Town"}
+    assert aliases == {"Alpha|Alpha Town", "Gamma|Gamma Town"}
 
 
 def test_reject_candidate_records_human_rejection():
@@ -309,3 +334,46 @@ def test_candidate_mutations_require_api_key_when_configured(monkeypatch):
     assert client.post(
         f"/api/candidates/{candidate.id}/approve", headers={"X-API-Key": "secret"}
     ).status_code == 200
+
+
+def test_candidate_queue_read_requires_api_key_when_configured(monkeypatch):
+    candidate = _candidate()
+    api.pending_candidates[candidate.id] = candidate
+    monkeypatch.setattr(api, "API_KEY", "secret")
+
+    assert client.get("/api/candidates").status_code == 401
+    ok = client.get("/api/candidates", headers={"X-API-Key": "secret"})
+
+    assert ok.status_code == 200
+    assert ok.json()["total"] == 1
+
+
+def test_candidate_queue_is_paginated_over_http():
+    for index in range(3):
+        candidate = _candidate(f"candidate-{index}")
+        candidate.id = f"{index:016d}"
+        api.pending_candidates[candidate.id] = candidate
+
+    first = client.get("/api/candidates?limit=2&offset=0").json()
+    rest = client.get("/api/candidates?limit=2&offset=2").json()
+
+    assert first["total"] == 3 and first["count"] == 2 and first["limit"] == 2
+    assert [c["id"] for c in first["candidates"]] == ["0000000000000000", "0000000000000001"]
+    assert rest["offset"] == 2
+    assert [c["id"] for c in rest["candidates"]] == ["0000000000000002"]
+
+
+def test_candidate_payload_carries_both_sides_and_the_link_state():
+    candidate = _candidate()
+    api.pending_candidates[candidate.id] = candidate
+
+    body = client.get("/api/candidates").json()["candidates"][0]
+
+    assert body["side_a"]["home_team"] == "Lech Poznan"
+    assert body["side_b"]["home_team"] == "Lech P."
+    assert body["team_positions"] == [
+        {"position": "home", "team_a": "Lech Poznan", "team_b": "Lech P."},
+        {"position": "away", "team_a": "Thun", "team_b": "FC Thun"},
+    ]
+    assert body["link_blocked"] is False  # _mapping_match sets deep_link_verified
+    assert body["alias_actionable"] is True

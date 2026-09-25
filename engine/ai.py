@@ -56,6 +56,21 @@ class MatchAI:
     def available(self) -> bool:
         return bool(self.api_key)
 
+    def with_shared_client(self) -> "MatchAI":
+        """Return a copy that reuses one HTTP client for all of its calls.
+
+        The default path builds an ``httpx.AsyncClient`` per call, so a batch of
+        N calls pays N TLS handshakes and leaves ``aclose()`` nothing to close.
+        The caller owns the returned adapter and must close it.
+        """
+        return MatchAI(
+            api_key=self.api_key,
+            base_url=self.base_url,
+            model=self.model,
+            timeout=self.timeout,
+            client=httpx.AsyncClient(timeout=self.timeout, verify=VERIFY_SSL),
+        )
+
     async def _chat(self, messages: list[dict], temperature: float = 0.0) -> str:
         if self._client is not None:
             return await self._chat_with_client(self._client, messages, temperature)

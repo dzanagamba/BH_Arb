@@ -21,7 +21,7 @@ import tempfile
 import threading
 import time
 from datetime import UTC, datetime
-from typing import Any, NamedTuple
+from typing import Any, Literal, NamedTuple
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request
 from pydantic import BaseModel
@@ -45,7 +45,15 @@ from engine.arbitrage import ArbitrageEngine
 from engine.certainty import CertaintyGate
 from engine.market_registry import unmapped_markets
 from engine.matcher import MatchMatcher
-from models.schemas import CandidateReview, MarketType, Match, MatchGroup, ScanStatus
+from models.schemas import (
+    CandidateReview,
+    MarketType,
+    Match,
+    MatchGroup,
+    PairSide,
+    ScanStatus,
+    TeamPositionPair,
+)
 from scrapers.admiralbet import AdmiralbetScraper
 from scrapers.betole import BetoleScraper
 from scrapers.evlbet import EvlbetScraper
@@ -172,6 +180,32 @@ ALLOWLIST_FILE = os.path.join(
 )
 _ALLOWLIST_LOCK = threading.Lock()
 
+# Candidates a human has already decided on, keyed by the deterministic pair id.
+# Without this a decided pair is rebuilt into the queue on every scan and can be
+# approved again forever, so the review loop could never converge.
+SUPPRESSED_CANDIDATES_FILE = os.path.join(CACHE_DIR, "suppressed_candidates.json")
+_suppressed_candidates: dict[str, str] = {}
+_SUPPRESSED_LOCK = threading.Lock()
+
+
+def _atomic_write_json(path: str, payload: object, prefix: str) -> None:
+    """Write JSON through a temp file so a reader never sees a partial document."""
+    directory = os.path.dirname(path) or "."
+    os.makedirs(directory, exist_ok=True)
+    fd, temp_path = tempfile.mkstemp(prefix=f".{prefix}.", suffix=".tmp", dir=directory, text=True)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as file:
+            json.dump(payload, file, ensure_ascii=False, indent=2)
+            file.flush()
+            os.fsync(file.fileno())
+        os.replace(temp_path, path)
+    finally:
+        if os.path.exists(temp_path):
+            try:
+                os.unlink(temp_path)
+            except OSError:
+                pass
+
 
 def _load_allowlist() -> set[str]:
     try:
@@ -185,26 +219,37 @@ def _load_allowlist() -> set[str]:
 
 
 def _save_allowlist(aliases: set[str]) -> None:
-    directory = os.path.dirname(ALLOWLIST_FILE) or "."
-    os.makedirs(directory, exist_ok=True)
-    fd, temp_path = tempfile.mkstemp(
-        prefix=".team_alias_allowlist.",
-        suffix=".tmp",
-        dir=directory,
-        text=True,
-    )
+    _atomic_write_json(ALLOWLIST_FILE, {"aliases": sorted(aliases)}, "team_alias_allowlist")
+
+
+def _load_suppressed_candidates() -> dict[str, str]:
+    """Return decided candidate ids mapped to the decision ("approved"/"rejected")."""
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as file:
-            json.dump({"aliases": sorted(aliases)}, file, ensure_ascii=False, indent=2)
-            file.flush()
-            os.fsync(file.fileno())
-        os.replace(temp_path, ALLOWLIST_FILE)
-    finally:
-        if os.path.exists(temp_path):
-            try:
-                os.unlink(temp_path)
-            except OSError:
-                pass
+        with open(SUPPRESSED_CANDIDATES_FILE, encoding="utf-8") as file:
+            data = json.load(file)
+        if not isinstance(data, dict):
+            return {}
+        return {
+            candidate_id: decision
+            for candidate_id, decision in data.items()
+            if isinstance(candidate_id, str) and decision in ("approved", "rejected")
+        }
+    except (OSError, TypeError, ValueError):
+        return {}
+
+
+def _save_suppressed_candidates() -> None:
+    _atomic_write_json(
+        SUPPRESSED_CANDIDATES_FILE, dict(sorted(_suppressed_candidates.items())),
+        "suppressed_candidates",
+    )
+
+
+def _suppress_candidate(candidate_id: str, decision: str) -> None:
+    """Record a human decision so the pair is not re-queued on the next scan."""
+    with _SUPPRESSED_LOCK:
+        _suppressed_candidates[candidate_id] = decision
+        _save_suppressed_candidates()
 
 
 _HISTORY_FILE = os.path.join(CACHE_DIR, "scan_history.json")
@@ -285,10 +330,23 @@ CANDIDATE_TEAM_SIM_MIN = 70
 CANDIDATE_BUCKET_SECONDS = 1800
 # The AI is one network call per candidate with a 10s timeout, so a busy scan
 # must not fan out without bound: 20 sequential calls is the ceiling, and the
-# most plausible candidates are ranked first so a cap drops the weakest ones.
+# most *actionable* candidates are ranked first so a cap drops the ones a human
+# could not have closed anyway.
 AI_CANDIDATE_RANK_CAP = 20
-# Hard wall-clock ceiling so slow or timing-out calls cannot stall a scan.
+# Wall-clock ceiling. It is checked before each call, so it can overshoot by at
+# most one in-flight call (`MatchAI.timeout`, 10s by default).
 AI_RANK_TIME_BUDGET_SECONDS = 90.0
+# The queue can hold five figures after a full scan and the review tab polls
+# every 30s, so the endpoint serves a bounded page. 100 cards is a payload a
+# browser re-renders comfortably, and because the queue is ordered by
+# actionability the first page is the part a reviewer actually works through.
+CANDIDATE_PAGE_SIZE = 100
+CANDIDATE_PAGE_MAX = 500
+CANDIDATE_REVIEW_HISTORY_MAX = 200   # in-memory log; the allowlist file is the durable record
+# Reasons the gate raises only because a bookmaker's event link is unproven.
+# They come from the per-book deep-link system check, never from a name, so no
+# human decision can clear them.
+LINK_REJECTION_REASONS = frozenset({"link_unverified", "no_event_link"})
 
 
 class _TeamTokens(NamedTuple):
@@ -299,16 +357,19 @@ class _TeamTokens(NamedTuple):
     home_tokens: frozenset[str]
     away_tokens: frozenset[str]
     all_tokens: frozenset[str]
-    bigrams: frozenset[str]
+    home_bigrams: frozenset[str]
+    away_bigrams: frozenset[str]
+    all_bigrams: frozenset[str]
 
     @classmethod
     def of(cls, match: Match) -> "_TeamTokens":
         home = match.home_team_normalized or match.home_team
         away = match.away_team_normalized or match.away_team
         home_tokens, away_tokens = frozenset(home.split()), frozenset(away.split())
+        home_bigrams, away_bigrams = _bigrams(home), _bigrams(away)
         return cls(
             home, away, home_tokens, away_tokens, home_tokens | away_tokens,
-            _bigrams(f"{home} {away}"),
+            home_bigrams, away_bigrams, home_bigrams | away_bigrams,
         )
 
 
@@ -316,6 +377,8 @@ class _FoundPair(NamedTuple):
     """A queued candidate plus the evidence used to rank it."""
 
     candidate: CandidateReview
+    alias_actionable: bool
+    human_blockers: int
     kickoff_delta_minutes: float
     team_similarity: float
     left: Match
@@ -352,40 +415,53 @@ def _kickoff_delta_minutes(left: Match, right: Match) -> float:
 
 
 def _bigrams(text: str) -> frozenset[str]:
-    """Return the character bigrams of a fixture string."""
+    """Return the character bigrams of a team string."""
     padded = f" {text} "
     return frozenset(padded[index:index + 2] for index in range(len(padded) - 1))
 
 
-def _team_similarity(left: _TeamTokens, right: _TeamTokens) -> float:
-    """Cheap prefilter: the best token-set overlap over both home/away orders.
+def _shares_any_signal(left: _TeamTokens, right: _TeamTokens) -> bool:
+    """Cheap "this pair is not hopeless" test, run before the fuzzy scorer.
 
-    The token/bigram gate is what makes the ~745k cross-bookmaker comparisons of
-    a real 7k-match scan affordable: it skips the fuzzy scorer for pairs sharing
-    no token, no substring run and no character bigram. The bigram term is what
-    keeps a single typo ("Millonarios" vs "Millionarios") in the queue, which a
-    token-only gate would drop. On a real 7k-match scan the gate discarded 1,669
-    pairs that the raw fuzzy score would have admitted; a sample of 25 were all
-    different real-world fixtures ("Bury Town" vs "Exeter"), i.e. fuzzy
-    false positives on short names, so nothing reviewable is lost.
+    True when the two fixtures share a token, one team name contains the other,
+    or they share a character bigram. It exists only to skip the ~730k fuzzy
+    calls of a 7k-match scan; the decision itself is still the fuzzy rule in
+    `_team_similarity`, so this test must never admit-or-veto on its own. The
+    bigram clause is what keeps a pure typo ("Millonarios" vs "Millionarios")
+    in the queue — it shares no token at all, and a token-only gate drops it.
     """
-    if not (
+    return bool(
         left.all_tokens & right.all_tokens
+        or left.all_bigrams & right.all_bigrams
         or _token_run_shared(left, right)
-        or left.bigrams & right.bigrams
-    ):
+    )
+
+
+def _team_similarity(left: _TeamTokens, right: _TeamTokens) -> float:
+    """The brief's plausibility rule: best token-set overlap over both orders.
+
+    The inner gate applies the *same* test as `_shares_any_signal`, per team
+    slot, so it can only skip a slot the outer gate already ruled hopeless. The
+    two therefore agree exactly, and the returned score is the plain
+    ``max(token_set_ratio(...))`` over the four combinations whenever the pair
+    is not hopeless at all.
+    """
+    if not _shares_any_signal(left, right):
         return 0.0
     best = 0.0
-    for first, second, first_tokens, second_tokens in (
-        (left.home, right.home, left.home_tokens, right.home_tokens),
-        (left.home, right.away, left.home_tokens, right.away_tokens),
-        (left.away, right.home, left.away_tokens, right.home_tokens),
-        (left.away, right.away, left.away_tokens, right.away_tokens),
+    for first, second, first_tokens, second_tokens, first_bigrams, second_bigrams in (
+        (left.home, right.home, left.home_tokens, right.home_tokens,
+         left.home_bigrams, right.home_bigrams),
+        (left.home, right.away, left.home_tokens, right.away_tokens,
+         left.home_bigrams, right.away_bigrams),
+        (left.away, right.home, left.away_tokens, right.home_tokens,
+         left.away_bigrams, right.home_bigrams),
+        (left.away, right.away, left.away_tokens, right.away_tokens,
+         left.away_bigrams, right.away_bigrams),
     ):
         if not (
             first_tokens & second_tokens
-            or first_tokens <= second_tokens
-            or second_tokens <= first_tokens
+            or first_bigrams & second_bigrams
             or first in second
             or second in first
         ):
@@ -434,6 +510,104 @@ def _verified_group_index(groups: list[MatchGroup]) -> dict[str, int]:
     return index
 
 
+def _alias_name_key(name: str) -> str:
+    """The form a name is compared in inside the reviewed allowlist.
+
+    Mirrors ``CertaintyGate._raw_team_key`` (case, spacing and a trailing dot),
+    which is what the gate normalises both sides of an entry through.
+    """
+    return " ".join(name.strip().casefold().split()).rstrip(".")
+
+
+def _slot_agreement(left_home: str, left_away: str, right_home: str, right_away: str) -> float:
+    """Score one home/away orientation of a pair on its normalized names."""
+    return (
+        fuzz.token_set_ratio(left_home, right_home)
+        + fuzz.token_set_ratio(left_away, right_away)
+    )
+
+
+def _team_positions(left: Match, right: Match) -> list[TeamPositionPair]:
+    """Pair each team slot of the fixture with the slot the other book uses.
+
+    A bookmaker may publish the fixture flipped, so the better-agreeing
+    orientation wins. The raw spellings of both sides are kept because that is
+    what a reviewed alias entry is made of; the decision is taken once, here, so
+    approval never has to re-derive it.
+    """
+    left_home = left.home_team_normalized or left.home_team
+    left_away = left.away_team_normalized or left.away_team
+    right_home = right.home_team_normalized or right.home_team
+    right_away = right.away_team_normalized or right.away_team
+    direct = _slot_agreement(left_home, left_away, right_home, right_away)
+    swapped = _slot_agreement(left_home, left_away, right_away, right_home)
+    home_b, away_b = (right.home_team, right.away_team) if direct >= swapped else (
+        right.away_team, right.home_team
+    )
+    return [
+        TeamPositionPair(position="home", team_a=left.home_team, team_b=home_b),
+        TeamPositionPair(position="away", team_a=left.away_team, team_b=away_b),
+    ]
+
+
+def _alias_entries(positions: list[TeamPositionPair]) -> list[str]:
+    """Return one allowlist entry per team slot the two books spell differently.
+
+    Both halves of one fixture are different clubs, so a fixture can never be a
+    single alias entry. A slot whose two spellings already agree needs none, and
+    a slot the gate could not pair to the same club would poison the allowlist,
+    so only real disagreements are written.
+    """
+    entries = {
+        "|".join(sorted((position.team_a.strip(), position.team_b.strip())))
+        for position in positions
+        if _alias_name_key(position.team_a) != _alias_name_key(position.team_b)
+        and "|" not in position.team_a
+        and "|" not in position.team_b
+        and position.team_a.strip()
+        and position.team_b.strip()
+    }
+    return sorted(entries)
+
+
+def _alias_actionable(
+    reasons: list[str],
+    positions: list[TeamPositionPair],
+    left: Match,
+    right: Match,
+    gate: CertaintyGate,
+) -> bool:
+    """Would the aliases this candidate implies clear every blocker a human owns?
+
+    Asked of the certainty gate itself rather than of a copy of its rules: the
+    pair is re-evaluated with only those aliases granted and with both links
+    marked verified, which is the state the per-book deep-link system check
+    (Task 12) produces. Anything short of ``verified`` is not something an
+    approval can fix, so the candidate is not advertised as actionable.
+    """
+    if not set(reasons) <= LINK_REJECTION_REASONS | {"team_unresolved"}:
+        return False
+    entries = _alias_entries(positions)
+    if not entries:
+        return False
+    gate.alias_allowlist = set(entries)
+    linked = [match.model_copy(update={"deep_link_verified": True}) for match in (left, right)]
+    return gate.evaluate_pair(linked[0], linked[1]).status == "verified"
+
+
+def _shared_client_ai() -> MatchAI | None:
+    """Return an AI adapter that reuses one HTTP client for the whole scan.
+
+    ``MatchAI`` builds a fresh ``httpx.AsyncClient`` per call, so 20 sequential
+    calls would pay 20 TLS handshakes. Returns ``None`` when no API key is
+    configured, so the AI path is never entered without one.
+    """
+    ai = MatchAI()
+    if not ai.available:
+        return None
+    return ai.with_shared_client()
+
+
 def _proposal_for_submitted_pair(
     proposals: list[PairProposal], left: Match, right: Match
 ) -> PairProposal | None:
@@ -477,6 +651,12 @@ async def _rank_candidates_with_ai(ai: MatchAI, found: list[_FoundPair]) -> None
         proposal = _proposal_for_submitted_pair(proposals, left, right)
         if proposal is None:
             continue
+        pair.candidate.ai_same_event = proposal.same_event
+        if not proposal.same_event:
+            # A negative verdict is a reason to deprioritise, never a confidence.
+            pair.candidate.ai_confidence = 0.0
+            pair.candidate.ai_reason = f"AI says not the same event: {proposal.reason}".strip()
+            continue
         pair.candidate.ai_confidence = proposal.confidence
         pair.candidate.ai_reason = proposal.reason
 
@@ -491,9 +671,15 @@ async def _collect_candidates(
 
     Pairs are discovered with a kickoff-bucket index (not an O(n^2) sweep) and a
     cheap team-token prefilter before the full gate runs. AI only ranks; it never
-    approves.
+    approves. A pair a human already decided on is never re-queued.
     """
     gate = CertaintyGate(
+        kickoff_window_minutes=CANDIDATE_KICKOFF_WINDOW_MIN,
+        league_equivalences=getattr(matcher, "_equivalences", set()),
+    )
+    # Second gate, reused for the "would an approval fix this?" question. It only
+    # ever answers with the aliases of the candidate under test.
+    what_if_gate = CertaintyGate(
         kickoff_window_minutes=CANDIDATE_KICKOFF_WINDOW_MIN,
         league_equivalences=getattr(matcher, "_equivalences", set()),
     )
@@ -508,6 +694,7 @@ async def _collect_candidates(
     # The candidate gate carries no alias allowlist on purpose: an allowlisted
     # alias is already proven, so those pairs must not come back for review.
     verified_in_group = _verified_group_index(groups or [])
+    decided = set(_suppressed_candidates)
     seen_pairs: set[str] = set()
     found: list[_FoundPair] = []
 
@@ -528,6 +715,9 @@ async def _collect_candidates(
                 if pair_key in seen_pairs:
                     continue
                 seen_pairs.add(pair_key)
+                candidate_id = _candidate_id(pair_key)
+                if candidate_id in decided:
+                    continue  # a human already decided this exact pair
                 left_group = verified_in_group.get(_match_side_key(left))
                 if left_group is not None and left_group == verified_in_group.get(
                     _match_side_key(right)
@@ -536,18 +726,43 @@ async def _collect_candidates(
                 result = gate.evaluate_pair(left, right)
                 if result.status == "verified":
                     continue  # already handled by the matcher's verified group
+                positions = _team_positions(left, right)
+                actionable = _alias_actionable(
+                    result.reasons, positions, left, right, what_if_gate
+                )
                 found.append(_FoundPair(
                     candidate=CandidateReview(
-                        id=_candidate_id(pair_key),
+                        id=candidate_id,
                         home_team=left.home_team,
                         away_team=left.away_team,
                         league=left.league,
                         kickoff=left.kickoff,
                         bookmakers=sorted([left.bookmaker, right.bookmaker]),
+                        side_a=PairSide(
+                            bookmaker=left.bookmaker,
+                            event_ref=_match_event_ref(left),
+                            home_team=left.home_team,
+                            away_team=left.away_team,
+                            link_verified=left.deep_link_verified,
+                        ),
+                        side_b=PairSide(
+                            bookmaker=right.bookmaker,
+                            event_ref=_match_event_ref(right),
+                            home_team=right.home_team,
+                            away_team=right.away_team,
+                            link_verified=right.deep_link_verified,
+                        ),
+                        team_positions=positions,
+                        alias_actionable=actionable,
+                        link_blocked=bool(set(result.reasons) & LINK_REJECTION_REASONS),
                         ai_confidence=0.0,
                         ai_reason="",
                         rule_rejections=result.reasons,
                         created_at=datetime.now(UTC).replace(tzinfo=None),
+                    ),
+                    alias_actionable=actionable,
+                    human_blockers=len(
+                        [r for r in result.reasons if r not in LINK_REJECTION_REASONS]
                     ),
                     kickoff_delta_minutes=_kickoff_delta_minutes(left, right),
                     team_similarity=similarity,
@@ -555,18 +770,25 @@ async def _collect_candidates(
                     right=right,
                 ))
 
-    # Tightest kickoff first, then the closest team strings: both the review
-    # queue and the AI cap see the most plausible pairs at the top.
+    # What a reviewer can act on first, then the fewest remaining blockers, then
+    # the tightest kickoff and closest names. The AI cap is taken from the top of
+    # this order, so the hosted calls land on pairs a human could actually close.
     found.sort(key=lambda pair: (
-        pair.kickoff_delta_minutes, -pair.team_similarity, pair.candidate.id,
+        not pair.alias_actionable,
+        pair.human_blockers,
+        pair.kickoff_delta_minutes,
+        -pair.team_similarity,
+        pair.candidate.id,
     ))
     candidates = {pair.candidate.id: pair.candidate for pair in found}
     logger.info(
-        f"Review candidates: {len(candidates)} unverified pairs from {len(all_matches)} matches"
+        f"Review candidates: {len(candidates)} unverified pairs from {len(all_matches)} matches "
+        f"({sum(1 for pair in found if pair.alias_actionable)} alias-actionable, "
+        f"{len(decided)} suppressed by earlier decisions)"
     )
 
-    ai = MatchAI()
-    if not ai.available:
+    ai = _shared_client_ai() if found else None
+    if ai is None:
         return candidates
     try:
         await _rank_candidates_with_ai(ai, found)
@@ -884,6 +1106,7 @@ async def health():
             if report.get("status") == "verified"
         ),
         "pending_candidates": len(pending_candidates),
+        "suppressed_candidates": len(_suppressed_candidates),
         "unverified_links": sum(
             1
             for match in cached_matches
@@ -1037,12 +1260,40 @@ class VerifyRequest(BaseModel):
 
 
 @router.get("/candidates")
-async def get_candidates(mode: str = "prematch"):
-    """List match candidates awaiting human review."""
+async def get_candidates(
+    limit: int = CANDIDATE_PAGE_SIZE,
+    offset: int = 0,
+    _auth: None = Depends(_require_api_key),
+):
+    """List match candidates awaiting human review, one bounded page at a time.
+
+    The queue is ordered by actionability, so the first page is the part a
+    reviewer can actually work through. `total` is the full queue size so a UI
+    can say "showing N of M" instead of pretending the page is the queue.
+    """
+    page = max(1, min(limit, CANDIDATE_PAGE_MAX))
+    start = max(0, offset)
+    window = list(pending_candidates.values())[start:start + page]
     return {
-        "count": len(pending_candidates),
-        "candidates": [candidate.model_dump(mode="json") for candidate in pending_candidates.values()],
+        "total": len(pending_candidates),
+        "count": len(window),
+        "limit": page,
+        "offset": start,
+        "candidates": [candidate.model_dump(mode="json") for candidate in window],
     }
+
+
+def _resolve_candidate(
+    candidate: CandidateReview, decision: Literal["approved", "rejected"]
+) -> None:
+    """Record a human decision and take the candidate out of the queue for good."""
+    candidate.status = decision
+    candidate.resolved_at = datetime.now(UTC).replace(tzinfo=None)
+    candidate.resolved_by = "human"
+    pending_candidates.pop(candidate.id, None)
+    candidate_reviews.insert(0, candidate.model_copy(deep=True))
+    del candidate_reviews[CANDIDATE_REVIEW_HISTORY_MAX:]
+    _suppress_candidate(candidate.id, decision)
 
 
 @router.post("/candidates/{candidate_id}/approve")
@@ -1050,23 +1301,48 @@ async def approve_candidate(
     candidate_id: str,
     _auth: None = Depends(_require_api_key),
 ):
-    """Approve a candidate as a human-reviewed team alias."""
+    """Approve a candidate by granting the reviewed team aliases it implies.
+
+    What an approval grants, precisely: one allowlist entry per team slot whose
+    two spellings differ, so the certainty gate will trust that those two names
+    are the same club. It grants nothing about the event link. A candidate is
+    queued precisely because `deep_link_verified` is False on at least one side,
+    and that flag is a per-book system check (deep-link verification), so the
+    pair stays unverified until that check runs. Approving the *pair* here would
+    forge a machine result from a name judgement.
+    """
     candidate = pending_candidates.get(candidate_id)
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
 
-    alias = "|".join(sorted({candidate.home_team, candidate.away_team}))
+    entries = _alias_entries(candidate.team_positions)
+    if not entries:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Candidate carries no cross-bookmaker team names to alias; "
+                "re-run a scan to regenerate it"
+            ),
+        )
     with _ALLOWLIST_LOCK:
         aliases = _load_allowlist()
-        aliases.add(alias)
+        aliases.update(entries)
         _save_allowlist(aliases)
 
-    candidate.status = "approved"
-    candidate.resolved_at = datetime.now(UTC).replace(tzinfo=None)
-    candidate.resolved_by = "human"
-    pending_candidates.pop(candidate_id, None)
-    candidate_reviews.insert(0, candidate.model_copy(deep=True))
-    return {"status": "approved", "allowlist_entries": [alias]}
+    _resolve_candidate(candidate, "approved")
+    link_pending = candidate.link_blocked
+    return {
+        "status": "approved",
+        "allowlist_entries": entries,
+        "link_verified": not link_pending,
+        "link_state": "pending_system_check" if link_pending else "verified",
+        "note": (
+            "Team aliases granted. The deep-link check is a separate system "
+            "verification and is still pending, so this pair is not verified yet."
+            if link_pending else
+            "Team aliases granted."
+        ),
+    }
 
 
 @router.post("/candidates/{candidate_id}/reject")
@@ -1079,11 +1355,7 @@ async def reject_candidate(
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
 
-    candidate.status = "rejected"
-    candidate.resolved_at = datetime.now(UTC).replace(tzinfo=None)
-    candidate.resolved_by = "human"
-    pending_candidates.pop(candidate_id, None)
-    candidate_reviews.insert(0, candidate.model_copy(deep=True))
+    _resolve_candidate(candidate, "rejected")
     return {"status": "rejected"}
 
 

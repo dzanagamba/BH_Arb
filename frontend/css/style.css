@@ -811,6 +811,33 @@ body::before {
 }
 .candidate-ai strong { color: var(--text); }
 .candidate-ai-note { display: block; margin-top: 4px; color: var(--text-3); font-size: 10.5px; }
+.candidate-ai-negative { color: var(--red); font-weight: 700; }
+
+.candidates-page-note {
+    margin: 0 0 4px;
+    color: var(--text-3);
+    font-size: 11.5px;
+}
+
+.candidate-positions { margin-top: 12px; }
+.candidate-positions ul { display: grid; gap: 6px; margin-top: 8px; padding: 0; list-style: none; }
+.candidate-position {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+}
+.candidate-position-slot {
+    min-width: 44px;
+    color: var(--text-3);
+    font: 10px ui-monospace, SFMono-Regular, Consolas, monospace;
+    text-transform: uppercase;
+}
+.candidate-position-none { color: var(--text-2); font-size: 12.5px; }
+.candidate-approval-note { margin: 10px 0 0; color: var(--text-3); font-size: 10.5px; line-height: 1.5; }
+.candidate-actionable { color: var(--green); font-weight: 700; }
+.candidate-blocked { color: var(--text-2); }
 
 .candidate-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 .candidate-action-error { margin-top: 10px; color: var(--red); font-size: 11.5px; }

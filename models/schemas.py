@@ -71,6 +71,34 @@ class MatchEvidence(BaseModel):
     allowlist_entries: list[str] = []
 
 
+class PairSide(BaseModel):
+    """One bookmaker's raw claim inside a candidate pair.
+
+    A candidate exists because two books disagree about the same fixture, so a
+    reviewable claim has to carry BOTH sides. One side alone cannot be turned
+    into a team alias — that would alias a club against its own opponent.
+    """
+
+    bookmaker: str
+    event_ref: str = ""
+    home_team: str
+    away_team: str
+    link_verified: bool = False
+
+
+class TeamPositionPair(BaseModel):
+    """One team slot as the two bookmakers spell it, in the agreed orientation.
+
+    ``team_a``/``team_b`` are the two raw names of the SAME club, which is what
+    a reviewed allowlist entry is made of. The orientation is decided once, when
+    the candidate is built, so approval never has to re-derive it.
+    """
+
+    position: Literal["home", "away"]
+    team_a: str
+    team_b: str
+
+
 class CandidateReview(BaseModel):
     """An ambiguous pairing awaiting human/AI resolution."""
     id: str
@@ -79,8 +107,20 @@ class CandidateReview(BaseModel):
     league: str
     kickoff: datetime | None = None
     bookmakers: list[str] = []
+    # The cross-bookmaker claim. `home_team`/`away_team` above stay for display
+    # (side A's fixture); approval reads the positions, never those two fields.
+    side_a: PairSide | None = None
+    side_b: PairSide | None = None
+    team_positions: list[TeamPositionPair] = []
+    # True when the aliases implied by team_positions would clear every blocker
+    # a human owns — measured with the certainty gate, links assumed verified.
+    alias_actionable: bool = False
+    # True when the gate refused partly because a deep link is unproven. That is
+    # a system check, so an approval cannot clear it.
+    link_blocked: bool = False
     ai_confidence: float = 0.0
     ai_reason: str = ""
+    ai_same_event: bool | None = None
     rule_rejections: list[str] = []
     status: Literal["pending", "approved", "rejected"] = "pending"
     created_at: datetime
