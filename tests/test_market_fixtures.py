@@ -26,10 +26,15 @@ WHAT THESE TESTS DO NOT PROVE
 * **Not every registry row is covered.** The gaps are split into two lists,
   because they mean different things and are proved differently:
 
-  - ``UNCOVERED_ROWS`` -- the feed never sent the block the market needs. The
-    payload holds no evidence, and
+  - ``UNCOVERED_ROWS`` -- the feed never sent the block the market needs. Where
+    a capture exists (4 of the 11 rows) the payload must hold no evidence, and
     ``test_a_declared_gap_is_not_just_listed_but_forgotten`` re-proves that
-    against the capture, so a gap cannot be declared and then forgotten.
+    against it, so a gap cannot be declared and then forgotten. The other 7
+    rows belong to books with no capture at all; there is no payload to
+    re-prove them against, so that branch checks only that the book is
+    declared in ``BOOKS_WITHOUT_FIXTURES``, and
+    ``test_a_gap_without_a_capture_requires_a_declared_bookless_book`` covers
+    the rule on a synthetic book.
   - ``KNOWN_DEFECT_ROWS`` -- the feed *does* send it and the code cannot read
     it. There is exactly one today: ``premier_kladionica/live/btts``, where the
     live block is ``LIVE - OBA TIMA DAJU GOL`` but the parser's ``NAME_BTTS`` is
@@ -46,6 +51,7 @@ WHAT THESE TESTS DO NOT PROVE
 from __future__ import annotations
 
 import json
+import sys
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -54,6 +60,13 @@ import pytest
 
 from engine.market_registry import MarketRegistry
 from models.schemas import Market, MarketType
+
+# This module's own entry in sys.modules, so the self-referential test below
+# patches the same globals the test functions actually read. Importing it by
+# name would be ambiguous: pytest may load this file as "test_market_fixtures"
+# or as "tests.test_market_fixtures" depending on import mode, giving two
+# distinct module objects and patches that silently miss.
+MODULE = sys.modules[__name__]
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "markets"
 FIXTURES = sorted(FIXTURE_DIR.glob("*.json"))
@@ -402,21 +415,36 @@ def test_a_declared_gap_is_not_just_listed_but_forgotten():
     """A gap may only be declared while the evidence for it still holds.
 
     ``UNCOVERED_ROWS`` alone is a promise: it says the feed never sent the block
-    this market needs. This test checks that promise against the captured
-    payload, so a gap cannot be declared once and then left behind while the
-    fixture sits there proving the data was there all along. It also keeps the
-    two kinds of gap apart -- a real feed gap carries no evidence, a code defect
-    does and is guarded by a strict xfail instead.
+    this market needs. This test checks that promise in whichever way the row can
+    be checked:
+
+    * A row whose book HAS a capture for that mode is re-proved against the
+      payload -- the payload must not carry the data the market needs. Without
+      this a gap could be declared once and then left behind while the fixture
+      sits there proving otherwise.
+    * A row with no capture has no payload to check, so it is only required to
+      name a book declared in ``BOOKS_WITHOUT_FIXTURES``. That branch is dead in
+      the committed tree (all 7 such rows belong to evlbet/betole, both already
+      declared), so
+      ``test_a_gap_without_a_capture_requires_a_declared_bookless_book`` covers
+      it on a synthetic book.
+
+    It also keeps the two kinds of gap apart: a real feed gap carries no
+    evidence, a code defect does and is guarded by a strict xfail instead.
     """
     for (book, mode, market_type), reason in UNCOVERED_ROWS.items():
         path = _fixture_for(book, mode)
         if not path.exists():
             # No payload means no evidence either way, so there is nothing to
-            # re-prove. This is a DELIBERATE skip, not a silent one: a book with
-            # no capture at all is declared in BOOKS_WITHOUT_FIXTURES (checked
-            # by test_coverage_gaps_are_declared_rather_than_ignored), and the
-            # assertion below proves that list is exhaustive -- so an unproved
-            # gap can only exist for a book that is itself accounted for.
+            # re-prove. It is still checked rather than skipped: a gap row with
+            # no capture to check against is only legitimate when the whole book
+            # is declared in BOOKS_WITHOUT_FIXTURES. Without that, a book could
+            # gain a capture in one mode and leave the other mode's gaps
+            # silently unchecked. The assertion stays inline rather than being
+            # factored into a helper, so the branch is read together with the
+            # payload check it sits beside;
+            # test_a_gap_without_a_capture_requires_a_declared_bookless_book
+            # exercises the same rule on a synthetic book.
             assert book in BOOKS_WITHOUT_FIXTURES, (
                 f"{book}/{mode}/{market_type} is declared a gap with no {path.name} "
                 f"to check it against, but {book!r} is not in BOOKS_WITHOUT_FIXTURES. "
@@ -442,6 +470,40 @@ def test_a_declared_gap_is_not_just_listed_but_forgotten():
             f"{path.name} no longer carries the offending block; re-check the defect "
             f"and the xfail {guard} together"
         )
+
+
+def test_a_gap_without_a_capture_requires_a_declared_bookless_book(monkeypatch):
+    """Executed coverage for the no-fixture branch above.
+
+    In the committed tree that branch is never taken by the real data: all 7
+    gap rows without a capture belong to ``evlbet`` and ``betole``, both
+    already in ``BOOKS_WITHOUT_FIXTURES``. Left alone, the assertion would be a
+    guard that cannot fire -- correct, but unproven.
+
+    So it is exercised here on a synthetic bookless gap row, by calling the real
+    test function with the two gap maps swapped via monkeypatch (which restores
+    them). Both halves are proved: an undeclared bookless book raises, and a
+    declared one is a legitimate skip.
+    """
+    sentinel = "book_with_a_capture_in_one_mode_only"
+    gap = {(sentinel, "live", "1x2"): "synthetic gap row with no capture to check"}
+
+    # 1. Undeclared book with no capture: the guard must fire.
+    monkeypatch.setattr(MODULE, "UNCOVERED_ROWS", gap)
+    monkeypatch.setattr(MODULE, "BOOKS_WITHOUT_FIXTURES", {"evlbet": "unrelated"})
+    with pytest.raises(AssertionError, match="is not in BOOKS_WITHOUT_FIXTURES"):
+        test_a_declared_gap_is_not_just_listed_but_forgotten()
+
+    # 2. Same row once the book IS declared bookless: the branch is a legitimate
+    #    skip, and the test body completes without raising.
+    monkeypatch.setattr(MODULE, "BOOKS_WITHOUT_FIXTURES", {sentinel: "declared"})
+    test_a_declared_gap_is_not_just_listed_but_forgotten()
+
+    # 3. The synthetic fixture must not exist, confirming the test wrote
+    #    nothing and the committed directory is untouched. Step 2 completing at
+    #    all is itself the proof that the no-fixture branch was taken: had it not
+    #    been, _load() would have raised FileNotFoundError on the missing file.
+    assert not _fixture_for(sentinel, "live").exists()
 
 
 def _all_registry_books() -> list[str]:

@@ -601,11 +601,14 @@ async def capture_premier(client: httpx.AsyncClient, _bookmaker: str, mode: str)
         # carries its prematch blocks, which the parser skips anyway.
         if mode == "live" and any(not is_live_tip(tip) for tip in keep_tips):
             continue
-        # "exercised" is decided by the SAME predicate that chose the blocks to
-        # keep, so the two can never disagree about which block is "the BTTS
-        # one". BTTS counts only when the block carries the parser's own
-        # spelling: the live "OBA TIMA DAJU GOL" block is retained as evidence
-        # but is not emitted, so it is not claimed as exercised either.
+        # The keep-set and `exercised` deliberately answer DIFFERENT questions,
+        # so they are not the same predicate: the keep-set retains whichever
+        # spelling this mode uses (_is_fulltime_btts accepts both), while
+        # `exercised` counts BTTS only when the block carries the parser's own
+        # prematch spelling, because that is the only one it can read. In live
+        # mode the two therefore differ on purpose -- "OBA TIMA DAJU GOL" is
+        # kept as evidence of the defect but is not emitted, so it is not
+        # claimed as exercised.
         exercised = ["1x2", "double_chance"]
         if PREMIER_BTTS_NAMES["prematch"] in by_name:
             exercised.append("btts")
