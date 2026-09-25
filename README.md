@@ -18,6 +18,25 @@ A web-based arbitrage betting detection tool for the Bosnian market.
 > registry and the parsers are correct and tested. Read
 > [Match & mapping certainty](#match--mapping-certainty) before concluding
 > anything about yield from a scan.
+>
+> **Re-check this claim yourself.** The part the repo can reproduce is *which
+> books declare a per-event route at all* — exactly three, in
+> `config/bookmaker_deeplinks.json` (`admiralbet`, `mdshop`, `mozzartbet`), and
+> the other six declare none:
+>
+> ```bash
+> python -c "import json;d=json.load(open('config/bookmaker_deeplinks.json'));print([b for b,v in d.items() if v.get('supports_event_id') is True])"
+> ```
+>
+> That they are *inert* is a measurement, not a repo fact, and it was taken on
+> 2026-09-25 by opening each route in a browser: see
+> `scripts/verify_deeplinks.py` (command in *Tools* below) and the findings in
+> `.superpowers/sdd/2026-09-25-match-and-game-mapping/task-12-report.md`.
+> Re-running it costs one browser navigation per event and does not converge
+> today (see *Tools*), so treat the inertness as a dated measurement to
+> re-confirm, not a permanent property. The doc claims in this section are
+> themselves checked by `tests/test_readme_claims.py`, so a claim here that
+> stops matching the code fails the suite.
 
 ## What it does
 
@@ -103,7 +122,16 @@ follows from the reasons left over:
 |---|---|---|
 | `verified` | **Zero** reasons. Every part of the claim is proven, links included. These are the only groups that reach arbitrage. | — |
 | `suggested` | At least one reason is outstanding — the identity is plausible but incomplete. Not priced; queued for review. | `kickoff_missing`, `kickoff_delta`, `team_unresolved`, `link_unverified`, `no_event_link` |
-| `rejected` | A hard gate contradicts the claim. | `league_mismatch`, `category_mismatch`, `orientation_unresolved` |
+| `rejected` | A hard gate contradicts the claim. | `league_mismatch`, `category_mismatch` |
+
+The reason strings above are the vocabulary the gate actually emits, and
+`tests/test_readme_claims.py` proves it by *running* the gate over one broken
+claim per reason and reading the results back — so a reason added or removed in
+`engine/certainty.py` fails this table. One wrinkle worth knowing:
+`HARD_REJECT_REASONS` (`engine/certainty.py:20`) also lists
+`orientation_unresolved`, which the gate never emits; the unresolvable-orientation
+case is reported as `team_unresolved`. Until that entry is either produced or
+deleted, treat `rejected` as the two reasons above.
 
 Two rules inside stage 1 matter more than the rest:
 
@@ -127,8 +155,9 @@ position and nothing else. A negative verdict sets the confidence to 0 and says
 Pairings the gate refused are collected every scan into `pending_candidates` and
 shown in the dashboard's **Review** tab. There is no dedicated URL: the Review
 tab is the second tab of the dashboard, so open `http://localhost:8000` and click
-**Review**. It is populated by `GET /api/candidates`, and approving or rejecting
-an entry is `POST /api/candidates/{candidate_id}/approve` / `.../reject`.
+**Review**. It is populated by `GET /api/candidates`, and deciding an entry is
+`POST /api/candidates/{candidate_id}/approve` or
+`POST /api/candidates/{candidate_id}/reject`.
 
 Approval grants a **team alias** and nothing else — one cross-bookmaker spelling
 pair per team slot, written to `config/team_alias_allowlist.json` — so the next
