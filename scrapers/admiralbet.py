@@ -10,7 +10,7 @@ API: getEventsStartingSoonFilterSelections?topN=25&skipN={skip}
 import logging
 from datetime import UTC, datetime, timedelta
 
-from models.schemas import Market, MarketType, Match
+from models.schemas import Market, Match
 from scrapers.base import launch_browser
 from scrapers.common import nsoft_event_url, parse_dt, parse_nsoft_bets, parse_nsoft_live_bets
 
@@ -55,11 +55,9 @@ def _parse_teams(event: dict) -> tuple[str, str]:
 def _parse_bets(bets: list, live: bool = False) -> list[Market]:
     if live:
         # Live feed uses the NSoft live bet type ID space (6/18/42/995/22/28).
-        return parse_nsoft_live_bets(bets)
-    # Validated shared parser, with Admiralbet's own prematch IDs (1639 = 1X2).
-    # Rejects incomplete/misclassified markets (e.g. the "Ide dalje" advance
-    # market) via label-set validation.
-    return parse_nsoft_bets(bets, extra_bet_types={1639: MarketType.MATCH_RESULT})
+        return parse_nsoft_live_bets(bets, bookmaker=BOOKMAKER_ID)
+    # The registry carries Admiralbet's bookmaker-specific prematch IDs.
+    return parse_nsoft_bets(bets, bookmaker=BOOKMAKER_ID, mode="prematch")
 
 
 class AdmiralbetScraper:

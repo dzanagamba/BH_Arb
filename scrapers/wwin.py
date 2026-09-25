@@ -29,6 +29,7 @@ import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
 
+from engine.market_registry import MARKET_REGISTRY, record_unmapped
 from models.schemas import Market, MarketType, Match, OddsValue
 from scrapers.base import launch_browser
 
@@ -39,6 +40,26 @@ BASE_URL = "https://wwin.ba"
 API_ROOT = f"{BASE_URL}/content/sport-livecontent/api"
 FOOTBALL_SPORT_ID = 2
 MARKET_IDS = "95,6,3,11,2"
+
+
+def _request_market_ids(mode: str) -> list[int | str]:
+    """Return the IDs requested from WWIN for a registry mode."""
+    ids: set[int | str] = set()
+    if mode == "prematch":
+        ids.add(2)  # first-half 1X2 remains an experimental prematch feed
+    for market_type in (
+        MarketType.MATCH_RESULT,
+        MarketType.DOUBLE_CHANCE,
+        MarketType.BTTS,
+        MarketType.OVER_UNDER_1_5,
+        MarketType.OVER_UNDER_2_5,
+        MarketType.OVER_UNDER_3_5,
+    ):
+        ids.update(MARKET_REGISTRY.ids_for("wwin", mode, market_type))
+    ordered: list[int | str] = [sid for sid in (95, 6, 3, 11, 2) if sid in ids]
+    known = set(ordered)
+    ordered.extend(sorted((sid for sid in ids if sid not in known), key=str))
+    return ordered
 
 # Verified WWIN market ids (football).
 # 95 = full-time 1X2, 6 = double chance, 3 = BTTS (Yes/No),
@@ -53,8 +74,8 @@ WWIN_OU_LINES = {
 }
 
 
-def _build_markets_from_bets(bets: list) -> list[Market]:
-    """Map verified WWIN bets into internal markets (shared prematch/live)."""
+def _build_markets_from_bets(bets: list, mode: str = "prematch") -> list[Market]:
+    """Map registered WWIN bet IDs into internal markets."""
     markets: list[Market] = []
 
     def read_odds(bet: dict) -> list[OddsValue]:
@@ -71,6 +92,15 @@ def _build_markets_from_bets(bets: list) -> list[Market]:
                 odds.append(OddsValue(label=label, value=value))
         return odds
 
+    def registered_spec(bet_id, market_type: MarketType, line: float | None = None):
+        spec = MARKET_REGISTRY.lookup_type(
+            "wwin", mode, bet_id, market_type, line=line
+        )
+        known = getattr(MARKET_REGISTRY, "has_source_id", None)
+        if spec is None and (known is None or not known("wwin", mode, bet_id)):
+            record_unmapped("wwin", bet_id)
+        return spec
+
     for bet in bets:
         if not isinstance(bet, dict):
             continue
@@ -78,29 +108,40 @@ def _build_markets_from_bets(bets: list) -> list[Market]:
         odds = read_odds(bet)
 
         if bet_id == 95:
-            by_label = {o.label: o for o in odds if o.label in ("1", "X", "2")}
-            if set(by_label) == {"1", "X", "2"}:
+            spec = registered_spec(bet_id, MarketType.MATCH_RESULT)
+            if spec is None:
+                continue
+            by_label = {o.label: o for o in odds if o.label in spec.labels}
+            if len(by_label) >= spec.min_legs and set(by_label).issubset(spec.labels):
                 markets.append(Market(
                     market_type=MarketType.MATCH_RESULT,
-                    odds=[by_label[label] for label in ("1", "X", "2")],
+                    odds=[by_label[label] for label in ("1", "X", "2") if label in by_label],
                 ))
         elif bet_id == 6:
-            by_label = {o.label: o for o in odds if o.label in ("1X", "12", "X2")}
-            if len(by_label) >= 2:
+            spec = registered_spec(bet_id, MarketType.DOUBLE_CHANCE)
+            if spec is None:
+                continue
+            by_label = {o.label: o for o in odds if o.label in spec.labels}
+            if len(by_label) >= spec.min_legs and set(by_label).issubset(spec.labels):
                 markets.append(Market(
                     market_type=MarketType.DOUBLE_CHANCE,
                     odds=[by_label[label] for label in ("1X", "12", "X2") if label in by_label],
                 ))
         elif bet_id == 3:
+            spec = registered_spec(bet_id, MarketType.BTTS)
+            if spec is None:
+                continue
             by_label = {o.label: o for o in odds}
             gg = by_label.get("Yes")
             ng = by_label.get("No")
-            if gg and ng:
+            if gg and ng and len({"GG", "NG"}) >= spec.min_legs:
                 markets.append(Market(
                     market_type=MarketType.BTTS,
                     odds=[OddsValue(label="GG", value=gg.value), OddsValue(label="NG", value=ng.value)],
                 ))
-        elif bet_id == 2:
+        elif bet_id == 2 and mode == "prematch":
+            # First-half 1X2 is an experimental market retained outside the
+            # core registry; keep the historical payload support.
             by_label = {o.label: o for o in odds if o.label in ("1", "X", "2")}
             if set(by_label) == {"1", "X", "2"}:
                 markets.append(Market(
@@ -108,21 +149,41 @@ def _build_markets_from_bets(bets: list) -> list[Market]:
                     odds=[by_label[label] for label in ("1", "X", "2")],
                 ))
         elif bet_id == 11:
-            spec = str(bet.get("spec") or "")
-            line = spec.replace("total=", "").strip()
+            raw_spec = str(bet.get("spec") or "")
+            line = raw_spec.replace("total=", "").strip()
+            canonical_line = line.replace(",", ".")
             market_type = WWIN_OU_LINES.get(line)
             if market_type is None:
+                market_type = next(
+                    (
+                        mt
+                        for key, mt in WWIN_OU_LINES.items()
+                        if key.replace(",", ".") == canonical_line
+                    ),
+                    None,
+                )
+            if market_type is None:
+                continue
+            try:
+                line_value = float(canonical_line)
+            except ValueError:
+                continue
+            spec = registered_spec(bet_id, market_type, line=line_value)
+            if spec is None:
                 continue
             over = next((o for o in odds if o.label.lower() == "over"), None)
             under = next((o for o in odds if o.label.lower() == "under"), None)
-            if over and under:
+            if over and under and len({"Over", "Under"}) >= spec.min_legs:
                 markets.append(Market(
                     market_type=market_type,
                     odds=[
-                        OddsValue(label=f"Over {line.replace(',', '.')}", value=over.value),
-                        OddsValue(label=f"Under {line.replace(',', '.')}", value=under.value),
+                        OddsValue(label=f"Over {canonical_line}", value=over.value),
+                        OddsValue(label=f"Under {canonical_line}", value=under.value),
                     ],
                 ))
+        else:
+            if bet_id is not None:
+                record_unmapped("wwin", bet_id)
     return markets
 
 
@@ -147,7 +208,11 @@ class WWINScraper:
 
             # The events endpoint accepts at most two bet ids per call, so fetch
             # the markets in groups and merge by event id. P2: parallel fetch with retry.
-            bet_groups = ("95,6", "3", "11", "2")
+            request_ids = _request_market_ids("prematch")
+            bet_groups = tuple(
+                ",".join(str(sid) for sid in request_ids[start:start + 2])
+                for start in range(0, len(request_ids), 2)
+            )
             sem = asyncio.Semaphore(6)
 
             async def fetch_one(day_offset: int, bets: str):
@@ -273,7 +338,10 @@ class WWINScraper:
                 chunk = ids[chunk_start:chunk_start + 100]
                 r2 = await page.request.get(
                     f"{API_ROOT}/LiveEvents/headerBets",
-                    params={"bets": MARKET_IDS, "ids": ",".join(chunk)},
+                    params={
+                        "bets": ",".join(str(sid) for sid in _request_market_ids("live")),
+                        "ids": ",".join(chunk),
+                    },
                     headers={"Accept": "application/json, text/plain, */*", "Referer": f"{BASE_URL}/kladjenje-uzivo/"},
                 )
                 if r2.status != 200:
@@ -300,7 +368,9 @@ class WWINScraper:
                 away = str(event.get("aname") or "").strip()
                 if not home or not away:
                     continue
-                markets = _build_markets_from_bets(bet_map.get(event_id, []))
+                markets = _build_markets_from_bets(
+                    bet_map.get(event_id, []), mode="live"
+                )
                 if not markets:
                     continue
                 kickoff = None

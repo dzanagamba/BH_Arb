@@ -18,6 +18,7 @@ import httpx
 from playwright.async_api import Page
 
 from config.settings import BOOKMAKERS, VERIFY_SSL
+from engine.market_registry import MARKET_REGISTRY, record_unmapped
 from models.schemas import Market, MarketType, Match, OddsValue
 from scrapers.base import BaseScraper, fetch_with_retry
 from scrapers.common import parse_nsoft_bets
@@ -46,8 +47,8 @@ API_HEADERS = {
 PAGE_SIZE = 1500
 
 
-def _parse_betole_markets(raw_odds: dict) -> list[Market]:
-    """Map Betole's verified numeric prematch pick codes to supported markets."""
+def _parse_betole_markets(raw_odds: dict, mode: str = "prematch") -> list[Market]:
+    """Map registered Betole pick-code groups into supported markets."""
     if not isinstance(raw_odds, dict):
         return []
 
@@ -58,34 +59,70 @@ def _parse_betole_markets(raw_odds: dict) -> list[Market]:
             return None
         return value if value >= 1.01 else None
 
+    def registered_spec(
+        code: str, market_type: MarketType, line: float | None = None
+    ):
+        spec = MARKET_REGISTRY.lookup_type(
+            "betole", mode, code, market_type, line=line
+        )
+        known = getattr(MARKET_REGISTRY, "has_source_id", None)
+        if spec is None and (known is None or not known("betole", mode, code)):
+            record_unmapped("betole", code)
+        return spec
+
     def build_market(
         market_type: MarketType,
         code_to_label: dict[str, str],
         *,
-        minimum: int | None = None,
+        line: float | None = None,
     ) -> Market | None:
+        spec = None
         odds: list[OddsValue] = []
         for code, label in code_to_label.items():
+            candidate = registered_spec(code, market_type, line=line)
+            if candidate is not None:
+                spec = candidate
             value = read_odd(code)
-            if value is not None:
+            if value is not None and candidate is not None and label in candidate.labels:
                 odds.append(OddsValue(label=label, value=value))
-        required = minimum if minimum is not None else len(code_to_label)
-        return Market(market_type=market_type, odds=odds) if len(odds) >= required else None
+        if spec is None or len(odds) < spec.min_legs:
+            return None
+        if not {o.label for o in odds}.issubset(spec.labels):
+            return None
+        return Market(market_type=market_type, odds=odds)
 
     markets: list[Market] = []
     mappings = [
         (MarketType.MATCH_RESULT, {"1": "1", "2": "X", "3": "2"}, None),
-        (MarketType.DOUBLE_CHANCE, {"7": "1X", "8": "12", "9": "X2"}, 2),
+        (MarketType.DOUBLE_CHANCE, {"7": "1X", "8": "12", "9": "X2"}, None),
         (MarketType.BTTS, {"272": "GG", "273": "NG"}, None),
         (MarketType.FIRST_HALF_1X2, {"4": "1", "5": "X", "6": "2"}, None),
-        (MarketType.OVER_UNDER_1_5, {"242": "Over 1.5", "21": "Under 1.5"}, None),
-        (MarketType.OVER_UNDER_2_5, {"24": "Over 2.5", "22": "Under 2.5"}, None),
-        (MarketType.OVER_UNDER_3_5, {"25": "Over 3.5", "219": "Under 3.5"}, None),
+        (MarketType.OVER_UNDER_1_5, {"242": "Over 1.5", "21": "Under 1.5"}, 1.5),
+        (MarketType.OVER_UNDER_2_5, {"24": "Over 2.5", "22": "Under 2.5"}, 2.5),
+        (MarketType.OVER_UNDER_3_5, {"25": "Over 3.5", "219": "Under 3.5"}, 3.5),
     ]
-    for market_type, code_to_label, minimum in mappings:
-        market = build_market(market_type, code_to_label, minimum=minimum)
+    for market_type, code_to_label, line in mappings:
+        if market_type == MarketType.FIRST_HALF_1X2 and mode == "prematch":
+            # Experimental market; retain the existing verified code mapping.
+            odds = [
+                OddsValue(label=label, value=value)
+                for code, label in code_to_label.items()
+                if (value := read_odd(code)) is not None
+            ]
+            if len(odds) == 3:
+                markets.append(Market(market_type=market_type, odds=odds))
+            continue
+        market = build_market(market_type, code_to_label, line=line)
         if market is not None:
             markets.append(market)
+
+    known_codes = {
+        "1", "2", "3", "4", "5", "6", "7", "8", "9",
+        "21", "22", "24", "25", "219", "242", "272", "273",
+    }
+    for code in raw_odds:
+        if str(code) not in known_codes:
+            record_unmapped("betole", code)
     return markets
 
 
@@ -237,7 +274,9 @@ class BetoleScraper(BaseScraper):
                     if live and "srl" in name_l:
                         continue  # Simulated reality — not a real match
 
-                    markets = _parse_betole_markets(event.get("odds", {}))
+                    markets = _parse_betole_markets(
+                        event.get("odds", {}), mode="live" if live else "prematch"
+                    )
                     if not markets:
                         continue
                     matches.append(Match(

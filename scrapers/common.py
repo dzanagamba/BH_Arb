@@ -6,9 +6,15 @@ scrapers (MDShop, MBet, SportPlus, EVLBet, Admiralbet). Centralizing them keeps
 outcome normalization and datetime parsing consistent across bookmakers.
 """
 
+from __future__ import annotations
+
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from models.schemas import Market, MarketType, OddsValue
+
+if TYPE_CHECKING:
+    from engine.market_registry import MarketRegistry
 
 # Formats accepted when parsing datetime strings.
 DT_FORMATS = [
@@ -274,6 +280,20 @@ NSOFT_LIVE_BET_TYPE_MAP: dict[int, MarketType] = {
 }
 NSOFT_LIVE_OU_BET_IDS = {22, 28}    # live O/U goals, threshold in sbv
 
+# Registry loading is lazy so importing shared scraper helpers remains cheap
+# for callers that do not parse an NSoft payload.
+_NSOFT_REGISTRY: MarketRegistry | None = None
+
+
+def _nsoft_registry() -> MarketRegistry:
+    global _NSOFT_REGISTRY
+    if _NSOFT_REGISTRY is None:
+        from engine.market_registry import MarketRegistry
+
+        _NSOFT_REGISTRY = MarketRegistry()
+    return _NSOFT_REGISTRY
+
+
 # Outcome label sets required to accept a market (defense against
 # misclassified markets like "Ide dalje" leaking into 1X2).
 _MARKET_LABEL_SETS: dict[MarketType, set[str]] = {
@@ -307,22 +327,40 @@ def parse_nsoft_bets(
     extra_ou_bet_ids: set[int] | None = None,
     base_bet_type_map: dict[int, MarketType] | None = None,
     base_ou_bet_ids: set[int] | None = None,
+    bookmaker: str = "mdshop",
+    mode: str = "prematch",
 ) -> list[Market]:
     """
-    Parse an NSoft `bets[]` array into Market objects.
+    Parse an NSoft ``bets[]`` array into Market objects.
 
-    A market is only accepted when its normalized outcome labels fully cover
-    the expected set for its resolved market type — e.g. a "1X2" must contain
-    all of 1/X/2. This rejects misclassified 2-way markets (advance/qualifier,
-    draw-no-bet, handicap) that would otherwise pollute the 1X2 pools.
+    Registry entries are authoritative whenever a bookmaker/mode is explicitly
+    present.  The legacy maps remain a compatibility fallback for callers that
+    use a synthetic bookmaker not represented in the JSON file.  An ID in a
+    registered mode that is absent from that mode is recorded rather than
+    silently discarded.
 
-    `extra_bet_types` adds bookmaker-specific bet type IDs on top of the base
-    map (e.g. Admiralbet serves prematch 1X2 as 1639) and `extra_ou_bet_ids`
-    adds O/U goal IDs. Live feeds REPLACE the base maps entirely (different ID
-    space) via `base_bet_type_map`/`base_ou_bet_ids`.
+    A market is accepted only when its normalized outcome labels satisfy the
+    registry's ``min_legs`` rule and no label falls outside the registered set.
+    This is the defense that keeps an NSoft 2-way "Ide dalje" market out of the
+    1X2 pool.
     """
-    bet_type_map = {**(base_bet_type_map or NSOFT_BET_TYPE_MAP), **(extra_bet_types or {})}
-    ou_bet_ids = (base_ou_bet_ids if base_ou_bet_ids is not None else NSOFT_OU_BET_IDS) | (extra_ou_bet_ids or set())
+    from engine.market_registry import record_unmapped
+
+    registry = _nsoft_registry()
+    has_mode = getattr(registry, "has_mode", None)
+    has_registry = (
+        has_mode(bookmaker, mode)
+        if has_mode is not None
+        else bool(registry.ids_for(bookmaker, mode, MarketType.MATCH_RESULT))
+    )
+    bet_type_map = {
+        **(base_bet_type_map or NSOFT_BET_TYPE_MAP),
+        **(extra_bet_types or {}),
+    }
+    ou_bet_ids = (
+        (base_ou_bet_ids if base_ou_bet_ids is not None else NSOFT_OU_BET_IDS)
+        | (extra_ou_bet_ids or set())
+    )
     markets: list[Market] = []
     for bet in bets:
         if not isinstance(bet, dict):
@@ -337,16 +375,40 @@ def parse_nsoft_bets(
                 sbv_val = float(raw_sbv)
             except (ValueError, TypeError):
                 pass
-        market_type = bet_type_map.get(btid)
-        if market_type is None and btid in ou_bet_ids and sbv_val is not None:
-            if sbv_val == 1.5:
-                market_type = MarketType.OVER_UNDER_1_5
-            elif sbv_val == 2.5:
-                market_type = MarketType.OVER_UNDER_2_5
-            elif sbv_val == 3.5:
-                market_type = MarketType.OVER_UNDER_3_5
-        if market_type is None:
-            continue
+
+        market_type: MarketType | None = None
+        expected_labels: set[str] = set()
+        required_line: float | None = None
+        required_legs = 3
+
+        if has_registry:
+            spec = registry.lookup(bookmaker, mode, btid, line=sbv_val)
+            if spec is None:
+                known = getattr(registry, "has_source_id", None)
+                if known is None or not known(bookmaker, mode, btid):
+                    record_unmapped(bookmaker, btid)
+                continue
+            market_type = spec.market_type
+            expected_labels = set(spec.labels)
+            required_line = spec.line
+            required_legs = spec.min_legs
+            if required_line is not None and (
+                sbv_val is None or abs(required_line - sbv_val) > 1e-9
+            ):
+                continue
+        else:
+            market_type = bet_type_map.get(btid)
+            if market_type is None and btid in ou_bet_ids and sbv_val is not None:
+                market_type = {
+                    1.5: MarketType.OVER_UNDER_1_5,
+                    2.5: MarketType.OVER_UNDER_2_5,
+                    3.5: MarketType.OVER_UNDER_3_5,
+                }.get(sbv_val)
+            if market_type is None:
+                continue
+            expected_labels = _MARKET_LABEL_SETS.get(market_type, set())
+            required_legs = 2 if market_type == MarketType.DOUBLE_CHANCE else len(expected_labels)
+
         outcomes = bet.get("betOutcomes", [])
         if not outcomes:
             continue
@@ -365,32 +427,31 @@ def parse_nsoft_bets(
             if odd_val < 1.01:
                 continue
             norm_label = normalize_outcome(lbl, market_type)
-            if norm_label in _MARKET_LABEL_SETS.get(market_type, set()):
+            if norm_label in expected_labels:
                 odds_values.append(OddsValue(label=norm_label, value=odd_val))
 
-        expected = _MARKET_LABEL_SETS.get(market_type, set())
         actual = {o.label for o in odds_values}
-        # 1X2 and BTTS/O-U must be COMPLETE; Double Chance needs at least 2 legs
-        if market_type == MarketType.DOUBLE_CHANCE:
-            valid = len(actual) >= 2 and actual.issubset(expected)
-        else:
-            valid = expected.issubset(actual)
+        valid = len(actual) >= required_legs and actual.issubset(expected_labels)
         if valid:
             markets.append(Market(market_type=market_type, odds=odds_values))
     return markets
 
 
-def parse_nsoft_live_bets(bets: list) -> list[Market]:
+def parse_nsoft_live_bets(
+    bets: list,
+    bookmaker: str = "mdshop",
+) -> list[Market]:
     """
-    Parse an in-play NSoft `bets[]` array (live ID space).
+    Parse an in-play NSoft ``bets[]`` array (live ID space).
 
-    Live matches use different bet type IDs (see NSOFT_LIVE_BET_TYPE_MAP);
-    prematch IDs like 135/152 never appear here. The same strict label-set
-    validation is applied, so dead/suspended outcome sides are dropped and
-    misclassified 2-way markets never pollute the 1X2 pool.
+    Live matches use the registry's live IDs.  The legacy live maps are passed
+    as a fallback for synthetic/unregistered callers, and the same strict
+    label-set validation is applied in either path.
     """
     return parse_nsoft_bets(
         bets,
         base_bet_type_map=NSOFT_LIVE_BET_TYPE_MAP,
         base_ou_bet_ids=NSOFT_LIVE_OU_BET_IDS,
+        bookmaker=bookmaker,
+        mode="live",
     )

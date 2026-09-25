@@ -37,6 +37,7 @@ from config.settings import (
     SCAN_RATE_LIMIT,
 )
 from engine.arbitrage import ArbitrageEngine
+from engine.market_registry import unmapped_markets
 from engine.matcher import MatchMatcher
 from models.schemas import MarketType, Match, ScanStatus
 from scrapers.admiralbet import AdmiralbetScraper
@@ -511,6 +512,7 @@ async def health():
         "matches_cached": len(cached_matches),
         "live_surebets_cached": len(cached_live_surebets),
         "live_matches_cached": len(cached_live_matches),
+        "unmapped_markets": dict(unmapped_markets),
         "prematch": {
             "last_scan_age_sec": age_sec(scan_status.last_scan_time),
             "per_bookie": dict(cached_per_bookie),

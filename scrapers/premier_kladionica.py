@@ -39,6 +39,7 @@ from datetime import UTC, datetime
 import httpx
 
 from config.settings import VERIFY_SSL
+from engine.market_registry import MARKET_REGISTRY, record_unmapped
 from models.schemas import Market, MarketType, Match, OddsValue
 
 logger = logging.getLogger(__name__)
@@ -77,6 +78,21 @@ OU_LINES = {
 }
 
 FH_OU_LINES = {"0.5", "1.5", "2.5"}
+
+
+def _registered_spec(
+    mode: str,
+    source_id: str,
+    market_type: MarketType,
+    line: float | None = None,
+):
+    spec = MARKET_REGISTRY.lookup_type(
+        "premier_kladionica", mode, source_id, market_type, line=line
+    )
+    known = getattr(MARKET_REGISTRY, "has_source_id", None)
+    if spec is None and (known is None or not known("premier_kladionica", mode, source_id)):
+        record_unmapped("premier_kladionica", source_id)
+    return spec
 
 
 def _norm_name(name: str) -> str:
@@ -287,29 +303,50 @@ class PremierKladionicaScraper:
 
             for var_id, tips in vars_map.items():
                 if base_name == NAME_1X2:
+                    source_prefix = "LIVE_UTAKMICA" if live else "UTAKMICA_1X2"
+                    mr_spec = _registered_spec(
+                        "live" if live else "prematch", source_prefix, MarketType.MATCH_RESULT
+                    )
+                    dc_source = "UTAKMICA_DC" if not live else "UTAKMICA_DC"
+                    dc_spec = _registered_spec(
+                        "live" if live else "prematch", dc_source, MarketType.DOUBLE_CHANCE
+                    )
                     by_kod = {str(set_tip_tip.get((FOOTBALL_SPORT_ID, set_tip_id, tip_id), "?")): koef
                               for tip_id, koef, _n in tips}
-                    match_result = [OddsValue(label=k, value=v) for k, v in
-                                    [("1", by_kod.get("1")), ("X", by_kod.get("X")), ("2", by_kod.get("2"))]
-                                    if v]
-                    if len(match_result) == 3 and {o.label for o in match_result} == {"1", "X", "2"}:
-                        add_market(MarketType.MATCH_RESULT, match_result)
-                    dc = [OddsValue(label=k, value=v) for k, v in
-                          [("1X", by_kod.get("1X")), ("X2", by_kod.get("X2")), ("12", by_kod.get("12"))]
-                          if v]
-                    if len(dc) >= 2:
-                        add_market(MarketType.DOUBLE_CHANCE, dc)
+                    if mr_spec is not None:
+                        match_result = [
+                            OddsValue(label=label, value=by_kod[label])
+                            for label in ("1", "X", "2")
+                            if by_kod.get(label) and label in mr_spec.labels
+                        ]
+                        if (
+                            len(match_result) >= mr_spec.min_legs
+                            and {o.label for o in match_result}.issubset(mr_spec.labels)
+                        ):
+                            add_market(MarketType.MATCH_RESULT, match_result)
+                    if dc_spec is not None:
+                        dc = [
+                            OddsValue(label=label, value=by_kod[label])
+                            for label in ("1X", "X2", "12")
+                            if by_kod.get(label) and label in dc_spec.labels
+                        ]
+                        if len(dc) >= dc_spec.min_legs:
+                            add_market(MarketType.DOUBLE_CHANCE, dc)
                 elif base_name == NAME_BTTS:
+                    source_id = "LIVE_OBA_DAJU_GOL" if live else "OBA_DAJU_GOL"
+                    spec = _registered_spec(
+                        "live" if live else "prematch", source_id, MarketType.BTTS
+                    )
                     by_kod = {str(set_tip_tip.get((FOOTBALL_SPORT_ID, set_tip_id, tip_id), "?")): koef
                               for tip_id, koef, _n in tips}
                     gg = by_kod.get("da") or by_kod.get("o-da") or by_kod.get("GG")
                     ng = by_kod.get("ne") or by_kod.get("o-ne") or by_kod.get("NG")
-                    if gg and ng:
+                    if spec is not None and gg and ng and len({"GG", "NG"}) >= spec.min_legs:
                         add_market(MarketType.BTTS, [
                             OddsValue(label="GG", value=gg),
                             OddsValue(label="NG", value=ng),
                         ])
-                elif base_name == NAME_FH_1X2:
+                elif base_name == NAME_FH_1X2 and not live:
                     by_kod = {str(set_tip_tip.get((FOOTBALL_SPORT_ID, set_tip_id, tip_id), "?")): koef
                               for tip_id, koef, _n in tips}
                     fh_result = [OddsValue(label=k, value=v) for k, v in
@@ -317,7 +354,7 @@ class PremierKladionicaScraper:
                                  if v]
                     if len(fh_result) == 3 and {o.label for o in fh_result} == {"1", "X", "2"}:
                         add_market(MarketType.FIRST_HALF_1X2, fh_result)
-                elif _is_fh_ou_name(base_name):
+                elif _is_fh_ou_name(base_name) and not live:
                     line = _parse_line_generic(
                         str(set_tip_var.get((FOOTBALL_SPORT_ID, set_tip_id, var_id), "")),
                         FH_OU_LINES,
@@ -337,15 +374,21 @@ class PremierKladionicaScraper:
                     line = _parse_line(str(set_tip_var.get((FOOTBALL_SPORT_ID, set_tip_id, var_id), "")))
                     if line is None:
                         continue
+                    market_type = OU_LINES[line]
+                    spec = _registered_spec(
+                        "prematch", "ZBROJ_GOLOVA", market_type, line=float(line)
+                    )
                     by_kod = {str(set_tip_tip.get((FOOTBALL_SPORT_ID, set_tip_id, tip_id), "?")): koef
                               for tip_id, koef, _n in tips}
                     over = by_kod.get("v") or by_kod.get("više") or by_kod.get("Vise") or by_kod.get("Over")
                     under = by_kod.get("m") or by_kod.get("manje") or by_kod.get("Under")
-                    if over and under:
-                        add_market(OU_LINES[line], [
+                    if spec is not None and over and under and len({"Over", "Under"}) >= spec.min_legs:
+                        add_market(market_type, [
                             OddsValue(label=f"Over {line}", value=over),
                             OddsValue(label=f"Under {line}", value=under),
                         ])
+                else:
+                    record_unmapped("premier_kladionica", set_tip_id)
         return markets
 
     async def _full_sync(self, client: httpx.AsyncClient) -> list | None:

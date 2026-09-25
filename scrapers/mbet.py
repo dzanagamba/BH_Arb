@@ -14,6 +14,7 @@ from datetime import UTC, datetime, timedelta
 import httpx
 
 from config.settings import VERIFY_SSL
+from engine.market_registry import MARKET_REGISTRY, record_unmapped
 from models.schemas import Market, MarketType, Match, OddsValue
 from scrapers.base import fetch_with_retry
 from scrapers.common import ah_label, parse_dt
@@ -68,6 +69,21 @@ def _get_active_value(entry) -> float | None:
         return None
 
 
+def _registered_spec(
+    mode: str,
+    source_id: str,
+    market_type: MarketType,
+    line: float | None = None,
+):
+    spec = MARKET_REGISTRY.lookup_type(
+        "mbet", mode, source_id, market_type, line=line
+    )
+    known = getattr(MARKET_REGISTRY, "has_source_id", None)
+    if spec is None and (known is None or not known("mbet", mode, source_id)):
+        record_unmapped("mbet", source_id)
+    return spec
+
+
 def _resolve_mbet_market(raw_sport_id: str, odds_dict: dict) -> dict[str, list[OddsValue]]:
     """
     MBet uses dynamic odds keys like:
@@ -83,36 +99,49 @@ def _resolve_mbet_market(raw_sport_id: str, odds_dict: dict) -> dict[str, list[O
     """
     s = raw_sport_id
     markets: dict[str, list[OddsValue]] = {}
+    prefix = f"o{s}:"
+    for key in odds_dict:
+        if not isinstance(key, str) or not key.startswith(prefix):
+            continue
+        market_prefix = key[len(prefix):].split(":", 1)[0]
+        if market_prefix not in {"fs", "dc", "gg", "tg", "ht", "hc"}:
+            record_unmapped("mbet", f"ofb:{market_prefix}")
 
     # 1X2 — fs is MBet/Alea's football full-time result (Konacan ishod).
     # Do not fall back to fts/ht/sh/fi: they are different markets with the
     # same 1/X/2-shaped key suffixes.
+    source_id = "ofb:fs"
+    spec = _registered_spec("prematch", source_id, MarketType.MATCH_RESULT)
     odds_1x2 = []
     k1 = f"o{s}:fs:1"
     kX = f"o{s}:fs:X"
     k2 = f"o{s}:fs:2"
-    if k1 in odds_dict:
+    if spec is not None and k1 in odds_dict:
         o1 = _get_active_value(odds_dict.get(k1))
         oX = _get_active_value(odds_dict.get(kX))
         o2 = _get_active_value(odds_dict.get(k2))
-        if o1 and oX and o2:
-            odds_1x2 = [
-                OddsValue(label="1", value=o1),
-                OddsValue(label="X", value=oX),
-                OddsValue(label="2", value=o2),
-            ]
+        by_label = {"1": o1, "X": oX, "2": o2}
+        odds_1x2 = [
+            OddsValue(label=label, value=value)
+            for label, value in by_label.items()
+            if value is not None and label in spec.labels
+        ]
+        if len(odds_1x2) < spec.min_legs or not {o.label for o in odds_1x2}.issubset(spec.labels):
+            odds_1x2 = []
     if odds_1x2:
         markets["1X2"] = odds_1x2
 
     # Double Chance
+    source_id = "ofb:dc"
+    spec = _registered_spec("prematch", source_id, MarketType.DOUBLE_CHANCE)
     dc_k = f"o{s}:dc:"
     dc_odds = []
     for label in ("1X", "X2", "12"):
         key = dc_k + label
         odd = _get_active_value(odds_dict.get(key))
-        if odd:
+        if odd and spec is not None and label in spec.labels:
             dc_odds.append(OddsValue(label=label, value=odd))
-    if len(dc_odds) >= 2:
+    if spec is not None and len(dc_odds) >= spec.min_legs:
         markets["DC"] = dc_odds
 
     # Half Time 1X2 (first-half result)
@@ -161,9 +190,17 @@ def _resolve_mbet_market(raw_sport_id: str, odds_dict: dict) -> dict[str, list[O
             markets["asian_handicap"] = ah_odds
 
     # Both Teams to Score
+    source_id = "ofb:gg"
+    spec = _registered_spec("prematch", source_id, MarketType.BTTS)
     gg_val = _get_active_value(odds_dict.get(f"o{s}:gg:GG"))
     ng_val = _get_active_value(odds_dict.get(f"o{s}:gg:NG"))
-    if gg_val and ng_val:
+    if (
+        spec is not None
+        and gg_val
+        and ng_val
+        and len({"GG", "NG"}) >= spec.min_legs
+        and {"GG", "NG"}.issubset(spec.labels)
+    ):
         markets["BTTS"] = [
             OddsValue(label="GG", value=gg_val),
             OddsValue(label="NG", value=ng_val),
@@ -179,6 +216,12 @@ def _resolve_mbet_market(raw_sport_id: str, odds_dict: dict) -> dict[str, list[O
         (MarketType.OVER_UNDER_3_5, f"o{s}:tg:4+", f"o{s}:tg:0-3"),
     ]
     for mt, over_key, under_key in ou_mappings:
+        threshold = {
+            MarketType.OVER_UNDER_1_5: "1.5",
+            MarketType.OVER_UNDER_2_5: "2.5",
+            MarketType.OVER_UNDER_3_5: "3.5",
+        }[mt]
+        spec = _registered_spec("prematch", "ofb:tg", mt, line=float(threshold))
         over_val = None
         under_val = None
         if over_key in odds_dict:
@@ -213,10 +256,15 @@ def _resolve_mbet_market(raw_sport_id: str, odds_dict: dict) -> dict[str, list[O
                     under_val = float(entry) if entry else 0
                 except (ValueError, TypeError):
                     pass
-        if over_val and under_val and over_val >= 1.01 and under_val >= 1.01:
-            # Build correct threshold string: "over_under_2_5" -> "2.5"
-            parts = mt.value.split("_")  # e.g. ["over", "under", "2", "5"]
-            threshold = f"{parts[-2]}.{parts[-1]}"  # "2.5"
+        if (
+            spec is not None
+            and over_val
+            and under_val
+            and over_val >= 1.01
+            and under_val >= 1.01
+            and len({"Over", "Under"}) >= spec.min_legs
+            and {f"Over {threshold}", f"Under {threshold}"}.issubset(spec.labels)
+        ):
             markets[mt.value] = [
                 OddsValue(label=f"Over {threshold}", value=over_val),
                 OddsValue(label=f"Under {threshold}", value=under_val),
@@ -227,38 +275,46 @@ def _resolve_mbet_market(raw_sport_id: str, odds_dict: dict) -> dict[str, list[O
 
 def _resolve_mbet_live_market(odds_dict: dict) -> dict[str, list[OddsValue]]:
     """
-    MBet live odds use the `lfb:` key prefix with live-specific markets:
-    - lfb:ft:1/X/2   → live full-time result
-    - lfb:dc:1X/12/X2 → live double chance
-    - lfb:bttsny:Yes/No → live both teams to score
-    - lfb:tg:over|X.5 / under|X.5 → live totals (line embedded in the key)
-    Other lfb:* markets (tg1sth, team totals, period markets) are excluded.
+    Resolve MBet's live ``lfb:`` market prefixes through the live registry.
+    Other live market families (period/team totals) are intentionally ignored.
     """
     markets: dict[str, list[OddsValue]] = {}
+    for key in odds_dict:
+        if not isinstance(key, str) or not key.startswith("lfb:"):
+            continue
+        market_prefix = key[len("lfb:"):].split(":", 1)[0]
+        if market_prefix not in {"ft", "dc", "bttsny", "tg"}:
+            record_unmapped("mbet", f"lfb:{market_prefix}")
 
+    spec = _registered_spec("live", "lfb:ft", MarketType.MATCH_RESULT)
     k1, kX, k2 = "lfb:ft:1", "lfb:ft:X", "lfb:ft:2"
-    if k1 in odds_dict:
-        o1 = _get_active_value(odds_dict.get(k1))
-        oX = _get_active_value(odds_dict.get(kX))
-        o2 = _get_active_value(odds_dict.get(k2))
-        if o1 and oX and o2:
-            markets["1X2"] = [
-                OddsValue(label="1", value=o1),
-                OddsValue(label="X", value=oX),
-                OddsValue(label="2", value=o2),
-            ]
+    if spec is not None and k1 in odds_dict:
+        values = {
+            "1": _get_active_value(odds_dict.get(k1)),
+            "X": _get_active_value(odds_dict.get(kX)),
+            "2": _get_active_value(odds_dict.get(k2)),
+        }
+        result = [
+            OddsValue(label=label, value=value)
+            for label, value in values.items()
+            if value is not None and label in spec.labels
+        ]
+        if len(result) >= spec.min_legs and {o.label for o in result}.issubset(spec.labels):
+            markets["1X2"] = result
 
+    spec = _registered_spec("live", "lfb:dc", MarketType.DOUBLE_CHANCE)
     dc_odds = []
     for label in ("1X", "X2", "12"):
         odd = _get_active_value(odds_dict.get(f"lfb:dc:{label}"))
-        if odd:
+        if odd and spec is not None and label in spec.labels:
             dc_odds.append(OddsValue(label=label, value=odd))
-    if len(dc_odds) >= 2:
+    if spec is not None and len(dc_odds) >= spec.min_legs:
         markets["DC"] = dc_odds
 
+    spec = _registered_spec("live", "lfb:bttsny", MarketType.BTTS)
     btts_yes = _get_active_value(odds_dict.get("lfb:bttsny:Yes"))
     btts_no = _get_active_value(odds_dict.get("lfb:bttsny:No"))
-    if btts_yes and btts_no:
+    if spec is not None and btts_yes and btts_no and len({"GG", "NG"}) >= spec.min_legs:
         markets["BTTS"] = [
             OddsValue(label="GG", value=btts_yes),
             OddsValue(label="NG", value=btts_no),
@@ -275,16 +331,19 @@ def _resolve_mbet_live_market(odds_dict: dict) -> dict[str, list[OddsValue]]:
         suffix = key[len("lfb:tg:"):]
         if "|" not in suffix:
             continue
-        direction, _, line = suffix.partition("|")
-        mapping = ou_mappings.get(line)
+        direction, _, line_text = suffix.partition("|")
+        mapping = ou_mappings.get(line_text)
         if mapping is None:
             continue
         market_type, over_label, under_label = mapping
+        spec = _registered_spec("live", "lfb:tg", market_type, line=float(line_text))
+        if spec is None:
+            continue
         value = _get_active_value(entry)
         if value is None:
             continue
         target_label = over_label if direction == "over" else under_label if direction == "under" else None
-        if target_label is None:
+        if target_label is None or target_label not in spec.labels:
             continue
         markets.setdefault(market_type.value, [])
         existing = next((o for o in markets[market_type.value] if o.label == target_label), None)
@@ -292,6 +351,30 @@ def _resolve_mbet_live_market(odds_dict: dict) -> dict[str, list[OddsValue]]:
             markets[market_type.value].append(OddsValue(label=target_label, value=value))
         elif value > existing.value:
             existing.value = value
+
+    for market_key, odds in list(markets.items()):
+        source_id, market_enum = {
+            "1X2": ("lfb:ft", MarketType.MATCH_RESULT),
+            "DC": ("lfb:dc", MarketType.DOUBLE_CHANCE),
+            "BTTS": ("lfb:bttsny", MarketType.BTTS),
+            "over_under_1_5": ("lfb:tg", MarketType.OVER_UNDER_1_5),
+            "over_under_2_5": ("lfb:tg", MarketType.OVER_UNDER_2_5),
+            "over_under_3_5": ("lfb:tg", MarketType.OVER_UNDER_3_5),
+        }.get(market_key, (None, None))
+        line = {
+            "over_under_1_5": 1.5,
+            "over_under_2_5": 2.5,
+            "over_under_3_5": 3.5,
+        }.get(market_key)
+        spec = (
+            MARKET_REGISTRY.lookup_type(
+                "mbet", "live", source_id, market_enum, line=line
+            )
+            if source_id is not None and market_enum is not None
+            else None
+        )
+        if spec is None or len(odds) < spec.min_legs:
+            del markets[market_key]
 
     return markets
 

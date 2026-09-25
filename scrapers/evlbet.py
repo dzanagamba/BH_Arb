@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 import httpx
 
 from config.settings import VERIFY_SSL
+from engine.market_registry import MARKET_REGISTRY, record_unmapped
 from models.schemas import Market, MarketType, Match, OddsValue
 from scrapers.base import fetch_with_retry
 from scrapers.common import parse_dt
@@ -110,13 +111,31 @@ class EvlbetScraper:
         league_name = str(ev.get("LeagueName") or ev.get("LeagueOriginalName") or "").strip()
         league = f"{category} - {league_name}".strip(" -") if (category and league_name) else (league_name or category or "Fudbal")
 
-        # Parse 1X2 market from BasicOffer. Only accept the standard match
-        # result (verified: BetTypeKey 12005 / GameId 1, no sbv). Skip any
-        # event whose basic offer is a different market (O/U, advance, ...).
+        # Parse 1X2 market from BasicOffer. Only the registered full-time
+        # result ID is accepted; O/U, advance, and other offers are excluded.
         basic_offer = ev.get("BasicOffer") or {}
         if not isinstance(basic_offer, dict):
             return None
         if basic_offer.get("HasSbv") or basic_offer.get("Sbv") is not None:
+            source_id = (
+                basic_offer.get("BetTypeKey")
+                or basic_offer.get("GameId")
+                or "12005"
+            )
+            known = getattr(MARKET_REGISTRY, "has_source_id", None)
+            if known is None or not known("evlbet", "prematch", source_id):
+                record_unmapped("evlbet", source_id)
+            return None
+        source_id = (
+            basic_offer.get("BetTypeKey")
+            or basic_offer.get("GameId")
+            or "12005"
+        )
+        spec = MARKET_REGISTRY.lookup_type(
+            "evlbet", "prematch", source_id, MarketType.MATCH_RESULT
+        )
+        if spec is None:
+            record_unmapped("evlbet", source_id)
             return None
         odds_list = basic_offer.get("Odds", [])
         mr_odds: list[OddsValue] = []
@@ -130,11 +149,11 @@ class EvlbetScraper:
             except (ValueError, TypeError):
                 continue
 
-            if lbl in ("1", "X", "2") and val > 1.0:
+            if lbl in spec.labels and val >= 1.01:
                 mr_odds.append(OddsValue(label=lbl, value=val))
 
-        # 1X2 is only valid when ALL THREE outcomes are present
-        if {o.label for o in mr_odds} != {"1", "X", "2"}:
+        actual = {o.label for o in mr_odds}
+        if len(actual) < spec.min_legs or not actual.issubset(spec.labels):
             return None
 
         markets = [Market(market_type=MarketType.MATCH_RESULT, odds=mr_odds)]

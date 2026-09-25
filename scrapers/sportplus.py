@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 import httpx
 
 from config.settings import VERIFY_SSL
+from engine.market_registry import MARKET_REGISTRY, record_unmapped
 from models.schemas import Market, MarketType, Match, OddsValue
 from scrapers.base import fetch_with_retry
 from scrapers.common import normalize_outcome, parse_dt
@@ -49,6 +50,21 @@ API_HEADERS = {
 
 BASE_API = "https://www.sportplus.ba/api/v1/prematch/offer"
 LIVE_API = "https://www.sportplus.ba/api/v1/live/offer"
+
+
+def _registered_spec(
+    mode: str,
+    source_id: int | str,
+    market_type: MarketType,
+    line: float | None = None,
+):
+    spec = MARKET_REGISTRY.lookup_type(
+        "sportplus", mode, source_id, market_type, line=line
+    )
+    known = getattr(MARKET_REGISTRY, "has_source_id", None)
+    if spec is None and (known is None or not known("sportplus", mode, source_id)):
+        record_unmapped("sportplus", source_id)
+    return spec
 
 
 class SportPlusScraper:
@@ -207,33 +223,42 @@ class SportPlusScraper:
                 result.append(Market(market_type=market_type, odds=odds))
 
             if name == "Pobjednik":
+                spec = _registered_spec("live", "POBJEDNIK", MarketType.MATCH_RESULT)
+                if spec is None:
+                    continue
                 by_label: dict[str, float] = {}
                 for alias, value in read_odds():
-                    if alias in ("1", "X", "2"):
+                    if alias in spec.labels:
                         by_label[alias] = max(by_label.get(alias, 0.0), value)
-                if set(by_label) == {"1", "X", "2"}:
+                if len(by_label) >= spec.min_legs and set(by_label).issubset(spec.labels):
                     append_market(MarketType.MATCH_RESULT, [
                         OddsValue(label=label, value=by_label[label])
-                        for label in ("1", "X", "2")
+                        for label in ("1", "X", "2") if label in by_label
                     ])
             elif "Dvostruka Prilika" in name:
+                spec = _registered_spec("live", "DVOSTRUKA_PRILIKA", MarketType.DOUBLE_CHANCE)
+                if spec is None:
+                    continue
                 by_label = {}
                 for alias, value in read_odds():
-                    if alias in ("1X", "12", "X2"):
+                    if alias in spec.labels:
                         by_label[alias] = max(by_label.get(alias, 0.0), value)
-                if len(by_label) >= 2:
+                if len(by_label) >= spec.min_legs and set(by_label).issubset(spec.labels):
                     append_market(MarketType.DOUBLE_CHANCE, [
                         OddsValue(label=label, value=by_label[label])
                         for label in ("1X", "12", "X2") if label in by_label
                     ])
             elif name == "Oba daju gol":
+                spec = _registered_spec("live", "OBA_DAJU_GOL", MarketType.BTTS)
+                if spec is None:
+                    continue
                 gg = ng = None
                 for alias, value in read_odds():
                     if alias in ("1(D)", "1D", "Da", "GG"):
                         gg = max(gg or 0.0, value)
                     elif alias in ("2(N)", "2N", "Ne", "NG"):
                         ng = max(ng or 0.0, value)
-                if gg and ng:
+                if gg and ng and len({"GG", "NG"}) >= spec.min_legs:
                     append_market(MarketType.BTTS, [
                         OddsValue(label="GG", value=gg),
                         OddsValue(label="NG", value=ng),
@@ -251,13 +276,16 @@ class SportPlusScraper:
                 }.get(line)
                 if market_type is None:
                     continue
+                spec = _registered_spec("live", "ZBROJ_GOLOVA", market_type, line=float(line))
+                if spec is None:
+                    continue
                 over = under = None
                 for alias, value in read_odds():
                     if "V" in alias:
                         over = max(over or 0.0, value)
                     elif "M" in alias:
                         under = max(under or 0.0, value)
-                if over and under:
+                if over and under and len({"Over", "Under"}) >= spec.min_legs:
                     append_market(market_type, [
                         OddsValue(label=f"Over {line}", value=over),
                         OddsValue(label=f"Under {line}", value=under),
@@ -354,6 +382,8 @@ class SportPlusScraper:
             market_id = market.get("id")
             market_name = str(market.get("name", "")).upper().strip()
             if any(w in market_name for w in ADVANCE_KEYWORDS):
+                if isinstance(market_id, int | str):
+                    record_unmapped("sportplus", market_id)
                 continue
 
             odds_raw = market.get("odds", [])
@@ -362,6 +392,9 @@ class SportPlusScraper:
 
             # 1X2 & Double Chance (same market block)
             if market_name in SPORT_MAP or market_id == 1:
+                source_id = market_id if isinstance(market_id, int | str) else ""
+                mr_spec = _registered_spec("prematch", source_id, MarketType.MATCH_RESULT)
+                dc_spec = _registered_spec("prematch", source_id, MarketType.DOUBLE_CHANCE)
                 match_result_odds = []
                 dc_odds = []
                 for o in odds_raw:
@@ -371,25 +404,43 @@ class SportPlusScraper:
                         odd_val = float(val) if val else 0
                     except (ValueError, TypeError):
                         continue
-                    if alias in ("1", "X", "2") and odd_val >= 1.01:
+                    if (
+                        mr_spec is not None
+                        and alias in mr_spec.labels
+                        and odd_val >= 1.01
+                    ):
                         match_result_odds.append(
                             OddsValue(label=normalize_outcome(alias, MarketType.MATCH_RESULT), value=odd_val)
                         )
-                    elif alias in ("1X", "12", "X2") and odd_val >= 1.01:
+                    elif (
+                        dc_spec is not None
+                        and alias in dc_spec.labels
+                        and odd_val >= 1.01
+                    ):
                         dc_odds.append(
                             OddsValue(label=normalize_outcome(alias, MarketType.DOUBLE_CHANCE), value=odd_val)
                         )
-                # 1X2 is only valid when ALL THREE outcomes are present
-                if {o.label for o in match_result_odds} == {"1", "X", "2"}:
+                if (
+                    mr_spec is not None
+                    and len({o.label for o in match_result_odds}) >= mr_spec.min_legs
+                    and {o.label for o in match_result_odds}.issubset(mr_spec.labels)
+                ):
                     add_market(MarketType.MATCH_RESULT, match_result_odds)
-                # Double Chance requires at least 2 distinct legs
-                if len({o.label for o in dc_odds}) >= 2:
+                if (
+                    dc_spec is not None
+                    and len({o.label for o in dc_odds}) >= dc_spec.min_legs
+                    and {o.label for o in dc_odds}.issubset(dc_spec.labels)
+                ):
                     add_market(MarketType.DOUBLE_CHANCE, dc_odds)
 
             # Over/Under 2.5
             elif market_name == "ZBROJ GOLOVA 2,5" or market_id == 768:
+                source_id = market_id if isinstance(market_id, int | str) else ""
+                spec = _registered_spec(
+                    "prematch", source_id, MarketType.OVER_UNDER_2_5, line=2.5
+                )
                 odds_list = self._parse_ou_odds(odds_raw, "2.5")
-                if odds_list:
+                if spec is not None and odds_list and len(odds_list) >= spec.min_legs:
                     add_market(MarketType.OVER_UNDER_2_5, odds_list)
 
             # First Half 1X2 (id=4 "PRVO POLUVRIJEME")
@@ -426,8 +477,10 @@ class SportPlusScraper:
 
             # Both Teams to Score
             elif market_name == "OBA TIMA DAJU GOL" or market_id == 6:
+                source_id = market_id if isinstance(market_id, int | str) else ""
+                spec = _registered_spec("prematch", source_id, MarketType.BTTS)
                 btts_odds = self._parse_btts_odds(odds_raw)
-                if btts_odds:
+                if spec is not None and btts_odds and len(btts_odds) >= spec.min_legs:
                     add_market(MarketType.BTTS, btts_odds)
 
             # Goal Range — maps to O/U 1.5, O/U 2.5, O/U 3.5
@@ -441,9 +494,34 @@ class SportPlusScraper:
                         continue
                     label = range_labels.get(alias)
                     if label and odd_val >= 1.01:
-                        current = goal_range_odds.get(label)
-                        if current is None or odd_val > current.value:
-                            goal_range_odds[label] = OddsValue(label=label, value=odd_val)
+                        threshold = label.split()[-1]
+                        market_type = {
+                            "1.5": MarketType.OVER_UNDER_1_5,
+                            "2.5": MarketType.OVER_UNDER_2_5,
+                            "3.5": MarketType.OVER_UNDER_3_5,
+                        }.get(threshold)
+                        source_id = (
+                            market_id
+                            if isinstance(market_id, int | str)
+                            else ""
+                        )
+                        spec = (
+                            _registered_spec(
+                                "prematch", source_id, market_type, line=float(threshold)
+                            )
+                            if market_type is not None
+                            else None
+                        )
+                        if spec is not None and label in spec.labels:
+                            current = goal_range_odds.get(label)
+                            if current is None or odd_val > current.value:
+                                goal_range_odds[label] = OddsValue(label=label, value=odd_val)
+            else:
+                if market_id is not None and market_name not in {
+                    "PRVO POLUVRIJEME",
+                    "AZIJSKI HENDIKEP",
+                }:
+                    record_unmapped("sportplus", market_id)
 
         for market_type, over_label, under_label in (
             (MarketType.OVER_UNDER_1_5, "Over 1.5", "Under 1.5"),
@@ -452,7 +530,11 @@ class SportPlusScraper:
         ):
             over = goal_range_odds.get(over_label)
             under = goal_range_odds.get(under_label)
-            if over and under:
+            source_id = 800
+            spec = _registered_spec(
+                "prematch", source_id, market_type, line=float(over_label.split()[-1])
+            )
+            if spec is not None and over and under and len({over.label, under.label}) >= spec.min_legs:
                 add_market(market_type, [over, under])
 
         return [

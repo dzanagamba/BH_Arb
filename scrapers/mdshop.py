@@ -184,8 +184,8 @@ class MDShopScraper:
     def _parse_bets(self, bets: list, live: bool = False) -> list[Market]:
         """Parse bet objects into Market list (validated NSoft parser)."""
         if live:
-            return parse_nsoft_live_bets(bets)
-        return parse_nsoft_bets(bets)
+            return parse_nsoft_live_bets(bets, bookmaker=BOOKMAKER_ID)
+        return parse_nsoft_bets(bets, bookmaker=BOOKMAKER_ID, mode="prematch")
 
     async def scrape(self, live: bool = False, scan_time: datetime | None = None) -> list[Match]:
         """
