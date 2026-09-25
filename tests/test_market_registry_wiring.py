@@ -23,13 +23,21 @@ WHAT THESE TESTS DO NOT PROVE
   superset of what the parser reads: betole's Over/Under rows do, and
   ``MARKET_MAPPING.md`` says so.
 * **Not that a wrong-but-consistent ID is caught.** The registry and the parser
-  read the same file, so a wrong ID is wrong in both. Changing mdshop's prematch
-  1X2 from ``135`` to ``999`` leaves every test in this file green.
+  read the same file, so a wrong ID is wrong in both. This file only covers the
+  one dispatch code per book listed in ``DISPATCH_CASES``, so it misses any wrong
+  ID outside that list. Measured against a mutated registry, changing sportplus
+  prematch BTTS from ``6`` to ``5``, mozzartbet prematch BTTS from ``130`` to
+  ``131``, or MBet prematch Over/Under 2.5 from ``ofb:tg`` to ``ofb:ht`` leaves
+  every test in this file green. (mdshop's prematch 1X2 is NOT such a case:
+  ``135`` is mdshop's own dispatch code here, so a wrong value IS caught.)
+  ``tests/test_market_fixtures.py`` closes the gap with captured payloads.
 * **Not every book has a payload-driven case.** ``premier_kladionica`` resolves
   markets inside a positional ``PrSync`` response builder that would need a
   fabricated multi-section payload; it is covered only by the static
   registry-routing check below, and that limitation is deliberate rather than
-  papered over with a contrived payload.
+  papered over with a contrived payload. A payload-driven case for it does now
+  exist in ``tests/test_market_fixtures.py``, built from captured ``dogTipK``
+  rows rather than fabricated ones.
 """
 
 from __future__ import annotations

@@ -59,7 +59,11 @@ UNCOVERED_ROWS: dict[tuple[str, str, str], str] = {
     ("evlbet", "prematch", "1x2"): (
         "sportapis.evlbet.com answers the flat offer endpoint with 200 and an empty "
         "list for every SportIds/Limit/Offset tried, so the book served no payload to "
-        "capture. No fixture is fabricated in its place."
+        "capture. No fixture is fabricated in its place. The registered id 12005 is "
+        "not merely scrapers/evlbet.py's fallback constant: MARKET_MAPPING.md:347 "
+        "records it as BetTypeKey=12005, GameId=1, 'Ishod meca', odds 1/X/2, sampled "
+        "across 1,500 events of the live catalog. What is unverified here is only that "
+        "the parser still reads it off a real feed today."
     ),
     ("mozzartbet", "prematch", "over_under_1_5"): (
         "game 3 serves subgames 2+/3+/0-2 only; there is no 0-1 leg, and the "
@@ -68,16 +72,12 @@ UNCOVERED_ROWS: dict[tuple[str, str, str], str] = {
     ("mozzartbet", "prematch", "over_under_3_5"): "same: no 4+/0-3 pair on the feed.",
     ("mozzartbet", "live", "over_under_1_5"): "same as prematch on the live feed.",
     ("mozzartbet", "live", "over_under_3_5"): "same as prematch on the live feed.",
-    ("premier_kladionica", "live", "btts"): (
-        "the live feed names this market 'LIVE - OBA TIMA DAJU GOL', but the parser's "
-        "NAME_BTTS constant is 'OBA DAJU GOL', so the registry's live LIVE_OBA_DAJU_GOL "
-        "row is unreachable: registry and parser agree with each other and disagree "
-        "with the feed. Found by this layer; needs a registry/parser fix."
-    ),
-    # betole is disabled in config/settings.py and is not in this layer's scope:
-    # its desk feed IS reachable, but _parse_betole_markets emits the
-    # experimental first_half_1x2 market unconditionally in prematch mode, so no
-    # trim of a real payload can satisfy "emitted == declared registry rows".
+    # betole is disabled in config/settings.py and is not in this layer's scope.
+    # Its desk feed IS reachable and carries picks 1/2/3 and 272/273, but
+    # _parse_betole_markets also emits the experimental first_half_1x2 market
+    # from picks 4/5/6, which the feed serves and which has no registry row. So
+    # a real betole payload can never satisfy "emitted == declared registry rows"
+    # for this layer, which is the invariant every capture is checked against.
     **{(("betole", "prematch", mt.value)): "book is disabled in config/settings.py; see above"
        for mt in CORE_MARKET_TYPES},
 }
@@ -88,6 +88,51 @@ BOOKS_WITHOUT_FIXTURES: dict[str, str] = {
     "evlbet": "its flat offer endpoint served an empty list (see UNCOVERED_ROWS)",
     "betole": "disabled book whose parser emits an unregistered market (see UNCOVERED_ROWS)",
 }
+
+# Rows the feed DOES serve but the code cannot reach. These are kept apart from
+# UNCOVERED_ROWS on purpose: a genuine feed gap has no evidence in the fixture,
+# whereas a code defect does, and the difference decides what the test should
+# assert. Each one names the strict xfail that guards it, so fixing the parser
+# turns that xfail into a failure and forces this entry to be revisited.
+KNOWN_DEFECT_ROWS: dict[tuple[str, str, str], str] = {
+    ("premier_kladionica", "live", "btts"): (
+        "test_premier_live_btts_is_emitted_once_name_btts_is_mode_aware"
+    ),
+}
+
+# The two subgames a Mozzartbet totals market needs, per the live feed. Used to
+# tell "the feed never sent this leg" from "the parser dropped it".
+_MOZZART_OU_LEGS = {
+    "over_under_1_5": ("2+", "0-1"),
+    "over_under_2_5": ("3+", "0-2"),
+    "over_under_3_5": ("4+", "0-3"),
+}
+
+
+def _serves_market(data: dict[str, Any], market_type: str) -> bool:
+    """Whether the captured payload holds the data the market needs.
+
+    Used to prove an ``UNCOVERED_ROWS`` entry is a real feed gap rather than a
+    stale declaration: if the payload turns out to carry the block, the row
+    belongs in ``expected_markets`` and the gap entry is a lie.
+    """
+    book, bets = data["bookmaker"], data["bets"]
+    if book == "mozzartbet" and market_type in _MOZZART_OU_LEGS:
+        over, under = _MOZZART_OU_LEGS[market_type]
+        names = {
+            str(o["subgame"]["name"]) for o in bets if o["game"]["id"] == 3
+        }
+        return {over, under} <= names
+    if book == "premier_kladionica":
+        return any(
+            "DAJU GOL" in str(row[2]).upper()
+            for row in data["lookup"]["set_tip"]
+        ) and market_type == "btts"
+    if book == "evlbet" and market_type == "1x2":
+        return bool(bets)
+    if book == "betole" and market_type == "1x2":
+        return bool(bets)
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -254,9 +299,11 @@ def test_fixture_records_its_provenance(path: Path):
     assert data["bookmaker"] and data["mode"] in ("prematch", "live")
     assert data["endpoint"].startswith(("http", "POST http")), f"{path.name} records no endpoint"
     assert len(data["provenance"]) > 60, f"{path.name} has no usable provenance note"
-    assert date.fromisoformat(data["captured_at"]) == date.fromisoformat(
-        data["captured_at"]
-    ), f"{path.name} captured_at is not an ISO date: {data['captured_at']!r}"
+    # fromisoformat raises ValueError on anything that is not an ISO date, so a
+    # malformed stamp fails here rather than comparing equal to itself.
+    assert date.fromisoformat(data["captured_at"]).isoformat() == data["captured_at"], (
+        f"{path.name} captured_at is not an ISO date (YYYY-MM-DD): {data['captured_at']!r}"
+    )
 
 
 @pytest.mark.parametrize("path", FIXTURES, ids=lambda p: p.stem)
@@ -309,6 +356,10 @@ def test_coverage_gaps_are_declared_rather_than_ignored():
     covered: set[tuple[str, str, str]] = set()
     for path in FIXTURES:
         data = _load(path)
+        assert data["expected_markets"], (
+            f"{path.name} declares no expected markets, so the exact-set assertion "
+            "above would pass vacuously"
+        )
         for market_type in data["expected_markets"]:
             covered.add((data["bookmaker"], data["mode"], market_type))
 
@@ -319,10 +370,10 @@ def test_coverage_gaps_are_declared_rather_than_ignored():
         for market_type in CORE_MARKET_TYPES
         if registry.ids_for(book, mode, market_type)
     } - covered
-    assert declared == set(UNCOVERED_ROWS), (
-        "UNCOVERED_ROWS is out of date: it claims "
-        f"{sorted(set(UNCOVERED_ROWS) - declared)} which are now covered, and misses "
-        f"{sorted(declared - set(UNCOVERED_ROWS))}"
+    assert declared == set(UNCOVERED_ROWS) | set(KNOWN_DEFECT_ROWS), (
+        "the declared-gap lists are out of date: they claim "
+        f"{sorted((set(UNCOVERED_ROWS) | set(KNOWN_DEFECT_ROWS)) - declared)} which are "
+        f"now covered, and miss {sorted(declared - set(UNCOVERED_ROWS) - set(KNOWN_DEFECT_ROWS))}"
     )
 
     for book in books:
@@ -330,6 +381,41 @@ def test_coverage_gaps_are_declared_rather_than_ignored():
         assert has_capture or book in BOOKS_WITHOUT_FIXTURES, (
             f"{book} has no captured payload; add one or document it in "
             "BOOKS_WITHOUT_FIXTURES with a reason"
+        )
+
+
+def test_a_declared_gap_is_not_just_listed_but_forgotten():
+    """A gap may only be declared while the evidence for it still holds.
+
+    ``UNCOVERED_ROWS`` alone is a promise: it says the feed never sent the block
+    this market needs. This test checks that promise against the captured
+    payload, so a gap cannot be declared once and then left behind while the
+    fixture sits there proving the data was there all along. It also keeps the
+    two kinds of gap apart -- a real feed gap carries no evidence, a code defect
+    does and is guarded by a strict xfail instead.
+    """
+    for (book, mode, market_type), reason in UNCOVERED_ROWS.items():
+        path = _fixture_for(book, mode)
+        data = _load(path) if path.exists() else None
+        if data is None:
+            continue
+        assert not _serves_market(data, market_type), (
+            f"{book}/{mode}/{market_type} is declared a feed gap, but the capture "
+            f"in {path.name} carries the data it needs. Either the feed now serves "
+            "it (add the market to expected_markets and drop this entry) or the "
+            f"parser is the problem (move it to KNOWN_DEFECT_ROWS). Reason given: {reason}"
+        )
+
+    for (book, mode, market_type), guard in KNOWN_DEFECT_ROWS.items():
+        path = _fixture_for(book, mode)
+        assert path.exists(), (
+            f"{book}/{mode}/{market_type} is a known defect guarded by {guard}, but "
+            f"there is no {path.name} carrying the evidence"
+        )
+        assert _serves_market(_load(path), market_type), (
+            f"{book}/{mode}/{market_type} is listed as a known code defect, but "
+            f"{path.name} no longer carries the offending block; re-check the defect "
+            f"and the xfail {guard} together"
         )
 
 
@@ -343,6 +429,64 @@ def _all_registry_books() -> list[str]:
 
 def _fixture_for(book: str, mode: str) -> Path:
     return FIXTURE_DIR / f"{book}_{mode}.json"
+
+
+# --- the premier live BTTS defect -------------------------------------------
+#
+# The live feed names the both-teams-to-score block 'LIVE - OBA TIMA DAJU GOL';
+# prematch is 'OBA DAJU GOL'. scrapers/premier_kladionica.py strips the 'LIVE - '
+# prefix and compares against a single NAME_BTTS = 'OBA DAJU GOL', so the live
+# block never matches, falls through to record_unmapped, and the registry's
+# live LIVE_OBA_DAJU_GOL row can never be reached.
+#
+# WHY THIS IS AN XFAIL AND NOT A FAILING ASSERTION: we do not ship a red build.
+# The fixture keeps the real 'LIVE - OBA TIMA DAJU GOL' rows, so the evidence is
+# in the repo, and this test waits on the fix. strict=True is the tripwire: the
+# moment NAME_BTTS is fixed the test XPASSes, and pytest reports an XPASS on a
+# strict xfail as a FAILURE. Nobody can fix the parser and leave the marker
+# behind, and nobody can delete the marker without fixing the parser.
+#
+# THE FIX IS NOT A REGISTRY RENAME. Prematch and live genuinely differ, so
+# making NAME_BTTS mode-aware is the change; rewriting the registry row to the
+# live spelling would break prematch. The comment is here because the wrong fix
+# is the obvious one.
+
+PREMIER_LIVE_BTTS_NAME = "LIVE - OBA TIMA DAJU GOL"
+
+
+def test_premier_live_fixture_carries_the_btts_block_the_defect_is_about():
+    """The evidence must stay in the fixture, or the xfail below has nothing to test."""
+    data = _load(_fixture_for("premier_kladionica", "live"))
+    names = {row[2] for row in data["lookup"]["set_tip"]}
+    assert PREMIER_LIVE_BTTS_NAME in names, (
+        "the premier live capture no longer carries the "
+        f"{PREMIER_LIVE_BTTS_NAME!r} block; re-check whether the feed or the "
+        "parser changed before trusting the xfail below"
+    )
+    assert "btts" not in data["expected_markets"], (
+        "the capture now declares live BTTS as exercised, so the known-defect "
+        "xfail below should be removed"
+    )
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "KNOWN DEFECT: the live feed's both-teams-to-score block is named "
+        f"{PREMIER_LIVE_BTTS_NAME!r} while the parser's NAME_BTTS is 'OBA DAJU GOL', "
+        "so the registry's live LIVE_OBA_DAJU_GOL row is unreachable. The fix is to "
+        "make NAME_BTTS mode-aware (prematch and live really do spell it "
+        "differently), NOT to rename the registry row, which would break prematch. "
+        "strict=True so that fixing the parser fails this test until the marker and "
+        "the UNCOVERED_ROWS entry are removed together."
+    ),
+)
+def test_premier_live_btts_is_emitted_once_name_btts_is_mode_aware():
+    """Passes only once the parser reads the live BTTS block."""
+    data = _load(_fixture_for("premier_kladionica", "live"))
+    assert "btts" in _emitted(data), (
+        "the captured 'LIVE - OBA TIMA DAJU GOL' block still produces no BTTS market"
+    )
 
 
 def test_a_captured_unregistered_id_is_counted_not_dropped():

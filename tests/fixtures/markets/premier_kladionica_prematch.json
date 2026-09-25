@@ -2,7 +2,7 @@
   "bookmaker": "premier_kladionica",
   "mode": "prematch",
   "captured_at": "2026-09-25",
-  "endpoint": "POST https://svc-test.premier-kladionica.com/PrSync/PrSync.ashx body=[[[4,1,0],7,{\"dogadjajIDs\":\"1242 football event ids\",\"clientVer\":1294004741}]]",
+  "endpoint": "POST https://svc-test.premier-kladionica.com/PrSync/PrSync.ashx body=[[[4,1,0],7,{\"dogadjajIDs\":\"1243 football event ids\",\"clientVer\":1294012823}]]",
   "source": "live_api_response",
   "payload_kind": "premier_dogtipk",
   "provenance": "dogTipK rows for one football event (id 4496738) from the live PrSync delta response, with the setTip/setTipVar/setTipTip definition rows for exactly the setTip ids those odds belong to. All rows are stored verbatim because PrSync is positional: setTipVar's line is column 9, setTipTip's outcome code is column 4 and dogTipK's price is column 5.",
@@ -327,7 +327,7 @@
       1440,
       2,
       1,
-      8.2,
+      8.3,
       1,
       0,
       0
@@ -349,7 +349,7 @@
       1440,
       2,
       3,
-      1.23,
+      1.22,
       1,
       0,
       0
@@ -360,7 +360,7 @@
       1440,
       3,
       1,
-      17.0,
+      18.0,
       1,
       0,
       0
@@ -415,7 +415,7 @@
       1442,
       2,
       1,
-      4.6,
+      4.5,
       1,
       0,
       0
@@ -437,7 +437,7 @@
       1442,
       3,
       1,
-      2.3,
+      2.25,
       1,
       0,
       0
@@ -448,7 +448,7 @@
       1442,
       3,
       2,
-      1.6,
+      1.65,
       1,
       0,
       0
@@ -459,7 +459,7 @@
       1442,
       4,
       1,
-      1.55,
+      1.5,
       1,
       0,
       0
@@ -470,7 +470,7 @@
       1442,
       4,
       2,
-      2.45,
+      2.5,
       1,
       0,
       0
@@ -481,7 +481,7 @@
       1442,
       5,
       1,
-      1.21,
+      1.2,
       1,
       0,
       0
@@ -492,7 +492,7 @@
       1442,
       5,
       2,
-      4.3,
+      4.4,
       1,
       0,
       0
@@ -514,7 +514,7 @@
       1442,
       6,
       2,
-      7.7,
+      8.0,
       1,
       0,
       0
@@ -536,7 +536,7 @@
       1452,
       1,
       2,
-      2.45,
+      2.4,
       1,
       0,
       0

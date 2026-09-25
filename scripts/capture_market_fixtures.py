@@ -480,6 +480,10 @@ async def capture_wwin(_client: httpx.AsyncClient, _bookmaker: str, mode: str) -
 # --------------------------------------------------------------------------
 
 PREMIER_SYNC = "https://svc-test.premier-kladionica.com/PrSync/PrSync.ashx"
+# Premier names the plain both-teams-to-score market differently per mode. The
+# prematch spelling is what scrapers/premier_kladionica.py matches (NAME_BTTS);
+# the live spelling is NOT, which is the defect the fixture keeps as evidence.
+PREMIER_BTTS_NAMES = {"prematch": "OBA DAJU GOL", "live": "OBA TIMA DAJU GOL"}
 PREMIER_HEADERS = {"User-Agent": UA, "Content-Type": "application/json", "Accept": "application/json"}
 
 
@@ -539,24 +543,55 @@ async def capture_premier(client: httpx.AsyncClient, _bookmaker: str, mode: str)
         raw = str(name_of.get((2, tip), ""))
         return raw[len("LIVE -"):].strip() if raw.startswith("LIVE -") else raw
 
+    def is_live_tip(tip: int) -> bool:
+        return str(name_of.get((2, tip), "")).startswith("LIVE - ")
+
+    def _is_fulltime_btts(base: str) -> bool:
+        """True for the plain both-teams-to-score block, in either mode's spelling.
+
+        Matched by exact name, not by substring. A Premier event also carries a
+        dozen half-time and combined variants that contain "DAJU GOL" -- "1.
+        POLUVRIJEME - OBA DAJU GOL", "UTAKMICA I OBA DAJU GOL", "DVOZNAK I OBA
+        DAJU GOL" -- none of which is a registered market. Keeping them would
+        bloat the fixture with a dozen blocks the parser must ignore, and it
+        would hide the one that matters: the plain block is named "OBA DAJU GOL"
+        prematch but "OBA TIMA DAJU GOL" live, which is the defect
+        tests/test_market_fixtures.py guards with a strict xfail.
+        """
+        return base.upper() in (PREMIER_BTTS_NAMES["prematch"], PREMIER_BTTS_NAMES["live"])
+
     for event_id, rows in rows_by_event.items():
         by_name: dict[str, set[int]] = {}
         for tip in {row[2] for row in rows}:
             by_name.setdefault(base_name(tip), set()).add(tip)
-        # UTAKMICA carries 1X2 + double chance; OBA DAJU GOL carries BTTS;
-        # ZBROJ GOLOVA carries the three declared totals (prematch only --
-        # the parser resolves that branch against the prematch registry).
+        # UTAKMICA carries 1X2 + double chance; the "both teams to score" block
+        # carries BTTS; ZBROJ GOLOVA carries the three declared totals (prematch
+        # only -- the parser resolves that branch against the prematch registry).
         required = {"UTAKMICA"} | ({"ZBROJ GOLOVA"} if mode == "prematch" else set())
         if not required <= set(by_name):
             continue
         keep_tips = set().union(*(by_name[name] for name in required))
-        if "OBA DAJU GOL" in by_name:
-            keep_tips |= by_name["OBA DAJU GOL"]
+        # Keep the BTTS block EVEN IN LIVE MODE, where the feed spells it
+        # "LIVE - OBA TIMA DAJU GOL" rather than the parser's NAME_BTTS of
+        # "OBA DAJU GOL". That mismatch is a real defect, and the block is the
+        # only evidence of it: without it in the fixture, the defect would be
+        # recorded in prose alone and a future parser fix would have nothing to
+        # turn green. tests/test_market_fixtures.py xfails on it with strict=True.
+        # Prematch keeps the plain full-time BTTS block only. Live additionally
+        # keeps the one-hour-later "N. POLUVRIJEME I OBA DAJU GOL" spellings so
+        # the fixture shows the feed is not simply inconsistent -- it uses the
+        # prematch spelling at other points in a match -- which is why the fix
+        # belongs in a mode-aware parser rather than in the registry.
+        keep_tips |= {
+            tip
+            for name, tips in by_name.items()
+            if _is_fulltime_btts(name)
+            for tip in tips
+            if is_live_tip(tip) == (mode == "live")
+        }
         # Only the RETAINED blocks have to be live: an in-play event still
         # carries its prematch blocks, which the parser skips anyway.
-        if mode == "live" and any(
-            not str(name_of.get((2, tip), "")).startswith("LIVE - ") for tip in keep_tips
-        ):
+        if mode == "live" and any(not is_live_tip(tip) for tip in keep_tips):
             continue
         exercised = ["1x2", "double_chance"]
         if "OBA DAJU GOL" in by_name:
@@ -591,9 +626,13 @@ async def capture_premier(client: httpx.AsyncClient, _bookmaker: str, mode: str)
                     + (
                         ""
                         if "btts" in exercised
-                        else " The live BTTS block is named 'LIVE - OBA TIMA DAJU GOL', not "
-                        "'LIVE - OBA DAJU GOL', so the parser's NAME_BTTS never matches it and "
-                        "the registry's live BTTS row is unreachable from the live feed."
+                        else " KNOWN DEFECT, kept as evidence: the live BTTS block is named "
+                        "'LIVE - OBA TIMA DAJU GOL' while the parser's NAME_BTTS is "
+                        "'OBA DAJU GOL', so the parser cannot match it and the registry's "
+                        "live LIVE_OBA_DAJU_GOL row is unreachable. Prematch really is "
+                        "'OBA DAJU GOL', so the fix is to make NAME_BTTS mode-aware, NOT to "
+                        "rename the registry row. See the xfail marker in "
+                        "tests/test_market_fixtures.py."
                     )
                 ),
                 "dropped_fields": [],

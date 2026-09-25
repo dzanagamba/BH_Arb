@@ -80,7 +80,21 @@ class AdmiralbetScraper:
             )
             await page.wait_for_timeout(5000)
 
-            # 3. Fetch all football events via getwebevents endpoint (uniform window)
+            # 3. Fetch all football events via getwebevents endpoint.
+            #    The window below is correct for prematch but WRONG for
+            #    isLive=true, and is NOT changed here because it needs its own
+            #    decision. NSoft filters events by kickoff against dateFrom, so
+            #    with dateFrom=now every already-started in-play game falls
+            #    outside the window and is filtered out of the response: at
+            #    2026-09-25 17:00 UTC this request returned {"events": []} while
+            #    35 live football events were available, and 35 events the moment
+            #    dateFrom was moved back to now-12h. This scraper most likely
+            #    returns no live matches at all today.
+            #    Receipt for the working window (committed, not prose):
+            #      tests/fixtures/markets/admiralbet_live.json -> "endpoint", which
+            #      embeds dateFrom=<now-12h>&dateTo=<now> and produced a real capture.
+            #    See also scrapers/mdshop.py, which builds the same window, and
+            #    scripts/capture_market_fixtures.py, which uses the working one.
             now_aware = (scan_time.replace(tzinfo=UTC) if scan_time and scan_time.tzinfo is None else scan_time) if scan_time else datetime.now(UTC)
             date_from = now_aware.strftime("%Y-%m-%dT%H:%M:%S.000")
             date_to = (now_aware + timedelta(days=14)).strftime("%Y-%m-%dT%H:%M:%S.000")
