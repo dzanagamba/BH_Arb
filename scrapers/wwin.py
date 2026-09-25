@@ -74,7 +74,7 @@ WWIN_OU_LINES = {
 }
 
 
-def wwin_registered_spec(
+def _wwin_registered_spec(
     mode: str,
     bet_id: int | str,
     market_type: MarketType,
@@ -111,7 +111,7 @@ def _build_markets_from_bets(bets: list, mode: str = "prematch") -> list[Market]
         return odds
 
     def registered_spec(bet_id, market_type: MarketType, line: float | None = None):
-        return wwin_registered_spec(mode, bet_id, market_type, line=line)
+        return _wwin_registered_spec(mode, bet_id, market_type, line=line)
 
     for bet in bets:
         if not isinstance(bet, dict):

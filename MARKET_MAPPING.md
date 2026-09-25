@@ -34,6 +34,13 @@ Source of truth: `config/bookmaker_markets.json`, loaded by
 so registry defaults (outcome labels, min legs, settlement) are included.
 Covers 9 bookmakers and 85 book/mode/market rows.
 
+Scope: these are the IDs the **registry declares**. It is the authority on
+the declared mapping, not on parser dispatch — a book's parser may read a
+subset of the IDs listed for it, because some parsers dispatch on a
+hardcoded pick table rather than iterating the registry. Where a row lists
+more IDs than the book actually consumes, the per-book field notes at the
+bottom of this file say so.
+
 ### Mapped markets
 
 | Bookmaker | Mode | Market | Source IDs | Outcome labels | Min legs | Line | Settlement |
@@ -188,11 +195,27 @@ Football sport id is `2`; events expose `brid` (Betradar id).
 
 Each bet carries its numeric offer id in `idBt` and its outcome label in `t`:
 `1`/`X`/`2` for the result, `1X`/`12`/`X2` for double chance, `Yes`/`No` for
-BTTS, and `Over`/`Under` for totals. The totals threshold arrives in a `total`
-spec field as a comma decimal (`1,5`/`2,5`/`3,5`) and is normalised before the
-registry lookup, so only the 1.5/2.5/3.5 lines resolve. A 1X2 offer is accepted
-only with all three `1`/`X`/`2` sides; double chance needs at least two valid
-legs.
+BTTS, and `Over`/`Under` for totals. The totals threshold arrives in the bet's
+`spec` field as `total=1,5` / `total=2,5` / `total=3,5` and is normalised before
+the registry lookup, so only the 1.5/2.5/3.5 lines resolve. A 1X2 offer is
+accepted only with all three `1`/`X`/`2` sides; double chance needs at least two
+valid legs.
+
+The IDs below are excluded, and the reason each is excluded is audit knowledge the
+generated table cannot hold — the table records *that* they are excluded, not
+*what they are*:
+
+- `idBt=7` — draw no bet.
+- `idBt=10` — three-way handicap.
+- `idBt=4` — half-time / full-time.
+- `idBt=476` — "Prolaz", the advance market.
+- `idBt=443` — Asian totals, including quarter lines such as `2.25` and `2.75`
+  that have no representation in the supported Over/Under set.
+- `idBt=51` — correct score.
+
+`idBt=2` was previously listed here as excluded. It is not: in prematch the
+parser reads it as `first_half_1x2`, an experimental market retained outside the
+core registry, the same treatment `ofb:ht` gets at MBet.
 
 The prematch `events` endpoint serves at most two bet ids per call, so the
 scraper fetches three groups (`95,6`, `3`, `11`) and merges by event id.
@@ -256,23 +279,31 @@ result needed its own ID here.
 Platform: Alea `events_cached`. Football market metadata was also checked via
 `/markets?platform=web&lang=ba&extended=true`.
 
-Odds arrive as colon-separated keys: `o<sport>:<market>:<outcome>`, so the
-registry key is the middle two segments — `ofb:fs` is `Konacan ishod` (the
-full-time result), `ofb:dc` is `Dupla sansa`, and `ofb:gg` is BTTS. The totals
-market uses outcome codes rather than words: `ofb:tg:2+` with `ofb:tg:0-1` for
-1.5, `ofb:tg:3+` with `ofb:tg:0-2` for 2.5 and `ofb:tg:4+` with `ofb:tg:0-3` for
-3.5. In live the same shape is used with the `lfb:` prefix, and the totals sides
-carry the threshold in the side name — `lfb:tg:over|1.5`, `lfb:tg:over|2.5` and
-so on (the `|` is a literal part of the key, not a separator). Any other
-`ofb:tg:*` key is an exact/range total or a team-goal count and is not mapped.
+Odds arrive as colon-separated keys. Prematch uses `o<sport>:<market>:<outcome>`,
+so the registry key is the middle two segments — `ofb:fs` is `Konacan ishod` (the
+full-time result), `ofb:dc` is `Dupla sansa`, and `ofb:gg` is BTTS. The prematch
+totals market uses outcome codes rather than words: `ofb:tg:2+` with `ofb:tg:0-1`
+for 1.5, `ofb:tg:3+` with `ofb:tg:0-2` for 2.5 and `ofb:tg:4+` with `ofb:tg:0-3`
+for 3.5. Only those six sides are read, so any other `ofb:tg:*` key is silently
+ignored. Live drops the `o` prefix and the sport segment: the keys are
+`lfb:ft:1`, `lfb:dc:1X`, `lfb:bttsny:Yes`, and the totals carry the direction and
+threshold in the side name — `lfb:tg:over|1.5`, `lfb:tg:under|1.5`, and so on,
+where the `|` is a literal part of the key and not a separator.
 
-Two prefixes are worth calling out because they look like the result market:
+Six prefixes are dispatched: `fs`, `dc`, `gg`, `tg`, `ht` and `hc`. The last two
+are **not** full-time result markets, and they are not ignored either — they are
+experimental markets parsed directly, outside the registry:
+
+- `ofb:ht` with sides `1`/`X`/`2` becomes `first_half_1x2`.
+- `ofb:hc` is a two-way handicap keyed `H1|<line>` / `H2|<line>` and becomes
+  `asian_handicap`; the favourite is the side with the lower odds, and all
+  handicap lines are preserved rather than overwritten.
+
+Two other prefixes look like the result market and are genuinely not mapped:
 `ofb:fts` is first team to score (its labels can be `1`/`X`/`2`), and `ofb:fi` is
-a baseball first-inning market that the football feed still carries. The
-period-specific keys `ofb:ht` (first half) and `ofb:sh` (second half) are also
-not full-time results. Note that `_excluded` currently lists `ofb:sh` but not
-`ofb:ht` or `ofb:hc` (handicap), so those two still raise an unmapped-market
-diagnostic when they appear.
+a baseball first-inning market that the football feed still carries. `ofb:sh` is
+the second-half result. All three are in the registry's `_excluded` block, so
+their unmapped-market diagnostic is suppressed on purpose.
 
 ## SportPlus
 

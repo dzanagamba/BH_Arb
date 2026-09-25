@@ -47,7 +47,7 @@ API_HEADERS = {
 PAGE_SIZE = 1500
 
 
-def betole_registered_spec(
+def _betole_registered_spec(
     mode: str,
     code: int | str,
     market_type: MarketType,
@@ -80,7 +80,7 @@ def _parse_betole_markets(raw_odds: dict, mode: str = "prematch") -> list[Market
     def registered_spec(
         code: str, market_type: MarketType, line: float | None = None
     ):
-        return betole_registered_spec(mode, code, market_type, line=line)
+        return _betole_registered_spec(mode, code, market_type, line=line)
 
     def build_market(
         market_type: MarketType,

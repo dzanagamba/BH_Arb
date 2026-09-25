@@ -24,10 +24,10 @@ API_URL = "https://sportapis.evlbet.com/SportsOfferApi/api/sport/offer/v3/matche
 
 # EVLBet's single registered full-time result ID, used when a BasicOffer omits
 # both BetTypeKey and GameId.
-DEFAULT_BASIC_OFFER_ID = "12005"
+_DEFAULT_BASIC_OFFER_ID = "12005"
 
 
-def evlbet_registered_spec(
+def _evlbet_registered_spec(
     mode: str,
     source_id: int | str,
     market_type: MarketType,
@@ -142,14 +142,14 @@ class EvlbetScraper:
         source_id = (
             basic_offer.get("BetTypeKey")
             or basic_offer.get("GameId")
-            or DEFAULT_BASIC_OFFER_ID
+            or _DEFAULT_BASIC_OFFER_ID
         )
         if basic_offer.get("HasSbv") or basic_offer.get("Sbv") is not None:
             known = getattr(MARKET_REGISTRY, "has_source_id", None)
             if known is None or not known("evlbet", "prematch", source_id):
                 record_unmapped("evlbet", source_id)
             return None
-        spec = evlbet_registered_spec("prematch", source_id, MarketType.MATCH_RESULT)
+        spec = _evlbet_registered_spec("prematch", source_id, MarketType.MATCH_RESULT)
         if spec is None:
             return None
         odds_list = basic_offer.get("Odds", [])

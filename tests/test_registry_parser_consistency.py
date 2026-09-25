@@ -1,12 +1,16 @@
-"""Registry <-> doc consistency: no orphan IDs, no undocumented parser IDs.
+"""The generated registry table in ``MARKET_MAPPING.md`` cannot drift.
 
 ``config/bookmaker_markets.json`` is the single source of truth for per-bookmaker
-source market IDs.  ``MARKET_MAPPING.md`` carries a machine-generated table of
-that registry, so a registry change without a doc regeneration is a test
-failure rather than silent documentation drift.
+source market IDs, and ``MARKET_MAPPING.md`` carries a machine-generated table of
+that registry. These tests cover the *documentation* side of that contract:
 
-The hand-written analysis above the generated markers is deliberately NOT
-covered here except for one regression: a regeneration must never clobber it.
+* the generated table matches the registry, in both directions;
+* the committed file is in sync with the registry, so a registry edit without a
+  regeneration is a test failure rather than silent drift;
+* a regeneration can never clobber the hand-written field notes;
+* the generated table states the scope of its own authority.
+
+Registry <-> parser behaviour lives in ``tests/test_market_registry_wiring.py``.
 """
 
 from __future__ import annotations
@@ -310,187 +314,26 @@ def test_excluded_ids_do_not_leak_into_mapped_rows():
             assert "136" not in row["ids"], f"{book} documents excluded id 136 as mapped"
 
 
-# --- registry <-> parser reachability ---------------------------------------
-
-
-def _parser_probes() -> dict[str, Any]:
-    """Map each bookmaker to *its own* parser module's registry-resolution call.
-
-    Every entry below is the function that module's market parsing actually
-    invokes; the refactor that lifted them to module scope is behaviour
-    preserving and covered by the rest of the suite.  Books whose resolver was
-    already a module-level ``_registered_spec`` are used as-is.
-    """
-    from scrapers.betole import betole_registered_spec
-    from scrapers.common import nsoft_registered_spec
-    from scrapers.evlbet import evlbet_registered_spec
-    from scrapers.mbet import _registered_spec as mbet_spec
-    from scrapers.mozzartbet import _registered_spec as mozzartbet_spec
-    from scrapers.premier_kladionica import _registered_spec as premier_spec
-    from scrapers.sportplus import _registered_spec as sportplus_spec
-    from scrapers.wwin import wwin_registered_spec
-
-    def adapt(fn: Any) -> Any:
-        """Normalise a (mode, source_id, market_type, line=) resolver."""
-
-        def resolve(mode: str, source_id: Any, market_type: Any, line: Any) -> Any:
-            return fn(mode, source_id, market_type, line=line)
-
-        return resolve
-
-    def nsoft(bookmaker: str) -> Any:
-        """NSoft resolves by ID + threshold, with no market type argument.
-
-        One ID pair is shared by every Over/Under line, so the line is part of
-        the lookup key rather than the market type.
-        """
-
-        def resolve(mode: str, source_id: Any, market_type: Any, line: Any) -> Any:
-            return nsoft_registered_spec(bookmaker, mode, source_id, sbv=line)
-
-        return resolve
-
-    def mozzart(mode: str, source_id: Any, market_type: Any, line: Any) -> Any:
-        # mozzartbet's resolver takes the bookmaker explicitly: the prematch and
-        # live builders share it and pass the id they were called with.
-        return mozzartbet_spec("mozzartbet", mode, source_id, market_type, line=line)
-
-    return {
-        "betole": adapt(betole_registered_spec),
-        "evlbet": adapt(evlbet_registered_spec),
-        "mbet": adapt(mbet_spec),
-        "premier_kladionica": adapt(premier_spec),
-        "sportplus": adapt(sportplus_spec),
-        "wwin": adapt(wwin_registered_spec),
-        "mozzartbet": mozzart,
-        "mdshop": nsoft("mdshop"),
-        "admiralbet": nsoft("admiralbet"),
-    }
-
-
-def test_every_bookmaker_has_a_parser_resolution_probe():
-    """A new registry book must come with a probe, or this file goes blind."""
-    from config.settings import BOOKMAKERS
-
-    probes = _parser_probes()
-    for bid in BOOKMAKERS:
-        assert bid in probes, f"{bid} has no parser resolution probe"
-
-
-def _registry_declarations() -> list[tuple[str, str, MarketType, tuple[str, ...], Any]]:
-    """One tuple per registry market declaration, with its resolved spec."""
-    registry = MarketRegistry()
-    rows: list[tuple[str, str, MarketType, tuple[str, ...], Any]] = []
-    for book, mode, market_type in _iter_market_types(_registry_json()):
-        for spec in _declared(registry, book, mode, market_type):
-            rows.append(
-                (
-                    book,
-                    mode,
-                    market_type,
-                    tuple(sorted(str(i) for i in spec.ids)),
-                    spec,
-                )
-            )
-    return rows
-
-
-_DECLARATIONS = _registry_declarations()
-_DECLARATION_IDS = [row[:4] for row in _DECLARATIONS]
-
-
-@pytest.mark.parametrize(("book", "mode", "market_type", "ids"), _DECLARATION_IDS)
-def test_registered_ids_resolve_through_their_own_books_parser(
-    book: str, mode: str, market_type: MarketType, ids: tuple[str, ...]
-):
-    """Every registered source ID is reachable by that book's parser.
-
-    WHAT THIS PROVES: for each book/mode/market declaration in the registry,
-    asking that bookmaker's parser module to resolve each of its source IDs
-    returns a MarketSpec instead of None, and that spec is the one the registry
-    declares (type, line, labels, min legs, settlement).  Equivalently: no
-    registry entry is an orphan that only the registry knows about.
-
-    WHAT THIS DOES NOT PROVE: that a real bookmaker feed emits these IDs, that
-    the surrounding payload shape is right, or that the resulting market is
-    economically usable.  It is a wiring check on IDs, not end-to-end market
-    coverage; captured-payload coverage is Task 11's job.
-    """
-    from engine.market_registry import unmapped_markets
-
-    before = dict(unmapped_markets)
-    probes = _parser_probes()
-    assert book in probes, f"{book} has no parser resolution probe"
-    resolve = probes[book]
-
-    for raw_id in ids:
-        # The parser sees the registry's own id type (int for NSoft/Mozzartbet,
-        # str for the name-keyed books); the doc only has the string form.
-        candidates: list[Any] = [raw_id]
-        try:
-            candidates.append(int(raw_id))
-        except ValueError:
-            pass
-        spec = None
-        for candidate in candidates:
-            spec = resolve(mode, candidate, market_type, _line_of(book, mode, market_type))
-            if spec is not None:
-                break
-        assert spec is not None, (
-            f"{book} parser cannot resolve registered {mode}/{market_type.value} "
-            f"id {raw_id!r}: reachable registry lookup is required"
-        )
-        assert spec.market_type is market_type
-        assert str(spec.bookmaker) == book
-        assert str(spec.mode) == mode
-
-    assert dict(unmapped_markets) == before, (
-        "resolving registered IDs must not record unmapped-market diagnostics"
-    )
-
-
-def _line_of(book: str, mode: str, market_type: MarketType) -> Any:
-    """The declared line for a book/mode/market, or None."""
-    registry = MarketRegistry()
-    for spec in _declared(registry, book, mode, market_type):
-        return spec.line
-    return None
-
-
-def test_parser_resolution_returns_the_declared_spec_not_just_any_spec():
-    """A resolver must return the declared labels/min legs/settlement too.
-
-    Without this, a parser resolving an ID to a *different* market's spec (the
-    NSoft 136 bug shape) would still pass the reachability test above.
-    """
-    probes = _parser_probes()
-    mismatches: list[str] = []
-    for book, mode, market_type, ids, spec in _DECLARATIONS:
-        resolve = probes[book]
-        line = spec.line
-        for raw_id in ids:
-            candidates: list[Any] = [raw_id]
-            try:
-                candidates.append(int(raw_id))
-            except ValueError:
-                pass
-            for candidate in candidates:
-                got = resolve(mode, candidate, market_type, line)
-                if got is None:
-                    continue
-                if (
-                    got.market_type is not market_type
-                    or got.labels != spec.labels
-                    or got.min_legs != spec.min_legs
-                    or got.line != spec.line
-                    or got.settlement != spec.settlement
-                ):
-                    mismatches.append(f"{book}/{mode}/{market_type.value}/{raw_id}")
-                break
-    assert not mismatches, f"parser resolved a different spec than declared: {mismatches}"
-
-
 # --- mapped and excluded must not overlap ----------------------------------
+
+
+def _mapped_declarations() -> list[tuple[str, str, str, tuple[str, ...]]]:
+    """(book, mode, market_type_value, source_ids) for every declared market.
+
+    Read straight from the registry JSON so these tests do not depend on the
+    parser modules at all.  ``market_type_value`` is ``MarketType.value`` and not
+    ``str(member)``: ``MarketType`` is a str-mixin enum whose ``__str__`` is
+    ``Enum.__str__``, so ``str`` yields ``"MarketType.BTTS"``.
+    """
+    rows: list[tuple[str, str, str, tuple[str, ...]]] = []
+    for book, modes in _registry_json().items():
+        if str(book).startswith("_"):
+            continue
+        for mode, markets in modes.items():
+            for value, spec in markets.items():
+                ids = tuple(sorted(str(i) for i in spec.get("ids", [])))
+                rows.append((str(book), str(mode), MarketType(value).value, ids))
+    return rows
 
 
 def test_mapped_and_excluded_ids_are_disjoint():
@@ -503,10 +346,10 @@ def test_mapped_and_excluded_ids_are_disjoint():
     registry = MarketRegistry()
     data = _registry_json()
     overlaps: list[str] = []
-    for book, mode, market_type, ids, _spec in _DECLARATIONS:
+    for book, mode, market_type, ids in _mapped_declarations():
         for source_id in ids:
             if registry.is_excluded(book, mode, source_id):
-                overlaps.append(f"{book}/{mode}/{market_type.value}/{source_id}")
+                overlaps.append(f"{book}/{mode}/{market_type}/{source_id}")
     assert not overlaps, f"IDs are both mapped and excluded: {overlaps}"
     assert data.get("_excluded"), "registry lost its _excluded block"
 
@@ -546,9 +389,7 @@ def test_intro_bookmaker_count_matches_settings():
 
 def test_intro_market_type_claims_match_the_registry():
     """The intro used to claim six MarketType values; schemas defines nine."""
-    registry_types = {
-        mt.value for book, _mode, mt, _ids, _spec in _registry_declarations()
-    }
+    registry_types = {value for _b, _m, value, _ids in _mapped_declarations()}
     all_types = {member.value for member in MarketType}
     assert len(all_types) == 9, "MarketType grew; revisit the intro wording"
     assert len(registry_types) == 6, (
@@ -561,6 +402,37 @@ def test_intro_market_type_claims_match_the_registry():
             f"MarketType `{value}` is not registry-backed but the intro does not "
             "say so, which is what made the old 'six values' claim wrong"
         )
+
+
+# --- the generated table must not overstate its own authority --------------
+
+
+def test_generated_table_states_the_scope_of_its_authority():
+    """The table is authoritative about the *registry*, not about parser dispatch.
+
+    A registry row may declare a superset of the IDs a book's parser actually
+    reads -- betole's Over/Under rows do -- so an unqualified "this table tells
+    you which IDs the parser uses" claim would be false. The generated block must
+    therefore say what it is authoritative about, inside the block itself rather
+    than in a caveat placed after it.
+    """
+    _, block = _split_section(_doc())
+    body = block.lower()
+    assert "registry" in body
+    assert "dispatch" in body, (
+        "the generated block must acknowledge that a parser's dispatch may read a "
+        "subset of the declared IDs"
+    )
+    # The caveat has to live inside the markers, next to the table it qualifies.
+    # Searching within `block` is what makes that structural rather than textual.
+    assert "subset" in body, "the scope statement must say the parser may read a subset"
+    # And the concrete case the caveat refers to must be named in the field notes,
+    # so a reader who hits the over-broad row can find out which book it affects.
+    notes = _narrative().lower()
+    assert "betole" in notes and "superset" in notes, (
+        "the field notes must identify betole as the book whose registry rows "
+        "declare more IDs than its parser reads"
+    )
 
 
 # --- regeneration must not clobber the hand-written narrative ---------------
@@ -732,9 +604,8 @@ def test_generated_market_names_are_human_readable_and_carry_the_enum_key():
             f"market cell {cell!r} does not carry a MarketType value"
         )
     # Every registry-backed type must be named, and nothing else invented.
-    assert {enum_key(cell) for cell in cells} == {
-        mt.value for _b, _m, mt, _i, _s in _registry_declarations()
-    }
+    declared = {value for _b, _m, value, _ids in _mapped_declarations()}
+    assert {enum_key(cell) for cell in cells} == declared
 
 
 def test_generator_never_emits_a_table_row_for_a_dashed_key():

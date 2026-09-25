@@ -291,7 +291,7 @@ def _nsoft_registry() -> MarketRegistry:
     return MARKET_REGISTRY
 
 
-def nsoft_registered_spec(
+def _nsoft_registered_spec(
     bookmaker: str,
     mode: str,
     betid: int | str,
@@ -406,7 +406,7 @@ def parse_nsoft_bets(
         required_legs = 3
 
         if has_registry:
-            spec = nsoft_registered_spec(bookmaker, mode, btid, sbv_val)
+            spec = _nsoft_registered_spec(bookmaker, mode, btid, sbv_val)
             if spec is None:
                 continue
             market_type = spec.market_type
