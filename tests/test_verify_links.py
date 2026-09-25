@@ -19,6 +19,7 @@ import os
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from models.schemas import Market, MarketType, Match, OddsValue
@@ -30,6 +31,7 @@ from scripts.verify_deeplinks import (
     apply_report,
     book_owned_host,
     build_targets,
+    json_event_paths,
     payload_evidence,
     rendered_text_evidence,
     whole_token_span,
@@ -92,6 +94,7 @@ def _report(
     duration: float = 12.5,
     mode: str = "prematch",
 ) -> LinkReport:
+    """A report exactly as `verify_bookmaker` fills one in, errors included."""
     outcomes = list(outcomes or [])
     return LinkReport(
         bookmaker=bookmaker,
@@ -102,6 +105,7 @@ def _report(
         checked=len(outcomes),
         verified=sum(1 for o in outcomes if o.verified),
         failed=sum(1 for o in outcomes if o.error == "" and not o.verified),
+        errored=sum(1 for o in outcomes if o.error),
         duration_seconds=duration,
         outcomes=outcomes,
     )
@@ -161,6 +165,8 @@ def isolate_state(monkeypatch, tmp_path):
     api._deep_link_verifications = {}
     api.cached_matches.clear()
     api.cached_live_matches.clear()
+    api._verify_link_request_times.clear()
+    api._scan_request_times.clear()
     yield
     api.cached_matches[:] = snapshot["prematch"]
     api.cached_live_matches[:] = snapshot["live"]
@@ -311,7 +317,8 @@ def test_the_event_id_in_a_book_owned_payload_is_evidence():
         EVENT_URL,
         EVENT_ID,
     )
-    assert "$.match.id = 9984468" in found[0] or "$.match.id = 9984468" in found[1]
+    assert len(found) >= 1
+    assert "$.match.id = 9984468" in found[0]
     assert f"betting/match/{EVENT_ID}" in found[0]
 
 
@@ -713,6 +720,395 @@ def test_the_live_template_is_used_for_a_live_check():
         live=True,
     )
     assert targets[0].url == f"https://www.mdshop.ba/sport-live?event={EVENT_ID}"
+
+
+# ─── 8. The load-bearing assumption: SUBFRAMES are examined ─────────────────────
+#
+# The whole finding of this task is that the NSoft product renders inside an
+# IFRAME and that the evidence for or against an event lives there, not in the
+# shell. A check that only ever looked at the main frame would report "no
+# evidence" for every event and would INVERT the conclusion. These tests make
+# that regression unshippable: narrow `page.on("response")` to the main frame, or
+# drop the `page.frames` loop, and they fail.
+
+
+class FakeFrame:
+    """A frame as `check_target` uses it: a url, and readable body text."""
+
+    def __init__(self, url: str, text: str = ""):
+        self.url = url
+        self._text = text
+
+    async def inner_text(self, selector: str) -> str:
+        if not self._text:
+            raise AssertionError("frame has no text to read")
+        return self._text
+
+    async def content(self) -> str:
+        return self._text
+
+
+class FakeResponse:
+    """A captured response, tagged with the frame it came from."""
+
+    def __init__(
+        self,
+        url: str,
+        body: str,
+        frame: FakeFrame,
+        content_type: str = "application/json",
+    ):
+        self.url = url
+        self._body = body
+        self.frame = frame
+        self.headers = {"content-type": content_type}
+        self.status = 200
+
+    async def text(self) -> str:
+        return self._body
+
+
+class FakePage:
+    """The minimum Page surface `check_target` touches, with real frames."""
+
+    def __init__(
+        self,
+        main_frame: FakeFrame,
+        responses: list[FakeResponse] | None = None,
+        subframes: list[FakeFrame] | None = None,
+    ):
+        self.main_frame = main_frame
+        self.frames = [main_frame, *(subframes or [])]
+        self._responses = responses or []
+        self._handlers: list = []
+        self.goto_calls: list[str] = []
+
+    def on(self, event: str, handler) -> None:
+        if event == "response":
+            self._handlers.append(handler)
+
+    def remove_listener(self, event: str, handler) -> None:
+        if event == "response" and handler in self._handlers:
+            self._handlers.remove(handler)
+
+    async def goto(
+        self, url: str, wait_until: str = "load", timeout: int = 0
+    ) -> FakeResponse:
+        self.goto_calls.append(url)
+        # Playwright's async event emitter schedules a coroutine handler, so the
+        # fake does the same rather than calling it synchronously.
+        scheduled = [
+            asyncio.ensure_future(handler(response))
+            for response in self._responses
+            for handler in list(self._handlers)
+        ]
+        if scheduled:
+            await asyncio.gather(*scheduled)
+        return FakeResponse(url, "", self.main_frame, "text/html")
+
+    async def wait_for_timeout(self, ms: int) -> None:
+        return None
+
+
+def _check(page: FakePage, event_id: str = EVENT_ID, url: str = EVENT_URL, base: str | None = None):
+    return run(
+        verify_deeplinks.check_target(
+            page, LinkTarget(event_id=event_id, url=url), base or "https://www.mozzartbet.ba"
+        )
+    )
+
+
+def test_a_subframe_response_proves_the_link():
+    """The evidence can arrive from an IFRAME, and it must count."""
+    shell = FakeFrame("https://www.mozzartbet.ba/sr/kladjenje/sport/1/match/9984468")
+    product = FakeFrame("https://www.mozzartbet.ba/betting/#/match")
+    body = f'{{"match":{{"id":{EVENT_ID},"eventName":"Lech Poznan - Thun"}}}}'
+    response = FakeResponse(
+        f"https://www.mozzartbet.ba/betting/match/{EVENT_ID}", body, product
+    )
+    page = FakePage(shell, [response], subframes=[product])
+
+    outcome = _check(page)
+
+    assert outcome.verified is True, outcome.evidence
+    assert f"betting/match/{EVENT_ID}" in outcome.evidence
+
+
+def test_a_main_frame_response_still_proves_the_link():
+    shell = FakeFrame(EVENT_URL)
+    body = f'{{"match":{{"id":{EVENT_ID}}}}}'
+    response = FakeResponse(
+        f"https://www.mozzartbet.ba/betting/match/{EVENT_ID}", body, shell
+    )
+    page = FakePage(shell, [response])
+
+    assert _check(page).verified is True
+
+
+def test_a_subframe_does_not_make_a_third_party_response_evidence():
+    """Subframes are examined; the book-owned host rule still applies to them."""
+    shell = FakeFrame(EVENT_URL)
+    iframe = FakeFrame("https://ads.example/x")
+    body = f'{{"match":{{"id":{EVENT_ID}}}}}'
+    response = FakeResponse(f"https://ads.example/betting/match/{EVENT_ID}", body, iframe)
+    page = FakePage(shell, [response], subframes=[iframe])
+
+    assert _check(page).verified is False
+
+
+def test_rendered_text_of_a_subframe_proves_the_link():
+    shell = FakeFrame(EVENT_URL, text="Klađenje Uživo Slot Registracija")
+    product = FakeFrame(
+        "https://www.mozzartbet.ba/sport-site/#/betting",
+        text=f"Cambridge Utd - AFC Wimbledon\nID utakmice: {EVENT_ID}\n1 2.10  X 3.30",
+    )
+    page = FakePage(shell, subframes=[product])
+
+    outcome = _check(page)
+
+    assert outcome.verified is True, outcome.evidence
+    assert "rendered page text" in outcome.evidence
+
+
+def test_rendered_text_of_the_main_frame_still_proves_the_link():
+    page = FakePage(FakeFrame(EVENT_URL, text=f"Utakmica {EVENT_ID}"), [])
+    assert _check(page).verified is True
+
+
+def test_a_subframe_showing_our_own_url_is_not_evidence():
+    """The echo lives in the shell's iframe src, and the NSoft iframe's own
+    render never repeats the id — a subframe showing the URL proves nothing."""
+    shell = FakeFrame(EVENT_URL, text="sport-prematch")
+    product = FakeFrame(
+        f"https://www.mdshop.ba/sport-site/sr/#/betting/prematch?eventId={EVENT_ID}",
+        text="Fudbal 648 Košarka 184",
+    )
+    page = FakePage(shell, subframes=[product])
+
+    outcome = _check(
+        page,
+        url=f"https://www.mdshop.ba/sport-prematch?sport=Fudbal&event={EVENT_ID}",
+        base="https://www.mdshop.ba",
+    )
+
+    assert outcome.verified is False, outcome.evidence
+
+
+# ─── 9. Throttling, browser concurrency, and the post-await re-check ──────────
+#
+# This endpoint launches a real browser against third-party bookmaker sites for
+# minutes at a time, and `_require_api_key` is a no-op unless API_KEY is set, so
+# it must throttle itself. A lock only SERIALISES: a flood would queue N full
+# runs instead of being refused.
+
+
+def test_verify_links_is_throttled_with_a_429(monkeypatch):
+    _install_checker(monkeypatch)
+    api.cached_matches.extend(_cached(_match()))
+
+    for _ in range(api.DEEP_LINK_VERIFY_RATE_LIMIT):
+        assert client.post("/api/verify-links?bookmaker=mozzartbet").status_code == 200
+
+    r = client.post("/api/verify-links?bookmaker=mozzartbet")
+
+    assert r.status_code == 429
+    assert "Rate limit" in r.json()["detail"]
+
+
+def test_a_throttled_call_does_not_run_the_checker(monkeypatch):
+    calls = _install_checker(monkeypatch)
+    api.cached_matches.extend(_cached(_match()))
+    for _ in range(api.DEEP_LINK_VERIFY_RATE_LIMIT):
+        client.post("/api/verify-links?bookmaker=mozzartbet")
+
+    client.post("/api/verify-links?bookmaker=mozzartbet")
+
+    assert len(calls) == api.DEEP_LINK_VERIFY_RATE_LIMIT
+
+
+def test_the_scan_and_verify_link_budgets_are_separate(monkeypatch):
+    """Reusing the window must not let a scan flood consume the check budget."""
+    assert api._verify_link_request_times is not api._scan_request_times
+
+    class FakeRequest:
+        client = type("C", (), {"host": "10.0.0.9"})()
+
+    for _ in range(3):
+        api._enforce_sliding_window(
+            FakeRequest(), api._scan_request_times, 3, "scans"  # type: ignore[arg-type]
+        )
+    with pytest.raises(HTTPException) as scan_blocked:
+        api._enforce_sliding_window(
+            FakeRequest(), api._scan_request_times, 3, "scans"  # type: ignore[arg-type]
+        )
+    assert scan_blocked.value.status_code == 429
+    assert "scans" in scan_blocked.value.detail
+
+    # The scan budget is spent; the check budget is untouched and still works.
+    _install_checker(monkeypatch)
+    api.cached_matches.extend(_cached(_match()))
+    assert client.post("/api/verify-links?bookmaker=mozzartbet").status_code == 200
+
+    with pytest.raises(HTTPException) as checks_blocked:
+        for _ in range(10):
+            api._enforce_sliding_window(
+                FakeRequest(),
+                api._verify_link_request_times,  # type: ignore[arg-type]
+                api.DEEP_LINK_VERIFY_RATE_LIMIT,
+                "verify-links checks",
+            )
+    assert checks_blocked.value.status_code == 429
+    assert "verify-links" in checks_blocked.value.detail
+
+
+def test_the_check_runs_inside_the_browser_semaphore(monkeypatch):
+    """Browser concurrency must stay bounded by BROWSER_CONCURRENCY, like a scan."""
+    held: list[int] = []
+
+    class RecordingSemaphore:
+        """Wraps the real semaphore so a test can see it was held, not just used."""
+
+        def __init__(self, inner):
+            self.inner = inner
+            self.acquired = 0
+            self.released = 0
+
+        async def acquire(self) -> None:
+            await self.inner.acquire()
+            self.acquired += 1
+            held.append(self.acquired)
+
+        def release(self) -> None:
+            self.released += 1
+            self.inner.release()
+
+        def locked(self) -> bool:
+            return self.inner.locked()
+
+        async def __aenter__(self) -> "RecordingSemaphore":
+            await self.acquire()
+            return self
+
+        async def __aexit__(self, *exc_info) -> None:
+            self.release()
+
+    real_sem = api._browser_sem
+    recorder = RecordingSemaphore(real_sem)
+    monkeypatch.setattr(api, "_browser_sem", recorder)
+
+    async def fake(bookmaker, matches, *, mode, live, limit):
+        return _report(outcomes=[_verified_outcome()])
+
+    monkeypatch.setattr(api, "_run_link_verification", fake)
+    api.cached_matches.extend(_cached(_match()))
+
+    r = client.post("/api/verify-links?bookmaker=mozzartbet")
+
+    assert r.status_code == 200
+    assert held == [1], "the check ran without holding the browser semaphore"
+    assert recorder.released == 1, "the browser semaphore leaked"
+    assert recorder.locked() is False
+    # The real semaphore is back to BROWSER_CONCURRENCY free slots.
+    assert real_sem._value == api.BROWSER_CONCURRENCY
+
+
+def test_a_scan_that_starts_during_the_check_skips_the_cache_write(monkeypatch):
+    saves: list[str] = []
+
+    async def fake(bookmaker, matches, *, mode, live, limit):
+        api.scan_status.is_scanning = True  # a scan starts while we navigate
+        return _report(outcomes=[_verified_outcome()])
+
+    monkeypatch.setattr(api, "_run_link_verification", fake)
+    monkeypatch.setattr(api, "_save_cache", lambda mode="prematch": saves.append(mode))
+    api.cached_matches.extend(_cached(_match()))
+
+    r = client.post("/api/verify-links?bookmaker=mozzartbet")
+
+    assert r.status_code == 200
+    body = r.json()
+    assert body["applied"] is False
+    assert "scan" in body["applied_note"]
+    assert saves == [], "a concurrent scan must not be overwritten"
+    assert api.cached_matches[0]["deep_link_verified"] is False
+
+
+def test_the_proof_is_still_recorded_when_the_cache_write_is_skipped(monkeypatch):
+    """Skipping the cache write must not throw the proof away: the store is
+    per-event, TTL'd and written atomically, and the next scan will apply it."""
+
+    async def fake(bookmaker, matches, *, mode, live, limit):
+        api.scan_status.is_scanning = True
+        return _report(outcomes=[_verified_outcome()])
+
+    monkeypatch.setattr(api, "_run_link_verification", fake)
+    api.cached_matches.extend(_cached(_match()))
+
+    client.post("/api/verify-links?bookmaker=mozzartbet")
+
+    assert f"mozzartbet|{EVENT_ID}" in api._deep_link_verifications["prematch"]
+
+
+def test_a_normal_run_reports_that_it_applied(monkeypatch):
+    _install_checker(monkeypatch, _report(outcomes=[_verified_outcome()]))
+    api.cached_matches.extend(_cached(_match()))
+
+    body = client.post("/api/verify-links?bookmaker=mozzartbet").json()
+
+    assert body["applied"] is True
+    assert body["applied_note"] == ""
+
+
+# ─── 10. The event-id key rule, and the arithmetic of the summary ─────────────
+
+
+@pytest.mark.parametrize(
+    "key",
+    ["id", "ID", "eventId", "matchId", "event_id", "match_id", "gameId", "fixtureId",
+     "originalEventId", "parentMatchId"],
+)
+def test_keys_that_name_an_event_are_accepted(key):
+    assert json_event_paths(f'{{"{key}":{EVENT_ID}}}', EVENT_ID) != []
+
+
+@pytest.mark.parametrize(
+    "key", ["paid", "valid", "grid", "void", "uuid", "maxTotalOdd", "displayNumberFormat",
+            "selectionId", "oddsId"],
+)
+def test_keys_that_merely_end_in_id_are_not_accepted(key):
+    assert json_event_paths(f'{{"{key}":{EVENT_ID}}}', EVENT_ID) == []
+
+
+def test_errored_checks_are_counted_separately():
+    outcomes = [_verified_outcome(), _failed_outcome(event_id="1", url="u1"),
+                _error_outcome(event_id="2", url="u2")]
+    report = _report(outcomes=outcomes)
+
+    report.errored = sum(1 for o in outcomes if o.error)
+
+    assert report.checked == 3
+    assert (report.verified, report.failed, report.errored) == (1, 1, 1)
+    assert report.checked == report.verified + report.failed + report.errored
+
+
+def test_the_response_reports_errored_checks(monkeypatch):
+    _install_checker(
+        monkeypatch, _report(outcomes=[_verified_outcome(), _error_outcome(event_id="1", url="u1")])
+    )
+    api.cached_matches.extend(_cached(_match(), _match(event_id="1")))
+
+    body = client.post("/api/verify-links?bookmaker=mozzartbet").json()
+
+    assert body["checked"] == 2
+    assert body["errored"] == 1
+    assert body["checked"] == body["verified"] + body["failed"] + body["errored"]
+
+
+def test_verify_bookmaker_counts_errored_outcomes():
+    report = _report(outcomes=[_verified_outcome(), _error_outcome()])
+    report.checked = len(report.outcomes)
+    report.errored = sum(1 for o in report.outcomes if o.error)
+    assert report.errored == 1
 
 
 # ─── helpers ──────────────────────────────────────────────────────────────────

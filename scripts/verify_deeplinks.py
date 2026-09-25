@@ -105,7 +105,12 @@ class LinkOutcome:
 
 @dataclass
 class LinkReport:
-    """What one on-demand verification run did, and what it cost."""
+    """What one on-demand verification run did, and what it cost.
+
+    ``checked == verified + failed + errored`` always holds: an errored check
+    (a navigation that never completed) is neither a proof nor a failure, and
+    leaving it out of the summary made the arithmetic look wrong to every reader.
+    """
 
     bookmaker: str
     mode: str = "prematch"
@@ -115,6 +120,7 @@ class LinkReport:
     checked: int = 0
     verified: int = 0
     failed: int = 0
+    errored: int = 0
     duration_seconds: float = 0.0
     outcomes: list[LinkOutcome] = field(default_factory=list)
 
@@ -165,6 +171,21 @@ def whole_token_span(haystack: str, event_id: str) -> tuple[int, int] | None:
     return start, start + len(event_id)
 
 
+# Keys that name an EVENT. A plain `endswith("id")` would also accept `paid`,
+# `valid`, `grid`, `void` and `uuid`, so the rule is an explicit set plus the
+# compound forms (`eventId`, `match_id`, `originalEventId`). Everything else —
+# including `maxTotalOdd` and `displayNumberFormat`, both measured on live
+# payloads — is not allowed to speak for an event.
+EVENT_ID_KEYS = frozenset({"id", "eventid", "matchid", "gameid", "fixtureid"})
+EVENT_ID_KEY_SUFFIXES = ("eventid", "matchid", "gameid", "fixtureid")
+
+
+def is_event_id_key(key: str) -> bool:
+    """Return whether a JSON key names an event, so its value may be the event id."""
+    normalized = key.lower().replace("_", "")
+    return normalized in EVENT_ID_KEYS or normalized.endswith(EVENT_ID_KEY_SUFFIXES)
+
+
 def json_event_paths(body: str, event_id: str, max_hits: int = 3) -> list[str]:
     """Return the JSON paths where a key that names an event holds exactly ``event_id``.
 
@@ -173,8 +194,8 @@ def json_event_paths(body: str, event_id: str, max_hits: int = 3) -> list[str]:
     ``"maxTotalOdd": 999999999999.00`` — a settings value that merely *contains*
     the digits. So a hit requires all three of:
 
-    * a key that names an event (``id``, ``matchId``, ``eventId`` — anything
-      ending in ``id``), so a settings key can never speak for an event,
+    * a key that names an event (:func:`is_event_id_key`), so a settings key can
+      never speak for an event,
     * a value that IS the id (``1234567`` is not ``9984468``), and
     * an integer or string value — never a float, because a decimal amount is
       the exact shape of that false pass.
@@ -198,7 +219,7 @@ def json_event_paths(body: str, event_id: str, max_hits: int = 3) -> list[str]:
         elif isinstance(node, bool):
             return  # bool is an int subclass, and True is not an event
         elif isinstance(node, int | str) and str(node) == event_id:
-            if key.lower().endswith("id"):
+            if is_event_id_key(key):
                 hits.append(f"{path} = {event_id}")
 
     walk(data, "", "$")
@@ -245,14 +266,16 @@ def rendered_text_evidence(text: str, event_id: str) -> str | None:
     """Return evidence when the visible page text carries the event id as a value.
 
     An id next to URL punctuation is a link the page is showing, not a value it
-    resolved, so it is rejected — a dead event is displayed the same way.
+    resolved, so it is rejected — a dead event is displayed the same way. An id
+    at the very start or end of the text has no adjacent character and is fine:
+    `"" in "/?&#"` is True in Python, so the test must skip the empty case.
     """
     span = whole_token_span(text, event_id)
     if span is None:
         return None
     before = text[span[0] - 1] if span[0] else ""
     after = text[span[1]] if span[1] < len(text) else ""
-    if before in URL_PUNCTUATION or after in URL_PUNCTUATION:
+    if (before and before in URL_PUNCTUATION) or (after and after in URL_PUNCTUATION):
         return None
     context = text[max(0, span[0] - 60): span[1] + 40].replace("\n", " ")
     return f'rendered page text shows "…{context}…"'
@@ -481,6 +504,7 @@ async def verify_bookmaker(
     report.checked = len(report.outcomes)
     report.verified = sum(1 for o in report.outcomes if o.verified)
     report.failed = sum(1 for o in report.outcomes if o.completed and not o.verified)
+    report.errored = sum(1 for o in report.outcomes if o.error)
     report.duration_seconds = round((datetime.now(UTC) - started).total_seconds(), 2)
     return report
 

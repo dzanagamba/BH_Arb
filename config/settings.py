@@ -135,6 +135,12 @@ PORT = int(os.getenv("PORT", "8000"))
 API_KEY = os.getenv("API_KEY", "")
 # Max scan triggers per minute per client IP (0 disables the limit)
 SCAN_RATE_LIMIT = int(os.getenv("SCAN_RATE_LIMIT", "3"))
+# Max on-demand deep-link checks per minute per client IP (0 disables the limit).
+# A check drives a real browser against a bookmaker's site for seconds per event,
+# and API_KEY is empty by default, so the endpoint throttles itself: a lock only
+# serialises runs, it does not refuse them.
+DEEP_LINK_VERIFY_RATE_LIMIT = int(os.getenv("DEEP_LINK_VERIFY_RATE_LIMIT", "2"))
+DEEP_LINK_VERIFY_RATE_WINDOW_SECONDS = 60
 
 # --- Cache ---
 CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "cache")

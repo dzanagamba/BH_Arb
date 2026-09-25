@@ -33,6 +33,8 @@ from config.settings import (
     BOOKMAKERS,
     BROWSER_CONCURRENCY,
     CACHE_DIR,
+    DEEP_LINK_VERIFY_RATE_LIMIT,
+    DEEP_LINK_VERIFY_RATE_WINDOW_SECONDS,
     DEFAULT_INVESTMENT,
     DUST_PROFIT_PERCENT,
     ENABLED_MARKETS,
@@ -290,7 +292,10 @@ DEEP_LINK_VERIFY_MAX_LIMIT = 20
 _deep_link_verifications: dict[str, dict[str, dict]] = {}
 _DEEP_LINK_LOCK = threading.Lock()
 # One browser at a time: the check is the most expensive thing this server does.
+# Serialising is not throttling, hence DEEP_LINK_VERIFY_RATE_LIMIT as well.
 _deep_link_check_lock = asyncio.Lock()
+# Per-client-IP window for the deep-link check, separate from the scan's.
+_verify_link_request_times: dict[str, list[float]] = {}
 
 
 def _deep_link_key(bookmaker: str, event_id: str) -> str:
@@ -1193,8 +1198,40 @@ def _load_cache():
 # API Endpoints
 # ---------------------------------------------------------------------------
 
-# Per-client-IP scan rate limiting (in-memory, sliding 60s window)
+# Per-client-IP rate limiting (in-memory, sliding window). The scan window and
+# the deep-link window are separate buckets so one cannot exhaust the other.
+RATE_LIMIT_WINDOW_SECONDS = DEEP_LINK_VERIFY_RATE_WINDOW_SECONDS
 _scan_request_times: dict[str, list[float]] = {}
+
+
+def _enforce_sliding_window(
+    request: Request,
+    bucket: dict[str, list[float]],
+    limit: int,
+    what: str,
+) -> None:
+    """Record one request per client IP in a sliding window, or refuse it.
+
+    A lock only SERIALISES expensive runs, so a flood of them queues N full
+    browser sessions instead of being turned away; this is what actually
+    throttles. Each caller owns its own bucket, so spending the scan budget
+    cannot exhaust the deep-link budget or the reverse.
+    """
+    if limit <= 0:
+        return
+    client_ip = request.client.host if request.client else "unknown"
+    now_ts = time.time()
+    window = [t for t in bucket.get(client_ip, []) if now_ts - t < RATE_LIMIT_WINDOW_SECONDS]
+    if len(window) >= limit:
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                f"Rate limit exceeded: max {limit} {what} per "
+                f"{RATE_LIMIT_WINDOW_SECONDS} seconds"
+            ),
+        )
+    window.append(now_ts)
+    bucket[client_ip] = window
 
 
 @router.post("/scan")
@@ -1220,16 +1257,7 @@ async def trigger_scan(
         }
 
     if SCAN_RATE_LIMIT > 0:
-        client_ip = request.client.host if request.client else "unknown"
-        now_ts = time.time()
-        window = [t for t in _scan_request_times.get(client_ip, []) if now_ts - t < 60]
-        if len(window) >= SCAN_RATE_LIMIT:
-            raise HTTPException(
-                status_code=429,
-                detail=f"Rate limit exceeded: max {SCAN_RATE_LIMIT} scans per minute",
-            )
-        window.append(now_ts)
-        _scan_request_times[client_ip] = window
+        _enforce_sliding_window(request, _scan_request_times, SCAN_RATE_LIMIT, "scans")
 
     async with mode_lock:
         if status.is_scanning:
@@ -1691,6 +1719,7 @@ async def recalculate_stakes(
 
 @router.post("/verify-links")
 async def verify_links(
+    request: Request,
     bookmaker: str = "",
     mode: str = "prematch",
     limit: int = DEEP_LINK_VERIFY_DEFAULT_LIMIT,
@@ -1706,6 +1735,12 @@ async def verify_links(
 
     A bookmaker that declares no per-event route (`supports_event_id: false`)
     has nothing to check and is reported as skipped, never as a failure.
+
+    Cost control, because `API_KEY` is empty by default on most deployments:
+    a per-client sliding window refuses a flood with 429, `_browser_sem` keeps
+    total browser concurrency inside `BROWSER_CONCURRENCY`, and the scan state
+    is re-checked AFTER the multi-minute await so a scan that started meanwhile
+    is never overwritten.
     """
     from scripts.verify_deeplinks import (
         CRITERION,
@@ -1724,8 +1759,6 @@ async def verify_links(
         raise HTTPException(status_code=404, detail=f"Unknown bookmaker: {bookmaker}")
     if mode not in ("prematch", "live"):
         raise HTTPException(status_code=400, detail="mode must be 'prematch' or 'live'")
-    if limit is None:
-        limit = DEEP_LINK_VERIFY_DEFAULT_LIMIT
     if limit < 1:
         raise HTTPException(status_code=400, detail="limit must be at least 1")
     limit = min(limit, DEEP_LINK_VERIFY_MAX_LIMIT)
@@ -1736,6 +1769,10 @@ async def verify_links(
             status_code=409,
             detail=f"A {mode} scan is in progress — retry after it finishes",
         )
+    # Refuse a flood BEFORE paying for a browser. Throttling, not serialising.
+    _enforce_sliding_window(
+        request, _verify_link_request_times, DEEP_LINK_VERIFY_RATE_LIMIT, "verify-links checks"
+    )
 
     base_url = str(BOOKMAKERS[bookmaker]["base_url"])
     if not supports_event_id(bookmaker):
@@ -1749,8 +1786,11 @@ async def verify_links(
             "checked": 0,
             "verified": 0,
             "failed": 0,
+            "errored": 0,
             "unchecked": 0,
             "duration_seconds": 0.0,
+            "applied": False,
+            "applied_note": "",
             "details": [],
         }
 
@@ -1769,25 +1809,50 @@ async def verify_links(
             "checked": 0,
             "verified": 0,
             "failed": 0,
+            "errored": 0,
             "unchecked": 0,
             "duration_seconds": 0.0,
+            "applied": False,
+            "applied_note": "",
             "details": [],
         }
 
+    # One browser at a time, and never more than BROWSER_CONCURRENCY across the
+    # whole server: a scan that starts after the 409 check above still finds its
+    # browser budget respected here.
     async with _deep_link_check_lock:
-        report = await _run_link_verification(
-            bookmaker, matches_cache, mode=mode, live=mode == "live", limit=limit
-        )
+        async with _browser_sem:
+            report = await _run_link_verification(
+                bookmaker, matches_cache, mode=mode, live=mode == "live", limit=limit
+            )
 
+    # A completed check is worth keeping even if a scan overtook us: the store is
+    # per-event, TTL'd and written atomically, and the next scan applies it.
     _record_deep_link_outcomes(mode, bookmaker, report.outcomes)
-    apply_report(matches_cache, report)
-    _apply_deep_link_verifications(matches_cache, mode)
-    _save_cache(mode)
+
+    # Re-check AFTER the multi-minute await. The 409 above is a snapshot taken
+    # minutes before the writes below, and overwriting a running scan's cache
+    # would publish a half-written snapshot of a different feed.
+    status_after, _, _, _, _ = _state_for(mode)
+    scan_underway = _lock_for(mode).locked() or status_after.is_scanning
+    applied = not scan_underway
+    applied_note = ""
+    if applied:
+        apply_report(matches_cache, report)
+        _apply_deep_link_verifications(matches_cache, mode)
+        _save_cache(mode)
+    else:
+        applied_note = (
+            f"a {mode} scan started while this check was running, so the cached "
+            "matches were left untouched; the proof is stored and the next scan "
+            "will apply it"
+        )
 
     logger.info(
         f"Deep-link check {bookmaker}/{mode}: {report.verified} verified, "
-        f"{report.failed} failed of {report.checked} checked "
+        f"{report.failed} failed, {report.errored} errored of {report.checked} checked "
         f"({report.unchecked} of {available} not checked) in {report.duration_seconds}s"
+        f"{'' if applied else ' — cache write skipped'}"
     )
     return {
         "bookmaker": bookmaker,
@@ -1799,8 +1864,11 @@ async def verify_links(
         "checked": report.checked,
         "verified": report.verified,
         "failed": report.failed,
+        "errored": report.errored,
         "unchecked": report.unchecked,
         "duration_seconds": report.duration_seconds,
+        "applied": applied,
+        "applied_note": applied_note,
         "details": [
             {
                 "event_id": outcome.event_id,
