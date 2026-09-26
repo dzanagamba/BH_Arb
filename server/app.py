@@ -8,9 +8,11 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from server.api import (
+    _deep_link_decisions,
     _deep_link_verifications,
     _load_bookmaker_state,
     _load_cache,
+    _load_deep_link_decisions,
     _load_deep_link_verifications,
     _load_history,
     _load_market_state,
@@ -51,6 +53,9 @@ async def on_startup() -> None:
     # with them, so without them every group reads `link_unverified` until the
     # next on-demand check.
     _deep_link_verifications.update(_load_deep_link_verifications())
+    # And which events have already been decided, so a restart does not restart
+    # a link sweep from the book's first event.
+    _deep_link_decisions.update(_load_deep_link_decisions())
     _load_cache()
     _load_bookmaker_state()
     _load_market_state()

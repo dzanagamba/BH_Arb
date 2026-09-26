@@ -218,20 +218,28 @@ python scripts/generate_market_mapping_doc.py --check
 
 # Prove a bookmaker's per-event deep links, one browser navigation per event.
 # Reads cache/last_scan.json, so run a scan first. Defaults to every book that
-# declares a per-event route; --limit defaults to 3.
+# declares a per-event route; --limit defaults to 3, --offset defaults to 0.
 python scripts/verify_deeplinks.py mozzartbet --limit 3
 python scripts/verify_deeplinks.py --mode live --limit 20
+python scripts/verify_deeplinks.py mozzartbet --limit 20 --offset 20
 ```
 
 `verify_deeplinks.py` is deliberately **not** part of a scan: each event costs a
 real browser navigation. It writes its verdicts into
 `cache/deep_link_verifications.json`, and the next scan reads that store.
 
-**It is not a one-shot operation.** `build_targets` has no offset, no cursor and
-no skip-already-checked, so a repeated call re-checks the same first N events
-forever. A per-book sweep over 600+ events cannot converge today; the fix is a
-cursor (with one echoed in the response), not a bigger `--limit`. The HTTP
-endpoint `POST /api/verify-links` is rate-limited and capped for the same reason.
+**A sweep advances — it is not a one-shot operation.** `build_targets` takes
+`settled` (event ids the caller has already decided) and `offset` (a positional
+resume, for a caller with no store of its own — which is the CLI), and the
+`settled` ids are skipped *before* the window is cut, so a call spends its whole
+budget on events nobody has looked at. `POST /api/verify-links` fills `settled`
+itself from the events it has already decided, which it keeps in
+`cache/deep_link_decisions.json`, so its caller keeps no cursor. Every response
+echoes `remaining` — the undecided events the run did not reach — and once a book
+is fully decided the call reports `remaining: 0` and checks nothing, so a sweep
+loop knows when to stop. Only a completed check settles an event: a navigation
+that errored is not a verdict, so it is offered again on the next call. The
+endpoint stays rate-limited and capped for the same reason.
 
 ### Known defects, recorded in-repo
 

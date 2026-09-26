@@ -200,11 +200,19 @@ a link-less book — is in the model, asserted in tests, and **reachable by no o
 response, and after no restart.** This is the only place a wrong declaration would surface, and
 it is currently invisible. Rated Important by the safety review.
 
-### 3. Add a cursor to `build_targets`
-`scripts/verify_deeplinks.py:301` walks matches in cache order and `break`s at `limit`. It has no
-offset, no cursor, and no skip-already-checked. Repeated calls re-check the same first N events
-forever. **A per-book sweep over 600+ events is impossible today.** Note the throttle is *not*
-the blocker — a bigger limit would not help. Disclosed to the user at `README.md:230-233`.
+### 3. ~~Add a cursor to `build_targets`~~ (fixed)
+It walked matches in cache order and `break`ed at `limit`, with no offset, no cursor and no
+skip-already-checked, so repeated calls re-checked the same first N events forever and a per-book
+sweep over 600+ events was impossible. **Now:** `build_targets` takes `settled` (ids the caller has
+already decided, skipped *before* the window is cut) and `offset` (a positional resume, for a caller
+with no store — the CLI). `POST /api/verify-links` fills `settled` itself from the new
+`cache/deep_link_decisions.json`, which records every **completed** check, so its caller keeps no
+cursor, and every response echoes `remaining` so a sweep loop knows when to stop. Two design points
+worth knowing before changing it: a completed **fail** must settle too (the proof store deletes
+those, so without the decisions store a book whose links do not verify can never advance), and a
+**proof must not settle** (a proven link has to stay re-checkable so a later completed fail can
+clear it — `?recheck=1` is the way back for a decided event). The throttle was never the blocker and
+is unchanged at 2 calls/min; a cursor is what made those calls worth making.
 
 ### 4. Make `group_matches` order-insensitive, or document the order
 16 → 106 groups from the same input is a 6× swing driven by iteration order. It affects yield

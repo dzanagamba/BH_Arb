@@ -34,6 +34,14 @@ checker. See
 Run it directly:
 
     python scripts/verify_deeplinks.py mozzartbet --limit 3
+    python scripts/verify_deeplinks.py mozzartbet --limit 20 --offset 20
+
+A book publishes hundreds of events and each costs a real navigation, so a sweep
+is many calls. The CLI keeps no record of what it has already decided, so it is
+driven by ``--offset`` — resume at the Nth undecided event — and every printed
+report echoes ``next_offset`` and ``remaining`` for the next call. The
+``POST /api/verify-links`` endpoint needs no cursor from its caller: it reads the
+events it has already decided out of its own store and skips them itself.
 
 It is deliberately NOT part of a scan: each event costs a real browser
 navigation (seconds), so triggering it from ``run_scan`` would turn a scan into
@@ -47,7 +55,8 @@ import asyncio
 import json
 import os
 import sys
-from dataclasses import dataclass, field
+from collections.abc import Collection
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlsplit
@@ -112,6 +121,10 @@ class LinkReport:
     ``checked == verified + failed + errored`` always holds: an errored check
     (a navigation that never completed) is neither a proof nor a failure, and
     leaving it out of the summary made the arithmetic look wrong to every reader.
+
+    ``next_offset`` and ``remaining`` exist so a sweep can be driven from the
+    report alone. They are populated only when a run actually checked something;
+    on the two early returns they stay 0, because no window was ever cut.
     """
 
     bookmaker: str
@@ -124,6 +137,8 @@ class LinkReport:
     failed: int = 0
     errored: int = 0
     duration_seconds: float = 0.0
+    next_offset: int = 0
+    remaining: int = 0
     outcomes: list[LinkOutcome] = field(default_factory=list)
 
     @property
@@ -304,10 +319,36 @@ def build_targets(
     base_url: str,
     live: bool = False,
     limit: int | None = None,
+    offset: int = 0,
+    settled: Collection[str] = (),
 ) -> list[LinkTarget]:
-    """Build one target per distinct event id a bookmaker published."""
+    """Build one target per distinct event id a bookmaker published.
+
+    The result is a WINDOW, not a list, and the two cursor arguments are applied
+    in this order, which is the whole contract:
+
+    1. walk the feed in order, dropping other books, blank ids and repeats;
+    2. skip any event id in ``settled`` — ids the caller has already DECIDED,
+       verified or failed. This happens BEFORE the limit is counted, so a run
+       spends its whole budget on events nobody has decided. It is the primary
+       mechanism: it is idempotent, it needs no state from the caller, and it
+       survives the feed growing at the head;
+    3. skip the first ``offset`` of what is left (a negative offset is clamped to
+       0, so it can never index from the end of the book);
+    4. stop at ``limit``.
+
+    ``offset`` exists for a caller with no store of its own — the CLI. It is a
+    position in the POST-skip ordering, so it is only comparable between calls
+    that skip the same set; combining it with a ``settled`` set that has grown
+    since skips further ahead than the number says. The caller decides what is
+    settled, so an event whose check ERRORED must never appear in ``settled``:
+    see :func:`apply_report`, which is the other half of that rule.
+    """
     targets: list[LinkTarget] = []
     seen: set[str] = set()
+    decided = {str(event_id) for event_id in settled}
+    start = max(0, offset)
+    undecided_seen = 0
     for match in matches:
         if _field(match, "bookmaker") != bookmaker:
             continue
@@ -316,6 +357,11 @@ def build_targets(
         if not event_id or event_id in seen:
             continue
         seen.add(event_id)
+        if event_id in decided:
+            continue
+        undecided_seen += 1
+        if undecided_seen <= start:
+            continue
         targets.append(
             LinkTarget(event_id=event_id, url=build_event_url(bookmaker, event_id, base_url, live))
         )
@@ -455,12 +501,27 @@ async def verify_bookmaker(
     live: bool | None = None,
     limit: int | None = None,
     base_url: str | None = None,
+    offset: int = 0,
+    settled: Collection[str] = (),
 ) -> LinkReport:
     """Open each of a bookmaker's per-event deep links and report what served.
 
     A bookmaker that declares no per-event route is skipped without launching a
     browser: there is no route to check, and "we never tried" must never be
     reported as a failure.
+
+    ``offset`` and ``settled`` are the cursor (see :func:`build_targets`). The
+    report then says where this run stopped and how much is left:
+
+    * ``next_offset`` = ``offset + len(targets)`` — the position to resume from
+      **in the post-skip ordering**, so only comparable against a run that
+      skipped the same ``settled`` set,
+    * ``remaining`` = the undecided targets this run did not reach, counted from
+      that position onwards. It is the same number as :attr:`LinkReport.unchecked`
+      — ``available`` already excludes what the cursor passed. An event this run
+      REACHED but that errored is therefore not counted in ``remaining``: it is
+      in ``errored``, and because an error is not a decision it is not in the
+      caller's next ``settled`` set, so the next run offers it again.
     """
     started = datetime.now(UTC)
     if not supports_event_id(bookmaker):
@@ -474,7 +535,9 @@ async def verify_bookmaker(
     if live is None:
         live = mode == "live"
     base_url = base_url or str(BOOKMAKERS[bookmaker]["base_url"])
-    available = build_targets(matches, bookmaker, base_url, live=live)
+    available = build_targets(
+        matches, bookmaker, base_url, live=live, offset=offset, settled=settled
+    )
     if not available:
         # Nothing to check: report it instead of paying for a browser launch.
         return LinkReport(
@@ -482,8 +545,8 @@ async def verify_bookmaker(
             mode=mode,
             status="checked",
             skip_reason=(
-                f"no {bookmaker} match carries an event id — nothing to check "
-                "(run a scan first)"
+                f"no {bookmaker} match carries an undecided event id — nothing to check "
+                "(run a scan first, or every event has already been decided)"
             ),
             duration_seconds=round((datetime.now(UTC) - started).total_seconds(), 2),
         )
@@ -512,6 +575,8 @@ async def verify_bookmaker(
     report.verified = sum(1 for o in report.outcomes if o.verified)
     report.failed = sum(1 for o in report.outcomes if o.completed and not o.verified)
     report.errored = sum(1 for o in report.outcomes if o.error)
+    report.next_offset = max(0, offset) + len(targets)
+    report.remaining = max(0, len(available) - len(targets))
     report.duration_seconds = round((datetime.now(UTC) - started).total_seconds(), 2)
     return report
 
@@ -533,6 +598,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("bookmakers", nargs="*", help="bookmaker ids (default: every declared one)")
     parser.add_argument("--mode", default="prematch", choices=("prematch", "live"))
     parser.add_argument("--limit", type=int, default=3, help="max events per bookmaker")
+    parser.add_argument(
+        "--offset",
+        type=int,
+        default=0,
+        help=(
+            "resume at this undecided event (0 = the first one). The CLI has no store of "
+            "its own, so this is how a sweep is driven here; the HTTP endpoint derives "
+            "the equivalent from the events it has already decided"
+        ),
+    )
     args = parser.parse_args(argv)
 
     books = args.bookmakers or [b for b in BOOKMAKERS if supports_event_id(b)]
@@ -542,9 +617,14 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps({"bookmaker": bookmaker, "error": "unknown bookmaker"}))
             continue
         report = asyncio.run(
-            verify_bookmaker(bookmaker, matches, mode=args.mode, limit=args.limit)
+            verify_bookmaker(
+                bookmaker, matches, mode=args.mode, limit=args.limit, offset=args.offset
+            )
         )
-        print(json.dumps(report.__dict__, ensure_ascii=False, indent=2))
+        # `asdict`, not `__dict__`: a report's `outcomes` are `LinkOutcome`s, which
+        # are not JSON-serialisable, so printing `__dict__` raised TypeError on the
+        # first completed check — the command in this module's own docstring.
+        print(json.dumps(asdict(report), ensure_ascii=False, indent=2))
     return 0
 
 

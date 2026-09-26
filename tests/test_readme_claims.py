@@ -815,25 +815,56 @@ def test_tool_check_fails_when_the_readme_documents_an_invented_flag():
 
 
 # ===========================================================================
-# 8. The convergence caveat, tied to the function that causes it
+# 8. How a link sweep advances, tied to the function that makes it advance
 # ===========================================================================
 
 
-def _convergence_problems(text: str) -> list[str]:
-    """The README's "cannot converge" claim, against ``build_targets`` itself."""
+def _convergence_problems(text: str, source: str | None = None) -> list[str]:
+    """The README's account of sweep convergence, against ``build_targets`` itself.
+
+    Both directions, because a stale caveat and an invented capability are the
+    same defect: the README said "cannot converge" while the function had no
+    cursor, and the day the function grew one the sentence became false. So the
+    warning is required exactly while the cursor is absent, and the description
+    of the cursor is required exactly while it is present.
+
+    Scoped to the claims that name ``build_targets``, not the whole section. The
+    certainty section runs ~130 lines, and a check that only asks whether
+    ``offset`` occurs *somewhere* in it is the weak shape this file exists to
+    avoid: a neighbouring paragraph's mention would stand in for the explanation.
+    ``source`` is a parameter so a companion can prove the code-side branch fails.
+    """
     problems: list[str] = []
-    if "cannot converge" not in _section(text, "## Match & mapping certainty"):
-        problems.append("the README no longer warns that the link sweep cannot converge")
-    source = (REPO_ROOT / "scripts" / "verify_deeplinks.py").read_text(encoding="utf-8")
+    section = _section(text, "## Match & mapping certainty")
+    carriers = [claim for claim in _claims(section) if "build_targets" in claim]
+    if source is None:
+        source = (REPO_ROOT / "scripts" / "verify_deeplinks.py").read_text(encoding="utf-8")
     for node in ast.walk(ast.parse(source)):
         if not (isinstance(node, ast.FunctionDef) and node.name == "build_targets"):
             continue
         params = {arg.arg for arg in node.args.args}
         names = {target.id for target in ast.walk(node) if isinstance(target, ast.Name)}
-        if params & {"offset", "cursor", "start_after", "skip_verified"}:
+        has_cursor = {"offset", "settled"} <= params
+        if has_cursor:
+            if "cannot converge" in section:
+                problems.append(
+                    "build_targets takes offset and settled, so the README's claim that a "
+                    "per-book sweep cannot converge is stale"
+                )
+            # One claim must name the function AND explain both halves of the cursor.
+            explained = [
+                claim for claim in carriers
+                if "`settled`" in claim and "`offset`" in claim and "skip" in claim.lower()
+            ]
+            if not explained:
+                problems.append(
+                    "no claim naming build_targets explains that `settled` ids are skipped "
+                    "before the window is cut and what `offset` resumes at"
+                )
+        elif "cannot converge" not in section:
             problems.append(
-                f"build_targets now takes a {sorted(params)}; the README's claim that a "
-                "per-book sweep cannot converge is stale"
+                f"build_targets takes {sorted(params)}; the README no longer warns that a "
+                "sweep cannot converge"
             )
         if "seen" not in names:
             problems.append("build_targets no longer dedupes event ids; re-read the claim")
@@ -844,16 +875,42 @@ def _convergence_problems(text: str) -> list[str]:
 
 
 def test_convergence_caveat_matches_build_targets():
-    """The README's warning is tied to the function that causes it."""
+    """The README's account of a sweep is tied to the function that makes it."""
     problems = _convergence_problems(README)
     assert problems == [], "; ".join(problems)
 
 
 def test_convergence_check_fails_when_the_readme_drops_the_warning():
     """Proves the previous test reads the warning out of the document."""
-    broken = README.replace("cannot converge today", "converges quickly")
+    broken = README.replace("advances", "cannot converge today")
     assert broken != README, "the mutation did not apply; the check is untested"
-    assert _convergence_problems(broken), "a README dropping the warning passed"
+    assert _convergence_problems(broken), "a README dropping the cursor passed"
+
+
+def test_convergence_check_fails_when_only_one_half_of_the_cursor_is_explained():
+    """`settled` and `offset` are different mechanisms; explaining one is not
+    explaining the other, so a claim that drops `offset` alone must fail."""
+    broken = README.replace("`offset` (a positional\nresume, for a caller with no store of its own — which is the CLI), and the",
+                            "and the")
+    assert broken != README, "the mutation did not apply; the check is untested"
+    assert _convergence_problems(broken), "a README describing only `settled` passed"
+
+
+def test_convergence_check_fails_when_the_code_loses_the_cursor():
+    """The other direction: a README that promises a cursor `build_targets` does
+    not have is the same defect, and only reading the code catches it."""
+    source = (REPO_ROOT / "scripts" / "verify_deeplinks.py").read_text(encoding="utf-8")
+    stripped = source.replace("    offset: int = 0,\n", "").replace(
+        "    settled: Collection[str] = (),\n", ""
+    )
+    assert stripped != source, "the mutation did not apply; the check is untested"
+    problems = _convergence_problems(README, source=stripped)
+    assert any("cannot converge" in problem for problem in problems), problems
+
+
+def test_convergence_check_fails_when_build_targets_is_gone():
+    problems = _convergence_problems(README, source="def other():\n    pass\n")
+    assert any("gone" in problem for problem in problems), problems
 
 
 # ===========================================================================

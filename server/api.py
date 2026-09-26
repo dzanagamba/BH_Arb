@@ -326,12 +326,36 @@ def _state_for(mode: str) -> tuple[ScanStatus, list, list, list, dict]:
 # record, keyed per mode (a live event id is not a prematch one) and bounded by
 # a TTL: a bookmaker can retire an event at any time, and a dead link must stop
 # unblocking `verified` on its own.
+#
+# TWO STORES, because the check answers two different questions and the sweep
+# needs both:
+#
+# * `_deep_link_verifications` — PROOFS. "This link served this event." A
+#   completed check that found nothing DELETES the entry, which is how a stale
+#   proof is cleared. So this store cannot answer "did we look at it?", only
+#   "did it pass?".
+# * `_deep_link_decisions` — DECISIONS. "We looked at this event and reached a
+#   verdict", including a verdict of `verified=False`. Without it, a book whose
+#   links do not verify stores nothing at all and the sweep re-checks its first
+#   `limit` events forever — the defect this store exists to close.
+#
+# Both are keyed `bookmaker|event_id`, both expire, and neither may be written
+# from an ERRORED check: a navigation that never completed is neither a proof nor
+# a failure, and treating it as either would drop an event that still needs
+# checking.
 # ---------------------------------------------------------------------------
 DEEP_LINK_VERIFICATIONS_FILE = os.path.join(CACHE_DIR, "deep_link_verifications.json")
+DEEP_LINK_DECISIONS_FILE = os.path.join(CACHE_DIR, "deep_link_decisions.json")
 DEEP_LINK_VERIFICATION_TTL_SECONDS = 3600
+# A decision is a statement about a moment, exactly like a proof, so it expires
+# on the same clock: a book is re-walked rather than frozen out of the sweep
+# after one pass. Its own constant, NOT derived from the rate-limit window —
+# those are unrelated and a derivation there once moved the scan's budget.
+DEEP_LINK_DECISION_TTL_SECONDS = 3600
 DEEP_LINK_VERIFY_DEFAULT_LIMIT = 5
 DEEP_LINK_VERIFY_MAX_LIMIT = 20
 _deep_link_verifications: dict[str, dict[str, dict]] = {}
+_deep_link_decisions: dict[str, dict[str, dict]] = {}
 _DEEP_LINK_LOCK = threading.Lock()
 # One browser at a time: the check is the most expensive thing this server does.
 # Serialising is not throttling, hence DEEP_LINK_VERIFY_RATE_LIMIT as well.
@@ -413,6 +437,104 @@ def _record_deep_link_outcomes(mode: str, bookmaker: str, outcomes: list) -> Non
         _save_deep_link_verifications(_deep_link_verifications)
 
 
+def _deep_link_decision_is_fresh(record: dict, now: datetime | None = None) -> bool:
+    """Return whether a stored DECISION is still inside its TTL.
+
+    A decision carries no verdict, so there is nothing to check but the
+    timestamp — the point of the record is that a check COMPLETED, and that is
+    only true for as long as the operator is expected to trust it.
+    """
+    if not isinstance(record, dict):
+        return False
+    raw = record.get("checked_at")
+    if not isinstance(raw, str):
+        return False
+    try:
+        checked_at = datetime.fromisoformat(raw)
+    except ValueError:
+        return False
+    if checked_at.tzinfo is not None:
+        checked_at = checked_at.astimezone(UTC).replace(tzinfo=None)
+    reference = now or datetime.now(UTC).replace(tzinfo=None)
+    age = (reference - checked_at).total_seconds()
+    return 0 <= age <= DEEP_LINK_DECISION_TTL_SECONDS
+
+
+def _load_deep_link_decisions() -> dict[str, dict[str, dict]]:
+    """Load the decision store, dropping entries that are malformed or past TTL."""
+    state: dict[str, dict[str, dict]] = {}
+    try:
+        with open(DEEP_LINK_DECISIONS_FILE, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, TypeError, ValueError):
+        return state
+    if not isinstance(data, dict):
+        return state
+    for mode, entries in data.items():
+        if not isinstance(mode, str) or not isinstance(entries, dict):
+            continue
+        fresh = {k: v for k, v in entries.items() if isinstance(k, str)
+                 and _deep_link_decision_is_fresh(v)}
+        if fresh:
+            state[mode] = fresh
+    return state
+
+
+def _save_deep_link_decisions(state: dict[str, dict[str, dict]]) -> None:
+    _atomic_write_json(DEEP_LINK_DECISIONS_FILE, state, "deep_link_decisions")
+
+
+def _record_deep_link_decisions(mode: str, bookmaker: str, outcomes: list) -> None:
+    """Record which events a run reached a VERDICT on, per mode.
+
+    Completed checks only. An errored check is recorded nowhere, which is what
+    keeps the event eligible: a navigation that never completed decided nothing,
+    so the next call must offer it again.
+
+    Expired decisions are dropped on the way out, so a long-lived server's file
+    cannot grow without bound.
+    """
+    now = datetime.now(UTC).replace(tzinfo=None)
+    now_iso = now.isoformat()
+    with _DEEP_LINK_LOCK:
+        entries = _deep_link_decisions.setdefault(mode, {})
+        for outcome in outcomes:
+            if outcome.error:
+                continue
+            entries[_deep_link_key(bookmaker, outcome.event_id)] = {"checked_at": now_iso}
+        fresh = {k: v for k, v in entries.items() if _deep_link_decision_is_fresh(v, now)}
+        if len(fresh) != len(entries):
+            entries.clear()
+            entries.update(fresh)
+        _save_deep_link_decisions(_deep_link_decisions)
+
+
+def _decided_event_ids(
+    mode: str, bookmaker: str, now: datetime | None = None
+) -> set[str]:
+    """Return the event ids this book has already been CHECKED on, in one mode.
+
+    Read from the DECISION store and from nothing else — deliberately. A proof
+    says the check passed, but the sweep's question is "did we look at it?", and
+    conflating the two takes away a capability the store depends on: a link that
+    has been proven can only STOP unblocking a `verified` group if it can be
+    checked again and fail, so a decided event must be re-offered deliberately
+    (`?recheck=1`) rather than being unable to be re-checked at all. The two
+    stores share a TTL and a completed check writes both, so nothing is lost by
+    reading only the decisions.
+
+    Book-scoped (`bookmaker|event_id`), per mode, and TTL-filtered: another
+    book's decisions, another mode's, and anything stale are all absent.
+    """
+    reference = now or datetime.now(UTC).replace(tzinfo=None)
+    prefix = f"{bookmaker}|"
+    return {
+        key[len(prefix):]
+        for key, record in (_deep_link_decisions.get(mode) or {}).items()
+        if key.startswith(prefix) and _deep_link_decision_is_fresh(record, reference)
+    }
+
+
 def _apply_deep_link_verifications(
     matches: list, mode: str, now: datetime | None = None
 ) -> int:
@@ -464,11 +586,15 @@ async def _run_link_verification(
     mode: str = "prematch",
     live: bool = False,
     limit: int | None = None,
+    offset: int = 0,
+    settled: set[str] | frozenset[str] = frozenset(),
 ):
     """Run the Playwright deep-link check. The endpoint's only browser seam."""
     from scripts.verify_deeplinks import verify_bookmaker
 
-    return await verify_bookmaker(bookmaker, matches, mode=mode, live=live, limit=limit)
+    return await verify_bookmaker(
+        bookmaker, matches, mode=mode, live=live, limit=limit, offset=offset, settled=settled
+    )
 
 
 def _load_history() -> None:
@@ -1854,6 +1980,8 @@ async def verify_links(
     bookmaker: str = "",
     mode: str = "prematch",
     limit: int = DEEP_LINK_VERIFY_DEFAULT_LIMIT,
+    offset: int = 0,
+    recheck: bool = False,
     _auth: None = Depends(_require_api_key),
 ):
     """Prove — or fail to prove — one bookmaker's per-event deep links.
@@ -1867,11 +1995,36 @@ async def verify_links(
     A bookmaker that declares no per-event route (`supports_event_id: false`)
     has nothing to check and is reported as skipped, never as a failure.
 
+    THE SWEEP SELF-ADVANCES, and that is the point. The events this book has
+    already been CHECKED on — every completed check, whether it proved the link
+    or not, from :func:`_decided_event_ids` — are skipped before the window is
+    cut, so a run always spends its budget on events nobody has looked at, and
+    repeated calls walk the book instead of replaying its first `limit` events.
+    The caller keeps no state and holds no cursor; the store does. When every
+    event has been decided the call reports `remaining: 0` and checks nothing,
+    so a sweep loop can stop. A stored PROOF does not by itself settle an event
+    (see :func:`_decided_event_ids` for why), so a proven link can still be
+    checked again and fail.
+
+    `offset` is the OTHER mechanism, for a caller with no store of the server's
+    verdicts: it resumes at the Nth undecided event. It is a position in the
+    POST-skip ordering and the skip set grows as the sweep proceeds, so a cursor
+    carried over from an earlier call skips further ahead than the number says.
+    Leave it at 0 here. The response echoes `offset` and `settled_count` so the
+    composition is visible rather than something a caller has to know.
+
+    `recheck=1` ignores the recorded decisions for one call, which is the only
+    way back to an event this server has already decided — needed because a
+    proven link stops unblocking a `verified` group only by being checked again
+    and failing. A sweep should not pay for that, so it is opt-in.
+
     Cost control, because `API_KEY` is empty by default on most deployments:
     a per-client sliding window refuses a flood with 429, `_browser_sem` keeps
     total browser concurrency inside `BROWSER_CONCURRENCY`, and the scan state
     is re-checked AFTER the multi-minute await so a scan that started meanwhile
-    is never overwritten.
+    is never overwritten. The window is charged before the browser work, so the
+    rate limit is what paces a sweep — raising it means a browser per call, and
+    the cursor is what made those calls worth making.
     """
     from scripts.verify_deeplinks import (
         CRITERION,
@@ -1892,6 +2045,8 @@ async def verify_links(
         raise HTTPException(status_code=400, detail="mode must be 'prematch' or 'live'")
     if limit < 1:
         raise HTTPException(status_code=400, detail="limit must be at least 1")
+    if offset < 0:
+        raise HTTPException(status_code=400, detail="offset must be at least 0")
     limit = min(limit, DEEP_LINK_VERIFY_MAX_LIMIT)
 
     status, _, matches_cache, _, _ = _state_for(mode)
@@ -1915,6 +2070,10 @@ async def verify_links(
             "failed": 0,
             "errored": 0,
             "unchecked": 0,
+            "remaining": 0,
+            "offset": offset,
+            "settled_count": 0,
+            "next_offset": 0,
             "duration_seconds": 0.0,
             # None, not False: nothing was written because nothing needed to be,
             # which is not the same as a write being suppressed.
@@ -1923,8 +2082,9 @@ async def verify_links(
             "details": [],
         }
 
-    available = len(build_targets(matches_cache, bookmaker, base_url, live=mode == "live"))
-    if available == 0:
+    live = mode == "live"
+    published = len(build_targets(matches_cache, bookmaker, base_url, live=live))
+    if published == 0:
         return {
             "bookmaker": bookmaker,
             "mode": mode,
@@ -1940,15 +2100,54 @@ async def verify_links(
             "failed": 0,
             "errored": 0,
             "unchecked": 0,
+            "remaining": 0,
+            "offset": offset,
+            "settled_count": 0,
+            "next_offset": 0,
             "duration_seconds": 0.0,
             "applied": None,
             "applied_note": "",
             "details": [],
         }
 
-    # Charged here, not above: a book that declares no route and a cache with no
-    # event ids both return without touching a browser, and a UI that probes
-    # either would otherwise spend the budget doing nothing.
+    settled: set[str] = set() if recheck else _decided_event_ids(mode, bookmaker)
+    available = len(
+        build_targets(
+            matches_cache, bookmaker, base_url, live=live, offset=offset, settled=settled
+        )
+    )
+    if available == 0:
+        # Converged. Saying so — and checking nothing — is what lets a sweep
+        # loop stop instead of re-checking the book until the throttle cuts it.
+        return {
+            "bookmaker": bookmaker,
+            "mode": mode,
+            "status": "checked",
+            "skip_reason": (
+                f"every {bookmaker} event in the {mode} cache has already been decided "
+                f"({len(settled)} settled, {published} published) — nothing left to check"
+            ),
+            "criterion": CRITERION,
+            "available": 0,
+            "checked": 0,
+            "verified": 0,
+            "failed": 0,
+            "errored": 0,
+            "unchecked": 0,
+            "remaining": 0,
+            "offset": offset,
+            "settled_count": len(settled),
+            "next_offset": 0,
+            "duration_seconds": 0.0,
+            "applied": None,
+            "applied_note": "",
+            "details": [],
+        }
+
+    # Charged here, not above: a book that declares no route, a cache with no
+    # event ids, and a book that is already fully decided all return without
+    # touching a browser, and a UI that probes any of them would otherwise spend
+    # the budget doing nothing.
     _enforce_sliding_window(
         request, _verify_link_request_times, DEEP_LINK_VERIFY_RATE_LIMIT, "verify-links checks"
     )
@@ -1959,12 +2158,21 @@ async def verify_links(
     async with _deep_link_check_lock:
         async with _browser_sem:
             report = await _run_link_verification(
-                bookmaker, matches_cache, mode=mode, live=mode == "live", limit=limit
+                bookmaker,
+                matches_cache,
+                mode=mode,
+                live=live,
+                limit=limit,
+                offset=offset,
+                settled=settled,
             )
 
     # A completed check is worth keeping even if a scan overtook us: the store is
     # per-event, TTL'd and written atomically, and the next scan applies it.
     _record_deep_link_outcomes(mode, bookmaker, report.outcomes)
+    # And so is the fact that the events were DECIDED, which is what keeps the
+    # next call off them. Outside the `applied` branch for the same reason.
+    _record_deep_link_decisions(mode, bookmaker, report.outcomes)
 
     # Re-check AFTER the multi-minute await. The 409 above is a snapshot taken
     # minutes before the writes below, and overwriting a running scan's cache
@@ -2005,6 +2213,14 @@ async def verify_links(
         "failed": report.failed,
         "errored": report.errored,
         "unchecked": report.unchecked,
+        # Undecided events this run did not reach, and where to resume. `remaining`
+        # counts from `offset` onwards, so it is the same number as `unchecked` here;
+        # an event this run reached and could not complete is in `errored` and is
+        # still undecided, which is why `remaining` can read 0 with work left.
+        "remaining": report.remaining,
+        "offset": offset,
+        "settled_count": len(settled),
+        "next_offset": report.next_offset,
         "duration_seconds": report.duration_seconds,
         "applied": applied,
         "applied_note": applied_note,

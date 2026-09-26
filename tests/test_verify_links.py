@@ -93,6 +93,8 @@ def _report(
     available: int | None = None,
     duration: float = 12.5,
     mode: str = "prematch",
+    next_offset: int = 0,
+    remaining: int = 0,
 ) -> LinkReport:
     """A report exactly as `verify_bookmaker` fills one in, errors included."""
     outcomes = list(outcomes or [])
@@ -107,8 +109,30 @@ def _report(
         failed=sum(1 for o in outcomes if o.error == "" and not o.verified),
         errored=sum(1 for o in outcomes if o.error),
         duration_seconds=duration,
+        next_offset=next_offset,
+        remaining=remaining,
         outcomes=outcomes,
     )
+
+
+def _feed(count: int, bookmaker: str = "mozzartbet", start: int = 0) -> list[dict]:
+    """`count` cached matches for one book with event ids `"start"`, `"start"+1`, …
+
+    Target selection reads only `bookmaker` and `event_id`, so nothing else in the
+    cached shape matters here — which is the point: the cursor is a property of
+    the feed, not of the matcher.
+    """
+    return [
+        {"bookmaker": bookmaker, "event_id": str(i), "deep_link_verified": False}
+        for i in range(start, start + count)
+    ]
+
+
+def _ids(targets) -> list[str]:
+    return [t.event_id for t in targets]
+
+
+MOZ_BASE = "https://www.mozzartbet.ba"
 
 
 def _verified_outcome(event_id: str = EVENT_ID, url: str = EVENT_URL) -> LinkOutcome:
@@ -156,13 +180,18 @@ def isolate_state(monkeypatch, tmp_path):
         "status": api.scan_status.model_dump(),
         "live_status": api.live_status.model_dump(),
         "verifications": api._deep_link_verifications,
+        "decisions": api._deep_link_decisions,
     }
     monkeypatch.setattr(
         api, "DEEP_LINK_VERIFICATIONS_FILE", str(tmp_path / "deep_link_verifications.json")
     )
+    monkeypatch.setattr(
+        api, "DEEP_LINK_DECISIONS_FILE", str(tmp_path / "deep_link_decisions.json")
+    )
     monkeypatch.setattr(api, "_save_cache", lambda *a, **k: None)
     monkeypatch.setattr(api, "ALLOWLIST_FILE", str(tmp_path / "team_alias_allowlist.json"))
     api._deep_link_verifications = {}
+    api._deep_link_decisions = {}
     api.cached_matches.clear()
     api.cached_live_matches.clear()
     api._verify_link_request_times.clear()
@@ -183,6 +212,7 @@ def isolate_state(monkeypatch, tmp_path):
     for key, value in snapshot["live_status"].items():
         setattr(api.live_status, key, value)
     api._deep_link_verifications = snapshot["verifications"]
+    api._deep_link_decisions = snapshot["decisions"]
     api._verify_link_request_times.clear()
     api._scan_request_times.clear()
 
@@ -194,7 +224,7 @@ def _install_checker(monkeypatch, report: LinkReport | None = None, outcome=None
     if result is None:
         result = _report(outcomes=[outcome] if outcome is not None else [])
 
-    async def fake(bookmaker, matches, *, mode, live, limit):
+    async def fake(bookmaker, matches, *, mode, live, limit, base_url=None, offset=0, settled=()):
         calls.append(
             {
                 "bookmaker": bookmaker,
@@ -202,6 +232,8 @@ def _install_checker(monkeypatch, report: LinkReport | None = None, outcome=None
                 "mode": mode,
                 "live": live,
                 "limit": limit,
+                "offset": offset,
+                "settled": set(settled),
             }
         )
         return result
@@ -1054,7 +1086,7 @@ def test_the_check_runs_inside_the_browser_semaphore(monkeypatch):
     recorder = RecordingSemaphore(real_sem)
     monkeypatch.setattr(api, "_browser_sem", recorder)
 
-    async def fake(bookmaker, matches, *, mode, live, limit):
+    async def fake(bookmaker, matches, *, mode, live, limit, base_url=None, offset=0, settled=()):
         return _report(outcomes=[_verified_outcome()])
 
     monkeypatch.setattr(api, "_run_link_verification", fake)
@@ -1073,7 +1105,7 @@ def test_the_check_runs_inside_the_browser_semaphore(monkeypatch):
 def test_a_scan_that_starts_during_the_check_skips_the_cache_write(monkeypatch):
     saves: list[str] = []
 
-    async def fake(bookmaker, matches, *, mode, live, limit):
+    async def fake(bookmaker, matches, *, mode, live, limit, base_url=None, offset=0, settled=()):
         api.scan_status.is_scanning = True  # a scan starts while we navigate
         return _report(outcomes=[_verified_outcome()])
 
@@ -1095,7 +1127,7 @@ def test_the_proof_is_still_recorded_when_the_cache_write_is_skipped(monkeypatch
     """Skipping the cache write must not throw the proof away: the store is
     per-event, TTL'd and written atomically, and the next scan will apply it."""
 
-    async def fake(bookmaker, matches, *, mode, live, limit):
+    async def fake(bookmaker, matches, *, mode, live, limit, base_url=None, offset=0, settled=()):
         api.scan_status.is_scanning = True
         return _report(outcomes=[_verified_outcome()])
 
@@ -1153,7 +1185,7 @@ def test_a_suppressed_write_says_what_it_defers(monkeypatch):
     scan rebuilds the list from the scrapers. The note must say both.
     """
 
-    async def fake(bookmaker, matches, *, mode, live, limit):
+    async def fake(bookmaker, matches, *, mode, live, limit, base_url=None, offset=0, settled=()):
         api.scan_status.is_scanning = True
         return _report(outcomes=[_verified_outcome()])
 
@@ -1329,7 +1361,530 @@ def test_the_response_reports_errored_checks(monkeypatch):
     assert body["checked"] == body["verified"] + body["failed"] + body["errored"]
 
 
+# ─── 11. The cursor: repeated calls must cover NEW events ──────────────────────
+#
+# MEASURED DEFECT. `build_targets` walked the feed in order and `break`ed at
+# `limit`, so a second call re-checked the identical first N events, forever. On
+# the 2026-09-25 feed mozzartbet published 608 events, `limit` is capped at 20,
+# and covering the book would have needed 31 calls that each redid the same 20.
+# A cursor is the fix; the rate limit is not.
+#
+# Two mechanisms, and they are NOT interchangeable:
+#
+# * `settled` — event ids the caller has already DECIDED. Idempotent, needs no
+#   caller bookkeeping, and survives a feed that grows at the head. PRIMARY.
+# * `offset` — a positional resume for a caller with no store (the CLI). It is a
+#   position in the POST-SKIP ordering, so it is only comparable across calls
+#   that skip the same set.
+#
+# THE RULE THAT MATTERS MOST, and the one an off-by-one would break silently: a
+# COMPLETED check settles an event, an ERROR does not. A navigation that never
+# completed is neither a proof nor a failure, and dropping it here would lose
+# events that still need checking — invisibly, because the run would just look
+# shorter.
+
+
+def test_two_calls_with_the_first_calls_verdicts_cover_disjoint_events():
+    """THE acceptance test, at the level the defect was measured at.
+
+    `settled` is the first call's verdicts and nothing else — no saved cursor, no
+    arithmetic — and the second call must land on the next events, not replay the
+    first ones.
+    """
+    feed = _feed(30)
+
+    first = build_targets(feed, "mozzartbet", MOZ_BASE, limit=5)
+    settled = {t.event_id for t in first}
+    second = build_targets(feed, "mozzartbet", MOZ_BASE, limit=5, settled=settled)
+
+    assert _ids(first) == ["0", "1", "2", "3", "4"]
+    assert _ids(second) == ["5", "6", "7", "8", "9"]
+    assert not {t.event_id for t in first} & {t.event_id for t in second}
+
+
+def test_a_settled_event_is_skipped_before_the_limit_is_counted():
+    """The skip is not positional: a run must spend its whole budget on events
+    nobody has decided, so `settled` is applied before the window is cut."""
+    settled = {str(i) for i in range(10)}
+
+    targets = build_targets(_feed(30), "mozzartbet", MOZ_BASE, limit=3, settled=settled)
+
+    assert _ids(targets) == ["10", "11", "12"]
+
+
+def test_a_sweep_visits_every_event_exactly_once():
+    """608 events at 20 per call is the case that used to be impossible."""
+    feed = _feed(23)
+    seen: list[str] = []
+    settled: set[str] = set()
+    while True:
+        window = build_targets(feed, "mozzartbet", MOZ_BASE, limit=5, settled=settled)
+        if not window:
+            break
+        seen += _ids(window)
+        settled |= {t.event_id for t in window}
+
+    assert len(seen) == len(set(seen)) == 23
+
+
+def test_the_offset_is_applied_after_the_settled_skip():
+    """The composition order is load-bearing and is pinned here.
+
+    Post-skip the order is 3, 4, 5, … so `offset=2` starts at 5. Skip-then-offset
+    the other way round would start at 2 and re-check an undecided event.
+    """
+    targets = build_targets(
+        _feed(30), "mozzartbet", MOZ_BASE, limit=2, offset=2, settled={"0", "1", "2"}
+    )
+
+    assert _ids(targets) == ["5", "6"]
+
+
+def test_the_offset_alone_walks_a_stateless_caller_forward():
+    feed = _feed(30)
+
+    assert _ids(build_targets(feed, "mozzartbet", MOZ_BASE, limit=3, offset=9)) == [
+        "9",
+        "10",
+        "11",
+    ]
+    assert build_targets(feed, "mozzartbet", MOZ_BASE, offset=30) == []
+
+
+def test_a_negative_offset_is_treated_as_no_offset():
+    """A negative cursor is clamped, not applied — otherwise Python's negative
+    indexing would silently select from the END of the book."""
+    feed = _feed(6)
+
+    assert build_targets(feed, "mozzartbet", MOZ_BASE, offset=-3) == build_targets(
+        feed, "mozzartbet", MOZ_BASE
+    )
+
+
+def test_settled_ids_the_feed_does_not_contain_change_nothing():
+    """A stale decision (the book retired the event) must not shift the window."""
+    feed = _feed(3)
+
+    assert build_targets(feed, "mozzartbet", MOZ_BASE, settled={"999", "6828117"}) == (
+        build_targets(feed, "mozzartbet", MOZ_BASE)
+    )
+
+
+class _BookPage(FakePage):
+    """A page that answers each navigation with THAT event's own payload.
+
+    `FakePage` replays one fixed response list for every navigation, which is
+    right for the criterion tests and wrong here: a sweep navigates several
+    different event ids and each has to see its own answer, or the selection
+    under test is not what gets measured.
+    """
+
+    def __init__(self, dead_ids=(), error_ids=()):
+        super().__init__(FakeFrame("https://www.mozzartbet.ba/"))
+        self.dead_ids = set(dead_ids)
+        self.error_ids = set(error_ids)
+
+    async def goto(self, url: str, wait_until: str = "load", timeout: int = 0) -> FakeResponse:
+        self.goto_calls.append(url)
+        event_id = url.rsplit("/", 1)[-1]
+        if event_id in self.error_ids:
+            raise TimeoutError(f"Timeout {timeout}ms exceeded")
+        if event_id in self.dead_ids:
+            return FakeResponse(url, "", self.main_frame, "text/html")  # nothing at all
+        response = FakeResponse(
+            f"https://www.mozzartbet.ba/betting/match/{event_id}",
+            f'{{"match":{{"id":{event_id}}}}}',
+            self.main_frame,
+        )
+        for handler in list(self._handlers):
+            await handler(response)
+        return FakeResponse(url, "", self.main_frame, "text/html")
+
+
+def test_the_report_says_where_to_resume_and_how_much_is_left(monkeypatch):
+    """`next_offset` and `remaining` exist so a sweep can be driven from the
+    report alone, and the arithmetic the summary asserts must still hold."""
+    _install_fake_browser(monkeypatch, _BookPage())
+
+    report = run(verify_deeplinks.verify_bookmaker("mozzartbet", _feed(6), limit=2))
+
+    assert [o.event_id for o in report.outcomes] == ["0", "1"]
+    assert report.available == 6
+    assert report.next_offset == 2
+    assert report.remaining == 4
+    assert report.checked == report.verified + report.failed + report.errored == 2
+
+
+def test_a_resumed_run_reports_the_position_it_resumed_from(monkeypatch):
+    _install_fake_browser(monkeypatch, _BookPage())
+
+    report = run(verify_deeplinks.verify_bookmaker("mozzartbet", _feed(6), limit=2, offset=2))
+
+    assert [o.event_id for o in report.outcomes] == ["2", "3"]
+    # `available` is what the run could have checked FROM the cursor, so
+    # `remaining` and `unchecked` are the same number and both mean "did not reach".
+    assert report.available == 4
+    assert report.next_offset == 4
+    assert report.remaining == report.unchecked == 2
+
+
+def test_verify_bookmaker_honours_a_settled_set(monkeypatch):
+    _install_fake_browser(monkeypatch, _BookPage())
+
+    report = run(
+        verify_deeplinks.verify_bookmaker("mozzartbet", _feed(6), limit=2, settled={"0", "1", "2"})
+    )
+
+    assert [o.event_id for o in report.outcomes] == ["3", "4"]
+    assert report.next_offset == 2
+    assert report.remaining == 1
+
+
+def test_a_completed_check_settles_its_event_whatever_the_verdict(monkeypatch):
+    """`verified=False` with no error is a verdict, so it settles too. If only
+    proofs settled, a book whose links do not verify could never be swept: the
+    store would hold nothing for it and every call would restart."""
+    _install_fake_browser(monkeypatch, _BookPage(dead_ids={"0", "1"}))
+
+    first = run(verify_deeplinks.verify_bookmaker("mozzartbet", _feed(4), limit=2))
+    settled = {o.event_id for o in first.outcomes if o.completed}
+    second = run(verify_deeplinks.verify_bookmaker("mozzartbet", _feed(4), limit=2, settled=settled))
+
+    assert first.verified == 0 and first.failed == 2
+    assert settled == {"0", "1"}
+    assert [o.event_id for o in second.outcomes] == ["2", "3"]
+
+
+def test_an_errored_check_settles_nothing_and_stays_eligible(monkeypatch):
+    """The failure mode this whole mechanism could introduce: dropping an event
+    whose navigation never completed. It must come back on the next run."""
+    _install_fake_browser(monkeypatch, _BookPage(error_ids={"0"}))
+
+    first = run(verify_deeplinks.verify_bookmaker("mozzartbet", _feed(2), limit=1))
+    settled = {o.event_id for o in first.outcomes if o.completed}
+    second = run(verify_deeplinks.verify_bookmaker("mozzartbet", _feed(2), limit=1, settled=settled))
+
+    assert first.errored == 1
+    assert settled == set()
+    assert [o.event_id for o in second.outcomes] == ["0"], "an errored event was dropped"
+
+
+def test_an_errored_event_is_not_counted_as_remaining(monkeypatch):
+    """`remaining` counts what the run did not REACH, so an event it reached and
+    could not complete is not in it — it is in `errored`, and the next run
+    re-offers it. Stated here so the docstring's claim is executable."""
+    _install_fake_browser(monkeypatch, _BookPage(error_ids={"0"}))
+
+    report = run(verify_deeplinks.verify_bookmaker("mozzartbet", _feed(2), limit=1))
+
+    assert report.errored == 1
+    assert report.remaining == 1
+    assert report.remaining != 2
+
+
+def _install_sweeping_checker(monkeypatch, decide=None):
+    """Stand in for the BROWSER only: select with the real `build_targets`, real
+    cursor and real `settled`, then return a completed outcome per target.
+
+    Selection is the thing under test, so it must not be faked; the navigation
+    must be, because no test may launch Chromium. The report's counts and cursor
+    are filled in the way `verify_bookmaker` fills them, so an endpoint assertion
+    about them tests the pass-through rather than this fake's arithmetic — the
+    arithmetic itself is asserted against the real function, on the fake page.
+    `decide(event_id)` returns True/False for a verdict and the string
+    `"error"` for a navigation that never completed.
+    """
+    calls: list[dict] = []
+
+    async def fake(bookmaker, matches, *, mode, live, limit, base_url=None, offset=0, settled=()):
+        book = base_url or str(api.BOOKMAKERS[bookmaker]["base_url"])
+        undecided = build_targets(
+            matches, bookmaker, book, live=live, offset=offset, settled=settled
+        )
+        window = undecided[:limit] if limit else undecided
+        calls.append(
+            {
+                "bookmaker": bookmaker,
+                "mode": mode,
+                "limit": limit,
+                "offset": offset,
+                "settled": set(settled),
+                "ids": _ids(window),
+            }
+        )
+        outcomes = []
+        for target in window:
+            verdict = decide(target.event_id) if decide else True
+            if verdict == "error":
+                outcomes.append(_error_outcome(target.event_id, target.url))
+            elif verdict:
+                outcomes.append(_verified_outcome(target.event_id, target.url))
+            else:
+                outcomes.append(_failed_outcome(target.event_id, target.url))
+        return _report(
+            bookmaker=bookmaker,
+            outcomes=outcomes,
+            available=len(undecided),
+            next_offset=max(0, offset) + len(window),
+            remaining=max(0, len(undecided) - len(window)),
+        )
+
+    monkeypatch.setattr(api, "_run_link_verification", fake)
+    return calls
+
+
+def test_the_endpoint_sweeps_forward_across_calls(monkeypatch):
+    """The measured failure, end to end: call the endpoint twice on one feed and
+    the second call must not replay the first call's events."""
+    _install_sweeping_checker(monkeypatch)
+    api.cached_matches.extend(_feed(30))
+
+    first = client.post("/api/verify-links?bookmaker=mozzartbet&limit=5").json()
+    second = client.post("/api/verify-links?bookmaker=mozzartbet&limit=5").json()
+
+    assert [d["event_id"] for d in first["details"]] == ["0", "1", "2", "3", "4"]
+    assert [d["event_id"] for d in second["details"]] == ["5", "6", "7", "8", "9"]
+    assert not {d["event_id"] for d in first["details"]} & {
+        d["event_id"] for d in second["details"]
+    }
+    assert first["next_offset"] == 5 and first["remaining"] == 25
+    # `next_offset` counts from the requested cursor, and the endpoint's own sweep
+    # always requests 0 — so it is the number just decided, and the way to resume
+    # is to call again with no `offset` at all.
+    assert second["next_offset"] == 5 and second["remaining"] == 20
+
+
+def test_a_failed_event_is_not_offered_to_the_next_call(monkeypatch):
+    """A completed FAIL is a decision and must settle, or a book whose links do
+    not verify can never advance past its first `limit` events."""
+    calls = _install_sweeping_checker(monkeypatch, decide=lambda event_id: False)
+    monkeypatch.setattr(api, "DEEP_LINK_VERIFY_RATE_LIMIT", 0)
+    api.cached_matches.extend(_feed(6))
+
+    first = client.post("/api/verify-links?bookmaker=mozzartbet&limit=2").json()
+    second = client.post("/api/verify-links?bookmaker=mozzartbet&limit=2").json()
+
+    assert first["failed"] == 2 and first["verified"] == 0
+    assert [d["event_id"] for d in second["details"]] == ["2", "3"]
+    assert calls[1]["settled"] == {"0", "1"}
+
+
+def test_an_errored_event_is_offered_to_the_next_call(monkeypatch):
+    """And the counterpart: an event whose navigation never completed is NOT
+    decided, so the next call spends a slot on it again."""
+    _install_sweeping_checker(monkeypatch, decide=lambda e: "error" if e == "0" else True)
+    monkeypatch.setattr(api, "DEEP_LINK_VERIFY_RATE_LIMIT", 0)
+    api.cached_matches.extend(_feed(4))
+
+    first = client.post("/api/verify-links?bookmaker=mozzartbet&limit=2").json()
+    second = client.post("/api/verify-links?bookmaker=mozzartbet&limit=2").json()
+
+    assert first["errored"] == 1
+    assert [d["event_id"] for d in second["details"]] == ["0", "2"], "an errored event was dropped"
+    decided = api._deep_link_decisions.get("prematch", {})
+    assert f"mozzartbet|{first['details'][0]['event_id']}" not in decided
+    assert f"mozzartbet|{first['details'][1]['event_id']}" in decided
+
+
+def test_a_book_with_nothing_left_to_decide_says_so_instead_of_rechecking(monkeypatch):
+    """Convergence has to be visible, or a sweep loop cannot know when to stop —
+    and the zero-work call must not spend the throttle budget (B4)."""
+    calls = _install_sweeping_checker(monkeypatch)
+    monkeypatch.setattr(api, "DEEP_LINK_VERIFY_RATE_LIMIT", 1)
+    api.cached_matches.extend(_feed(2))
+    assert client.post("/api/verify-links?bookmaker=mozzartbet&limit=2").status_code == 200
+    api._verify_link_request_times.clear()
+
+    for _ in range(3):
+        body = client.post("/api/verify-links?bookmaker=mozzartbet&limit=2").json()
+        assert body["checked"] == 0
+        assert body["remaining"] == 0
+        assert body["applied"] is None
+        assert "already been decided" in body["skip_reason"]
+
+    assert len(calls) == 1, "the checker ran again with nothing to check"
+    assert api._verify_link_request_times == {}, "a zero-work call spent the budget"
+
+
+def test_a_stale_cursor_on_top_of_a_grown_settled_set_skips_further_ahead(monkeypatch):
+    """Documented, executable behaviour: `offset` is a position in the POST-SKIP
+    order, so carrying one across calls whose `settled` grew skips events nobody
+    decided. It is why the endpoint's own sweep leaves `offset` at 0 and lets
+    `settled` do the work — and why the response echoes both numbers."""
+    calls = _install_sweeping_checker(monkeypatch)
+    api.cached_matches.extend(_feed(30))
+
+    body = client.post("/api/verify-links?bookmaker=mozzartbet&limit=2&offset=2").json()
+
+    assert calls[0]["settled"] == set()
+    assert [d["event_id"] for d in body["details"]] == ["2", "3"]
+    assert body["offset"] == 2
+    assert body["settled_count"] == 0
+    assert body["next_offset"] == 4
+    assert body["available"] == 28
+    assert body["remaining"] == 26
+
+
+def test_the_endpoint_rejects_a_negative_offset():
+    r = client.post("/api/verify-links?bookmaker=mozzartbet&offset=-1")
+
+    assert r.status_code == 400
+    assert "offset" in r.json()["detail"]
+
+
+def test_the_endpoint_passes_its_cursor_and_settled_set_to_the_checker(monkeypatch):
+    calls = _install_sweeping_checker(monkeypatch)
+    api.cached_matches.extend(_feed(10))
+
+    body = client.post("/api/verify-links?bookmaker=mozzartbet&limit=3&offset=4").json()
+
+    assert calls[0]["offset"] == 4
+    assert [d["event_id"] for d in body["details"]] == ["4", "5", "6"]
+    assert body["next_offset"] == 7
+    assert body["available"] == 6
+    assert body["remaining"] == 3
+
+
+def test_a_stored_proof_does_not_by_itself_settle_an_event(monkeypatch):
+    """The proof store is NOT read for the cursor, and that is load-bearing.
+
+    A link that has been proven can only stop unblocking a `verified` group by
+    being checked again and failing. If a proof settled the event, the endpoint
+    would refuse to check it again — which is exactly what
+    `test_a_stale_verification_is_cleared_by_a_later_failed_check` needs it to do.
+    """
+    calls = _install_sweeping_checker(monkeypatch)
+    _record(EVENT_ID, verified=True, age_seconds=60)
+    api.cached_matches.extend(_cached(_match(event_id=EVENT_ID), _match(event_id="1")))
+
+    body = client.post("/api/verify-links?bookmaker=mozzartbet&limit=5").json()
+
+    assert calls[0]["settled"] == set()
+    assert [d["event_id"] for d in body["details"]] == [EVENT_ID, "1"]
+
+
+def test_recheck_offers_an_event_that_has_already_been_decided(monkeypatch):
+    """The way back: `recheck=1` ignores the decisions for one call, so a sweep
+    can be paused and a single link re-proved without deleting the store."""
+    _install_sweeping_checker(monkeypatch)
+    monkeypatch.setattr(api, "DEEP_LINK_VERIFY_RATE_LIMIT", 0)
+    api.cached_matches.extend(_feed(4))
+    assert client.post("/api/verify-links?bookmaker=mozzartbet&limit=4").json()["checked"] == 4
+
+    body = client.post("/api/verify-links?bookmaker=mozzartbet&limit=4&recheck=1").json()
+
+    assert body["settled_count"] == 0
+    assert [d["event_id"] for d in body["details"]] == ["0", "1", "2", "3"]
+
+
+def test_a_decision_is_scoped_to_its_book_and_its_mode(monkeypatch):
+    calls = _install_sweeping_checker(monkeypatch)
+    _record_decision(EVENT_ID, age_seconds=60, bookmaker="mdshop")
+    _record_decision(EVENT_ID, age_seconds=60, mode="live")
+    api.cached_matches.extend(_cached(_match()))
+
+    body = client.post("/api/verify-links?bookmaker=mozzartbet&limit=5").json()
+
+    assert calls[0]["settled"] == set()
+    assert [d["event_id"] for d in body["details"]] == [EVENT_ID]
+
+
+def test_an_expired_decision_is_not_a_decision(monkeypatch):
+    """A decision is a statement about a moment, exactly like a proof: past its
+    TTL the event is eligible again, so a book is re-walked rather than frozen."""
+    stale = api.DEEP_LINK_DECISION_TTL_SECONDS + 60
+    calls = _install_sweeping_checker(monkeypatch)
+    _record_decision(EVENT_ID, age_seconds=stale)
+    api.cached_matches.extend(_cached(_match()))
+
+    body = client.post("/api/verify-links?bookmaker=mozzartbet&limit=5").json()
+
+    assert calls[0]["settled"] == set()
+    assert [d["event_id"] for d in body["details"]] == [EVENT_ID]
+
+
+def test_a_decision_survives_a_restart(monkeypatch):
+    """Otherwise every server restart restarts the sweep from the first event."""
+    _install_sweeping_checker(monkeypatch)
+    api.cached_matches.extend(_feed(2))
+    client.post("/api/verify-links?bookmaker=mozzartbet&limit=2")
+
+    api._deep_link_decisions = {}
+    api._deep_link_decisions.update(api._load_deep_link_decisions())
+
+    assert sorted(api._deep_link_decisions["prematch"]) == ["mozzartbet|0", "mozzartbet|1"]
+
+
+def test_a_decision_is_recorded_even_when_the_cache_write_is_skipped(monkeypatch):
+    """Same reasoning as the proof: a concurrent scan must not cost the sweep its
+    place, or the next call re-checks what was just decided."""
+
+    async def fake(bookmaker, matches, *, mode, live, limit, base_url=None, offset=0, settled=()):
+        api.scan_status.is_scanning = True
+        return _report(outcomes=[_verified_outcome()])
+
+    monkeypatch.setattr(api, "_run_link_verification", fake)
+    api.cached_matches.extend(_cached(_match()))
+
+    client.post("/api/verify-links?bookmaker=mozzartbet")
+
+    assert f"mozzartbet|{EVENT_ID}" in api._deep_link_decisions["prematch"]
+
+
+def test_the_cli_accepts_an_offset_and_prints_the_resume_position(monkeypatch, capsys):
+    """The flag has to reach `verify_bookmaker`, and the report it prints has to
+    say where to resume — asserted, not assumed.
+
+    Parsing the printed JSON is also the regression test for the print itself: it
+    used to `json.dumps(report.__dict__)`, and a report's `outcomes` are
+    `LinkOutcome`s, so the command in the module docstring raised TypeError on the
+    first completed check.
+    """
+    seen: list[dict] = []
+
+    async def fake(bookmaker, matches, *, mode, limit, offset=0, settled=()):
+        seen.append({"bookmaker": bookmaker, "limit": limit, "offset": offset})
+        return _report(
+            bookmaker=bookmaker,
+            outcomes=[_verified_outcome()],
+            available=3,
+            next_offset=offset + 1,
+            remaining=2,
+        )
+
+    monkeypatch.setattr(verify_deeplinks, "verify_bookmaker", fake)
+    monkeypatch.setattr(verify_deeplinks, "_load_cached_matches", lambda mode: _feed(3))
+
+    assert verify_deeplinks.main(["mozzartbet", "--limit", "1", "--offset", "2"]) == 0
+
+    assert seen == [{"bookmaker": "mozzartbet", "limit": 1, "offset": 2}]
+    printed = json.loads(capsys.readouterr().out)
+    assert printed["next_offset"] == 3
+    assert printed["remaining"] == 2
+    assert printed["outcomes"][0]["event_id"] == EVENT_ID
+
+    # And the default is no cursor, so an existing invocation is unchanged.
+    assert verify_deeplinks.main(["mozzartbet", "--limit", "1"]) == 0
+    assert seen[-1]["offset"] == 0
+
+
 # ─── helpers ──────────────────────────────────────────────────────────────────
+
+
+def _record_decision(
+    event_id: str,
+    *,
+    age_seconds: float,
+    mode: str = "prematch",
+    bookmaker: str = "mozzartbet",
+):
+    """A stored DECISION: "we looked at this event and reached a verdict"."""
+    checked_at = datetime.now(UTC).replace(tzinfo=None) - timedelta(seconds=age_seconds)
+    api._deep_link_decisions.setdefault(mode, {})[f"{bookmaker}|{event_id}"] = {
+        "checked_at": checked_at.isoformat()
+    }
+    if os.path.exists(api.DEEP_LINK_DECISIONS_FILE):
+        os.unlink(api.DEEP_LINK_DECISIONS_FILE)
 
 
 def _record(

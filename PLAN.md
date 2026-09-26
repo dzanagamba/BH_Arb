@@ -210,9 +210,15 @@ rejects it; that is the pairing working, not a link problem. The report's 26 and
 * NSoft live window (`mdshop`, `admiralbet`) — `dateFrom=now` excludes every
   already-started in-play game, so both books most likely return no live matches
   at all today. `KNOWN DEFECT` comment in `scrapers/mdshop.py`.
-* `build_targets` (`scripts/verify_deeplinks.py`) has no offset, no cursor and
-  no skip-already-checked, so a per-book link sweep over 600+ events cannot
-  converge. This — not the rate limit — is what blocks convergence.
+
+**Fixed since the above list was written:**
+* `build_targets` takes `settled` and `offset`, so a per-book link sweep advances
+  instead of re-checking its first N events. The endpoint fills `settled` itself
+  from `cache/deep_link_decisions.json`, which records every COMPLETED check — a
+  navigation that errored is not a verdict, so that event is offered again. This
+  — not the rate limit — was what blocked convergence. A sweep still costs
+  `events / limit` calls at 2 calls/min: 608 mozzartbet events at the cap of 20
+  is 31 calls, about 15 minutes.
 
 **Verification.** `pytest` 572 passed + 1 xfailed (2026-09-26), `ruff` clean,
 `mypy` clean.
