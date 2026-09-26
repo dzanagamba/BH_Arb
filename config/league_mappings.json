@@ -56,7 +56,12 @@
     "league_one": [
         "League One",
         "EFL League One",
-        "Engleska - League One"
+        "Engleska - League One",
+        "ENGLAND 3",
+        "England 3",
+        "Engleska 3",
+        "ENGLESKA  3",
+        "ENGLESKA FL 1"
     ],
     "fa_cup": [
         "FA Cup",
@@ -85,7 +90,9 @@
         "La Liga",
         "Španija - La Liga",
         "Španija Primera Liga",
-        "Primera Division"
+        "ŠPANJOLSKA 1.LIGA",
+        "Španjolska 1.Liga",
+        "Spain 1"
     ],
     "laliga_2": [
         "LaLiga 2",
@@ -98,7 +105,10 @@
         "Spain - LaLiga 2",
         "Spain LaLiga2",
         "Španija 2.Liga",
-        "Spanija 2.Liga"
+        "Spanija 2.Liga",
+        "ŠPANJOLSKA 2.LIGA",
+        "Španjolska 2.Liga",
+        "Spain 2"
     ],
     "serie_a": [
         "Italy - Serie A",
@@ -109,12 +119,16 @@
         "Italija 1",
         "Italija 1.Liga",
         "ITALIJA 1",
-        "Serie A"
+        "Serie A",
+        "TALIJANSKA 1.LIGA",
+        "Talijanska 1.Liga"
     ],
     "serie_b": [
         "Italija - Serie B",
         "Serie B",
-        "Italy - Serie B"
+        "Italy - Serie B",
+        "TALIJANSKA 2.LIGA",
+        "Talijanska 2.Liga"
     ],
     "bundesliga": [
         "1. Bundesliga",
@@ -127,7 +141,9 @@
         "Germany - Bundesliga",
         "NJEMAČKA 1",
         "Njemačka Bundesliga",
-        "Njemacka Bundesliga"
+        "Njemacka Bundesliga",
+        "NEMAČKA  1",
+        "Germany 1"
     ],
     "bundesliga_2": [
         "Bundesliga 2",
@@ -137,7 +153,9 @@
         "Njemačka 2",
         "Nemacka 2",
         "Njemacka - 2. Bundesliga",
-        "Njemačka - 2. Bundesliga"
+        "Njemačka - 2. Bundesliga",
+        "NJEmačka 2.Liga",
+        "Njemacka 2.Liga"
     ],
     "ligue_1": [
         "Ligue1",
@@ -148,7 +166,8 @@
         "Francuska - Liga 1",
         "Liga 1",
         "Ligue 1",
-        "Francuska - Ligue 1"
+        "Francuska - Ligue 1",
+        "France 1"
     ],
     "eliteserien": [
         "NORVEŠKA 1",
@@ -258,7 +277,9 @@
         "Netherlands - Eredivisie",
         "Eredivisie",
         "Holandija 1",
-        "NETHERLANDS 1"
+        "NETHERLANDS 1",
+        "NIZOZEMSKA 1.LIGA",
+        "Nizozemska 1.Liga"
     ],
     "primeira_liga": [
         "Portugal - Primeira Liga",
@@ -269,7 +290,9 @@
         "Portugalija 1",
         "PORTUGALIJA 1",
         "Portugal 1",
-        "Portugal 1 Liga"
+        "Portugal 1 Liga",
+        "PORTUGALSKA 1.LIGA",
+        "Portugalska 1.Liga"
     ],
     "scottish_premiership": [
         "Scotland - Premiership",
@@ -320,12 +343,16 @@
     ],
     "allsvenskan": [
         "SWEDEN 1",
-        "Švedska 1"
+        "Švedska 1",
+        "ŠVEDSKA 1.LIGA",
+        "Svedska 1.Liga"
     ],
     "superettan": [
         "Švedska 2",
         "Svedska 2",
-        "SWEDEN 2"
+        "SWEDEN 2",
+        "ŠVEDSKA 2.LIGA",
+        "Svedska 2.Liga"
     ],
     "danish_1st_div": [
         "DENMARK 2",
@@ -337,7 +364,9 @@
     ],
     "danish_3rd_div": [
         "Danska 4",
-        "DENMARK 4"
+        "DENMARK 4",
+        "DANSKA 4.LIGA",
+        "Danska 4.Liga"
     ],
     "mls": [
         "MLS",
@@ -351,7 +380,8 @@
         "USA MLS Next Pro",
         "SAD 1 MLS Next Pro",
         "SAD 3 MLS NP",
-        "SAD - SAD 3 MLS NP"
+        "SAD - SAD 3 MLS NP",
+        "S A D  -  M L S"
     ],
     "usl_championship": [
         "USL CHAMPIONSHIP",
@@ -361,15 +391,27 @@
         "USA - USL",
         "SAD - SAD 3",
         "SAD 3",
-        "USA USL Championship"
+        "USA USL Championship",
+        "S A D  -  U S L"
     ],
     "liga_mx": [
         "Meksiko 1",
-        "MEXICO 1"
+        "MEXICO 1",
+        "Liga MX",
+        "MEKSIČKA 1.LIGA",
+        "Meksička 1.Liga",
+        "MEKSIKO  1  -  APERTURA",
+        "Meksiko 1 - Apertura"
     ],
     "liga_betplay": [
         "COLOMBIA 1",
-        "Kolumbija 1"
+        "Kolumbija 1",
+        "KOLUMBIJA  1  -  KLAUSURA",
+        "Kolumbija 1 - Klausura",
+        "KOLUMBIJSKA 1.LIGA",
+        "Kolumbijska 1.Liga",
+        "Primera A",
+        "Primera A, Apertura"
     ],
     "czech_first_league": [
         "CZECH REP. 1",
@@ -377,7 +419,9 @@
     ],
     "austrian_2_liga": [
         "Austrija 2",
-        "AUSTRIA 2"
+        "AUSTRIA 2",
+        "AUSTRIJSKA 2.LIGA",
+        "Austrijska 2.Liga"
     ],
     "argentine_primera": [
         "Liga Profesional - Clausura",
@@ -390,7 +434,14 @@
         "Argentina Primera"
     ],
     "argentine_primera_b_nacional": [
-        "Argentina 2", "ARGENTINA 2", "Primera B Nacional", "Primera Nacional"
+        "Argentina 2",
+        "ARGENTINA 2",
+        "Primera B Nacional",
+        "Primera Nacional",
+        "ARGENTINSKA 2.LIGA GRUPA A",
+        "Argentinska 2.Liga Grupa A",
+        "ARGENTINSKA 2.LIGA GRUPA B",
+        "Argentinska 2.Liga Grupa B"
     ],
     "copa_do_brasil": [
         "BRAZIL Copa do Brasil",
@@ -406,7 +457,9 @@
         "Chile 2",
         "CHILE 2",
         "Primera B",
-        "Chile - Primera B"
+        "Chile - Primera B",
+        "ČILEANSKA 2.LIGA",
+        "Cileanska 2.Liga"
     ],
     "ecuador_serie_a": [
         "ECUADOR 1",
@@ -437,7 +490,12 @@
         "mexico liga de expansion mx - apertura",
         "mexico 2",
         "Liga de Expansion MX",
-        "meksiko 2"
+        "meksiko 2",
+        "Liga de Expansion MX, Apertura",
+        "MEKSIČKA 2.LIGA",
+        "Meksička 2.Liga",
+        "MEKSIKO  2  -  APERTURA",
+        "Meksiko 2 - Apertura"
     ],
     "brazil_goiano_2": [
         "brazil goiano 2",
@@ -451,7 +509,11 @@
     "finland_2nd_div": [
         "Finska 2",
         "finland 2",
-        "finska 2"
+        "finska 2",
+        "FINSKA 2.LIGA",
+        "Finska 2.Liga",
+        "Ykkosiliga",
+        "Ykkosliiga"
     ],
     "russian_premier": [
         "Rusija 1",
@@ -474,7 +536,9 @@
     "usl_league_one": [
         "usa usl league one",
         "sad 3 usl",
-        "USL League One"
+        "USL League One",
+        "USL Liga 1",
+        "S A D  -  U S L  1"
     ],
     "australia_npl_vic": [
         "australia npl victoria",
@@ -507,7 +571,16 @@
     "uruguay_primera": [
         "Urugvaj 1",
         "urugvaj 1",
-        "uruguay 1 - torneo intermedio"
+        "uruguay 1 - torneo intermedio",
+        "URUGUAY 1",
+        "Uruguay 1",
+        "URUGVAJSKA 1.LIGA",
+        "Urugvajska 1.Liga",
+        "URUGVAJ  1  -  KLAUSURA",
+        "Urugvaj 1 - Klausura",
+        "Primera Division",
+        "Primera Divizija",
+        "PRIMERA DIVIZIJA"
     ],
     "israel_toto_cup": [
         "israel league cup",
@@ -524,7 +597,11 @@
         "bugarska 1"
     ],
     "bugarian_second_league": [
-        "Bugarska 2", "BULGARIA 2", "bulgaria 2", "Vtora Liga", "vtora liga"
+        "Bugarska 2",
+        "BULGARIA 2",
+        "bulgaria 2",
+        "Vtora Liga",
+        "vtora liga"
     ],
     "chinese_super_league": [
         "kina 1",
@@ -561,7 +638,9 @@
         "Holandija 2",
         "NETHERLANDS 2",
         "Netherlands 2",
-        "Holandija 2 "
+        "Holandija 2 ",
+        "NIZOZEMSKA 2.LIGA",
+        "Nizozemska 2.Liga"
     ],
     "slovenia_prva_liga": [
         "Slovenija 1",
@@ -577,7 +656,9 @@
         "J.Liga 2",
         "J League 2",
         "japan 2",
-        "j liga 2"
+        "j liga 2",
+        "JAPANSKA 2.LIGA",
+        "Japanska 2.Liga"
     ],
     "j_league_3": [
         "Japan 3",
@@ -585,7 +666,9 @@
         "J.Liga 3",
         "J League 3",
         "japan 3",
-        "j liga 3"
+        "j liga 3",
+        "JAPANSKA 3.LIGA",
+        "Japanska 3.Liga"
     ],
     "k_league_1": [
         "Juzna Koreja 1",
@@ -609,6 +692,675 @@
         "Austria 1",
         "Austrija - Bundesliga",
         "Austrian Bundesliga",
-        "Austrija 1. Liga"
-    ]
+        "Austrija 1. Liga",
+        "AUSTRIJSKA 1.LIGA",
+        "Austrijska 1.Liga"
+    ],
+    "_audit_note": "Every id below was added or split from scripts/audit_league_pairs.py, which lists the league-label pairs the certainty gate refused on the real 5,373-match feed. Two rules governed every decision. (1) A label is only mapped when the feed's own fixtures show what competition it denotes; a bare root word shared by several countries is left unmapped rather than guessed. (2) A competition that is really several groups under one root word gets one id per group, never one id for the family - see nations_league_a..d, spain_primera_federacion_1..5, spain_segunda_federacion_1..5, italy_serie_c_a..c. The pooled labels that publish those groups together ('Liga Nacija', 'Primera Federacion', 'Segunda Federacion', 'Ettan') deliberately keep their own id and do not match any single group.",
+    "league_two": [
+        "League Two",
+        "EFL League Two",
+        "ENGLAND 4",
+        "England 4",
+        "Engleska 4",
+        "ENGLESKA  4",
+        "ENGLESKA FL 2"
+    ],
+    "england_national_league": [
+        "ENGLESKA  5",
+        "Engleska 5",
+        "ENGLAND 5 Conference",
+        "England 5 Conference",
+        "National League",
+        "ENGLESKA NL PREMIER",
+        "Engleska NL Premier"
+    ],
+    "england_national_league_north": [
+        "ENGLAND 6 North",
+        "England 6 North",
+        "ENGLESKA  6  SEVER",
+        "Engleska 6 sever",
+        "ENGLESKA NL SJEVER",
+        "Engleska NL Sjever",
+        "Nacionalna Liga Sjever",
+        "National League, Sjever"
+    ],
+    "england_national_league_south": [
+        "ENGLAND 6 South",
+        "England 6 South",
+        "ENGLESKA  6  JUG",
+        "Engleska 6 jug",
+        "ENGLESKA NL JUG",
+        "Engleska NL Jug",
+        "Nacionalna Liga Jug",
+        "National League, Jug"
+    ],
+    "england_fa_trophy": [
+        "ENGLAND FA Trophy",
+        "England FA Trophy",
+        "FA Trophy",
+        "FA TROPHY -  FINALE",
+        "FA Trophy - Finale",
+        "ENGLESKA  -  FA  TROFEJ",
+        "Engleska - FA Trofej",
+        "ENGLESKI FA TROPHY KUP",
+        "Engleski FA Trophy Kup"
+    ],
+    "scottish_challenge_cup": [
+        "Challenge kup",
+        "ŠKOTSKI CHALLENGE KUP",
+        "Skotski Challenge Kup"
+    ],
+    "wales_cymru_premier": [
+        "WALES 1",
+        "Wales 1",
+        "WALES 1.LIGA",
+        "Wales 1.Liga",
+        "Vels 1",
+        "VELS  1",
+        "Cymru Premier"
+    ],
+    "wales_cymru_championship_south": [
+        "WALES 2 South",
+        "Wales 2 South",
+        "Cymru Championship South",
+        "WALES FAW CHAMPIONSHIP - JUG",
+        "Wales FAW Championship - Jug"
+    ],
+    "northern_ireland_premier": [
+        "Northern Ireland 1",
+        "SEVERNA  IRSKA  1",
+        "Severna Irska 1",
+        "SJ.IRSKA PREMIER LIGA",
+        "Sj Irska Premier Liga"
+    ],
+    "northern_ireland_championship": [
+        "NORTHERN IRELAND 2",
+        "Northern Ireland 2",
+        "SEVERNA  IRSKA  2",
+        "Severna Irska 2",
+        "SJ.IRSKA CHAMPIONSHIP 1",
+        "Sj Irska Championship 1"
+    ],
+    "nwsl": [
+        "NWSL (Ž)",
+        "SAD - NWSL (Ž)",
+        "SAD 1 Ž",
+        "USA NWSL Women",
+        "S A D  -  N W S L"
+    ],
+    "_nations_league_note": "admiralbet, wwin and mdshop publish 'Liga Nacija' with leagues A, B, C and D pooled into one list, so 'nations_league' is that union and must not be merged with any single league. mbet and mozzartbet publish the leagues separately; each gets its own id. premier_kladionica publishes the sub-groups; the group number carries no separate competition identity here, so a sub-group label resolves to its league.",
+    "nations_league_a": [
+        "UEFA Nations League - League A",
+        "LIGA NACIJA A",
+        "Liga Nacija A",
+        "LIGA  NACIJA  A",
+        "LIGA NACIJA LIGA A - Grupa 1",
+        "Liga Nacija Liga A - Grupa 2",
+        "Liga Nacija Liga A - Grupa 3",
+        "Liga Nacija Liga A - Grupa 4"
+    ],
+    "nations_league_b": [
+        "UEFA Nations League - League B",
+        "LIGA NACIJA LIGA B - Grupa 1",
+        "Liga Nacija Liga B - Grupa 2",
+        "Liga Nacija Liga B - Grupa 3",
+        "Liga Nacija Liga B - Grupa 4"
+    ],
+    "nations_league_c": [
+        "UEFA Nations League - League C",
+        "LIGA NACIJA LIGA C - Grupa 1",
+        "Liga Nacija Liga C - Grupa 2",
+        "Liga Nacija Liga C - Grupa 3",
+        "Liga Nacija Liga C - Grupa 4"
+    ],
+    "nations_league_d": [
+        "UEFA Nations League - League D",
+        "LIGA NACIJA LIGA D - Grupa 1",
+        "Liga Nacija Liga D - Grupa 2"
+    ],
+    "_spain_pyramid_note": "Primera/Segunda/Tercera Federación are each split into groups and two teams can be in different groups of the same tier on the same day, so every group is its own id. wwin's unqualified 'Primera Federacion' and 'Segunda Federacion' pool every group and therefore stay unmapped rather than joining any one group.",
+    "spain_primera_federacion_1": [
+        "Primera RFEF Grupa 1",
+        "Primera RFER Grupa 1",
+        "SPAIN 3 - Group 1",
+        "Spain 3 - Group 1",
+        "Španija 3 Grupa 1",
+        "Španija 3 - Grupa 1",
+        "ŠPANJOLSKA 3.LIGA GRUPA 1",
+        "Spanjolska 3.liga Grupa 1"
+    ],
+    "spain_primera_federacion_2": [
+        "Primera RFEF Grupa 2",
+        "Primera RFER Grupa 2",
+        "SPAIN 3 - Group 2",
+        "Spain 3 - Group 2",
+        "Španija 3 Grupa 2",
+        "Španija 3 - Grupa 2",
+        "ŠPANJOLSKA 3.LIGA GRUPA 2",
+        "Spanjolska 3.liga Grupa 2"
+    ],
+    "spain_segunda_federacion_1": [
+        "Segunda PFEF plej of",
+        "SPAIN 4 - Group 1",
+        "Spain 4 - Group 1",
+        "Španija 4 Grupa 1",
+        "ŠPANJOLSKA 4.LIGA GRUPA 1",
+        "Spanjolska 4.liga Grupa 1"
+    ],
+    "spain_segunda_federacion_2": [
+        "Segunda RFEF Grupa 2",
+        "SPAIN 4 - Group 2",
+        "Spain 4 - Group 2",
+        "Španija 4 Grupa 2",
+        "ŠPANJOLSKA 4.LIGA GRUPA 2",
+        "Spanjolska 4.liga Grupa 2"
+    ],
+    "spain_segunda_federacion_3": [
+        "Segunda RFEF Grupa 3",
+        "SPAIN 4 - Group 3",
+        "Spain 4 - Group 3",
+        "Španija 4 Grupa 3",
+        "ŠPANJOLSKA 4.LIGA GRUPA 3",
+        "Spanjolska 4.liga Grupa 3"
+    ],
+    "spain_segunda_federacion_4": [
+        "Segunda RFEF Grupa 4",
+        "SPAIN 4 - Group 4",
+        "Spain 4 - Group 4",
+        "Španija 4 Grupa 4",
+        "ŠPANJOLSKA 4.LIGA GRUPA 4",
+        "Spanjolska 4.liga Grupa 4"
+    ],
+    "spain_segunda_federacion_5": [
+        "Segunda RFEF Grupa 5",
+        "SPAIN 4 - Group 5",
+        "Spain 4 - Group 5",
+        "Španija 4 Grupa 5",
+        "ŠPANJOLSKA 4.LIGA GRUPA 5",
+        "Spanjolska 4.liga Grupa 5"
+    ],
+    "spain_tercera_federacion_1": [
+        "Tercera RFEF, Sk.1",
+        "SPAIN 5 - Group 1"
+    ],
+    "spain_tercera_federacion_2": [
+        "Tercera RFEF, Sk.2",
+        "SPAIN 5 - Group 2"
+    ],
+    "spain_tercera_federacion_3": [
+        "Tercera RFEF, Sk.3",
+        "SPAIN 5 - Group 3"
+    ],
+    "spain_tercera_federacion_4": [
+        "Tercera RFEF, Sk.4",
+        "SPAIN 5 - Group 4"
+    ],
+    "spain_tercera_federacion_5": [
+        "Tercera RFEF, Sk.5",
+        "SPAIN 5 - Group 5"
+    ],
+    "spain_tercera_federacion_6": [
+        "Tercera RFEF, Sk.6",
+        "SPAIN 5 - Group 6"
+    ],
+    "spain_tercera_federacion_7": [
+        "Tercera RFEF, Sk.7",
+        "SPAIN 5 - Group 7"
+    ],
+    "spain_tercera_federacion_10": [
+        "Tercera RFEF, Sk.10",
+        "SPAIN 5 - Group 10"
+    ],
+    "spain_tercera_federacion_11": [
+        "Tercera RFEF, Sk.11",
+        "SPAIN 5 - Group 11"
+    ],
+    "spain_tercera_federacion_12": [
+        "Tercera RFEF, Sk.12",
+        "SPAIN 5 - Group 12"
+    ],
+    "spain_tercera_federacion_13": [
+        "Tercera RFEF, Sk.13",
+        "SPAIN 5 - Group 13"
+    ],
+    "spain_tercera_federacion_15": [
+        "Tercera RFEF, Sk.15",
+        "SPAIN 5 - Group 15"
+    ],
+    "spain_tercera_federacion_16": [
+        "Tercera RFEF, Sk.16",
+        "SPAIN 5 - Group 16"
+    ],
+    "spain_tercera_federacion_17": [
+        "Tercera RFEF, Sk.17"
+    ],
+    "spain_tercera_federacion_18": [
+        "Tercera RFEF, Sk.18"
+    ],
+    "_italy_serie_c_note": "Serie C is three separate groups; the group letter is part of the competition's identity, so Serie C Group A must never match Serie C Group B.",
+    "italy_serie_c_a": [
+        "ITALY 3 - Group A",
+        "Italy 3 - Group A",
+        "ITALIA 3 GRUPA A",
+        "Italia 3 Grupa A",
+        "ITALIJA 3 GRUPA A",
+        "Italija 3 Grupa A",
+        "ITALIA 3 A",
+        "Italia 3 A",
+        "ITALIJA 3 A",
+        "Italija 3 A",
+        "SERIJA C GRUPA A",
+        "Serija C Grupa A",
+        "Serie C, Grupa A",
+        "TALIJANSKA 3.LIGA GRUPA A",
+        "Talijanska 3.Liga Grupa A"
+    ],
+    "italy_serie_c_b": [
+        "ITALY 3 - Group B",
+        "Italy 3 - Group B",
+        "ITALIA 3 GRUPA B",
+        "Italia 3 Grupa B",
+        "ITALIJA 3 GRUPA B",
+        "Italija 3 Grupa B",
+        "ITALIA 3 B",
+        "Italia 3 B",
+        "ITALIJA 3 B",
+        "Italija 3 B",
+        "SERIJA C GRUPA B",
+        "Serija C Grupa B",
+        "Serie C, Grupa B",
+        "TALIJANSKA 3.LIGA GRUPA B",
+        "Talijanska 3.Liga Grupa B"
+    ],
+    "italy_serie_c_c": [
+        "ITALY 3 - Group C",
+        "Italy 3 - Group C",
+        "ITALIA 3 GRUPA C",
+        "Italia 3 Grupa C",
+        "ITALIJA 3 GRUPA C",
+        "Italija 3 Grupa C",
+        "ITALIA 3 C",
+        "Italia 3 C",
+        "ITALIJA 3 C",
+        "Italija 3 C",
+        "SERIJA C GRUPA C",
+        "Serija C Grupa C",
+        "Serie C, Grupa C",
+        "TALIJANSKA 3.LIGA GRUPA C",
+        "Talijanska 3.Liga Grupa C"
+    ],
+    "_argentina_note": "Argentina's tiers 2, 3 and 4 are three different competitions (Primera B Nacional, Primera B Metropolitana, Primera C) and must not be merged. Within Primera B Nacional, mbet/mdshop/admiralbet publish both groups as one 'Argentina 2' list while premier_kladionica splits them into grupa a / grupa b - same fixtures, so both group labels resolve to the tier's single id.",
+    "argentine_primera_b_metropolitana": [
+        "Argentina 3 B",
+        "ARGENTINA 3 Primera B",
+        "Argentina 3 Primera B",
+        "Primera B Metropilitana",
+        "Primera B Metropolitana",
+        "ARGENTINSKA PRIMERA B METROPOLITANA",
+        "Argentina Primera B Metropolitana",
+        "Argentinska Primera B Metropolitana"
+    ],
+    "argentine_primera_c": [
+        "Argentina 4 A",
+        "Argentina 4 Primera C",
+        "Primera C",
+        "PRIMERA C",
+        "ARGENTINSKA PRIMERA C",
+        "Argentinska Primera C"
+    ],
+    "_nordic_note": "Sweden's Ettan and Norway's 3. Divisjon are each split into a north and a south / group 1 and group 2 division. wwin's unqualified 'Ettan' pools both, so it keeps its own ungrouped id and matches neither.",
+    "sweden_division_1_north": [
+        "Sweden 3 North",
+        "SWEDEN 3 North",
+        "Svedska 3 Sever",
+        "ŠVEDSKA  3  SEVER",
+        "Svedska 3.Liga Sjever",
+        "ŠVEDSKA 3.LIGA SJEVER",
+        "Divizija 1. Norra"
+    ],
+    "sweden_division_1_south": [
+        "Sweden 3 South",
+        "SWEDEN 3 South",
+        "Svedska 3 Jug",
+        "ŠVEDSKA  3  JUG",
+        "Svedska 3.Liga Jug",
+        "ŠVEDSKA 3.LIGA JUG",
+        "Divizija 1. Sorda"
+    ],
+    "sweden_division_2_sodra_gotaland": [
+        "Svedska 4.Liga Sodra Gotaland",
+        "Svedska 4 Juzni Gotaland",
+        "Sweden 4 - South Gotaland"
+    ],
+    "sweden_division_2_norra_svealand": [
+        "Svedska 4.Liga Norra Svealand",
+        "Sweden 4 - North Svealand"
+    ],
+    "sweden_division_2_vast_gotaland": [
+        "Sweden 4 - West Gotaland"
+    ],
+    "norway_3_division_group_1": [
+        "Norway 3 - Group 1",
+        "NORWAY 3 - Group 1",
+        "Norveska 3 Grupa 1",
+        "NORVESKA 3.LIGA GRUPA 1",
+        "Norveska 3.Liga Grupa 1",
+        "2. Divizija Grupa 1",
+        "2. divizija Grupa 1",
+        "NORVEŠKA  3  A",
+        "Norveška 3 A"
+    ],
+    "norway_3_division_group_2": [
+        "Norway 3 - Group 2",
+        "NORWAY 3 - Group 2",
+        "Norveska 3 Grupa 2",
+        "NORVESKA 3.LIGA GRUPA 2",
+        "Norveska 3.Liga Grupa 2",
+        "2. Divizija Grupa 2",
+        "2. divizija Grupa 2",
+        "NORVEŠKA  3  B",
+        "Norveška 3 B"
+    ],
+    "norway_4_division_group_1": [
+        "Norway 4 - Group 1",
+        "NORWAY 4 - Group 1",
+        "Norveška 4.Liga - Grupa 1",
+        "NORVEŠKA 4.LIGA - GRUPA 1",
+        "Norveška 4 - Grupa 1",
+        "NORVEŠKA  4  -  GRUPA 1"
+    ],
+    "netherlands_tweede_divisie": [
+        "Tweede Divisie",
+        "NIZOZEMSKA 3.LIGA",
+        "Nizozemska 3.Liga",
+        "Holandija 3"
+    ],
+    "germany_regionalliga_nord": [
+        "Regionalliga Sjever",
+        "NEMACKA 4 SEVER",
+        "Nemacka 4 sever",
+        "Germany 4 North"
+    ],
+    "germany_regionalliga_west": [
+        "Regionalliga Zapad",
+        "NEMACKA 4 ZAPAD",
+        "Nemacka 4 zapad",
+        "Germany 4 West"
+    ],
+    "germany_regionalliga_nordost": [
+        "Regionalliga Sjeveroistok",
+        "NEMACKA 4 SEVEROISTOK",
+        "Nemacka 4 severoistok"
+    ],
+    "france_ligue_2": [
+        "Ligue 2",
+        "FRANCUSKA 2.LIGA",
+        "Francuska 2.Liga"
+    ],
+    "france_championnat_national": [
+        "Francuska 3",
+        "FRANCUSKA  3",
+        "Francuska 3.Liga",
+        "France 3"
+    ],
+    "swiss_1_liga": [
+        "Switzerland 3",
+        "SWITZERLAND 3",
+        "ŠVAJCARSKA  3",
+        "Svajcarska 3",
+        "ŠVICARSKA 3.LIGA",
+        "Svicarska 3.Liga"
+    ],
+    "greece_superleague_2": [
+        "Greece 2",
+        "GRČKA 2.LIGA",
+        "Grčka 2.Liga"
+    ],
+    "j_fl": [
+        "Japan 4",
+        "JAPAN 4",
+        "Japan Football League"
+    ],
+    "chinese_champions_league": [
+        "China 2",
+        "CHINA 2",
+        "KINA  2",
+        "Kina 2"
+    ],
+    "russian_first_league": [
+        "Rusija 2",
+        "RUSIJA  2",
+        "FNL",
+        "Russia 2",
+        "RUSSIA 2",
+        "1. Liga",
+        "1. liga"
+    ],
+    "austria_regionalliga_west": [
+        "Regionalna Liga Zapad",
+        "AUSTRIA 3 West",
+        "Austria 3 West",
+        "AUSTRIJA  3  ZAPAD",
+        "Austrija 3 Zapad"
+    ],
+    "croatian_prva_nl": [
+        "Croatia 2",
+        "HRVATSKA  2",
+        "Hrvatska 2",
+        "HRVATSKA 2.LIGA",
+        "Hrvatska 2.Liga",
+        "Prva NL"
+    ],
+    "slovenian_second_league": [
+        "2. SNL",
+        "Slovenia 2",
+        "SLOVENIA 2",
+        "SLOVENIJA  2",
+        "Slovenija 2"
+    ],
+    "slovak_second_league": [
+        "Slovakia 2",
+        "SLOVAKIA 2",
+        "SLOVAČKA  2",
+        "Slovačka 2"
+    ],
+    "_latam_note": "Klausura / Apertura are the opening and closing phases of one season of one competition, not separate competitions, so each country's phase labels fold into that country's single id.",
+    "colombia_second_division": [
+        "Colombia 2",
+        "COLOMBIA 2",
+        "Kolumbija 2",
+        "KOLUMBIJSKA 2.LIGA",
+        "Kolumbijska 2.Liga"
+    ],
+    "uruguay_second_division": [
+        "Uruguay 2",
+        "URUGUAY 2",
+        "URUGVAJSKA 2.LIGA",
+        "Urugvajska 2.Liga",
+        "URUGVAJ  2",
+        "Urugvaj 2"
+    ],
+    "canadian_premier_league": [
+        "Canada 1",
+        "CANADA 1",
+        "Kanada 1",
+        "KANADA  1",
+        "Kanadska Premier Liga"
+    ],
+    "guatemala_liga_nacional": [
+        "Guatemala 1",
+        "GUATEMALA 1",
+        "Guatemala 1.Liga",
+        "GVATEMALA 1.LIGA",
+        "Gvatemala 1",
+        "GVATEMALA  1",
+        "Gvatemala 1.Liga",
+        "Gvatemala 1 - Apertura",
+        "Guatemala 1 - Apertura",
+        "GVATEMALA  1  -  APERTURA",
+        "Liga Nacional, Apertura"
+    ],
+    "paraguay_primera": [
+        "Paraguay 1",
+        "PARAGUAY 1",
+        "Paragvaj 1",
+        "PARAGVAJSKA 1.LIGA",
+        "Paragvajska 1.Liga",
+        "Division de Honor, Apertura",
+        "PARAGVAJ  1  -  KLAUSURA",
+        "Paragvaj 1 - Klausura"
+    ],
+    "paraguay_second_division": [
+        "Paraguay 2",
+        "PARAGUAY 2",
+        "Paragvajska 2.Liga"
+    ],
+    "peru_second_division": [
+        "Peru 2",
+        "PERU 2",
+        "PERUANSKA 2.LIGA - GRUPA A",
+        "Peruanska 2.Liga - Grupa A"
+    ],
+    "morocco_botola": [
+        "Maroko 1",
+        "MAROKO  1",
+        "Morocco 1",
+        "MOROCCO 1",
+        "MAROKANSKA 1.LIGA",
+        "Marokanska 1.Liga",
+        "Botola",
+        " Botola Pro D1",
+        "Botola Pro D1"
+    ],
+    "panama_liga_panameña": [
+        "Panama 1",
+        "PANAMA  1  -  APERTURA",
+        "Panama 1 - Apertura",
+        "Liga Panamena de Futbol, Apertura",
+        "PANAMSKA 1.LIGA ISTOK",
+        "Panamska 1.Liga Istok"
+    ],
+    "afcon_qualification": [
+        "Africa Cup of Nations - Qualification",
+        "AFRICA Cup of Nations - Qualification",
+        "Afrički Kup Nacija Kval.",
+        "Afrički Kup Nacija Kval",
+        "Afrički Kup Nacija Kvalifikacije",
+        "Kvalifikacije za Afrički Kup Nacija",
+        "KVALIFIKACIJE  ZA  AFRIČKI  KUP  NACIJA"
+    ],
+    "international_friendly": [
+        "Friendly International",
+        "MEĐUNARODNE  PRIJATELJSKE",
+        "Međunarodne Prijateljske",
+        "Prijateljske Utakmice Reprezentacije",
+        "PRIJATELJSKE UTAKMICE REPREZENTACIJE",
+        "Prijateljske Utakmice Reprezentacije (Ž)"
+    ],
+    "euro_u21_qualification": [
+        "Euro U21 - Qualification",
+        "EURO U21 kval.",
+        "EURO U21 Kval.",
+        "Euro U21 Kval"
+    ],
+    "asean_cup": [
+        "ASEAN Cup",
+        "FIFA ASEAN Kup"
+    ],
+    "asian_games_football": [
+        "Asian Games",
+        "Azijske Igre"
+    ],
+    "gulf_cup": [
+        "Gulf Kup",
+        "GULF  KUP",
+        "Gulf Cup Grupa A",
+        "Gulf Cup Grupa B",
+        "Zalivski Kup",
+        "Arabian Gulf Cup"
+    ],
+    "copa_santa_catarina": [
+        "Brazil - Copa Santa Catarina",
+        "BRAZIL - COPA SANTA CATARINA",
+        "Copa Santa Catarina"
+    ],
+    "copa_argentina": [
+        "Argentina - Kup",
+        "ARGENTINA  -  KUP",
+        "Argentina Kup",
+        "Argentina Cup",
+        "ARGENTINA Cup",
+        "Copa Argentina"
+    ],
+    "argentina_supercopa": [
+        "Argentina superkup",
+        "Superkup"
+    ],
+    "supercopa_internacional": [
+        "Argentina - Supercopa Internacional",
+        "ARGENTINA - SUPERCOPA INTERNACIONAL",
+        "Supercopa Internacional"
+    ],
+    "belgian_cup": [
+        "Belgija - Kup",
+        "BELGIJA  -  KUP",
+        "Belgijski Kup",
+        "Belgium Cup"
+    ],
+    "chile_cup": [
+        "Chile Cup",
+        "CHILE Cup",
+        "ČILE  -  KUP",
+        "Čile - Kup"
+    ],
+    "_womens_note": "The women's competitions carry their own ids, never the men's. 'Super Liga (Ž)' and 'Super League (Ž)' are the English Womens Super League as admiralbet and wwin label it, not the Norwegian one; Norwegian women are 'Norveška 1 Ž' / 'Toppserien (Ž)'.",
+    "womens_super_league_england": [
+        "Engleska 1 Ž",
+        "ENGLESKA  1  W",
+        "Super Liga (Ž)",
+        "SUPER LIGA (Ž)",
+        "Super League (Ž)",
+        "ENGLESKA SUPER LIGA (Ž)",
+        "Engleska Super Liga (Ž)"
+    ],
+    "norwegian_women_eliteserien": [
+        "Norveška 1 Ž",
+        "NORVEŠKA  1  W",
+        "Norveška 1 W",
+        "NORVEŠKA 1.LIGA (Ž)",
+        "Toppserien (Ž)"
+    ],
+    "swedish_women_allsvenskan": [
+        "Švedska 1 Ž",
+        "ŠVEDSKA  1  W",
+        "ŠVEDSKA 1.LIGA (Ž)",
+        "Damallsvenskan (Ž)"
+    ],
+    "spain_women_liga_f": [
+        "Španija 1 Ž",
+        "ŠPANIJA  1  W"
+    ],
+    "italy_women_serie_a": [
+        "Italija 1 Ž",
+        "Serija A (Ž)",
+        "Serie A (Ž)"
+    ],
+    "belgium_women_first_division": [
+        "Belgija 1 Ž",
+        "BELGIJA  1  W",
+        "Superliga (Ž)"
+    ],
+    "netherlands_women_eredivisie": [
+        "Holandija 1 Ž",
+        "HOLANDIJA  1  W",
+        "Eredivisie (Ž)"
+    ],
+    "mexico_women_liga_mx_f": [
+        "Liga MX (Ž)",
+        "Liga MX (Ž), Apertura",
+        "Meksiko 1 Ž",
+        "MEKSIKO  1  W  -  APERTURA"
+    ],
+    "_primera_division_note": "'Primera Division' was listed under la_liga. It is not a Spanish name for La Liga - La Liga is never called that - and on the real feed admiralbet's 'Primera Divizija' is the Uruguayan Primera (progreso, racing montevideo, wanderers, penarol). It now resolves to uruguay_primera, which is what its fixtures are. Measured on the feed this costs no verified group: 252 groups before and after the move."
 }
