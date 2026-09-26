@@ -41,6 +41,10 @@ from server.app import app
 
 client = TestClient(app)
 
+# Captured before the autouse `isolate_state` fixture replaces it, so the tests
+# that exercise the save/load round trip can put the real one back.
+_REAL_SAVE_CACHE = api._save_cache
+
 KICKOFF = datetime(2026, 9, 25, 18, 0)
 EVENT_ID = "9984468"
 EVENT_URL = f"https://www.mozzartbet.ba/sr/kladjenje/sport/1/match/{EVENT_ID}"
@@ -61,6 +65,7 @@ def _match(
     away_team: str = "Thun",
     league: str = "Liga Evrope",
     kickoff: datetime = KICKOFF,
+    url: str = "",
 ) -> Match:
     return Match(
         bookmaker=bookmaker,
@@ -69,6 +74,7 @@ def _match(
         league=league,
         kickoff=kickoff,
         event_id=event_id,
+        url=url or EVENT_URL,
         deep_link_verified=deep_link_verified,
         markets=[
             Market(
@@ -656,6 +662,208 @@ def test_verification_survives_a_cache_reload(monkeypatch, tmp_path):
 
     assert len(api.cached_matches) == 1
     assert api.cached_matches[0]["deep_link_verified"] is True
+
+
+def test_a_restored_cache_keeps_the_verified_groups_the_scan_had(monkeypatch, tmp_path):
+    """A restart must not report "no match group is verified" for a scan that had one.
+
+    `run_scan` fills `cached_match_groups_report` and `_save_cache` persisted
+    everything else the scan produced, but the report was not among it. So for as
+    long as the cache file stayed inside its 30-minute TTL — 30 minutes in which
+    the operator's dashboard said `match_groups: 0` and "no match group is
+    verified" — the count read 0 even when groups had verified. The surebets and
+    the odds behind them were on screen the whole time.
+
+    The whole point is that the count is the SAME before and after a restart, so
+    this asserts against a real scan's own output rather than a hand-written
+    report: anything a scan cannot produce, a restore cannot be asked to produce.
+    """
+    monkeypatch.setattr(api, "_save_cache", _REAL_SAVE_CACHE)
+    monkeypatch.setattr(api, "_PREMATCH_CACHE_FILE", str(tmp_path / "last_scan.json"))
+    monkeypatch.setattr(api, "_LIVE_CACHE_FILE", str(tmp_path / "last_live_scan.json"))
+    _record(EVENT_ID, verified=True, age_seconds=60)
+    _record("6828117", verified=True, age_seconds=60, bookmaker="mdshop")
+    _stub_scan(
+        monkeypatch,
+        {"mozzartbet": [_match("mozzartbet")], "mdshop": [_match("mdshop", "6828117")]},
+    )
+
+    run(api.run_scan("prematch"))
+
+    before = [r["status"] for r in api.cached_match_groups_report]
+    assert before == ["verified"], "the control scan verified nothing, so this proves nothing"
+    assert run(api.get_results("prematch"))["match_groups"] == 1
+
+    # A restart: the report is gone from memory, the cache file is all that is left.
+    api.cached_match_groups_report.clear()
+    api.cached_surebets.clear()
+    api.cached_matches.clear()
+    api._load_cache()
+
+    after = run(api.get_results("prematch"))
+    assert [r["status"] for r in api.cached_match_groups_report] == before, (
+        "the report was written by the scan and not read back, so the operator saw "
+        "zero match groups until the next scan"
+    )
+    assert after["match_groups"] == 1
+    assert after["group_statuses"] == {"verified": 1}
+
+
+def test_a_cache_file_written_before_the_report_was_persisted_restores_no_groups(
+    monkeypatch, tmp_path
+):
+    """An older cache file has no `match_groups` key, and must restore 0 groups.
+
+    The honest answer for a file that never carried the report is zero, not a
+    guess: the scan's own output is gone, and `match_groups` is a count of what
+    this process verified, not a number to be reconstructed from the odds. So
+    this is a compatibility case, not a defect — a deployment upgrading with a
+    warm cache reads 0 verified groups for one scan cycle and then reads the
+    truth.
+    """
+    cache_file = tmp_path / "last_scan.json"
+    cache_file.write_text(
+        json.dumps(
+            {
+                "surebets": [],
+                "matches": _cached(_match()),
+                "scan_time": datetime.now(UTC).replace(tzinfo=None).isoformat(),
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(api, "_PREMATCH_CACHE_FILE", str(cache_file))
+    monkeypatch.setattr(api, "_LIVE_CACHE_FILE", str(tmp_path / "last_live_scan.json"))
+    api.cached_match_groups_report.clear()
+    api.cached_matches.clear()
+
+    api._load_cache()
+
+    assert len(api.cached_matches) == 1, "the matches must still restore"
+    assert api.cached_match_groups_report == []
+    assert run(api.get_results("prematch"))["match_groups"] == 0
+
+
+def test_a_restored_group_keeps_a_leg_the_book_declares_no_link_for(
+    monkeypatch, tmp_path
+):
+    """Six of the nine books declare no per-event route, and the restore must not
+    demand a link proof of them.
+
+    A declared absence is settled by the declaration itself — the gate's case 2,
+    and the reason those books' groups verify on identity alone. There is no link
+    for a check to have stored a proof of, so a restore that looked for one would
+    drop every group six of the nine books are in, and the operator would read 0
+    verified groups after a restart on a feed that had 201. This is checked on a
+    THREE-book group for that reason: two books that declare a route and one that
+    declares it does not.
+    """
+    from scrapers.common import declares_no_event_id
+
+    assert declares_no_event_id("premier_kladionica"), (
+        "the fixture book must declare no per-event route, or this test is about "
+        "nothing"
+    )
+    monkeypatch.setattr(api, "_save_cache", _REAL_SAVE_CACHE)
+    monkeypatch.setattr(api, "_PREMATCH_CACHE_FILE", str(tmp_path / "last_scan.json"))
+    monkeypatch.setattr(api, "_LIVE_CACHE_FILE", str(tmp_path / "last_live_scan.json"))
+    # No proof at all for the declaring book, and proofs for the other two.
+    _record(EVENT_ID, verified=True, age_seconds=60)
+    _record("6828117", verified=True, age_seconds=60, bookmaker="mdshop")
+    _stub_scan(
+        monkeypatch,
+        {
+            "mozzartbet": [_match("mozzartbet")],
+            "mdshop": [_match("mdshop", "6828117")],
+            "premier_kladionica": [
+                _match("premier_kladionica", "9985188", url="https://www.premier-kladionica.com/ponuda/")
+            ],
+        },
+    )
+    run(api.run_scan("prematch"))
+    before = api.cached_match_groups_report
+    assert [r["status"] for r in before] == ["verified"]
+    assert {b["bookmaker"] for b in before[0]["bookmakers"]} == {
+        "mozzartbet",
+        "mdshop",
+        "premier_kladionica",
+    }
+
+    api.cached_match_groups_report.clear()
+    api.cached_surebets.clear()
+    api.cached_matches.clear()
+    api._load_cache()
+
+    assert [r["status"] for r in api.cached_match_groups_report] == ["verified"], (
+        "a leg whose book declares no per-event route was dropped for want of a link "
+        "proof, so every group containing one of the six such books disappears on a "
+        "restart"
+    )
+    assert run(api.get_results("prematch"))["match_groups"] == 1
+
+
+def test_a_restored_report_may_not_verify_a_link_the_store_no_longer_proves(
+    monkeypatch, tmp_path
+):
+    """Restoring the report must not widen what the gate would accept.
+
+    The report is a snapshot of a decision another process made, so it can be
+    older than the store it rests on: a proof can have been cleared by a completed
+    fail, or aged out, since the scan that wrote it. A restore that believed the
+    snapshot unconditionally would put back a `verified` claim the store no
+    longer supports — the exact failure the TTL exists to prevent, arriving by
+    the back door.
+
+    So a restored `verified` group survives only while every one of its legs still
+    has a FRESH proof in the store — not while the cached match says
+    `deep_link_verified`, because that flag is itself a snapshot: it is written by
+    the scan, and `_apply_deep_link_verifications` only ever SETS a flag, so it
+    outlives the proof that set it. Consulting it here would make the restore a
+    copy of the very staleness the TTL exists to catch, and the check would pass
+    for the wrong reason.
+
+    An unsupported group is dropped rather than demoted to another status, because
+    `group_matches` only ever returns accepted groups: a group whose links are
+    unproven is not reported as a group at all, so a restore that reported one
+    would be describing a state the matcher cannot be in.
+    """
+    monkeypatch.setattr(api, "_save_cache", _REAL_SAVE_CACHE)
+    monkeypatch.setattr(api, "_PREMATCH_CACHE_FILE", str(tmp_path / "last_scan.json"))
+    monkeypatch.setattr(api, "_LIVE_CACHE_FILE", str(tmp_path / "last_live_scan.json"))
+    _record(EVENT_ID, verified=True, age_seconds=60)
+    _record("6828117", verified=True, age_seconds=60, bookmaker="mdshop")
+    _stub_scan(
+        monkeypatch,
+        {"mozzartbet": [_match("mozzartbet")], "mdshop": [_match("mdshop", "6828117")]},
+    )
+    run(api.run_scan("prematch"))
+    assert [r["status"] for r in api.cached_match_groups_report] == ["verified"]
+
+    # A completed check on mdshop's event found nothing: the proof is popped.
+    api._deep_link_verifications["prematch"].pop("mdshop|6828117")
+    api.cached_match_groups_report.clear()
+    api.cached_surebets.clear()
+    api.cached_matches.clear()
+
+    api._load_cache()
+
+    assert "mdshop|6828117" not in api._deep_link_verifications["prematch"], (
+        "the store must still be the one thing that says the link is unproven"
+    )
+    assert api.cached_match_groups_report == [], (
+        "a group was restored as verified on a link the store no longer proves"
+    )
+    body = run(api.get_results("prematch"))
+    assert body["match_groups"] == 0
+    assert body["group_statuses"] == {}
+    # The match's own flag is NOT what decided this, and is still the scan's
+    # snapshot: `_apply_deep_link_verifications` only ever sets a flag, so a
+    # `True` here is pre-existing, documented asymmetry rather than a claim the
+    # restore is entitled to make on the report's behalf.
+    assert {m["bookmaker"]: m["deep_link_verified"] for m in api.cached_matches} == {
+        "mozzartbet": True,
+        "mdshop": True,
+    }
 
 
 # ─── 6. The endpoint touches nothing it has no business touching ───────────────
@@ -1866,6 +2074,236 @@ def test_the_cli_accepts_an_offset_and_prints_the_resume_position(monkeypatch, c
     # And the default is no cursor, so an existing invocation is unchanged.
     assert verify_deeplinks.main(["mozzartbet", "--limit", "1"]) == 0
     assert seen[-1]["offset"] == 0
+
+
+# ─── 11. A sweep has to fit inside the lifetime of what it produces ─────────────
+#
+# The blocker this section exists for. A proof stamps `deep_link_verified` onto a
+# cached match, and the gate needs that flag on every member book before a group
+# can be `verified`, so a book cannot be trusted until a full pass over it has
+# landed. When the pass took longer than the proof's lifetime, the first proof of
+# a sweep was already dead before the last one was written, and nothing a sweep
+# produced could ever be held all at once. Measured on the live system on
+# 2026-09-26: 21 calls of 20 events over 35 minutes, 83.9s between one call's
+# completion and the next, and at 02:44 the newest of 412 stored proofs was 75
+# minutes old while the TTL was 60 — 0 of 4,260 cached matches carried
+# `deep_link_verified`, so no group could verify and no surebet could exist.
+#
+# `SECONDS_PER_EVENT` is that measurement, pinned as a literal because a test
+# must not read a cache file that the next sweep rewrites. The command that
+# produces it from the store is in the fix report.
+
+# The MEDIAN gap between calls on the live system, measured from
+# `cache/deep_link_decisions.json`: 21 calls of exactly 20 events, gaps spanning
+# 83.6s to 302.2s, median 89.6s. The median, not the mean, and not the fastest
+# call: the mean is pulled up by two operator pauses (302s and 132s) and the
+# fastest call flatters the TTLs. Observed range 83.6s-131.3s excluding the two
+# pauses, so a caller can re-measure and expect to land near this.
+MEASURED_SECONDS_PER_CALL = 89.6
+# The cost controls state a floor the measurement has to clear: at most
+# DEEP_LINK_VERIFY_MAX_LIMIT events per call, and at most
+# DEEP_LINK_VERIFY_RATE_LIMIT calls per RATE_LIMIT_WINDOW_SECONDS. Raising either
+# makes a pass cheaper, and these numbers follow, so the invariant below cannot
+# be satisfied by freezing the cost controls.
+THROTTLE_SECONDS_PER_EVENT = (
+    api.RATE_LIMIT_WINDOW_SECONDS
+    / max(1, api.DEEP_LINK_VERIFY_RATE_LIMIT)
+    / api.DEEP_LINK_VERIFY_MAX_LIMIT
+)
+SECONDS_PER_EVENT = max(MEASURED_SECONDS_PER_CALL / api.DEEP_LINK_VERIFY_MAX_LIMIT, THROTTLE_SECONDS_PER_EVENT)
+# Mozzartbet's published prematch feed on 2026-09-26: 1,236 events carrying a
+# per-event id, the largest single book the sweep has to walk.
+SWEEP_EVENTS = 1236
+
+
+def _pass_seconds(events: int = SWEEP_EVENTS) -> float:
+    """Wall-clock one full pass over `events` events costs, at the measured rate."""
+    return events * SECONDS_PER_EVENT
+
+
+def _age_both_stores_by(seconds: float) -> None:
+    """Move every stored proof and decision `seconds` into the past.
+
+    A pass is a wall-clock property, so a test about one has to move the clock.
+    The records are rewritten in place rather than by faking `datetime`, so what
+    is under test is still the real age arithmetic in
+    `_deep_link_record_is_fresh`.
+    """
+    for store in (api._deep_link_verifications, api._deep_link_decisions):
+        for entries in store.values():
+            for record in entries.values():
+                checked_at = datetime.fromisoformat(record["checked_at"])
+                record["checked_at"] = (checked_at - timedelta(seconds=seconds)).isoformat()
+
+
+def _seed_one_finished_pass(events: int = SWEEP_EVENTS, bookmaker: str = "mozzartbet"):
+    """Seed the store the way one completed pass leaves it, and return the ages.
+
+    One record per call's worth of events, spread evenly across the pass, so the
+    newest proof is 0s old and the oldest is exactly one pass old. That is the
+    state a sweep leaves behind, and it is the state the TTL has to survive: the
+    first proof the sweep wrote is the one a group most needs to still be holding.
+    """
+    per_call = _pass_seconds() / max(1, -(-events // api.DEEP_LINK_VERIFY_MAX_LIMIT) - 1)
+    ages = []
+    for call, first in enumerate(range(0, events, api.DEEP_LINK_VERIFY_MAX_LIMIT)):
+        age = call * per_call
+        ages.append(age)
+        api._deep_link_verifications.setdefault("prematch", {})[f"{bookmaker}|{first}"] = {
+            "verified": True,
+            "checked_at": _age_iso(age),
+            "url": f"https://www.mozzartbet.ba/sr/kladjenje/sport/1/match/{first}",
+        }
+    if os.path.exists(api.DEEP_LINK_VERIFICATIONS_FILE):
+        os.unlink(api.DEEP_LINK_VERIFICATIONS_FILE)
+    return ages
+
+
+def _age_iso(age_seconds: float) -> str:
+    return (
+        datetime.now(UTC).replace(tzinfo=None) - timedelta(seconds=age_seconds)
+    ).isoformat()
+
+
+def test_one_pass_over_a_book_costs_longer_than_the_ttl_that_shipped():
+    """The measurement itself, so the numbers below are not asserted on faith.
+
+    A pass over one real book is 92 minutes. The TTL that shipped was 60. There
+    is no reading of that in which the store could hold the result of a sweep:
+    the first proof a pass writes is dead 32 minutes before the pass ends, and
+    everything it wrote is dead 32 minutes after.
+    """
+    assert _pass_seconds() == pytest.approx(5539, abs=5), (
+        "the measured per-event cost changed; re-measure the sweep before trusting "
+        "the TTLs, and update this assertion with the measurement"
+    )
+    assert _pass_seconds() > 3600, (
+        "a pass now fits inside the old TTL, so the bug this section guards is no "
+        "longer reproducible; the TTLs may be revisited"
+    )
+
+
+def test_every_link_lifetime_outlives_a_full_pass_over_the_largest_book():
+    """The invariant, stated once: one pass must fit inside what it produces.
+
+    Both stores, because both are written by the same pass and both are read to
+    decide whether the pass is finished. A lifetime shorter than a pass is not a
+    conservative choice — it is a store that can never hold a complete set, and
+    for the decision store it is worse than that: a book whose first decisions
+    expire mid-pass is offered them again before the pass reaches its end, so the
+    sweep walks in circles and never reports itself converged.
+
+    And the two are ordered, because they are not the same kind of claim. A proof
+    is a positive fact about a route and is trusted for as long as a bookmaker's
+    routing can be expected to hold; a decision only says a check happened, and
+    needs to outlive one pass and no more.
+    """
+    one_pass = _pass_seconds()
+
+    assert api.DEEP_LINK_DECISION_TTL_SECONDS > one_pass, (
+        f"a decision expires after {api.DEEP_LINK_DECISION_TTL_SECONDS}s but a pass "
+        f"over {SWEEP_EVENTS} events costs {one_pass:.0f}s, so the sweep re-offers "
+        "the events it started on and can never reach the end of the book"
+    )
+    assert api.DEEP_LINK_VERIFICATION_TTL_SECONDS > api.DEEP_LINK_DECISION_TTL_SECONDS, (
+        "a proof is a positive fact and must outlive 'we looked at it', or a "
+        "re-walk expires the evidence it was meant to refresh"
+    )
+    assert api.DEEP_LINK_VERIFICATION_TTL_SECONDS > one_pass
+
+
+def test_a_group_verifies_from_proofs_that_span_a_whole_pass(monkeypatch):
+    """The test this whole section is for: a complete set, from a real spread.
+
+    The store is seeded exactly as one finished pass leaves it — 62 records whose
+    ages run from 0 to a full pass — and the group is built from the two ENDS of
+    that spread: the proof the pass wrote first, and a fresh one. So every leg the
+    gate needs is proven, and the oldest proof it leans on is as old as the sweep
+    that produced it. With a lifetime shorter than a pass this is 0 verified
+    groups, which is the whole failure: correct pipeline, unreachable.
+    """
+    ages = _seed_one_finished_pass()
+    assert ages[0] == 0.0
+    assert max(ages) == pytest.approx(_pass_seconds(), rel=0.001), (
+        "the seeded spread is not a full pass, so this test would pass on a TTL "
+        "that cannot hold one"
+    )
+    # The group's mozzartbet leg is the LAST event of the pass, so it carries the
+    # OLDEST proof in the store. mdshop's leg is proven fresh.
+    oldest_event = str((SWEEP_EVENTS - 1) // api.DEEP_LINK_VERIFY_MAX_LIMIT * api.DEEP_LINK_VERIFY_MAX_LIMIT)
+    _record("6828117", verified=True, age_seconds=0.0, bookmaker="mdshop")
+    _stub_scan(
+        monkeypatch,
+        {
+            "mozzartbet": [_match("mozzartbet", oldest_event)],
+            "mdshop": [_match("mdshop", "6828117")],
+        },
+    )
+
+    run(api.run_scan("prematch"))
+
+    assert {m["bookmaker"]: m["deep_link_verified"] for m in api.cached_matches} == {
+        "mozzartbet": True,
+        "mdshop": True,
+    }, "a proof from the start of a pass no longer counts, so no set can be held"
+    assert [r["status"] for r in api.cached_match_groups_report] == ["verified"], (
+        "every leg of this group is proven and the oldest proof is a whole pass "
+        "old, so the group must verify — the sweep produced a complete set"
+    )
+
+
+def test_a_sweep_reaches_the_end_of_the_book_and_then_stops(monkeypatch):
+    """The pass has to be able to FINISH, or nothing downstream of it ever runs.
+
+    Driven through the endpoint with a stubbed checker that offers the same window
+    `verify_bookmaker` would, so the only thing being simulated is elapsed time:
+    after every call the store is aged by one call's measured cost, which is what
+    a real sweep does. The throttle is opened for the test because its effect is
+    already inside `SECONDS_PER_EVENT`; what is under test is the decision TTL
+    against the length of a pass.
+
+    A pass over 1,236 events is 62 calls, and the call after the last must report
+    nothing left to check. Under a decision lifetime shorter than a pass this
+    never terminates: the front of the book expires before the back is reached, so
+    call 62 is still working on the events call 1 did.
+    """
+    calls_needed = -(-SWEEP_EVENTS // api.DEEP_LINK_VERIFY_MAX_LIMIT)  # ceil
+    monkeypatch.setattr(api, "DEEP_LINK_VERIFY_RATE_LIMIT", 0)
+    api.cached_matches.extend(_feed(SWEEP_EVENTS, "mozzartbet"))
+    checked: list[str] = []
+
+    async def sweep_checker(bookmaker, matches, *, mode, live, limit, base_url=None, offset=0, settled=()):
+        available = build_targets(
+            matches, bookmaker, base_url or "", live=live, offset=offset, settled=settled
+        )
+        window = available[:limit]
+        checked.extend(t.event_id for t in window)
+        return _report(
+            outcomes=[_verified_outcome(t.event_id, t.url) for t in window],
+            available=len(available),
+        )
+
+    monkeypatch.setattr(api, "_run_link_verification", sweep_checker)
+
+    per_call = SECONDS_PER_EVENT * api.DEEP_LINK_VERIFY_MAX_LIMIT
+    converged_at = None
+    for call in range(1, calls_needed + 2):
+        r = client.post(f"/api/verify-links?bookmaker=mozzartbet&limit={api.DEEP_LINK_VERIFY_MAX_LIMIT}")
+        assert r.status_code == 200, r.text
+        _age_both_stores_by(per_call)
+        if r.json()["checked"] == 0:
+            converged_at = call
+            break
+
+    assert converged_at == calls_needed + 1, (
+        f"the sweep never reported itself converged within {calls_needed + 1} calls; "
+        f"it had re-checked {len(checked)} events by then, so it is walking in "
+        "circles on a book whose decisions expire before the pass reaches them"
+    )
+    assert len(set(checked)) == SWEEP_EVENTS, (
+        "a pass must decide each event exactly once, or the store is not holding a "
+        "full set and the sweep is buying the same evidence twice"
+    )
 
 
 # ─── helpers ──────────────────────────────────────────────────────────────────

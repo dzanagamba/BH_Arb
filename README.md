@@ -45,11 +45,13 @@ A web-based arbitrage betting detection tool for the Bosnian market.
 > 2026-09-25 by opening each route in a browser: see
 > `scripts/verify_deeplinks.py` (command in *Tools* below) and the findings in
 > `.superpowers/sdd/2026-09-25-match-and-game-mapping/task-12-report.md`.
-> Re-running it costs one browser navigation per event and does not converge
-> today (see *Tools*), so treat the inertness as a dated measurement to
-> re-confirm, not a permanent property. The doc claims in this section are
-> themselves checked by `tests/test_readme_claims.py`, so a claim here that
-> stops matching the code fails the suite.
+> Re-running it costs one browser navigation per event and a full pass over one
+> book takes about 92 minutes, so treat the inertness as a dated measurement to
+> re-confirm, not a permanent property. A sweep does converge — one call after
+> the last reports nothing left to check — but only because
+> `DEEP_LINK_DECISION_TTL_SECONDS` is longer than a pass; see *Tools*. The doc
+> claims in this section are themselves checked by `tests/test_readme_claims.py`,
+> so a claim here that stops matching the code fails the suite.
 
 ## What it does
 
@@ -241,6 +243,24 @@ loop knows when to stop. Only a completed check settles an event: a navigation
 that errored is not a verdict, so it is offered again on the next call. The
 endpoint stays rate-limited and capped for the same reason.
 
+**Both store lifetimes must outlast one pass, and they are not equal.** A proof
+in `cache/deep_link_verifications.json` is what lets a group reach `verified`, so
+if it expires before the sweep that writes it finishes, the sweep can never hold a
+complete set and no surebet can exist — which is exactly what happened: a pass over
+Mozzartbet's 1,236 published events measured at 92 minutes against a one-hour
+proof lifetime, and 412 stored proofs aged out with 0 of 4,260 cached matches
+carrying `deep_link_verified`. So `DEEP_LINK_VERIFICATION_TTL_SECONDS` (24h) is
+longer than a pass by 15.6x, and `DEEP_LINK_DECISION_TTL_SECONDS` (6h) is longer
+than one by 3.9x — a decision carries no verdict, only "a check completed", so it
+needs to outlive a pass and nothing more, and being too short has a functional
+cost as well as a safety one: a book whose first decisions expire mid-pass is
+offered them again before the pass reaches the back, so it walks in circles. The
+proof is the longer of the two because it is the only one of the two that grants
+anything. Both numbers are re-derived from that measurement by
+`tests/test_verify_links.py::test_every_link_lifetime_outlives_a_full_pass_over_the_largest_book`,
+and re-measure the sweep before trusting them: the per-event cost is a real browser
+navigation, so the headroom is a number of events, not a promise.
+
 ### Known defects, recorded in-repo
 
 * **`premier_kladionica` live BTTS.** The live feed names the block
@@ -271,5 +291,10 @@ endpoint stays rate-limited and capped for the same reason.
 - Betole is disabled (`"enabled": False`) by default to save system resources
 - All odds are displayed as European decimal odds
 - Stakes are calculated for the configured `DEFAULT_INVESTMENT` and can be adjusted live in the dashboard (with optional rounding to whole KM)
-- Last scan results are cached to `cache/last_scan.json` and restored on startup
+- Last scan results — surebets, matches and the match report — are cached to
+  `cache/last_scan.json` and restored on startup, for 30 minutes; past that the
+  file is discarded rather than replayed. A restored report is re-checked against
+  the link store rather than trusted, so a `verified` group survives a restart only
+  while every one of its legs still has a fresh proof — a snapshot older than the
+  proofs it was decided on is dropped, not shown.
 - Verified football market mappings and deliberately excluded offers are documented in `MARKET_MAPPING.md`

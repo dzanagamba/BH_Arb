@@ -913,6 +913,126 @@ def test_convergence_check_fails_when_build_targets_is_gone():
     assert any("gone" in problem for problem in problems), problems
 
 
+def _link_lifetime_problems(text: str) -> list[str]:
+    """The README's account of a converging sweep, against the two TTL constants.
+
+    The sweep converges only while a pass is shorter than the decision lifetime,
+    and a group can hold a complete set of proofs only while a pass is shorter
+    than the proof lifetime. Both were one hour against a measured 86-minute
+    pass, and the consequence was not slow output but none: no group could reach
+    `verified`, so no surebet could exist.
+
+    So the claim is checked in BOTH directions, because the two failures are the
+    same defect. A README claiming convergence while the ordering is false is
+    inventing a capability; a README still warning that a sweep cannot converge
+    while the ordering holds is a stale caveat that would send the next engineer
+    to fix code that is already correct — and the two sentences sat in this same
+    document until they contradicted each other.
+
+    The arithmetic the ordering has to satisfy ("longer than one pass") is a
+    measurement, so it is not re-derived here: it belongs to
+    `tests/test_verify_links.py`, which holds the per-event cost. This predicate
+    checks the document against the constants, and that test checks the constants
+    against the measurement.
+    """
+    problems: list[str] = []
+    section = _section(text, "## Match & mapping certainty")
+    if "does not converge" in text:
+        problems.append(
+            "the README still warns that a sweep does not converge, while the Tools "
+            "section below says a fully decided book reports remaining: 0; the two "
+            "sentences cannot both be true"
+        )
+    carriers = [
+        claim
+        for claim in _claims(section)
+        if "DEEP_LINK_VERIFICATION_TTL_SECONDS" in claim
+        and "DEEP_LINK_DECISION_TTL_SECONDS" in claim
+    ]
+    if not carriers:
+        problems.append(
+            "no claim names both DEEP_LINK_VERIFICATION_TTL_SECONDS and "
+            "DEEP_LINK_DECISION_TTL_SECONDS, so nothing in the document says why a "
+            "sweep can hold a complete set of proofs"
+        )
+    elif not all("longer of the two" in claim for claim in carriers):
+        problems.append(
+            "the claim naming both lifetimes does not say which of the two is the "
+            "longer, so a reader cannot tell a positive fact from a re-walk clock"
+        )
+    if api.DEEP_LINK_VERIFICATION_TTL_SECONDS <= api.DEEP_LINK_DECISION_TTL_SECONDS:
+        problems.append(
+            f"the README calls DEEP_LINK_VERIFICATION_TTL_SECONDS "
+            f"({api.DEEP_LINK_VERIFICATION_TTL_SECONDS}s) the longer of the two, but "
+            f"DEEP_LINK_DECISION_TTL_SECONDS is {api.DEEP_LINK_DECISION_TTL_SECONDS}s, "
+            "which is longer; the claim is stale"
+        )
+    for name, value in (
+        ("DEEP_LINK_VERIFICATION_TTL_SECONDS", api.DEEP_LINK_VERIFICATION_TTL_SECONDS),
+        ("DEEP_LINK_DECISION_TTL_SECONDS", api.DEEP_LINK_DECISION_TTL_SECONDS),
+    ):
+        hours = f"{value // 3600}h"
+        if hours not in section:
+            problems.append(
+                f"the README does not state {name} as {hours}, which is what the "
+                "constant currently is"
+            )
+    return problems
+
+
+def test_link_lifetimes_match_the_constants():
+    """The README's account of the two store lifetimes, against `server/api.py`."""
+    problems = _link_lifetime_problems(README)
+    assert problems == [], "; ".join(problems)
+
+
+def test_link_lifetime_check_fails_when_the_readme_repeats_the_stale_warning():
+    """Proves the previous test reads the stale-convergence warning."""
+    broken = README.replace(
+        "A sweep does converge", "A sweep does not converge today"
+    )
+    assert broken != README, "the mutation did not apply; the check is untested"
+    assert _link_lifetime_problems(broken), "a README repeating the warning passed"
+
+
+def test_link_lifetime_check_fails_when_the_ordering_goes_unstated():
+    """The document has to say WHICH lifetime is longer, not just that both exist.
+
+    Without it a reader cannot tell a positive fact from a re-walk clock, and the
+    asymmetry is the part that is easy to undo by accident. The mutation spans the
+    line break the source is wrapped at, so it is the real sentence that goes and
+    not a string the document happens to break differently one day.
+    """
+    broken = README.replace("proof is the longer of the two", "proof is one of the two")
+    assert broken != README, "the mutation did not apply; the check is untested"
+    problems = _link_lifetime_problems(broken)
+    assert any("which of the two is the longer" in p for p in problems), problems
+
+
+def test_link_lifetime_check_fails_when_the_constants_move_under_the_readme():
+    """Proves the numbers in the document are read, not assumed.
+
+    `monkeypatch` on the module the predicate reads, so this is the code side of
+    the comparison rather than a second copy of it.
+    """
+    saved = api.DEEP_LINK_DECISION_TTL_SECONDS
+    try:
+        api.DEEP_LINK_DECISION_TTL_SECONDS = saved * 4
+        problems = _link_lifetime_problems(README)
+    finally:
+        api.DEEP_LINK_DECISION_TTL_SECONDS = saved
+    assert any("which is longer" in p for p in problems), problems
+    assert _link_lifetime_problems(README) == [], "the module was not restored"
+
+
+def test_link_lifetime_check_fails_when_a_lifetime_is_dropped_from_the_document():
+    """Naming one constant is not naming the asymmetry."""
+    broken = README.replace("`DEEP_LINK_DECISION_TTL_SECONDS` (6h)", "(6h)")
+    assert broken != README, "the mutation did not apply; the check is untested"
+    problems = _link_lifetime_problems(broken)
+    assert any("both DEEP_LINK_VERIFICATION_TTL_SECONDS" in p for p in problems), problems
+
+
 # ===========================================================================
 # 9. The two known defects, and the tripwires that guard them
 # ===========================================================================

@@ -379,6 +379,14 @@ class MatchMatcher:
         """
         Generate a debugging report of all match groupings.
         Call this to verify correct pairing before trusting surebets.
+
+        Each leg carries its `event_id` because the report outlives the process
+        that built it: `_save_cache` persists it and `_load_cache` restores it
+        after a restart, and a restored `verified` group is only kept while the
+        link store still proves every one of its legs. Keying that check needs
+        the id — a book publishes many events, so "this book has some proven
+        match" is not the same claim as "this group's leg is proven". The field
+        is additive and nothing reads it except that restore.
         """
         report = []
         for i, group in enumerate(groups):
@@ -394,6 +402,7 @@ class MatchMatcher:
             for match in group.matches:
                 bookmakers.append({
                     "bookmaker": match.bookmaker,
+                    "event_id": match.event_id,
                     "home_team_raw": match.home_team,
                     "away_team_raw": match.away_team,
                     "home_normalized": match.home_team_normalized,

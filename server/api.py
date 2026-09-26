@@ -339,19 +339,62 @@ def _state_for(mode: str) -> tuple[ScanStatus, list, list, list, dict]:
 #   links do not verify stores nothing at all and the sweep re-checks its first
 #   `limit` events forever — the defect this store exists to close.
 #
-# Both are keyed `bookmaker|event_id`, both expire, and neither may be written
-# from an ERRORED check: a navigation that never completed is neither a proof nor
-# a failure, and treating it as either would drop an event that still needs
-# checking.
+# Both are keyed `bookmaker|event_id`, both expire — on DIFFERENT clocks, and
+# asymmetrically, because they are not the same kind of claim (see the lifetimes
+# below) — and neither may be written from an ERRORED check: a navigation that
+# never completed is neither a proof nor a failure, and treating it as either
+# would drop an event that still needs checking.
 # ---------------------------------------------------------------------------
 DEEP_LINK_VERIFICATIONS_FILE = os.path.join(CACHE_DIR, "deep_link_verifications.json")
 DEEP_LINK_DECISIONS_FILE = os.path.join(CACHE_DIR, "deep_link_decisions.json")
-DEEP_LINK_VERIFICATION_TTL_SECONDS = 3600
-# A decision is a statement about a moment, exactly like a proof, so it expires
-# on the same clock: a book is re-walked rather than frozen out of the sweep
-# after one pass. Its own constant, NOT derived from the rate-limit window —
-# those are unrelated and a derivation there once moved the scan's budget.
-DEEP_LINK_DECISION_TTL_SECONDS = 3600
+# A stored record may only keep unblocking `verified` while it is inside its
+# lifetime, and BOTH lifetimes below are chosen against ONE measured number: how
+# long a full pass over a book costs.
+#
+# THE MEASUREMENT (2026-09-26, from the live store): mozzartbet published 1,236
+# prematch events with per-event ids; the sweep decided exactly 20 per call across
+# 21 calls; the gap between one call finishing and the next had a median of 89.6s
+# and spanned 83.6s-302.2s, the top two being operator pauses. So a pass is ~92
+# minutes, and at 02:44 the newest of 412 stored proofs was 75 minutes old. Both
+# lifetimes were then 60 minutes. A pass therefore could not hold its own result:
+# the first proof a pass wrote died 32 minutes before the pass ended, the last
+# proof died 32 minutes after, and at every moment in between no book held a
+# complete set — so no group could reach `verified` and no surebet could exist.
+# The pipeline was correct and unreachable.
+#
+# So the requirement is the same for both stores and it is not negotiable: one
+# pass must fit inside the lifetime of what that pass writes. Both are stated in
+# hours because the fact being certified — "this book still serves a per-event
+# route for this id" — is a structural fact about a bookmaker's site, not a
+# per-minute market reading, and it is the only thing either lifetime is guarding.
+#
+#   decision 6h  — a decision carries no verdict, only "a check completed", so it
+#                  needs to outlive one pass and nothing more. It has a hard
+#                  functional cost when it is too short: `_decided_event_ids`
+#                  reads it, so a book whose first decisions expire mid-pass is
+#                  offered them again before the pass reaches the back, and the
+#                  sweep walks in circles and never reports itself converged. It
+#                  has no safety cost at any length, because granting nothing is
+#                  what a decision does.
+#   proof     24h  — a proof is a POSITIVE fact and outlives the decision that
+#                  produced it by 4x. A book's routes changing is a site change,
+#                  not a market tick; a day is the order of magnitude, and it is
+#                  15.6x the measured pass, so it absorbs a book growing to ~19,000
+#                  events before it stops being true. The sweep, not the TTL, is
+#                  what keeps this honest: a book that is being swept has its
+#                  whole decision set expire every 6h, so a route that dies is
+#                  caught within one decision lifetime plus one pass, and the 24h
+#                  ceiling only ever binds on a book nobody has swept.
+#
+# What this does NOT buy, stated plainly: for a book nobody sweeps, a proof that
+# has stopped being true can keep a group `verified` for up to 24h where it was
+# 1h. The four things that stay in place are what keep that from being a wrong
+# bet rather than a dead link — a retired event drops out of the feed on the next
+# scan, a completed check that finds nothing POPS the proof, `?recheck=1` is the
+# way back to a decided event, and the surebet itself is separately bounded by
+# `EXPIRY_BUFFER_MINUTES` on kickoff and by `ODDS_TTL_SECONDS` on every leg.
+DEEP_LINK_VERIFICATION_TTL_SECONDS = 24 * 3600
+DEEP_LINK_DECISION_TTL_SECONDS = 6 * 3600
 DEEP_LINK_VERIFY_DEFAULT_LIMIT = 5
 DEEP_LINK_VERIFY_MAX_LIMIT = 20
 _deep_link_verifications: dict[str, dict[str, dict]] = {}
@@ -369,8 +412,13 @@ def _deep_link_key(bookmaker: str, event_id: str) -> str:
     return f"{bookmaker}|{event_id}"
 
 
-def _deep_link_record_is_fresh(record: dict, now: datetime | None = None) -> bool:
-    """Return whether a stored verification is still inside its TTL."""
+def _deep_link_record_is_fresh(record: dict | None, now: datetime | None = None) -> bool:
+    """Return whether a stored verification is still inside its TTL.
+
+    `None` is accepted so a caller may pass a lookup that missed without
+    pre-checking it: a missing record is not a fresh record, and that is the
+    whole answer.
+    """
     if not isinstance(record, dict) or record.get("verified") is not True:
         return False
     raw = record.get("checked_at")
@@ -520,11 +568,14 @@ def _decided_event_ids(
     has been proven can only STOP unblocking a `verified` group if it can be
     checked again and fail, so a decided event must be re-offered deliberately
     (`?recheck=1`) rather than being unable to be re-checked at all. The two
-    stores share a TTL and a completed check writes both, so nothing is lost by
-    reading only the decisions.
+    stores now expire on different clocks, and that is no reason to read both:
+    a completed check writes both, so the decision store alone still knows
+    everything the sweep needs.
 
     Book-scoped (`bookmaker|event_id`), per mode, and TTL-filtered: another
-    book's decisions, another mode's, and anything stale are all absent.
+    book's decisions, another mode's, and anything stale are all absent. The TTL
+    is also what makes a pass finishable — see `DEEP_LINK_DECISION_TTL_SECONDS`,
+    which is longer than a measured pass for exactly this reason.
     """
     reference = now or datetime.now(UTC).replace(tzinfo=None)
     prefix = f"{bookmaker}|"
@@ -1356,8 +1407,14 @@ async def run_scan(mode: str = "prematch"):
 
 
 def _save_cache(mode: str = "prematch"):
-    """Persist last scan results to JSON cache files (with TTL metadata P0-6)."""
-    status, surebets_cache, matches_cache, _, _ = _state_for(mode)
+    """Persist last scan results to JSON cache files (with TTL metadata P0-6).
+
+    The match report goes out with the rest of it. It is the diagnostic the
+    dashboard counts `match_groups` and `verified_groups` from, so persisting the
+    surebets and the odds while dropping it left the operator reading 0 verified
+    groups for as long as the cache file stayed inside its own 30-minute TTL.
+    """
+    status, surebets_cache, matches_cache, report_cache, _ = _state_for(mode)
     cache_file = _LIVE_CACHE_FILE if mode == "live" else _PREMATCH_CACHE_FILE
     try:
         os.makedirs(CACHE_DIR, exist_ok=True)
@@ -1372,6 +1429,7 @@ def _save_cache(mode: str = "prematch"):
                 "surebets": surebets_cache,
                 "matches": matches_cache,
                 "matches_count": len(matches_cache),
+                "match_groups": list(report_cache),
                 "mode": mode,
                 "scan_time": status.last_scan_time.isoformat() if status.last_scan_time else None,
                 "fetched_at": status.last_scan_time.isoformat() if status.last_scan_time else None,
@@ -1380,13 +1438,94 @@ def _save_cache(mode: str = "prematch"):
         logger.warning(f"Cache save failed: {e}")
 
 
+def _restorable_match_groups(report: object, mode: str) -> list[dict]:
+    """Return the stored report rows a restart is still entitled to show.
+
+    A persisted `verified` row is a snapshot of a decision another process made,
+    so it can be older than the store it rests on: a proof may have been cleared
+    by a completed check, or aged out, since the scan wrote it. Restoring such a
+    row would put back a `verified` claim the store no longer supports — the
+    staleness the link TTL exists to prevent, arriving through the cache file
+    instead of the store. So a `verified` row survives only while EVERY one of
+    its legs is still settled.
+
+    "Settled" is the gate's own two settled cases and no others, which is why this
+    is a per-leg test and not a plain store lookup:
+
+    * a FRESH proof in the store, keyed `bookmaker|event_id` (case 1 of
+      `CertaintyGate._link_evidence`, and why `get_match_report` emits the id); or
+    * a book that DECLARES no per-event route (case 2, where the declaration is
+      itself the proof and there is no link for a check to have stored one for).
+      Six of the nine books are in that case, so demanding a proof of their legs
+      would drop every group they belong to, which is the opposite of what the
+      restore is for.
+    * anything else is case 3 or 4, `link_unverified` and `no_event_link`, which
+      both block, so the row is dropped.
+
+    Cases 3 and 4 are also why a leg carrying no `event_id`, or a book with no
+    declaration at all, drops the row: silence is not proof of absence, and a
+    restore must not be the one place that treats it as one.
+
+    The test is the store's, never the cached match's own flag:
+    `_apply_deep_link_verifications` only ever sets a flag, so a restored
+    `deep_link_verified=True` is a scan's snapshot that outlives its proof and
+    would make this a copy of the very staleness it is here to catch.
+
+    A row that fails is DROPPED rather than demoted, and that is the only honest
+    option: `group_matches` returns only accepted groups, so a group whose links
+    are unproven is not a group the matcher reports at all. Inventing a status for
+    it here would put a word in the report's vocabulary that no scan can produce.
+    """
+    if not isinstance(report, list):
+        return []
+    with _DEEP_LINK_LOCK:
+        entries = dict(_deep_link_verifications.get(mode) or {})
+    reference = datetime.now(UTC).replace(tzinfo=None)
+    kept: list[dict] = []
+    for row in report:
+        if not isinstance(row, dict):
+            continue
+        if row.get("status") != "verified":
+            kept.append(row)
+            continue
+        legs = row.get("bookmakers")
+        if not isinstance(legs, list) or not legs:
+            continue
+        proven = True
+        for leg in legs:
+            if not isinstance(leg, dict):
+                proven = False
+                break
+            bookmaker = str(leg.get("bookmaker") or "")
+            if not bookmaker:
+                proven = False
+                break
+            if declares_no_event_id(bookmaker):
+                continue  # the declaration IS the proof; no link exists to store
+            event_id = str(leg.get("event_id") or "")
+            record = entries.get(_deep_link_key(bookmaker, event_id)) if event_id else None
+            if not _deep_link_record_is_fresh(record, reference):
+                proven = False
+                break
+        if proven:
+            kept.append(row)
+        else:
+            logger.info(
+                f"Dropped a restored {mode} match group: the link store no longer "
+                f"settles every leg of '{row.get('canonical_match', '?')}'"
+            )
+    return kept
+
+
 def _load_cache():
     """Restore last scan results from the JSON cache files on startup (TTL 30min P0-6)."""
     for mode, cache_file, state_fields in (
-        ("prematch", _PREMATCH_CACHE_FILE, (scan_status, cached_surebets, cached_matches)),
-        ("live", _LIVE_CACHE_FILE, (live_status, cached_live_surebets, cached_live_matches)),
+        ("prematch", _PREMATCH_CACHE_FILE,
+         (scan_status, cached_surebets, cached_matches, cached_match_groups_report)),
+        ("live", _LIVE_CACHE_FILE,
+         (live_status, cached_live_surebets, cached_live_matches, cached_live_match_groups_report)),
     ):
-        status, surebets_cache, matches_cache = state_fields
+        status, surebets_cache, matches_cache, report_cache = state_fields
         try:
             if not os.path.exists(cache_file):
                 continue
@@ -1413,11 +1552,16 @@ def _load_cache():
             # A restored cache is re-stamped with any link proof that is still
             # inside its TTL, so a restart does not silently demote every group.
             _apply_deep_link_verifications(matches_cache, mode)
+            # And the report is re-checked against that store rather than trusted:
+            # see `_restorable_match_groups` for why a stored `verified` row can
+            # be older than the proofs it was decided on.
+            report_cache[:] = _restorable_match_groups(data.get("match_groups"), mode)
             status.total_matches = len(matches_cache)
             status.surebets_found = len(surebets_cache)
             logger.info(
                 f"Loaded cached {'live' if mode == 'live' else 'prematch'} scan: "
-                f"{len(surebets_cache)} surebets, {len(matches_cache)} matches from {scan_time}"
+                f"{len(surebets_cache)} surebets, {len(matches_cache)} matches, "
+                f"{len(report_cache)} match groups from {scan_time}"
             )
         except Exception as e:
             logger.warning(f"Cache load failed ({mode}): {e}")
