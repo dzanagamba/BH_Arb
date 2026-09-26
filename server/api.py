@@ -1505,6 +1505,33 @@ async def trigger_scan(
     }
 
 
+def _unverified_link_count(matches: list[dict]) -> int:
+    """Matches whose per-event link is unproven AND can still block.
+
+    The predicate is the gate's own, `not declares_no_event_id(book)`, and not
+    `supports_event_id(book)`: those two disagree exactly on a book with no
+    declaration at all, which is the one case where the gate blocks everything
+    and this diagnostic is the reason an operator needs. Under
+    `supports_event_id` a removed declaration would report 0 unverified links
+    while the gate refused every group. A book that declares
+    `supports_event_id: false` is excluded either way: the gate settles its link
+    from that declaration, so counting it would report thousands of blockers
+    that block nothing.
+
+    One function for both feeds, because the live counter exists only so the
+    dashboard can answer for the feed it is showing: a live empty state that
+    quoted the prematch count would be quoting a different scan than the one on
+    screen.
+    """
+    return sum(
+        1
+        for match in matches
+        if match.get("event_id")
+        and not match.get("deep_link_verified")
+        and not declares_no_event_id(str(match.get("bookmaker", "")))
+    )
+
+
 @router.get("/health")
 async def health():
     """Health + per-bookie diagnostics (P1-6)."""
@@ -1533,23 +1560,11 @@ async def health():
         ),
         "pending_candidates": len(pending_candidates),
         "suppressed_candidates": len(_suppressed_candidates),
-        # Matches whose per-event link is unproven AND can still block. The
-        # predicate is the gate's own, `not declares_no_event_id(book)`, and not
-        # `supports_event_id(book)`: those two disagree exactly on a book with no
-        # declaration at all, which is the one case where the gate blocks
-        # everything and this diagnostic is the reason an operator needs. Under
-        # `supports_event_id` a removed declaration would report 0 unverified
-        # links while the gate refused every group. A book that declares
-        # `supports_event_id: false` is excluded either way: the gate settles its
-        # link from that declaration, so counting it would report thousands of
-        # blockers that block nothing.
-        "unverified_links": sum(
-            1
-            for match in cached_matches
-            if match.get("event_id")
-            and not match.get("deep_link_verified")
-            and not declares_no_event_id(str(match.get("bookmaker", "")))
-        ),
+        # Matches whose per-event link is unproven AND can still block. See
+        # `_unverified_link_count` for why the predicate is the gate's and why
+        # the live feed is counted separately rather than answered from this one.
+        "unverified_links": _unverified_link_count(cached_matches),
+        "live_unverified_links": _unverified_link_count(cached_live_matches),
         # The declaration map the gate is actually reading, not the one in the
         # file on disk. `scrapers.common._deeplink_cache` is populated once per
         # process, so an operator who edits

@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "profit_floor_percent": 0.2,
+  "placeholders": [
+    "matches",
+    "unverified_links",
+    "verified_groups",
+    "surebets",
+    "profit_floor_percent"
+  ],
+  "flags": {
+    "scanned": "matches_cached (live_matches_cached) is above zero AND prematch.last_scan_age_sec (live.last_scan_age_sec) is not null, for the mode on screen",
+    "unverified_links": "unverified_links (live_unverified_links) is above zero, for the mode on screen",
+    "verified_groups": "match_groups on /api/results for the mode on screen, which is the same count as the health endpoint's verified_groups but read per mode",
+    "have_surebets": "the surebets the /api/results payload returned, as held in allSurebets",
+    "show_surebets": "shownSurebets: the count left after the client's own filters, so at most have_surebets"
+  },
+  "group_statuses": "Deliberately not rendered. `group_matches` returns only the groups the certainty gate accepted, so the match report it feeds never holds a `suggested` or `rejected` entry and group_statuses can only be {} or {\"verified\": n}. Printing a count of verified groups next to a sentence about refused pairings would read as though the refusals had been counted too.",
+  "cases": [
+    {
+      "id": "never_scanned",
+      "panel": "empty-state",
+      "decided_by": ["matches_cached", "live_matches_cached", "last_scan_age_sec"],
+      "guard": { "all": [], "none": ["scanned"] },
+      "title": "Ready to Hunt Surebets",
+      "title_live": "No Live Matches Scanned",
+      "body": "Click <strong>Scan Now</strong> to start scanning your connected bookmakers for arbitrage opportunities. Browser windows will open — solve any CAPTCHA if prompted.",
+      "body_live": "Click <strong>Scan Now</strong> to scan all bookmakers for <strong>in-play</strong> arbitrage opportunities. Live odds change fast — rescan often.",
+      "actions": []
+    },
+    {
+      "id": "links_unverified",
+      "panel": "empty-state",
+      "decided_by": ["unverified_links", "live_unverified_links", "verified_groups", "match_groups", "matches_cached"],
+      "guard": { "all": ["scanned", "unverified_links"], "none": ["verified_groups", "have_surebets"] },
+      "title": "No Surebets — Deep Links Are Unproven",
+      "body": "The scan read {matches} matches. {unverified_links} of them carry a per-event link that has never been proven, and the certainty gate refuses a pairing the moment one side's link is unproven, so a match on that list can never join a verified group. {verified_groups} match groups came out verified, which leaves the surebet engine with nothing to price. <strong>This is not a filter problem:</strong> no market, bookmaker or minimum profit can prove a link. The pairings the gate refused are queued in the Review tab.",
+      "actions": ["showReview"]
+    },
+    {
+      "id": "identity_unproven",
+      "panel": "empty-state",
+      "decided_by": ["unverified_links", "live_unverified_links", "verified_groups", "match_groups", "matches_cached"],
+      "guard": { "all": ["scanned"], "none": ["unverified_links", "verified_groups", "have_surebets"] },
+      "title": "No Surebets — No Match Group Is Verified",
+      "body": "The scan read {matches} matches. {unverified_links} of them are carrying an unproven per-event link, and {verified_groups} match groups came out verified, so nothing reached the surebet engine: it is only ever fed groups the certainty gate has proven to be the same event — identical league, kickoff within 15 minutes, the same match category, the same two teams and the same home/away order, with a proven link on each side. The pairings the gate refused are queued in the Review tab. <strong>This is not a filter problem:</strong> no threshold or market choice can prove that two fixtures are the same event.",
+      "actions": ["showReview"]
+    },
+    {
+      "id": "no_edge",
+      "panel": "empty-state",
+      "decided_by": ["verified_groups", "match_groups", "matches_cached"],
+      "guard": { "all": ["scanned", "verified_groups"], "none": ["have_surebets"] },
+      "title": "No Surebets — Verified Groups, Nothing Priced",
+      "body": "The scan proved {verified_groups} match groups, so pairing worked, and the surebet engine priced none of them. A group is only priced once its kickoff has not passed and its odds are still inside the freshness window the health bar reports, so a group already under way — or a scan older than that window — is never priced at all. <strong>This is not a filter problem:</strong> this scan priced no surebet at the {profit_floor_percent}% floor it applies, so there is nothing for the filters to reveal. Scan again for a fresher read of the same fixtures.",
+      "actions": []
+    },
+    {
+      "id": "filters_hiding",
+      "panel": "no-results",
+      "decided_by": ["have_surebets", "surebets", "matches_cached"],
+      "guard": { "all": ["scanned", "have_surebets"], "none": ["show_surebets"] },
+      "title": "No Surebets Match Your Filters",
+      "body": "The scan priced {surebets} surebets and the filters in force are showing none of them. Every control on this bar is applied on top of the scan, so the market, the bookmakers, the search text and the minimum profit can each hide all of them. The certainty gate is not involved here — the scan already priced these.",
+      "actions": ["resetFilters"]
+    }
+  ]
+}

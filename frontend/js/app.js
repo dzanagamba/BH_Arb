@@ -30,6 +30,9 @@ let soundMuted = false;
 let audioContext = null;       // shared AudioContext (reused, no per-alert leak)
 let autoRescanTimer = null;    // auto-rescan countdown interval
 let knownSurebetSignatures = new Set();  // fingerprints of previously seen surebets
+let healthSnapshot = null;     // last /api/health payload, kept for the no-surebet diagnostic
+let resultsSnapshot = null;    // last /api/results payload, same reason
+let noSurebetReasons = null;   // the diagnostic copy table, fetched once at start-up
 
 // Reviewer-facing wording for deterministic gate codes. Keep the raw code in
 // the rendered title attribute so diagnostics remain available to operators.
@@ -165,6 +168,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     restoreMode();
     await loadConfig();
     initBookmakerChips();
+    // The diagnostic copy table is static and local, so it is read once, before
+    // the first render. A panel must never be painted from a table that has not
+    // arrived, and must never fall back to a sentence that names the wrong cause.
+    await loadNoSurebetReasons();
     await loadResults(true);  // Load any cached results from previous scan (no alert sound)
     const tabs = document.querySelector('.results-tabs');
     if (tabs) tabs.addEventListener('keydown', handleTabKeydown);
@@ -480,6 +487,10 @@ async function loadResults(silent = false) {
         const data = await res.json();
 
         allSurebets = data.surebets || [];
+        // Kept for the same reason as healthSnapshot: `match_groups` is the
+        // mode-correct count of groups the certainty gate accepted, and the
+        // health payload's equivalent is prematch-only.
+        resultsSnapshot = data;
 
         // Update stats
         document.getElementById('stat-matches').textContent =
@@ -591,47 +602,253 @@ function resetFilters() {
 // ─── Rendering ────────────────────────────────────────────────────────────────
 function renderSurebets(surebets) {
     const grid = document.getElementById('results-grid');
-    const emptyState = document.getElementById('empty-state');
-    const noResults = document.getElementById('no-results');
     const surebetsCount = document.getElementById('surebets-count');
 
     if (surebetsCount) surebetsCount.textContent = surebets.length;
     grid.innerHTML = '';
 
-    // Mode-aware empty state copy
-    const emptyTitle = emptyState.querySelector('.empty-state-title');
-    const emptyDescription = emptyState.querySelector('.empty-state-desc');
-    if (currentMode === 'live') {
-        if (emptyTitle) emptyTitle.textContent = 'No Live Matches Scanned';
-        if (emptyDescription) emptyDescription.innerHTML =
-            'Click <strong>Scan Now</strong> to scan all bookmakers for <strong>in-play</strong> arbitrage opportunities. Live odds change fast — rescan often.';
-    } else {
-        if (emptyTitle) emptyTitle.textContent = 'Ready to Hunt Surebets';
-        if (emptyDescription) emptyDescription.innerHTML =
-            'Click <strong>Scan Now</strong> to start scanning all 9 bookmakers for arbitrage opportunities. Browser windows will open — solve any CAPTCHA if prompted.';
-    }
-
-    // Show empty state if no data at all
-    if (allSurebets.length === 0) {
-        emptyState.style.display = '';
-        noResults.style.display = 'none';
+    // Anything the grid cannot show is handed to the diagnostic, which decides
+    // which of the two panels is up and what that panel says. It is never told
+    // "show the empty state" — only "there is nothing to show".
+    if (allSurebets.length === 0 || surebets.length === 0) {
+        renderNoSurebetState();
         return;
     }
 
-    emptyState.style.display = 'none';
-
-    // Show no-results if filters eliminate everything
-    if (surebets.length === 0) {
-        noResults.style.display = '';
-        return;
-    }
-
-    noResults.style.display = 'none';
+    document.getElementById('empty-state').style.display = 'none';
+    document.getElementById('no-results').style.display = 'none';
 
     surebets.forEach((sb, idx) => {
         const card = buildSurebetCard(sb, idx);
         grid.appendChild(card);
     });
+}
+
+// ─── No-surebet diagnostic ─────────────────────────────────────────────────────
+//
+// The reason a surebet is absent is the one thing an operator cannot work out
+// from the screen, and before this the screen asserted a reason it had not
+// checked: it told a user who had just scanned thousands of matches to scan
+// again, and told a user whose certainty gate had refused every group to reset
+// their filters. Both were wrong, and the second one is a loop, because
+// resetting the filters changes nothing.
+//
+// So the reason is read off the two payloads the dashboard is already polling.
+// `frontend/js/no-surebet-reasons.json` holds the copy and the guards; this
+// module holds the arithmetic, and `tests/test_frontend_empty_state.py` holds
+// the truth table that proves the two cannot disagree.
+
+// The only place a case's behaviour is defined. An action the table names that
+// this map does not implement renders nothing, so a typo cannot become a button
+// wired to a function that does not exist.
+const DIAGNOSTIC_ACTIONS = {
+    resetFilters: { label: 'Reset Filters', handler: () => resetFilters() },
+    showReview: { label: 'Open review queue', handler: () => switchTab('review') },
+};
+
+// Which elements hold the copy in each panel. `#no-results` keeps its own
+// classes so nothing about how it looks depends on which case is in it.
+const DIAGNOSTIC_PANELS = {
+    'empty-state': { title: '.empty-state-title', body: '.empty-state-desc', actions: '#empty-state-actions' },
+    'no-results': { title: '#no-results-title', body: '#no-results-desc', actions: '#no-results-actions' },
+};
+
+function formatCount(value) {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric.toLocaleString() : '0';
+}
+
+async function loadNoSurebetReasons() {
+    try {
+        const res = await fetch('/js/no-surebet-reasons.json');
+        if (!res.ok) throw new Error(`copy table responded ${res.status}`);
+        noSurebetReasons = await res.json();
+    } catch (error) {
+        // Falling back to a hard-coded sentence here would reintroduce the
+        // defect this module exists to remove, so the dashboard says it does
+        // not know instead of naming a cause it has not checked.
+        console.warn('No-surebet copy table unavailable:', error);
+        noSurebetReasons = null;
+    }
+}
+
+// The five facts every case is decided from. `match_groups` is read from the
+// results payload rather than `verified_groups` from the health payload because
+// the health counter is prematch-only, and this screen may be showing live.
+function diagnosticFlags(health, results, counts) {
+    const live = counts.mode === 'live';
+    const feed = live ? health?.live : health?.prematch;
+    const matches = live ? health?.live_matches_cached : health?.matches_cached;
+    const links = live ? health?.live_unverified_links : health?.unverified_links;
+    return {
+        scanned: Number(matches) > 0 && feed?.last_scan_age_sec != null,
+        unverified_links: Number(links) > 0,
+        verified_groups: Number(results?.match_groups) > 0,
+        have_surebets: Number(counts.surebets) > 0,
+        show_surebets: Number(counts.shownSurebets) > 0,
+    };
+}
+
+function selectNoSurebetReason(flags) {
+    const table = noSurebetReasons;
+    if (!table || !Array.isArray(table.cases)) return null;
+    return table.cases.find(reason => {
+        const guard = reason.guard || {};
+        const all = Array.isArray(guard.all) ? guard.all : [];
+        const none = Array.isArray(guard.none) ? guard.none : [];
+        return all.every(flag => flags[flag] === true) && none.every(flag => flags[flag] !== true);
+    }) || null;
+}
+
+function diagnosticValues(health, results, counts) {
+    const live = counts.mode === 'live';
+    return {
+        matches: formatCount(live ? health?.live_matches_cached : health?.matches_cached),
+        unverified_links: formatCount(live ? health?.live_unverified_links : health?.unverified_links),
+        verified_groups: formatCount(results?.match_groups),
+        surebets: formatCount(counts.surebets),
+        profit_floor_percent: formatCount(noSurebetReasons?.profit_floor_percent),
+    };
+}
+
+// Every count substituted into the copy goes through escapeHtml, including the
+// ones this module formats itself: the numbers behind them are bookmaker feed
+// data, and a formatter that passed a string through would be an unescaped path
+// into innerHTML. An unknown placeholder is left alone rather than blanked, so a
+// typo in the table shows up instead of quietly reading as a missing number.
+function fillDiagnosticBody(template, values) {
+    return String(template ?? '').replace(/\{([a-z_]+)\}/g, (whole, name) => (
+        Object.prototype.hasOwnProperty.call(values, name) ? escapeHtml(values[name]) : whole
+    ));
+}
+
+function renderCaseCopy(reason, values, live) {
+    if (!reason) return { title: '', body: '' };
+    const title = live && reason.title_live ? reason.title_live : reason.title;
+    const body = live && reason.body_live ? reason.body_live : reason.body;
+    return {
+        title: fillDiagnosticBody(title, values),
+        body: fillDiagnosticBody(body, values),
+    };
+}
+
+function renderDiagnosticActions(reason) {
+    const names = Array.isArray(reason?.actions) ? reason.actions : [];
+    return names
+        .filter(name => Object.prototype.hasOwnProperty.call(DIAGNOSTIC_ACTIONS, name))
+        .map(name => {
+            const action = DIAGNOSTIC_ACTIONS[name];
+            return `<button type="button" class="btn btn-secondary" data-diagnostic-action="${escapeHtml(name)}">${escapeHtml(action.label)}</button>`;
+        })
+        .join('');
+}
+
+function writeDiagnosticPanel(panel, reason, copy) {
+    const slots = DIAGNOSTIC_PANELS[reason.panel] || DIAGNOSTIC_PANELS['empty-state'];
+    const title = panel.querySelector(slots.title);
+    const body = panel.querySelector(slots.body);
+    const actions = document.querySelector(slots.actions);
+    if (title) title.innerHTML = copy.title;
+    if (body) body.innerHTML = copy.body;
+    if (!actions) return;
+    actions.innerHTML = renderDiagnosticActions(reason);
+    actions.hidden = !actions.innerHTML;
+    actions.querySelectorAll('[data-diagnostic-action]').forEach(button => {
+        const action = DIAGNOSTIC_ACTIONS[button.dataset.diagnosticAction];
+        if (action) button.addEventListener('click', action.handler);
+    });
+}
+
+// Shown when the dashboard cannot name a cause, which is two different things
+// with the same honest answer. Neither may fall back to a hard-coded sentence:
+// guessing is the defect this module exists to remove.
+const DIAGNOSTIC_UNAVAILABLE = {
+    noCopyTable: 'The dashboard could not read its diagnostic copy, so it cannot tell you why '
+        + 'this scan returned nothing. /api/health and /api/results hold the counts it would '
+        + 'have used.',
+    countsUnread: 'The dashboard has not read the counts for this scan yet, so it cannot tell '
+        + 'you why there is no surebet. /api/health and /api/results hold them.',
+};
+
+function renderNoSurebetState() {
+    const emptyState = document.getElementById('empty-state');
+    const noResults = document.getElementById('no-results');
+    if (!emptyState || !noResults) return;
+    // Without the counts, "no surebets" is not evidence of anything, so nothing
+    // is claimed. The first paint happens before /api/health has answered, and
+    // this is what it says until it has.
+    if (!noSurebetReasons || !healthSnapshot) {
+        renderDiagnosticUnavailable();
+        return;
+    }
+    const counts = {
+        mode: currentMode,
+        surebets: allSurebets.length,
+        shownSurebets: filteredSurebets.length,
+    };
+    const reason = selectNoSurebetReason(
+        diagnosticFlags(healthSnapshot, resultsSnapshot, counts)
+    );
+    if (!reason) {
+        emptyState.style.display = 'none';
+        noResults.style.display = 'none';
+        return;
+    }
+    const intoNoResults = reason.panel === 'no-results';
+    const panel = intoNoResults ? noResults : emptyState;
+    const other = intoNoResults ? emptyState : noResults;
+    panel.style.display = '';
+    other.style.display = 'none';
+    panel.dataset.noSurebetReason = reason.id;
+    other.removeAttribute('data-no-surebet-reason');
+    // The bookmaker wall is an invitation to scan. It is only true of the case
+    // that is asking for a scan. `style.display`, not `hidden`: the row is
+    // `display: flex` in the stylesheet, and an author rule outranks the user
+    // agent's `[hidden] { display: none }`.
+    const bookies = emptyState.querySelector('.empty-state-bookies');
+    if (bookies) bookies.style.display = reason.id === 'never_scanned' ? '' : 'none';
+    writeDiagnosticPanel(panel, reason, renderCaseCopy(
+        reason,
+        diagnosticValues(healthSnapshot, resultsSnapshot, counts),
+        currentMode === 'live',
+    ));
+}
+
+function renderDiagnosticUnavailable() {
+    const emptyState = document.getElementById('empty-state');
+    const noResults = document.getElementById('no-results');
+    if (noResults) {
+        noResults.style.display = 'none';
+        noResults.removeAttribute('data-no-surebet-reason');
+    }
+    if (!emptyState) return;
+    emptyState.style.display = '';
+    emptyState.dataset.noSurebetReason = 'diagnostics_unavailable';
+    const title = emptyState.querySelector('.empty-state-title');
+    const body = emptyState.querySelector('.empty-state-desc');
+    if (title) title.textContent = 'No Surebets — Reason Unknown';
+    if (body) body.textContent = noSurebetReasons
+        ? DIAGNOSTIC_UNAVAILABLE.countsUnread
+        : DIAGNOSTIC_UNAVAILABLE.noCopyTable;
+    const bookies = emptyState.querySelector('.empty-state-bookies');
+    if (bookies) bookies.style.display = 'none';
+    const actions = document.getElementById('empty-state-actions');
+    if (actions) {
+        actions.innerHTML = '';
+        actions.hidden = true;
+    }
+}
+
+// Re-read the retained payloads on the existing 30s cadence, so a reason that
+// changes (links proven, a fresh scan) is corrected without waiting for a
+// filter change. No new request and no new timer.
+function refreshNoSurebetState() {
+    const emptyState = document.getElementById('empty-state');
+    const noResults = document.getElementById('no-results');
+    const panelIsUp = [emptyState, noResults]
+        .some(panel => panel && panel.style.display !== 'none');
+    if (!panelIsUp) return;
+    renderNoSurebetState();
 }
 
 function buildSurebetCard(sb, idx) {
@@ -1260,6 +1477,10 @@ async function loadHealth() {
     try {
         const res = await fetch('/api/health');
         const data = await res.json();
+        // The bar below discards almost everything in this response. The counts
+        // that say WHY there is no surebet are the rest of it, so the payload is
+        // kept for the diagnostic; the bar itself is unchanged.
+        healthSnapshot = data;
         const bar = document.getElementById('health-bar');
         if (!bar) return;
         const fmtAge = (sec) => sec == null ? '—' : sec < 60 ? `${Math.round(sec)}s ago` : `${Math.round(sec/60)}m ago`;
@@ -1269,6 +1490,7 @@ async function loadHealth() {
         if (data.prematch?.errors?.length || data.live?.errors?.length) {
             bar.title = [...(data.prematch?.errors||[]), ...(data.live?.errors||[])].join(' | ');
         }
+        refreshNoSurebetState();
     } catch (e) { /* ignore */ }
 }
 

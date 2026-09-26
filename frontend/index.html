@@ -238,9 +238,9 @@
             <div class="empty-state-icon">🔍</div>
             <h2 class="empty-state-title">Ready to Hunt Surebets</h2>
             <p class="empty-state-desc">
-                Click <strong>Scan Now</strong> to start scanning all 7 bookmakers for arbitrage opportunities.
-                Browser windows will open — solve any CAPTCHA if prompted.
+                Click <strong>Scan Now</strong> to start scanning your connected bookmakers for arbitrage opportunities. Browser windows will open — solve any CAPTCHA if prompted.
             </p>
+            <div id="empty-state-actions" hidden></div>
             <div class="empty-state-bookies">
                 <div class="bookie-badge" style="--color: #FF6B00">Mozzartbet</div>
                 <div class="bookie-badge" style="--color: #22c55e">MDShop</div>
@@ -254,12 +254,14 @@
             </div>
         </div>
 
-        <!-- No results state -->
+        <!-- No results state. Its title, description and button are written from
+             frontend/js/no-surebet-reasons.json, and it is only ever shown for the
+             case that the filters really are the cause of. -->
         <div class="no-results" id="no-results" style="display:none;">
             <div class="no-results-icon">📭</div>
-            <h3>No Surebets Found</h3>
-            <p>No arbitrage opportunities match your current filters. Try reducing the minimum profit threshold or checking all markets.</p>
-            <button class="btn btn-secondary" onclick="resetFilters()">Reset Filters</button>
+            <h3 id="no-results-title"></h3>
+            <p id="no-results-desc"></p>
+            <div id="no-results-actions" hidden></div>
         </div>
 
         <!-- Results grid -->
