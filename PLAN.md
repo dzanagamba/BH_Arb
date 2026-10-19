@@ -184,10 +184,13 @@ monotonicity datum: the change only ever adds pairs, it removes none.
   the engine refuses every leg for reasons unrelated to the link gate. Both are
   applied and neither touches link state. A surebet that appears only after those
   two rewrites is not evidence that the arbitrage is still on.
-* **The group count is order-sensitive.** `MatchMatcher.group_matches` sorts with
-  a stable sort and the first match to arrive anchors its group, so the same feed
-  gives 16, 34 or 106 for scenario A depending only on the order the books are
-  fed in. Quote a group count together with the order, or do not quote it.
+* **The group counts above predate the order fix.** `MatchMatcher.group_matches`
+  used to let the first match to arrive anchor its group, so this feed gave 16, 34
+  or 106 for scenario A depending only on the order the books were fed in. It now
+  processes listings in a total order and falls through to the next-best group
+  when the gate refuses one, so a count no longer depends on input order — but
+  the figures here were taken before that change and have not been re-measured
+  (see `docs/HANDOFF.md` §4 for after-fix numbers on a newer cache).
 * Zero surebets on a 36-day-old cache is a statement about that cache, not about
   any book's prices today.
 
