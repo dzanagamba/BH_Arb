@@ -43,7 +43,7 @@
       "decided_by": ["unverified_links", "live_unverified_links", "verified_groups", "match_groups", "matches_cached"],
       "guard": { "all": ["scanned"], "none": ["unverified_links", "verified_groups", "have_surebets"] },
       "title": "No Surebets — No Match Group Is Verified",
-      "body": "The scan read {matches} matches. {unverified_links} of them are carrying an unproven per-event link, and {verified_groups} match groups came out verified, so nothing reached the surebet engine: it is only ever fed groups the certainty gate has proven to be the same event — identical league, kickoff within 15 minutes, the same match category, the same two teams and the same home/away order, with a proven link on each side. The pairings the gate refused are queued in the Review tab. <strong>This is not a filter problem:</strong> no threshold or market choice can prove that two fixtures are the same event.",
+      "body": "The scan read {matches} matches. {unverified_links} of them are carrying an unproven per-event link, and {verified_groups} match groups came out verified, so nothing reached the surebet engine: it is only ever fed groups the certainty gate has proven to be the same event — the same league (or the exact same two teams under a differently-named league), kickoff within 15 minutes, the same match category, the same two teams in the same home/away order, and each side's link either proven or declared absent. The pairings the gate refused are queued in the Review tab. <strong>This is not a filter problem:</strong> no threshold or market choice can prove that two fixtures are the same event.",
       "actions": ["showReview"]
     },
     {

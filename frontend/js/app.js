@@ -1,38 +1,46 @@
 /**
- * Surebet Scanner — Dashboard JavaScript
+ * Surebet BiH — dashboard
  *
- * Responsibilities:
- *  - scanNow()          — Trigger backend scan, start status polling
- *  - pollStatus()       — Poll /api/status every 2s during scan
- *  - loadResults()      — Fetch /api/results and render cards
- *  - renderSurebets()   — Build surebet card HTML from data
- *  - applyFilters()     — Client-side filter by market + min profit + bookmaker
- *  - recalculateAll()   — Re-compute stakes for new global investment
- *  - recalculateCard()  — Per-card investment input handler
- *  - playAlertSound()   — Web Audio API beep for high-profit surebets
+ * Two jobs, in this order:
+ *  1. Show which surebets the last scan found (left list).
+ *  2. Help place one (right bet slip): re-check the odds first, then give each
+ *     leg in the order to place it, with a stake you can actually type, the
+ *     bookmaker page to open, and how that bookmaker spells the match. When a
+ *     leg is placed at different odds, the remaining stakes are re-planned.
+ *
+ * The "why is there no surebet" diagnostic and the review queue are kept from
+ * the previous dashboard; their contracts are pinned by tests/test_frontend_*.py.
  */
 
 'use strict';
 
 // ─── State ────────────────────────────────────────────────────────────────────
-let currentMode = 'prematch';       // 'prematch' (future) | 'live' (in-play)
+let currentMode = 'prematch';       // 'prematch' (upcoming) | 'live' (in-play)
 let activeScanMode = null;          // mode of the currently running scan
-let activeTab = 'surebets';         // 'surebets' (results) | 'review' (human queue)
-let candidateApiKey = '';            // in-memory key for configured review mutations
-let allSurebets = [];          // Full list from server
-let filteredSurebets = [];     // After client-side filtering
+let activeTab = 'surebets';         // 'surebets' | 'review' | 'history'
+let candidateApiKey = '';           // in-memory key for configured review mutations
+let allSurebets = [];               // full list from the server
+let filteredSurebets = [];          // after client-side filtering
+let selectedSurebetId = null;       // the surebet open in the bet slip
 let pollingInterval = null;
 let activeBookmakers = new Set(['mozzartbet', 'mdshop', 'admiralbet', 'betole', 'mbet', 'sportplus', 'evlbet', 'premier_kladionica', 'wwin']);
 let bookmakersConfig = {};
 let globalInvestment = 100;
-let stakeRounding = 'exact';   // 'exact' | '1' | '5'
-let soundMuted = false;
-let audioContext = null;       // shared AudioContext (reused, no per-alert leak)
-let autoRescanTimer = null;    // auto-rescan countdown interval
-let knownSurebetSignatures = new Set();  // fingerprints of previously seen surebets
-let healthSnapshot = null;     // last /api/health payload, kept for the no-surebet diagnostic
-let resultsSnapshot = null;    // last /api/results payload, same reason
-let noSurebetReasons = null;   // the diagnostic copy table, fetched once at start-up
+let stakeRounding = '1';            // 'exact' | '1' | '5' — whole KM by default
+let soundMuted = true;
+let audioContext = null;
+let autoRescanTimer = null;
+let knownSurebetSignatures = new Set();
+let healthSnapshot = null;          // last /api/health payload, kept for the no-surebet diagnostic
+let resultsSnapshot = null;         // last /api/results payload, same reason
+let noSurebetReasons = null;        // the diagnostic copy table, fetched once at start-up
+let currentCandidates = [];         // the review page on screen
+const selectedCandidates = new Set();
+const verifyState = {};             // surebet id -> {state, at, data}
+const slipState = {};               // surebet id -> {investment, placed: {label: {odds, stake}}}
+
+// How long a re-check counts as fresh enough to place on.
+const VERIFY_FRESH_SECONDS = { prematch: 120, live: 30 };
 
 // Reviewer-facing wording for deterministic gate codes. Keep the raw code in
 // the rendered title attribute so diagnostics remain available to operators.
@@ -48,96 +56,10 @@ const REASON_LABELS = Object.freeze({
 });
 
 const SUREBET_STATUS_LABELS = Object.freeze({
-    verified: { label: '✓ Verified', ariaLabel: 'Verified match pairing' },
-    suggested: { label: '! Suggested', ariaLabel: 'Suggested match pairing' },
-    rejected: { label: '✕ Rejected', ariaLabel: 'Rejected match pairing' },
+    verified: { label: 'Verified pairing', ariaLabel: 'Verified match pairing' },
+    suggested: { label: 'Suggested pairing', ariaLabel: 'Suggested match pairing' },
+    rejected: { label: 'Rejected pairing', ariaLabel: 'Rejected match pairing' },
 });
-
-function restoreMode() {
-    try {
-        const saved = localStorage.getItem('currentMode');
-        if (saved === 'live' || saved === 'prematch') {
-            currentMode = saved;
-        }
-    } catch (e) { /* localStorage unavailable */ }
-    updateModeToggleUI();
-}
-
-function updateModeToggleUI() {
-    const prematchBtn = document.getElementById('mode-prematch');
-    const liveBtn = document.getElementById('mode-live');
-    if (prematchBtn) prematchBtn.classList.toggle('active', currentMode === 'prematch');
-    if (liveBtn) liveBtn.classList.toggle('active', currentMode === 'live');
-}
-
-function switchTab(tab) {
-    const target = tab === 'review' ? 'review' : 'surebets';
-    activeTab = target;
-
-    document.querySelectorAll('.results-tabs [role="tab"]').forEach(button => {
-        const isActive = button.dataset.tab === target;
-        button.classList.toggle('active', isActive);
-        button.setAttribute('aria-selected', String(isActive));
-        button.tabIndex = isActive ? 0 : -1;
-    });
-
-    document.querySelectorAll('[data-tab-panel]').forEach(panel => {
-        const isActive = panel.dataset.tabPanel === target;
-        panel.hidden = !isActive;
-        panel.setAttribute('aria-hidden', String(!isActive));
-    });
-
-    // The queue is small and inexpensive, but fetch on demand so a reviewer
-    // sees fresh candidates when opening the tab.
-    if (target === 'review') loadCandidates();
-}
-
-function handleTabKeydown(event) {
-    const tab = event.target.closest('[role="tab"]');
-    if (!tab) return;
-
-    const tabs = [...document.querySelectorAll('.results-tabs [role="tab"]')];
-    const currentIndex = tabs.indexOf(tab);
-    if (currentIndex < 0) return;
-
-    let nextIndex = null;
-    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
-        nextIndex = (currentIndex + 1) % tabs.length;
-    } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
-        nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
-    } else if (event.key === 'Home') {
-        nextIndex = 0;
-    } else if (event.key === 'End') {
-        nextIndex = tabs.length - 1;
-    }
-
-    if (nextIndex !== null) {
-        event.preventDefault();
-        tabs[nextIndex].focus();
-        switchTab(tabs[nextIndex].dataset.tab);
-    }
-}
-
-function switchMode(mode) {
-    if (mode !== 'prematch' && mode !== 'live') return;
-    if (mode === currentMode) return;
-    currentMode = mode;
-    try { localStorage.setItem('currentMode', mode); } catch (e) { /* ignore */ }
-    updateModeToggleUI();
-    hideError();
-    // Load the other mode's cached results (silent, no alert sound)
-    loadResults(true);
-    // Each feed has its own review queue.
-    if (activeTab === 'review') loadCandidates();
-}
-
-function surebetSignature(sb) {
-    const stakes = sb.stakes
-        .map(s => `${s.bookmaker}:${s.outcome_label}:${s.odds}`)
-        .sort()
-        .join('|');
-    return `${sb.home_team}|${sb.away_team}|${sb.market_type}|${stakes}`;
-}
 
 const BOOKMAKER_COLORS = {
     mozzartbet: '#FF6B00',
@@ -156,16 +78,31 @@ const MARKET_LABELS = {
     'over_under_1_5': 'O/U 1.5',
     'over_under_2_5': 'O/U 2.5',
     'over_under_3_5': 'O/U 3.5',
-    'btts':           'GG/NG',
-    'double_chance':  'Dupla',
-    'first_half_1x2': '1st Half 1X2',
-    'first_half_ou':  '1st Half O/U',
+    'btts':           'BTTS',
+    'double_chance':  '1X2 + DC',
+    'first_half_1x2': '1H 1X2',
+    'first_half_ou':  '1H O/U',
     'asian_handicap': 'Asian Hcp',
 };
 
+// What each outcome label means, in words a bettor types into a ticket.
+function outcomeDescription(label, marketType) {
+    const half = marketType && marketType.startsWith('first_half') ? ' (1st half)' : '';
+    const words = {
+        '1': 'Home win', 'X': 'Draw', '2': 'Away win',
+        '1X': 'Home or draw', 'X2': 'Draw or away', '12': 'Home or away',
+        'GG': 'Both teams score', 'NG': 'Not both teams score',
+    };
+    if (words[label]) return words[label] + half;
+    const over = /^Over (.+)$/.exec(label);
+    if (over) return `Over ${over[1]} goals${half}`;
+    const under = /^Under (.+)$/.exec(label);
+    if (under) return `Under ${under[1]} goals${half}`;
+    return label + half;
+}
+
 // ─── Init ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
-    restoreDashboardTheme();
     restorePreferences();
     restoreMode();
     await loadConfig();
@@ -174,58 +111,43 @@ document.addEventListener('DOMContentLoaded', async () => {
     // the first render. A panel must never be painted from a table that has not
     // arrived, and must never fall back to a sentence that names the wrong cause.
     await loadNoSurebetReasons();
-    await loadResults(true);  // Load any cached results from previous scan (no alert sound)
+    await loadResults(true);
     const tabs = document.querySelector('.results-tabs');
     if (tabs) tabs.addEventListener('keydown', handleTabKeydown);
-    // Health and review-queue refresh share the existing 30-second cadence.
+    document.addEventListener('keydown', handleGlobalKeydown);
+    // Health and review-queue refresh share one 30-second cadence.
     refreshDiagnostics();
     setInterval(refreshDiagnostics, 30000);
+    // Ages on screen ("re-checked 12s ago") tick once a second.
+    setInterval(tickAges, 1000);
 });
 
-function restoreDashboardTheme() {
-    let theme = 'terminal';
-    try { theme = localStorage.getItem('dashboardTheme') || theme; } catch (e) { /* ignore */ }
-    setDashboardTheme(theme, false);
+function restoreMode() {
+    try {
+        const saved = localStorage.getItem('currentMode');
+        if (saved === 'live' || saved === 'prematch') currentMode = saved;
+    } catch (e) { /* localStorage unavailable */ }
+    updateModeToggleUI();
 }
 
-function setDashboardTheme(theme, persist = true) {
-    const themes = ['terminal', 'brief', 'signal', 'portfolio'];
-    if (!themes.includes(theme)) theme = 'terminal';
-    document.body.dataset.theme = theme;
-    const picker = document.getElementById('theme-select');
-    if (picker) picker.value = theme;
-    if (persist) {
-        try { localStorage.setItem('dashboardTheme', theme); } catch (e) { /* ignore */ }
+function updateModeToggleUI() {
+    for (const mode of ['prematch', 'live']) {
+        const button = document.getElementById(`mode-${mode}`);
+        if (!button) continue;
+        button.classList.toggle('active', currentMode === mode);
+        button.setAttribute('aria-selected', String(currentMode === mode));
     }
 }
 
 function restorePreferences() {
     try {
-        stakeRounding = localStorage.getItem('stakeRounding') || 'exact';
-        const roundingEl = document.getElementById('filter-rounding');
-        if (roundingEl) roundingEl.value = stakeRounding;
-
-        soundMuted = localStorage.getItem('soundMuted') === '1';
-        const muteBtn = document.getElementById('mute-btn');
-        if (muteBtn) muteBtn.textContent = soundMuted ? '🔕' : '🔔';
+        stakeRounding = localStorage.getItem('stakeRounding') || '1';
+        soundMuted = localStorage.getItem('soundMuted') !== '0';
     } catch (e) { /* localStorage unavailable */ }
-}
-
-function setStakeRounding(mode) {
-    stakeRounding = mode;
-    try { localStorage.setItem('stakeRounding', mode); } catch (e) { /* ignore */ }
-    recalculateAll(globalInvestment);
-    applyFilters();
-}
-
-function roundStake(value) {
-    if (stakeRounding === '1') return Math.round(value);
-    if (stakeRounding === '5') return Math.round(value / 5) * 5;
-    return Math.round(value * 100) / 100;
-}
-
-function stakeFormat(value) {
-    return roundStake(value).toFixed(stakeRounding === 'exact' ? 2 : 0);
+    const roundingEl = document.getElementById('filter-rounding');
+    if (roundingEl) roundingEl.value = stakeRounding;
+    const sound = document.getElementById('sound-toggle');
+    if (sound) sound.checked = !soundMuted;
 }
 
 async function loadConfig() {
@@ -233,18 +155,13 @@ async function loadConfig() {
         const res = await fetch('/api/config');
         const data = await res.json();
         bookmakersConfig = data.bookmakers || {};
-
-        // Set global defaults from server config
         const minInput = document.getElementById('filter-profit');
-        if (data.min_profit_percent) minInput.value = data.min_profit_percent;
-
+        if (data.min_profit_percent && minInput) minInput.value = data.min_profit_percent;
         const investInput = document.getElementById('filter-investment');
         if (data.default_investment) {
             globalInvestment = data.default_investment;
-            investInput.value = data.default_investment;
+            if (investInput) investInput.value = data.default_investment;
         }
-
-        // Experimental-market checkboxes (server-side toggles)
         if (data.experimental_markets) {
             document.querySelectorAll('.exp-check').forEach(label => {
                 const market = label.dataset.market;
@@ -259,75 +176,117 @@ async function loadConfig() {
     }
 }
 
-async function toggleExperimentalMarket(box) {
-    const market = box.value;
-    try {
-        const res = await fetch(`/api/config/toggle_market/${market}`, { method: 'POST' });
-        const data = await res.json();
-        if (data.status === 'ok') {
-            box.checked = data.enabled;
-            setStatus('done', `${data.enabled ? 'Enabled' : 'Disabled'} ${market} — re-scan to apply`);
-        } else {
-            box.checked = !box.checked;
-        }
-    } catch (e) {
-        box.checked = !box.checked;
-        console.warn('Market toggle failed:', e);
+// ─── Navigation ───────────────────────────────────────────────────────────────
+function switchTab(tab) {
+    const target = ['review', 'history'].includes(tab) ? tab : 'surebets';
+    activeTab = target;
+    document.querySelectorAll('.results-tabs [role="tab"]').forEach(button => {
+        const isActive = button.dataset.tab === target;
+        button.classList.toggle('active', isActive);
+        button.setAttribute('aria-selected', String(isActive));
+        button.tabIndex = isActive ? 0 : -1;
+    });
+    document.querySelectorAll('[data-tab-panel]').forEach(panel => {
+        const isActive = panel.dataset.tabPanel === target;
+        panel.hidden = !isActive;
+        panel.setAttribute('aria-hidden', String(!isActive));
+    });
+    if (target === 'review') loadCandidates();
+    if (target === 'history') loadHistory();
+}
+
+function handleTabKeydown(event) {
+    const tab = event.target.closest('[role="tab"]');
+    if (!tab) return;
+    const tabs = [...document.querySelectorAll('.results-tabs [role="tab"]')];
+    const currentIndex = tabs.indexOf(tab);
+    if (currentIndex < 0) return;
+    let nextIndex = null;
+    if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % tabs.length;
+    else if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+    else if (event.key === 'Home') nextIndex = 0;
+    else if (event.key === 'End') nextIndex = tabs.length - 1;
+    if (nextIndex !== null) {
+        event.preventDefault();
+        tabs[nextIndex].focus();
+        switchTab(tabs[nextIndex].dataset.tab);
     }
 }
 
+// j/k move through the list, Escape closes the settings drawer.
+function handleGlobalKeydown(event) {
+    if (event.key === 'Escape') { toggleSettings(false); return; }
+    const typing = event.target.closest('input, select, textarea');
+    if (typing || activeTab !== 'surebets' || !filteredSurebets.length) return;
+    if (event.key !== 'j' && event.key !== 'k') return;
+    const index = filteredSurebets.findIndex(sb => sb.id === selectedSurebetId);
+    const step = event.key === 'j' ? 1 : -1;
+    const next = Math.min(filteredSurebets.length - 1, Math.max(0, index + step));
+    selectSurebet(filteredSurebets[next].id);
+}
+
+function switchMode(mode) {
+    if (mode !== 'prematch' && mode !== 'live') return;
+    if (mode === currentMode) return;
+    currentMode = mode;
+    try { localStorage.setItem('currentMode', mode); } catch (e) { /* ignore */ }
+    updateModeToggleUI();
+    hideError();
+    selectedSurebetId = null;
+    loadResults(true);
+    if (activeTab === 'review') loadCandidates();
+}
+
+function toggleSettings(open) {
+    const drawer = document.getElementById('settings-drawer');
+    const backdrop = document.getElementById('settings-backdrop');
+    if (!drawer || !backdrop) return;
+    drawer.hidden = !open;
+    backdrop.hidden = !open;
+    if (open) loadHealth();
+}
+
+// ─── Bookmakers & markets (settings) ─────────────────────────────────────────
 function initBookmakerChips() {
     const container = document.getElementById('bookie-chips');
-    if (!container) return;
-    container.innerHTML = '';
-
+    const wall = document.getElementById('empty-state-bookies');
     const bookieList = Object.keys(bookmakersConfig).length > 0
         ? Object.entries(bookmakersConfig)
         : Object.entries(BOOKMAKER_COLORS).map(([k]) => [k, { name: capitalize(k), color: BOOKMAKER_COLORS[k], enabled: true }]);
 
-    // Rebuild the client-side filter from the server's enabled state
     activeBookmakers = new Set();
-    bookieList.forEach(([id, cfg]) => {
-        if (cfg.enabled !== false) activeBookmakers.add(id);
-    });
+    bookieList.forEach(([id, cfg]) => { if (cfg.enabled !== false) activeBookmakers.add(id); });
 
-    bookieList.forEach(([id, cfg]) => {
-        const color = cfg.color || BOOKMAKER_COLORS[id] || '#888';
-        const name = cfg.name || capitalize(id);
-        const enabled = cfg.enabled !== false;
-
-        const chip = document.createElement('button');
-        chip.className = 'bookie-chip' + (enabled ? ' active' : '');
-        chip.dataset.bookie = id;
-        chip.style.setProperty('--chip-color', color);
-        chip.innerHTML = `${name} <span class="chip-toggle-icon">${enabled ? '✓' : '✕'}</span>`;
-        chip.addEventListener('click', () => toggleBookmakerAPI(chip, id));
-        container.appendChild(chip);
-    });
+    if (container) {
+        container.innerHTML = '';
+        bookieList.forEach(([id, cfg]) => {
+            const chip = document.createElement('button');
+            chip.type = 'button';
+            chip.className = 'chip' + (cfg.enabled !== false ? ' active' : '');
+            chip.style.setProperty('--chip-color', cfg.color || BOOKMAKER_COLORS[id] || '#888');
+            chip.textContent = cfg.name || capitalize(id);
+            chip.setAttribute('aria-pressed', String(cfg.enabled !== false));
+            chip.addEventListener('click', () => toggleBookmakerAPI(chip, id));
+            container.appendChild(chip);
+        });
+    }
+    if (wall) {
+        wall.innerHTML = bookieList
+            .filter(([, cfg]) => cfg.enabled !== false)
+            .map(([id, cfg]) => `<span class="book-tag" style="--color:${escapeHtml(cfg.color || BOOKMAKER_COLORS[id] || '#888')}">${escapeHtml(cfg.name || capitalize(id))}</span>`)
+            .join('');
+    }
 }
 
 async function toggleBookmakerAPI(chip, id) {
     try {
-        const res = await fetch(`/api/config/toggle/${id}`, { method: 'POST' });
+        const res = await fetch(`/api/config/toggle/${id}`, { method: 'POST', headers: candidateActionHeaders() });
         const data = await res.json();
-
         if (data.status === 'ok') {
-            if (data.enabled) {
-                chip.classList.add('active');
-                chip.querySelector('.chip-toggle-icon').textContent = '✓';
-                chip.title = 'Click to disable';
-            } else {
-                chip.classList.remove('active');
-                chip.querySelector('.chip-toggle-icon').textContent = '✕';
-                chip.title = 'Click to enable';
-            }
-
-            // Keep the client-side bookmaker filter in sync with the backend toggle
-            if (data.enabled) {
-                activeBookmakers.add(id);
-            } else {
-                activeBookmakers.delete(id);
-            }
+            chip.classList.toggle('active', data.enabled);
+            chip.setAttribute('aria-pressed', String(data.enabled));
+            if (data.enabled) activeBookmakers.add(id); else activeBookmakers.delete(id);
+            if (bookmakersConfig[id]) bookmakersConfig[id].enabled = data.enabled;
             applyFilters();
         }
     } catch (e) {
@@ -335,34 +294,60 @@ async function toggleBookmakerAPI(chip, id) {
     }
 }
 
+async function toggleExperimentalMarket(box) {
+    try {
+        const res = await fetch(`/api/config/toggle_market/${box.value}`, { method: 'POST', headers: candidateActionHeaders() });
+        const data = await res.json();
+        if (data.status === 'ok') {
+            box.checked = data.enabled;
+            showToast(`${data.enabled ? 'Enabled' : 'Disabled'} — applies on the next scan`);
+        } else {
+            box.checked = !box.checked;
+        }
+    } catch (e) {
+        box.checked = !box.checked;
+    }
+}
+
+function setStakeRounding(mode) {
+    stakeRounding = mode;
+    try { localStorage.setItem('stakeRounding', mode); } catch (e) { /* ignore */ }
+    renderSlip();
+}
+
+function recalculateAll(investment) {
+    const value = parseFloat(investment);
+    if (!value || value <= 0) return;
+    globalInvestment = value;
+    // A slip the user has not touched follows the default.
+    Object.values(slipState).forEach(state => { if (!state.touched) state.investment = value; });
+    renderSlip();
+}
+
 // ─── Scan ─────────────────────────────────────────────────────────────────────
 async function scanNow() {
     const btn = document.getElementById('scan-btn');
     if (btn.disabled) return;
-
     try {
-        const res = await fetch(`/api/scan?mode=${currentMode}`, { method: 'POST' });
+        const res = await fetch(`/api/scan?mode=${currentMode}`, { method: 'POST', headers: candidateActionHeaders() });
         const data = await res.json();
-
+        if (res.status === 429) {
+            showError(data.detail || 'Too many scans — wait a moment.');
+            return;
+        }
         if (data.status === 'already_scanning') {
-            setStatus('scanning', 'Scan in progress...');
+            setStatus('scanning', 'Scan in progress…');
             startPolling();
             return;
         }
-
-        // Start UI updates
         btn.disabled = true;
+        btn.textContent = 'Scanning…';
         activeScanMode = currentMode;
-        btn.innerHTML = `<svg class="btn-icon scanning" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 22V12M12 12V2M12 12H2M12 12h10"/>
-        </svg> Scanning...`;
-
         showScanProgress();
-        setStatus('scanning', `Starting ${currentMode === 'live' ? 'live' : 'future'} scan...`);
+        setStatus('scanning', `Scanning ${currentMode === 'live' ? 'live' : 'upcoming'} matches…`);
         startPolling();
-
     } catch (e) {
-        showError('Failed to start scan: ' + e.message);
+        showError('Could not start the scan: ' + e.message);
     }
 }
 
@@ -371,19 +356,23 @@ function startPolling() {
     pollingInterval = setInterval(pollStatus, 2000);
 }
 
-// ─── Auto-Rescan ──────────────────────────────────────────────────────────────
+function stopPolling() {
+    if (pollingInterval) {
+        clearInterval(pollingInterval);
+        pollingInterval = null;
+    }
+}
+
 function setAutoRescan(minutes) {
     if (autoRescanTimer) {
         clearInterval(autoRescanTimer);
         autoRescanTimer = null;
     }
-
     const countdownEl = document.getElementById('autorescan-countdown');
     if (!minutes || minutes <= 0) {
         if (countdownEl) countdownEl.style.display = 'none';
         return;
     }
-
     let remaining = minutes * 60;
     autoRescanTimer = setInterval(() => {
         remaining -= 1;
@@ -391,18 +380,13 @@ function setAutoRescan(minutes) {
             countdownEl.style.display = '';
             const m = Math.floor(remaining / 60);
             const s = (remaining % 60).toString().padStart(2, '0');
-            countdownEl.textContent = `⟳ next scan in ${m}:${s}`;
+            countdownEl.textContent = `next scan ${m}:${s}`;
         }
         if (remaining <= 0) {
             remaining = minutes * 60;
             scanNow();
         }
     }, 1000);
-}function stopPolling() {
-    if (pollingInterval) {
-        clearInterval(pollingInterval);
-        pollingInterval = null;
-    }
 }
 
 async function pollStatus() {
@@ -411,7 +395,6 @@ async function pollStatus() {
         const res = await fetch(`/api/status?mode=${pollMode}`);
         const status = await res.json();
         updateScanProgress(status);
-
         if (!status.is_scanning) {
             stopPolling();
             activeScanMode = null;
@@ -426,128 +409,75 @@ function updateScanProgress(status) {
     const subEl = document.getElementById('scan-progress-sub');
     const doneEl = document.getElementById('scan-bookies-done');
     const barEl = document.getElementById('scan-bar');
-    const statusTextEl = document.getElementById('status-text');
-
-    if (subEl) subEl.textContent = status.current_bookmaker || 'Processing...';
-    if (statusTextEl) statusTextEl.textContent = status.current_bookmaker || 'Scanning...';
-
-    // Per-bookmaker progress badges (scraping / done / error)
+    if (subEl) subEl.textContent = status.current_bookmaker || 'Processing…';
+    setStatus('scanning', status.current_bookmaker || 'Scanning…');
     if (doneEl) {
-        const prog = status.bookmaker_progress || {};
-        doneEl.innerHTML = Object.entries(prog).map(([id, state]) => {
-            const name = bookmakersConfig[id]?.name || capitalize(id);
-            if (state === 'done') return `<span class="scan-bookie-badge">✓ ${name}</span>`;
-            if (state === 'scraping') return `<span class="scan-bookie-badge scanning">⟳ ${name}</span>`;
-            if (state === 'error') return `<span class="scan-bookie-badge error">✕ ${name}</span>`;
-            return ''; // skipped
+        const progress = status.bookmaker_progress || {};
+        doneEl.innerHTML = Object.entries(progress).map(([id, state]) => {
+            if (state === 'skipped') return '';
+            const name = escapeHtml(bookmakersConfig[id]?.name || capitalize(id));
+            return `<span class="scan-bookie scan-bookie-${escapeHtml(state)}">${name}</span>`;
         }).join('');
     }
-
-    // Progress bar (estimate based on done count vs total ENABLED bookmakers)
-    const enabledTotal = Object.values(bookmakersConfig).filter(c => c.enabled !== false).length;
-    const total = enabledTotal || 4;
+    const total = Object.values(bookmakersConfig).filter(c => c.enabled !== false).length || 4;
     const done = (status.bookmakers_done || []).length;
-    const pct = Math.min(90, (done / total) * 80 + 5);
-    if (barEl) barEl.style.width = pct + '%';
+    if (barEl) barEl.style.width = Math.min(92, (done / total) * 85 + 5) + '%';
 }
 
 async function onScanComplete(status) {
-    // Animate bar to 100%
     const barEl = document.getElementById('scan-bar');
     if (barEl) barEl.style.width = '100%';
-
-    await new Promise(r => setTimeout(r, 600));
     hideScanProgress();
-
-    // Reset scan button
     const btn = document.getElementById('scan-btn');
     btn.disabled = false;
-    btn.innerHTML = `<svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-    </svg> Scan Now`;
-
-    // Show errors if any
+    btn.textContent = 'Scan now';
     if (status.errors && status.errors.length > 0) {
-        const errorMsg = 'Errors during scan: ' + status.errors.slice(0, 2).join('; ');
-        showError(errorMsg);
+        showError('Some bookmakers failed: ' + status.errors.slice(0, 3).join('; '));
     }
-
-    if (status.surebets_found > 0) {
-        setStatus('done', `${status.surebets_found} surebet${status.surebets_found > 1 ? 's' : ''} found!`);
-    } else {
-        setStatus('done', 'Scan complete — no surebets');
-    }
-
+    setStatus('done', status.surebets_found > 0
+        ? `${status.surebets_found} surebet${status.surebets_found > 1 ? 's' : ''} found`
+        : 'Scan complete — no surebets');
     await loadResults();
-    // A new scan can create more refused pairings; refresh the human queue too.
     loadCandidates();
 }
+
 // ─── Results ──────────────────────────────────────────────────────────────────
 async function loadResults(silent = false) {
     try {
         const res = await fetch(`/api/results?mode=${currentMode}`);
         const data = await res.json();
-
         allSurebets = data.surebets || [];
-        // Kept for the same reason as healthSnapshot: `match_groups` is the
-        // mode-correct count of groups the certainty gate accepted, and the
-        // health payload's equivalent is prematch-only.
+        // `match_groups` is the mode-correct count of groups the certainty gate
+        // accepted; the health payload's equivalent is prematch-only.
         resultsSnapshot = data;
 
-        // Update stats
-        document.getElementById('stat-matches').textContent =
-            data.total_matches != null ? data.total_matches.toLocaleString() : '—';
+        setText('stat-matches', data.total_matches != null ? data.total_matches.toLocaleString() : '—');
+        setText('stat-groups', data.match_groups != null ? Number(data.match_groups).toLocaleString() : '—');
+        setText('stat-time', data.last_scan_time ? formatAgo(parseKickoff(data.last_scan_time)) : 'never');
 
-        const dustCount = allSurebets.filter(s => s.profit_percent >= 0.2 && s.profit_percent < 0.5).length;
-        const realCount = allSurebets.filter(s => s.profit_percent >= 0.5).length;
-        document.getElementById('stat-surebets').textContent =
-            allSurebets.length > 0 ? (dustCount ? `${realCount} (+${dustCount} dust)` : `${realCount}`) : '0';
-
-        if (allSurebets.length > 0) {
-            const best = allSurebets.reduce((a, b) =>
-                a.profit_percent > b.profit_percent ? a : b
-            );
-            document.getElementById('stat-best').textContent =
-                best.profit_percent.toFixed(2) + '%';
-        } else {
-            document.getElementById('stat-best').textContent = '—';
+        if (selectedSurebetId && !allSurebets.some(sb => sb.id === selectedSurebetId)) {
+            selectedSurebetId = null;
         }
-
-        if (data.last_scan_time) {
-            const dt = new Date(data.last_scan_time);
-            document.getElementById('stat-time').textContent = formatTime(dt);
-            // P0-6 staleness badge — warn if odds older than 2 minutes
-            const ageSec = (Date.now() - dt.getTime()) / 1000;
-            if (ageSec > 120) {
-                showError(`⚠️ Odds are ${Math.round(ageSec)}s old — click Verify Odds before betting (stale cache)`);
-            } else {
-                // Clear stale warning if previously shown and now fresh
-                const banner = document.getElementById('error-banner');
-                const bannerText = document.getElementById('error-banner-text');
-                if (bannerText && bannerText.textContent.includes('Odds are') && bannerText.textContent.includes('old')) {
-                    hideError();
-                }
-            }
-        }
-
         applyFilters();
 
-        // Alert sound for NEW high-value surebets only — never on page load,
-        // and never twice for the same surebet across rescans
+        // Chime for NEW high-value surebets only — never on page load, never
+        // twice for the same surebet across rescans.
         const signatures = new Set(allSurebets.map(surebetSignature));
-        if (!silent) {
-            const newHighValue = allSurebets.filter(
-                s => s.profit_percent >= 3.0 && !knownSurebetSignatures.has(surebetSignature(s))
-            );
-            if (newHighValue.length > 0) {
-                playAlertSound();
-            }
+        if (!silent && allSurebets.some(s => s.profit_percent >= 3.0 && !knownSurebetSignatures.has(surebetSignature(s)))) {
+            playAlertSound();
         }
         knownSurebetSignatures = signatures;
-
     } catch (e) {
         console.error('Failed to load results:', e);
     }
+}
+
+function surebetSignature(sb) {
+    const stakes = sb.stakes
+        .map(s => `${s.bookmaker}:${s.outcome_label}:${s.odds}`)
+        .sort()
+        .join('|');
+    return `${sb.home_team}|${sb.away_team}|${sb.market_type}|${stakes}`;
 }
 
 function applyFilters() {
@@ -558,33 +488,26 @@ function applyFilters() {
     const sortMode = document.getElementById('filter-sort').value;
 
     filteredSurebets = allSurebets.filter(sb => {
-        // Market filter
         if (marketFilter && sb.market_type !== marketFilter) return false;
-        // Profit filter
         if (sb.profit_percent < minProfit) return false;
-        // Bookmaker filter — check if ANY stake uses an active bookmaker
-        const sbBookmakers = new Set(sb.stakes.map(s => s.bookmaker));
-        const hasActive = [...sbBookmakers].some(b => activeBookmakers.has(b));
-        if (!hasActive) return false;
-        // Search filter — team or league substring
+        // Every leg's bookmaker has to be one you have turned on.
+        if (!sb.stakes.every(s => activeBookmakers.has(s.bookmaker))) return false;
         if (searchTerm) {
-            const haystack = `${sb.home_team} ${sb.away_team} ${sb.league || ''}`.toLowerCase();
+            const listed = Object.values(sb.listings || {}).map(l => `${l.home} ${l.away} ${l.league}`).join(' ');
+            const haystack = `${sb.home_team} ${sb.away_team} ${sb.league || ''} ${listed}`.toLowerCase();
             if (!haystack.includes(searchTerm)) return false;
         }
         return true;
     });
 
-    // Sort
     filteredSurebets.sort((a, b) => {
         if (sortMode === 'kickoff') {
-            const ta = a.kickoff ? new Date(a.kickoff).getTime() : Number.MAX_SAFE_INTEGER;
-            const tb = b.kickoff ? new Date(b.kickoff).getTime() : Number.MAX_SAFE_INTEGER;
+            const ta = a.kickoff ? parseKickoff(a.kickoff).getTime() : Number.MAX_SAFE_INTEGER;
+            const tb = b.kickoff ? parseKickoff(b.kickoff).getTime() : Number.MAX_SAFE_INTEGER;
             return ta - tb;
         }
-        if (sortMode === 'league') {
-            return (a.league || '').localeCompare(b.league || '');
-        }
-        return b.profit_percent - a.profit_percent; // profit desc (default)
+        if (sortMode === 'league') return (a.league || '').localeCompare(b.league || '');
+        return b.profit_percent - a.profit_percent;
     });
 
     renderSurebets(filteredSurebets);
@@ -592,64 +515,496 @@ function applyFilters() {
 
 function resetFilters() {
     document.getElementById('filter-market').value = '';
-    document.getElementById('filter-profit').value = '0.5';
+    document.getElementById('filter-profit').value = '0';
     document.getElementById('filter-search').value = '';
     document.getElementById('filter-sort').value = 'profit';
-    // Re-activate all bookmakers
-    activeBookmakers = new Set(Object.keys(BOOKMAKER_COLORS));
-    document.querySelectorAll('.bookie-chip').forEach(c => c.classList.add('active'));
     applyFilters();
 }
 
-// ─── Rendering ────────────────────────────────────────────────────────────────
 function renderSurebets(surebets) {
     const grid = document.getElementById('results-grid');
-    const surebetsCount = document.getElementById('surebets-count');
-
-    if (surebetsCount) surebetsCount.textContent = surebets.length;
+    setText('surebets-count', surebets.length);
     grid.innerHTML = '';
 
-    // Anything the grid cannot show is handed to the diagnostic, which decides
-    // which of the two panels is up and what that panel says. It is never told
-    // "show the empty state" — only "there is nothing to show".
+    // Anything the list cannot show is handed to the diagnostic, which decides
+    // which panel is up and what it says. It is never told "show the empty
+    // state" — only "there is nothing to show".
     if (allSurebets.length === 0 || surebets.length === 0) {
+        grid.hidden = true;
         renderNoSurebetState();
+        renderSlip();
         return;
     }
-
+    grid.hidden = false;
     document.getElementById('empty-state').style.display = 'none';
     document.getElementById('no-results').style.display = 'none';
 
-    surebets.forEach((sb, idx) => {
-        const card = buildSurebetCard(sb, idx);
-        grid.appendChild(card);
+    surebets.forEach(sb => grid.appendChild(buildSurebetRow(sb)));
+    if (!selectedSurebetId || !surebets.some(sb => sb.id === selectedSurebetId)) {
+        // Open the best one straight away on a wide screen; on a phone the list
+        // comes first and a tap opens the slip.
+        if (window.matchMedia('(min-width: 900px)').matches) selectSurebet(surebets[0].id);
+        else renderSlip();
+    } else {
+        markSelectedRow();
+        renderSlip();
+    }
+}
+
+function buildSurebetRow(sb) {
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'sb-row';
+    row.dataset.id = sb.id;
+    row.setAttribute('role', 'option');
+    row.dataset.tier = profitTier(sb.profit_percent);
+    const kickoff = parseKickoff(sb.kickoff);
+    const when = currentMode === 'live' ? 'In play' : (kickoff ? formatKickoff(kickoff) : '');
+    const books = sb.stakes.map(s => `<span class="book-dot" style="--color:${escapeHtml(bookColor(s.bookmaker))}" title="${escapeHtml(bookName(s.bookmaker))}">${escapeHtml(bookShort(s.bookmaker))}</span>`).join('');
+    const check = verifyState[sb.id];
+    const badge = check ? `<span class="row-check row-check-${escapeHtml(check.state)}">${escapeHtml(verifyShortLabel(check))}</span>` : '';
+    row.innerHTML = `
+        <span class="row-profit">${sb.profit_percent.toFixed(2)}%</span>
+        <span class="row-main">
+            <span class="row-teams">${escapeHtml(formatTeamName(sb.home_team))} – ${escapeHtml(formatTeamName(sb.away_team))}</span>
+            <span class="row-meta">${escapeHtml(MARKET_LABELS[sb.market_type] || sb.market_type)} · ${escapeHtml(when)} · ${escapeHtml(formatLeague(sb.league))}</span>
+        </span>
+        <span class="row-side">${books}${badge}</span>
+    `;
+    row.addEventListener('click', () => selectSurebet(sb.id));
+    return row;
+}
+
+function profitTier(profit) {
+    if (profit >= 3) return 'high';
+    if (profit >= 1.5) return 'mid';
+    if (profit >= 0.5) return 'low';
+    return 'dust';
+}
+
+function markSelectedRow() {
+    document.querySelectorAll('.sb-row').forEach(row => {
+        const on = row.dataset.id === selectedSurebetId;
+        row.classList.toggle('selected', on);
+        row.setAttribute('aria-selected', String(on));
     });
+}
+
+function selectSurebet(id) {
+    selectedSurebetId = id;
+    markSelectedRow();
+    document.body.classList.add('slip-open');
+    renderSlip();
+    const check = verifyState[id];
+    // Odds are re-checked whenever a slip is opened and the last check is not fresh.
+    if (!check || (check.state !== 'checking' && !verifyIsFresh(check))) verifySurebet(id);
+    const row = document.querySelector(`.sb-row[data-id="${CSS.escape(id)}"]`);
+    if (row) row.scrollIntoView({ block: 'nearest' });
+}
+
+function closeSlip() {
+    document.body.classList.remove('slip-open');
+}
+
+// ─── Bet slip ─────────────────────────────────────────────────────────────────
+function roundStake(value) {
+    if (stakeRounding === '1') return Math.round(value);
+    if (stakeRounding === '5') return Math.round(value / 5) * 5;
+    return Math.round(value * 100) / 100;
+}
+
+function stakeFormat(value) {
+    return roundStake(value).toFixed(stakeRounding === 'exact' ? 2 : 0);
+}
+
+function money(value) {
+    return (Math.round(value * 100) / 100).toFixed(2);
+}
+
+// The order to place legs in: highest odds first. The long price is the one a
+// bookmaker is quickest to move or limit, so it is the one to secure while the
+// short, stable legs can still be adjusted around it.
+function placementOrder(stakes) {
+    return [...stakes].sort((a, b) => b.odds - a.odds);
+}
+
+/**
+ * Stakes for every leg, as typed amounts.
+ *
+ * With nothing placed, stakes split `investment` so every outcome returns the
+ * same, then are rounded. Once a leg is placed (at the odds actually taken and
+ * the stake actually typed), the remaining legs are re-planned to return at
+ * least what that leg returns, so a moved price is absorbed by the legs still
+ * to place instead of silently breaking the arbitrage.
+ */
+function planStakes(stakes, investment, placed) {
+    const placedLegs = stakes.filter(s => placed[s.outcome_label]);
+    let legs;
+    if (!placedLegs.length) {
+        const margin = stakes.reduce((sum, s) => sum + 1 / s.odds, 0);
+        legs = stakes.map(s => ({
+            ...s, plannedStake: roundStake(investment * (1 / s.odds) / margin), takenOdds: s.odds, placed: false,
+        }));
+    } else {
+        const target = Math.max(...placedLegs.map(s => placed[s.outcome_label].stake * placed[s.outcome_label].odds));
+        legs = stakes.map(s => {
+            const done = placed[s.outcome_label];
+            if (done) return { ...s, plannedStake: done.stake, takenOdds: done.odds, placed: true };
+            // Round up so the re-planned leg never returns less than the target.
+            const raw = target / s.odds;
+            const up = stakeRounding === '5' ? Math.ceil(raw / 5) * 5 : stakeRounding === '1' ? Math.ceil(raw) : Math.ceil(raw * 100) / 100;
+            return { ...s, plannedStake: up, takenOdds: s.odds, placed: false };
+        });
+    }
+    const total = legs.reduce((sum, leg) => sum + leg.plannedStake, 0);
+    const returns = legs.map(leg => leg.plannedStake * leg.takenOdds);
+    const worst = Math.min(...returns);
+    return { legs, total, worst, profit: worst - total, profitPercent: total > 0 ? (worst / total - 1) * 100 : 0 };
+}
+
+// The legs at the prices the latest re-check saw. A leg whose price moved at
+// the same bookmaker is planned at the new price; one that moved to another
+// bookmaker or vanished keeps the scanned price and is flagged on the leg.
+function currentStakes(sb, check) {
+    const drift = check?.state === 'ok' || check?.state === 'gone' ? check.data?.drift || {} : {};
+    return sb.stakes.map(stake => {
+        const moved = drift[stake.outcome_label];
+        if (moved && moved.changed && moved.new_odds != null && moved.new_bookmaker === stake.bookmaker) {
+            return { ...stake, odds: Number(moved.new_odds), scannedOdds: stake.odds };
+        }
+        return stake;
+    });
+}
+
+function slipFor(sb) {
+    if (!slipState[sb.id]) slipState[sb.id] = { investment: globalInvestment, placed: {}, touched: false };
+    return slipState[sb.id];
+}
+
+function renderSlip() {
+    const pane = document.getElementById('slip');
+    if (!pane) return;
+    const sb = allSurebets.find(s => s.id === selectedSurebetId);
+    if (!sb || !filteredSurebets.some(s => s.id === sb.id)) {
+        pane.innerHTML = `
+            <div class="slip-placeholder">
+                <h3>Bet slip</h3>
+                <p>Pick a surebet on the left. Its odds are re-checked first, then you get each leg in the order to place it, with the stake to type.</p>
+            </div>`;
+        return;
+    }
+    const state = slipFor(sb);
+    const check = verifyState[sb.id];
+    const plan = planStakes(placementOrder(currentStakes(sb, check)), state.investment, state.placed);
+    const kickoff = parseKickoff(sb.kickoff);
+    const exactProfit = sb.profit_percent;
+    const roundingCost = exactProfit - plan.profitPercent;
+
+    const warnings = [];
+    if (plan.profit <= 0) {
+        warnings.push(`<div class="slip-alert slip-alert-bad">With these stakes the worst outcome loses ${money(-plan.profit)} KM. ${Object.keys(state.placed).length ? 'A placed price moved — consider stopping or hedging rather than placing the rest.' : 'Raise the total stake or round to exact amounts.'}</div>`);
+    } else if (!Object.keys(state.placed).length && roundingCost > exactProfit / 2) {
+        warnings.push(`<div class="slip-alert">Rounding eats more than half the edge (${plan.profitPercent.toFixed(2)}% left of ${exactProfit.toFixed(2)}%). A larger total stake keeps more of it.</div>`);
+    }
+    if (plan.legs.some(leg => !leg.placed && leg.plannedStake < 1)) {
+        warnings.push('<div class="slip-alert">A stake is below 1 KM — most bookmakers will not take it.</div>');
+    }
+
+    const listings = sb.listings || {};
+    const legsHtml = plan.legs.map((leg, index) => {
+        const name = bookName(leg.bookmaker);
+        const listing = listings[leg.bookmaker];
+        const listedAs = listing ? `${listing.home} – ${listing.away}` : `${formatTeamName(sb.home_team)} – ${formatTeamName(sb.away_team)}`;
+        const url = (sb.bet_urls && sb.bet_urls[leg.bookmaker]) || (sb.match_urls && sb.match_urls[leg.bookmaker]) || '';
+        const drift = check?.data?.drift?.[leg.outcome_label];
+        let driftNote = '';
+        if (leg.scannedOdds != null && !leg.placed) {
+            driftNote = `<span class="leg-drift">was ${leg.scannedOdds.toFixed(2)} at scan</span>`;
+        } else if (drift && drift.changed && !leg.placed) {
+            driftNote = `<span class="leg-drift leg-drift-bad">${drift.new_odds != null ? 'best now ' + Number(drift.new_odds).toFixed(2) + ' at ' + escapeHtml(bookName(drift.new_bookmaker)) : 'no longer offered'}</span>`;
+        }
+        const stakeText = leg.plannedStake.toFixed(stakeRounding === 'exact' ? 2 : 0);
+        const label = escapeHtml(leg.outcome_label);
+        return `
+        <li class="leg${leg.placed ? ' leg-placed' : ''}" style="--color:${escapeHtml(bookColor(leg.bookmaker))}" data-label="${label}">
+            <div class="leg-step">${index + 1}</div>
+            <div class="leg-body">
+                <div class="leg-head">
+                    <span class="leg-book">${escapeHtml(name)}</span>
+                    ${url ? `<a class="btn btn-small" href="${escapeHtml(url)}" target="_blank" rel="noopener" onclick="copyText(${escapeHtml(JSON.stringify(listedAs))}, 'Match name copied — paste it into the site search')">Open ${escapeHtml(name)} ↗</a>` : ''}
+                </div>
+                <div class="leg-listing">
+                    <span title="How ${escapeHtml(name)} lists this match">${escapeHtml(listedAs)}</span>
+                    <button type="button" class="link-btn" onclick="copyText(${escapeHtml(JSON.stringify(listedAs))}, 'Match name copied')">copy name</button>
+                    ${listing?.league ? `<span class="leg-league">${escapeHtml(listing.league)}</span>` : ''}
+                </div>
+                <div class="leg-bet">
+                    <div><span class="leg-k">Pick</span><span class="leg-v">${label}</span><span class="leg-sub">${escapeHtml(outcomeDescription(leg.outcome_label, sb.market_type))}</span></div>
+                    <div><span class="leg-k">Odds</span><span class="leg-v mono">${leg.takenOdds.toFixed(2)}</span>${driftNote}</div>
+                    <div><span class="leg-k">Stake</span>
+                        <button type="button" class="leg-v mono stake-copy" title="Copy stake" onclick="copyText('${stakeText}', 'Stake copied')">${stakeText} KM</button>
+                    </div>
+                    <div><span class="leg-k">Returns</span><span class="leg-v mono">${money(leg.plannedStake * leg.takenOdds)}</span></div>
+                </div>
+                <div class="leg-placed-row">
+                    ${leg.placed
+                        ? `<span class="placed-tag">Placed at ${leg.takenOdds.toFixed(2)} for ${stakeText} KM</span>
+                           <button type="button" class="link-btn" onclick="unmarkPlaced('${escapeHtml(sb.id)}', ${escapeHtml(JSON.stringify(leg.outcome_label))})">undo</button>`
+                        : `<label class="placed-odds">Odds taken <input class="input input-narrow mono" type="number" step="0.01" min="1.01" value="${leg.odds.toFixed(2)}" data-placed-odds></label>
+                           <button type="button" class="btn btn-secondary btn-small" onclick="markPlaced('${escapeHtml(sb.id)}', ${escapeHtml(JSON.stringify(leg.outcome_label))}, this)">Mark placed</button>`}
+                </div>
+            </div>
+        </li>`;
+    }).join('');
+
+    const evidence = (sb.evidence || []).map(line => `<li>${escapeHtml(line)}</li>`).join('');
+
+    pane.innerHTML = `
+        <div class="slip-head">
+            <button type="button" class="link-btn slip-back" onclick="closeSlip()">← All surebets</button>
+            <div class="slip-title">
+                <h2>${escapeHtml(formatTeamName(sb.home_team))} – ${escapeHtml(formatTeamName(sb.away_team))}</h2>
+                <p>${escapeHtml(formatLeague(sb.league))} · ${escapeHtml(currentMode === 'live' ? 'In play' : (kickoff ? formatKickoffLong(kickoff) : 'Kickoff unknown'))}</p>
+            </div>
+            <div class="slip-profit" data-tier="${profitTier(plan.profitPercent)}" title="Profit of the stakes below, after rounding">
+                <span class="mono">${plan.profitPercent.toFixed(2)}%</span>
+                <small>${escapeHtml(MARKET_LABELS[sb.market_type] || sb.market_type)} · ${exactProfit.toFixed(2)}% at scan, exact stakes</small>
+            </div>
+        </div>
+        <span class="status-badge" hidden></span>
+
+        ${renderVerifyBanner(sb, check)}
+
+        <div class="slip-stake">
+            <label class="inline-field"><span>Total stake</span>
+                <input class="input mono" type="number" min="1" step="10" value="${state.investment}"
+                       oninput="setSlipInvestment('${escapeHtml(sb.id)}', this.value)" ${Object.keys(state.placed).length ? 'disabled title="Fixed once a leg is placed"' : ''}> KM</label>
+            <div class="slip-totals">
+                <span>Staked <b class="mono">${money(plan.total)}</b></span>
+                <span>Worst return <b class="mono">${money(plan.worst)}</b></span>
+                <span class="${plan.profit > 0 ? 'good' : 'bad'}">Profit <b class="mono">${plan.profit >= 0 ? '+' : ''}${money(plan.profit)} KM</b></span>
+            </div>
+        </div>
+        ${warnings.join('')}
+
+        <ol class="legs">${legsHtml}</ol>
+
+        <details class="slip-howto">
+            <summary>How to place this</summary>
+            <ol>
+                <li>Place the legs top to bottom. The first has the longest odds — the price most likely to move or be limited.</li>
+                <li>On the bookmaker's site, check the odds match before you confirm. If they dropped, type the odds you got into <em>Odds taken</em> and press <em>Mark placed</em>: the stakes below are re-planned to cover it.</li>
+                <li>If a later leg is gone or the profit turns red, stop. Either hedge the placed leg at the best price available or accept the single bet — do not chase.</li>
+            </ol>
+        </details>
+
+        ${evidence ? `<div class="slip-evidence"><h4>Why these are the same match</h4><ul>${evidence}</ul></div>` : ''}
+
+        <div class="slip-actions">
+            <button type="button" class="btn btn-secondary" onclick="verifySurebet('${escapeHtml(sb.id)}')">Re-check odds</button>
+            <button type="button" class="btn btn-secondary" onclick="copySurebetDetails('${escapeHtml(sb.id)}')">Copy slip</button>
+        </div>
+    `;
+    applyStatusBadge(pane.querySelector('.status-badge'), sb.status || sb.match_status);
+}
+
+// Only show a status the backend explicitly sent; never infer safety from the
+// fact that a surebet is present in the results payload.
+function applyStatusBadge(statusEl, reportedStatus) {
+    if (!statusEl) return;
+    statusEl.hidden = true;
+    statusEl.className = 'status-badge';
+    statusEl.textContent = '';
+    const statusInfo = Object.prototype.hasOwnProperty.call(SUREBET_STATUS_LABELS, reportedStatus)
+        ? SUREBET_STATUS_LABELS[reportedStatus]
+        : null;
+    if (statusInfo) {
+        statusEl.hidden = false;
+        statusEl.classList.add(`status-${reportedStatus}`);
+        statusEl.textContent = statusInfo.label;
+        statusEl.setAttribute('aria-label', statusInfo.ariaLabel);
+    }
+}
+
+function renderVerifyBanner(sb, check) {
+    if (!check) return '<div class="verify-banner verify-idle">Odds not re-checked yet.</div>';
+    if (check.state === 'checking') {
+        return '<div class="verify-banner verify-checking"><span class="spinner"></span> Re-checking the odds at each bookmaker…</div>';
+    }
+    const ago = `<span data-ago="${check.at.getTime()}">${formatAgo(check.at)}</span>`;
+    if (check.state === 'ok') {
+        const fresh = verifyIsFresh(check);
+        const floor = check.data.meets_min_profit === false ? ' — below your usual minimum' : '';
+        return `<div class="verify-banner ${fresh ? 'verify-ok' : 'verify-stale'}">
+            ${fresh ? 'Still a surebet' : 'Was a surebet'}: <b class="mono">${Number(check.data.current.profit_percent).toFixed(2)}%</b>${floor}, re-checked ${ago}.
+            ${fresh ? '' : ' Re-check before placing.'}</div>`;
+    }
+    if (check.state === 'gone') {
+        const now = check.data?.current ? ` (now ${Number(check.data.current.profit_percent).toFixed(2)}%)` : '';
+        return `<div class="verify-banner verify-bad">Gone${now}. ${escapeHtml(check.data?.message || 'The prices moved.')} Checked ${ago}. Do not place.</div>`;
+    }
+    return `<div class="verify-banner verify-unknown">Could not confirm: ${escapeHtml(check.message || 'unknown')}. Checked ${ago}. Check each price on the site before placing.</div>`;
+}
+
+function verifyShortLabel(check) {
+    if (check.state === 'checking') return 'checking';
+    if (check.state === 'ok') return verifyIsFresh(check) ? 'live ✓' : 'stale';
+    if (check.state === 'gone') return 'gone';
+    return '?';
+}
+
+function verifyIsFresh(check) {
+    if (!check || check.state !== 'ok') return false;
+    return (Date.now() - check.at.getTime()) / 1000 <= VERIFY_FRESH_SECONDS[currentMode];
+}
+
+function setSlipInvestment(id, value) {
+    const sb = allSurebets.find(s => s.id === id);
+    const amount = parseFloat(value);
+    if (!sb || !amount || amount <= 0) return;
+    const state = slipFor(sb);
+    state.investment = amount;
+    state.touched = true;
+    // Re-render without losing focus on the input being typed in.
+    const active = document.activeElement;
+    const caret = active && active.selectionStart;
+    renderSlip();
+    const input = document.querySelector('.slip-stake input');
+    if (input && active && active.closest && active.closest('.slip-stake')) {
+        input.focus();
+        try { input.setSelectionRange(caret, caret); } catch (e) { /* number inputs */ }
+    }
+}
+
+function markPlaced(id, label, button) {
+    const sb = allSurebets.find(s => s.id === id);
+    if (!sb) return;
+    const state = slipFor(sb);
+    const plan = planStakes(placementOrder(currentStakes(sb, verifyState[sb.id])), state.investment, state.placed);
+    const leg = plan.legs.find(l => l.outcome_label === label);
+    const input = button.closest('.leg').querySelector('[data-placed-odds]');
+    const odds = parseFloat(input?.value);
+    if (!leg || !odds || odds < 1.01) {
+        showToast('Enter the odds you actually got');
+        return;
+    }
+    state.placed[label] = { odds, stake: leg.plannedStake };
+    renderSlip();
+}
+
+function unmarkPlaced(id, label) {
+    const sb = allSurebets.find(s => s.id === id);
+    if (!sb) return;
+    delete slipFor(sb).placed[label];
+    renderSlip();
+}
+
+// ─── Verify odds ──────────────────────────────────────────────────────────────
+async function verifySurebet(id) {
+    const sb = allSurebets.find(s => s.id === id);
+    if (!sb) return;
+    verifyState[id] = { state: 'checking', at: new Date() };
+    refreshRowBadge(id);
+    if (id === selectedSurebetId) renderSlip();
+    let result;
+    try {
+        const res = await fetch('/api/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...candidateActionHeaders() },
+            body: JSON.stringify({ surebet_id: id, mode: currentMode }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            result = { state: 'unknown', at: new Date(), message: data.detail || `request failed (${res.status})` };
+        } else if (data.still_profitable === true) {
+            result = { state: 'ok', at: new Date(), data };
+        } else if (data.still_profitable === false) {
+            result = { state: 'gone', at: new Date(), data };
+        } else {
+            result = { state: 'unknown', at: new Date(), message: data.message || 'the bookmakers did not all answer', data };
+        }
+    } catch (e) {
+        result = { state: 'unknown', at: new Date(), message: 'network error' };
+    }
+    verifyState[id] = result;
+    refreshRowBadge(id);
+    if (id === selectedSurebetId) renderSlip();
+}
+
+function refreshRowBadge(id) {
+    const row = document.querySelector(`.sb-row[data-id="${CSS.escape(id)}"]`);
+    const sb = allSurebets.find(s => s.id === id);
+    if (!row || !sb) return;
+    const fresh = buildSurebetRow(sb);
+    fresh.classList.toggle('selected', row.classList.contains('selected'));
+    fresh.setAttribute('aria-selected', row.getAttribute('aria-selected') || 'false');
+    row.replaceWith(fresh);
+}
+
+function tickAges() {
+    document.querySelectorAll('[data-ago]').forEach(el => {
+        el.textContent = formatAgo(new Date(Number(el.dataset.ago)));
+    });
+    // A check that just went stale changes the banner's colour and advice.
+    const check = verifyState[selectedSurebetId];
+    if (check && check.state === 'ok') {
+        const banner = document.querySelector('.verify-banner');
+        if (banner && banner.classList.contains('verify-ok') !== verifyIsFresh(check)) renderSlip();
+    }
+}
+
+// ─── Copy ─────────────────────────────────────────────────────────────────────
+async function copyText(text, message) {
+    try {
+        await navigator.clipboard.writeText(text);
+    } catch (e) {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+    }
+    if (message) showToast(message);
+}
+
+function copySurebetDetails(id) {
+    const sb = allSurebets.find(s => s.id === id);
+    if (!sb) return;
+    const state = slipFor(sb);
+    const plan = planStakes(placementOrder(currentStakes(sb, verifyState[sb.id])), state.investment, state.placed);
+    const kickoff = parseKickoff(sb.kickoff);
+    const lines = [
+        `${formatTeamName(sb.home_team)} – ${formatTeamName(sb.away_team)}`,
+        `${formatLeague(sb.league)} · ${kickoff ? formatKickoffLong(kickoff) : 'kickoff unknown'}`,
+        `${MARKET_LABELS[sb.market_type] || sb.market_type} · profit ${plan.profitPercent.toFixed(2)}% (${money(plan.profit)} KM on ${money(plan.total)} KM)`,
+        '',
+        ...plan.legs.map((leg, index) => {
+            const link = (sb.bet_urls && sb.bet_urls[leg.bookmaker]) || (sb.match_urls && sb.match_urls[leg.bookmaker]) || '';
+            const listing = sb.listings?.[leg.bookmaker];
+            const listed = listing ? ` [${listing.home} – ${listing.away}]` : '';
+            return `${index + 1}. ${bookName(leg.bookmaker)}${listed}: ${leg.outcome_label} @ ${leg.takenOdds.toFixed(2)} → ${leg.plannedStake.toFixed(stakeRounding === 'exact' ? 2 : 0)} KM${link ? ' ' + link : ''}`;
+        }),
+    ];
+    copyText(lines.join('\n'), 'Slip copied');
 }
 
 // ─── No-surebet diagnostic ─────────────────────────────────────────────────────
 //
 // The reason a surebet is absent is the one thing an operator cannot work out
-// from the screen, and before this the screen asserted a reason it had not
-// checked: it told a user who had just scanned thousands of matches to scan
-// again, and told a user whose certainty gate had refused every group to reset
-// their filters. Both were wrong, and the second one is a loop, because
-// resetting the filters changes nothing.
-//
-// So the reason is read off the two payloads the dashboard is already polling.
+// from the screen. It is read off the two payloads the dashboard already polls.
 // `frontend/js/no-surebet-reasons.json` holds the copy and the guards; this
 // module holds the arithmetic, and `tests/test_frontend_empty_state.py` holds
 // the truth table that proves the two cannot disagree.
 
 // The only place a case's behaviour is defined. An action the table names that
-// this map does not implement renders nothing, so a typo cannot become a button
-// wired to a function that does not exist.
+// this map does not implement renders nothing.
 const DIAGNOSTIC_ACTIONS = {
     resetFilters: { label: 'Reset Filters', handler: () => resetFilters() },
     showReview: { label: 'Open review queue', handler: () => switchTab('review') },
 };
 
-// Which elements hold the copy in each panel. `#no-results` keeps its own
-// classes so nothing about how it looks depends on which case is in it.
+// Which elements hold the copy in each panel.
 const DIAGNOSTIC_PANELS = {
     'empty-state': { title: '.empty-state-title', body: '.empty-state-desc', actions: '#empty-state-actions' },
     'no-results': { title: '#no-results-title', body: '#no-results-desc', actions: '#no-results-actions' },
@@ -666,9 +1021,8 @@ async function loadNoSurebetReasons() {
         if (!res.ok) throw new Error(`copy table responded ${res.status}`);
         noSurebetReasons = await res.json();
     } catch (error) {
-        // Falling back to a hard-coded sentence here would reintroduce the
-        // defect this module exists to remove, so the dashboard says it does
-        // not know instead of naming a cause it has not checked.
+        // Falling back to a hard-coded sentence would name a cause that has not
+        // been checked, so the dashboard says it does not know instead.
         console.warn('No-surebet copy table unavailable:', error);
         noSurebetReasons = null;
     }
@@ -713,11 +1067,8 @@ function diagnosticValues(health, results, counts) {
     };
 }
 
-// Every count substituted into the copy goes through escapeHtml, including the
-// ones this module formats itself: the numbers behind them are bookmaker feed
-// data, and a formatter that passed a string through would be an unescaped path
-// into innerHTML. An unknown placeholder is left alone rather than blanked, so a
-// typo in the table shows up instead of quietly reading as a missing number.
+// Every count substituted into the copy goes through escapeHtml. An unknown
+// placeholder is left alone so a typo in the table shows up.
 function fillDiagnosticBody(template, values) {
     return String(template ?? '').replace(/\{([a-z_]+)\}/g, (whole, name) => (
         Object.prototype.hasOwnProperty.call(values, name) ? escapeHtml(values[name]) : whole
@@ -761,9 +1112,8 @@ function writeDiagnosticPanel(panel, reason, copy) {
     });
 }
 
-// Shown when the dashboard cannot name a cause, which is two different things
-// with the same honest answer. Neither may fall back to a hard-coded sentence:
-// guessing is the defect this module exists to remove.
+// Shown when the dashboard cannot name a cause. Neither case may fall back to a
+// hard-coded sentence: guessing is the defect this module exists to remove.
 const DIAGNOSTIC_UNAVAILABLE = {
     noCopyTable: 'The dashboard could not read its diagnostic copy, so it cannot tell you why '
         + 'this scan returned nothing. /api/health and /api/results hold the counts it would '
@@ -777,8 +1127,7 @@ function renderNoSurebetState() {
     const noResults = document.getElementById('no-results');
     if (!emptyState || !noResults) return;
     // Without the counts, "no surebets" is not evidence of anything, so nothing
-    // is claimed. The first paint happens before /api/health has answered, and
-    // this is what it says until it has.
+    // is claimed until /api/health has answered.
     if (!noSurebetReasons || !healthSnapshot) {
         renderDiagnosticUnavailable();
         return;
@@ -803,10 +1152,9 @@ function renderNoSurebetState() {
     other.style.display = 'none';
     panel.dataset.noSurebetReason = reason.id;
     other.removeAttribute('data-no-surebet-reason');
-    // The bookmaker wall is an invitation to scan. It is only true of the case
-    // that is asking for a scan. `style.display`, not `hidden`: the row is
-    // `display: flex` in the stylesheet, and an author rule outranks the user
-    // agent's `[hidden] { display: none }`.
+    // The bookmaker row is an invitation to scan, so it only shows for the case
+    // that asks for one. `style.display`, not `hidden`: the row is
+    // `display: flex` in the stylesheet, which outranks `[hidden]`.
     const bookies = emptyState.querySelector('.empty-state-bookies');
     if (bookies) bookies.style.display = reason.id === 'never_scanned' ? '' : 'none';
     writeDiagnosticPanel(panel, reason, renderCaseCopy(
@@ -841,9 +1189,8 @@ function renderDiagnosticUnavailable() {
     }
 }
 
-// Re-read the retained payloads on the existing 30s cadence, so a reason that
-// changes (links proven, a fresh scan) is corrected without waiting for a
-// filter change. No new request and no new timer.
+// Re-read the retained payloads on the 30s cadence, so a reason that changes
+// is corrected without waiting for a filter change.
 function refreshNoSurebetState() {
     const emptyState = document.getElementById('empty-state');
     const noResults = document.getElementById('no-results');
@@ -851,133 +1198,6 @@ function refreshNoSurebetState() {
         .some(panel => panel && panel.style.display !== 'none');
     if (!panelIsUp) return;
     renderNoSurebetState();
-}
-
-function buildSurebetCard(sb, idx) {
-    const tpl = document.getElementById('surebet-card-tpl');
-    const card = tpl.content.cloneNode(true).querySelector('.surebet-card');
-
-    card.dataset.id = sb.id;
-    card.dataset.margin = sb.total_margin;
-    card.dataset.profit = sb.profit_percent;
-
-    // Profit tier coloring — dust (<0.5%) is low-value requiring verify
-    if (sb.profit_percent >= 3.0) card.dataset.tier = 'high';
-    else if (sb.profit_percent >= 1.5) card.dataset.tier = 'mid';
-    else if (sb.profit_percent >= 0.5) card.dataset.tier = 'low';
-    else if (sb.profit_percent >= 0.0) card.dataset.tier = 'dust';
-    else card.dataset.tier = 'negative';
-
-    // Profit value + dust hint
-    const profitEl = card.querySelector('.profit-value');
-    profitEl.textContent = sb.profit_percent.toFixed(2) + '%';
-    if (sb.profit_percent < 0.5 && sb.profit_percent >= 0.2) {
-        profitEl.title = 'Dust — verify odds before betting (profit <0.5%)';
-    }
-
-    // Market badge
-    card.querySelector('.market-badge').textContent =
-        MARKET_LABELS[sb.market_type] || sb.market_type;
-
-    // Only show a status the backend explicitly sent; never infer safety from
-    // the fact that a surebet is present in the results payload.
-    const reportedStatus = sb.status || sb.match_status;
-    const statusEl = card.querySelector('.status-badge');
-    if (statusEl) {
-        statusEl.hidden = true;
-        statusEl.className = 'status-badge';
-        statusEl.textContent = '';
-        statusEl.removeAttribute('aria-label');
-        statusEl.removeAttribute('title');
-
-        const statusInfo = Object.prototype.hasOwnProperty.call(SUREBET_STATUS_LABELS, reportedStatus)
-            ? SUREBET_STATUS_LABELS[reportedStatus]
-            : null;
-        if (statusInfo) {
-            statusEl.hidden = false;
-            statusEl.classList.add(`status-${reportedStatus}`);
-            statusEl.textContent = statusInfo.label;
-            statusEl.setAttribute('aria-label', statusInfo.ariaLabel);
-            statusEl.title = `Match pairing status: ${reportedStatus}`;
-        }
-    }
-
-    // League
-    card.querySelector('.card-league').textContent =
-        formatLeague(sb.league) || 'Unknown League';
-
-    // Live badge + kickoff (in-play matches show a LIVE marker)
-    const isLiveMode = currentMode === 'live';
-    const liveBadge = card.querySelector('.card-live-badge');
-    if (isLiveMode) {
-        liveBadge.style.display = '';
-    }
-
-    // Kickoff
-    const kickoffDt = parseKickoff(sb.kickoff);
-    card.querySelector('.card-kickoff').textContent =
-        isLiveMode ? (kickoffDt ? `Started ${formatTime(kickoffDt)}` : 'In play') : (kickoffDt ? formatKickoff(kickoffDt) : '');
-
-    // Teams
-    card.querySelector('.team-home').textContent = formatTeamName(sb.home_team);
-    card.querySelector('.team-away').textContent = formatTeamName(sb.away_team);
-
-    // Stakes
-    const stakesEl = card.querySelector('.card-stakes');
-    sb.stakes.forEach(stake => {
-        const stakeDiv = buildStakeRow(stake, sb.market_type, sb.match_urls || {}, sb.bet_urls || {});
-        stakesEl.appendChild(stakeDiv);
-    });
-
-    // Return display
-    const ret = (globalInvestment / sb.total_margin);
-    card.querySelector('.return-value').textContent = ret.toFixed(2) + ' KM';
-
-    // Investment input
-    const investInput = card.querySelector('.card-invest-input');
-    investInput.value = globalInvestment;
-    investInput.addEventListener('input', (e) => {
-        recalculateCard(card, sb, parseFloat(e.target.value) || 0);
-    });
-
-    return card;
-}
-
-function buildStakeRow(stake, marketType, matchUrls, betUrls) {
-    const div = document.createElement('div');
-    div.className = 'stake-row';
-
-    const bookieName = bookmakersConfig[stake.bookmaker]?.name ||
-                       capitalize(stake.bookmaker);
-    const bookieColor = bookmakersConfig[stake.bookmaker]?.color ||
-                        BOOKMAKER_COLORS[stake.bookmaker] || '#888';
-
-    const url = matchUrls ? matchUrls[stake.bookmaker] : null;
-    const bookieHtml = url
-        ? `<a class="stake-bookie-link" href="${url}" target="_blank" rel="noopener" style="color: ${bookieColor}" title="Open match page on ${bookieName}">${bookieName}</a>`
-        : `<div class="stake-bookie" style="color: ${bookieColor}">${bookieName}</div>`;
-
-    // Ticket button: bet-slip prefill URL when the bookmaker supports it,
-    // otherwise falls back to the match page URL.
-    const betUrl = betUrls ? betUrls[stake.bookmaker] : null;
-    const ticketHref = betUrl || url;
-    const ticketTitle = betUrl
-        ? `Add ${stake.outcome_label} @ ${stake.odds.toFixed(2)} to ticket on ${bookieName}`
-        : (url ? `Open match on ${bookieName}` : null);
-    const ticketHtml = ticketHref && ticketTitle
-        ? `<a class="stake-ticket-link" href="${ticketHref}" target="_blank" rel="noopener" title="${ticketTitle}" aria-label="${ticketTitle}">🎫</a>`
-        : '';
-
-    div.innerHTML = `
-        <div class="stake-bookie-row">
-            ${bookieHtml}
-            ${ticketHtml}
-        </div>
-        <div class="stake-outcome">${stake.outcome_label}</div>
-        <div class="stake-odds">${stake.odds.toFixed(2)}</div>
-        <div class="stake-amount">Bet: <strong data-stake="${stake.stake}">${stakeFormat(stake.stake)} KM</strong></div>
-    `;
-    return div;
 }
 
 // ─── Candidate review ──────────────────────────────────────────────────────────
@@ -1005,7 +1225,6 @@ function renderCandidatesMessage(message) {
     if (!list) return;
     list.innerHTML = `
         <div class="empty-state">
-            <div class="empty-state-icon">⌁</div>
             <h2 class="empty-state-title">${escapeHtml(message)}</h2>
             <p class="empty-state-desc">The review queue could not be refreshed. Try again in a moment.</p>
         </div>
@@ -1050,11 +1269,14 @@ function renderCandidates(candidates, total) {
     const queue = Array.isArray(candidates) ? candidates : [];
     if (!list) return;
     if (count) count.textContent = total || 0;
+    currentCandidates = queue;
+    // Keep only selections that are still on the page.
+    [...selectedCandidates].forEach(id => { if (!queue.some(c => c.id === id)) selectedCandidates.delete(id); });
+    updateBulkButton();
 
     if (!queue.length) {
         list.innerHTML = `
             <div class="empty-state">
-                <div class="empty-state-icon">✓</div>
                 <h2 class="empty-state-title">Nothing to review yet.</h2>
                 <p class="empty-state-desc">No pairing candidates are queued for human review.</p>
             </div>
@@ -1062,14 +1284,16 @@ function renderCandidates(candidates, total) {
         return;
     }
 
-    // AI confidence helps a reviewer prioritise the queue; it never grants trust.
-    // A negative AI verdict sorts last whatever its confidence — the model said
-    // these are not the same event, so a high score must not float it upward.
+    // AI confidence helps a reviewer prioritise; it never grants trust. A
+    // negative AI verdict sorts last whatever its confidence. Then the closest
+    // spellings first, since those are the quickest to decide.
     const orderedCandidates = [...queue].sort((left, right) => {
         const leftNegative = left.ai_same_event === false;
         const rightNegative = right.ai_same_event === false;
         if (leftNegative !== rightNegative) return leftNegative ? 1 : -1;
-        return candidateConfidence(right.ai_confidence) - candidateConfidence(left.ai_confidence);
+        const byAi = candidateConfidence(right.ai_confidence) - candidateConfidence(left.ai_confidence);
+        if (byAi) return byAi;
+        return (Number(right.name_score) || 0) - (Number(left.name_score) || 0);
     });
 
     const pageNote = total > queue.length
@@ -1084,24 +1308,23 @@ function renderCandidates(candidates, total) {
         const kickoffDate = candidate.kickoff ? parseKickoff(candidate.kickoff) : null;
         const kickoff = kickoffDate ? escapeHtml(formatKickoff(kickoffDate)) : 'Kickoff unknown';
         const bookmakers = (Array.isArray(candidate.bookmakers) ? candidate.bookmakers : [])
-            .map(bookmaker => escapeHtml(bookmakersConfig[bookmaker]?.name || capitalize(bookmaker)))
+            .map(bookmaker => escapeHtml(bookName(bookmaker)))
             .join(' / ') || 'No bookmakers recorded';
         const confidence = Math.round(candidateConfidence(candidate.ai_confidence) * 100);
-        const aiReason = escapeHtml(candidate.ai_reason || 'No AI explanation provided.');
+        const nameScore = Math.round(Number(candidate.name_score) || 0);
         const aiNegative = candidate.ai_same_event === false;
+        const aiReason = candidate.ai_reason ? escapeHtml(candidate.ai_reason) : '';
         const aiVerdict = aiNegative
-            ? `<strong>AI verdict:</strong> <span class="candidate-ai-negative">not the same event</span> ${aiReason}`
-            : `<strong>AI suggestion:</strong> ${aiReason} <span class="candidate-ai-note">Suggestion only — a human must decide.</span>`;
-        // What approval actually does, stated on the card. A team alias is a
-        // human judgement; the deep-link check is a system verification.
+            ? `<p class="candidate-ai"><strong>AI verdict:</strong> <span class="candidate-ai-negative">not the same event</span> ${aiReason}</p>`
+            : (aiReason ? `<p class="candidate-ai"><strong>AI suggestion (${confidence}%):</strong> ${aiReason} <span class="candidate-ai-note">Suggestion only — a human must decide.</span></p>` : '');
         const positions = Array.isArray(candidate.team_positions) ? candidate.team_positions : [];
         const positionItems = positions.length
             ? positions.map(position => `
-                <li class="candidate-position">
+                <li class="candidate-position${position.team_a !== position.team_b ? ' differs' : ''}">
                     <span class="candidate-position-slot">${escapeHtml(position.position)}</span>
-                    <span>${escapeHtml(formatTeamName(position.team_a))}</span>
+                    <span>${escapeHtml(position.team_a)}</span>
                     <span aria-hidden="true">≈</span>
-                    <span>${escapeHtml(formatTeamName(position.team_b))}</span>
+                    <span>${escapeHtml(position.team_b)}</span>
                 </li>
             `).join('')
             : '<li class="candidate-position candidate-position-none">No cross-bookmaker names recorded — run a scan to regenerate this candidate</li>';
@@ -1112,59 +1335,112 @@ function renderCandidates(candidates, total) {
         // than write a self-alias, so the button says so instead of failing.
         const writesAlias = positions.some(position => position.team_a !== position.team_b);
         const approveButton = writesAlias
-            ? `<button type="button" class="btn btn-primary" aria-label="Approve pairing ${homeTeam} versus ${awayTeam}"
-                            onclick="approveCandidate(this.closest('.candidate-card').dataset.id)">Approve pairing</button>`
-            : `<button type="button" class="btn btn-primary" disabled
+            ? `<button type="button" class="btn btn-primary btn-small" aria-label="Approve pairing ${homeTeam} versus ${awayTeam}"
+                            onclick="approveCandidate(this.closest('.candidate-card').dataset.id)">Same match</button>`
+            : `<button type="button" class="btn btn-primary btn-small" disabled
                             title="Both books already spell these teams identically, so there is no alias to write — reject this pairing instead">Nothing to alias</button>`;
         const actionability = candidate.alias_actionable
-            ? '<span class="candidate-actionable">An approval clears every remaining blocker here.</span>'
-            : '<span class="candidate-blocked">An approval alone cannot clear the remaining blockers here.</span>';
+            ? '<span class="candidate-actionable">Approving clears every blocker.</span>'
+            : '<span class="candidate-blocked">Approving alone will not clear every blocker.</span>';
         const reasons = Array.isArray(candidate.rule_rejections) ? candidate.rule_rejections : [];
         const reasonItems = reasons.length
             ? reasons.map(reason => {
                 const rawCode = String(reason);
                 const label = REASON_LABELS[rawCode] || rawCode || REASON_UNKNOWN_LABEL;
-                return `
-                    <li class="candidate-reason" title="${escapeHtml(rawCode)}">
-                        <span class="candidate-reason-label">${escapeHtml(label)}</span>
-                        <code class="candidate-reason-code">${escapeHtml(rawCode)}</code>
-                    </li>
-                `;
+                return `<li class="candidate-reason" title="${escapeHtml(rawCode)}">${escapeHtml(label)}</li>`;
             }).join('')
-            : '<li class="candidate-reason candidate-reason-none">No rejection reason recorded</li>';
+            : '<li class="candidate-reason candidate-reason-none">No reason recorded</li>';
+        const checked = selectedCandidates.has(candidate.id) ? ' checked' : '';
+        const selectable = writesAlias ? '' : ' disabled';
 
         return `
             <article class="candidate-card" data-id="${id}" data-confidence="${confidence}"${aiNegative ? ' data-ai-verdict="negative"' : ''}>
-                <div class="candidate-card-header">
-                    <div>
+                <label class="candidate-select" title="Select for bulk approval">
+                    <input type="checkbox" data-candidate-select${checked}${selectable} onchange="toggleCandidateSelection(this)">
+                </label>
+                <div class="candidate-body">
+                    <div class="candidate-card-header">
                         <div class="candidate-teams"><span>${homeTeam}</span> <span class="candidate-vs">vs</span> <span>${awayTeam}</span></div>
-                        <div class="candidate-meta">${league} <span aria-hidden="true">·</span> ${kickoff} <span aria-hidden="true">·</span> ${bookmakers}</div>
+                        <span class="name-score" data-score="${nameScore >= 85 ? 'high' : nameScore >= 65 ? 'mid' : 'low'}" title="How alike the least-alike name pair is">${nameScore}% alike</span>
                     </div>
-                    <div class="candidate-ai-confidence" title="AI confidence is a suggestion only; it does not approve a pairing">
-                        <strong>${confidence}%</strong>
-                        <span>AI confidence</span>
-                    </div>
-                </div>
-                <div class="candidate-reasons" role="group" aria-label="Reasons the certainty gate refused this pairing">
-                    <div class="candidate-section-label">Why the certainty gate refused</div>
-                    <ul>${reasonItems}</ul>
-                </div>
-                <div class="candidate-positions" role="group" aria-label="How the two bookmakers spell each team">
-                    <div class="candidate-section-label">Names the two books disagree on</div>
-                    <ul>${positionItems}</ul>
-                    <p class="candidate-approval-note">${escapeHtml(approvalNote)} ${actionability}</p>
-                </div>
-                <div class="candidate-ai" title="AI explanation">
+                    <div class="candidate-meta">${league} · ${kickoff} · ${bookmakers}</div>
+                    <ul class="candidate-positions" aria-label="How the two bookmakers spell each team">${positionItems}</ul>
+                    <ul class="candidate-reasons" aria-label="Why the certainty gate refused">${reasonItems}</ul>
                     ${aiVerdict}
+                    <p class="candidate-approval-note">${escapeHtml(approvalNote)} ${actionability}</p>
                 </div>
                 <div class="candidate-actions">
                     ${approveButton}
-                    <button type="button" class="btn btn-mute" aria-label="Reject pairing ${homeTeam} versus ${awayTeam}"
-                            onclick="rejectCandidate(this.closest('.candidate-card').dataset.id)">Reject pairing</button>
+                    <button type="button" class="btn btn-secondary btn-small" aria-label="Reject pairing ${homeTeam} versus ${awayTeam}"
+                            onclick="rejectCandidate(this.closest('.candidate-card').dataset.id)">Different</button>
                 </div>
             </article>
         `;
     }).join('');
+}
+
+function toggleCandidateSelection(box) {
+    const id = box.closest('.candidate-card')?.dataset.id;
+    if (!id) return;
+    if (box.checked) selectedCandidates.add(id); else selectedCandidates.delete(id);
+    updateBulkButton();
+}
+
+// Selects, never approves: the reviewer still presses the button and confirms.
+function selectStrongCandidates() {
+    const threshold = Number(document.getElementById('review-threshold')?.value) || 85;
+    currentCandidates.forEach(candidate => {
+        const positions = Array.isArray(candidate.team_positions) ? candidate.team_positions : [];
+        const writes = positions.some(position => position.team_a !== position.team_b);
+        if (writes && candidate.alias_actionable && candidate.ai_same_event !== false
+            && (Number(candidate.name_score) || 0) >= threshold) {
+            selectedCandidates.add(candidate.id);
+        }
+    });
+    document.querySelectorAll('.candidate-card').forEach(card => {
+        const box = card.querySelector('[data-candidate-select]');
+        if (box) box.checked = selectedCandidates.has(card.dataset.id);
+    });
+    updateBulkButton();
+    showToast(`${selectedCandidates.size} selected — check them, then approve`);
+}
+
+function updateBulkButton() {
+    const button = document.getElementById('review-approve-selected');
+    if (!button) return;
+    button.disabled = selectedCandidates.size === 0;
+    button.textContent = selectedCandidates.size ? `Approve ${selectedCandidates.size} selected` : 'Approve selected';
+}
+
+async function approveSelectedCandidates() {
+    const ids = [...selectedCandidates];
+    if (!ids.length) return;
+    const confirmed = window.confirm(
+        `Approve ${ids.length} pairing${ids.length > 1 ? 's' : ''}? Each writes reviewed team aliases to the allowlist.`,
+    );
+    if (!confirmed) return;
+    const send = () => fetch('/api/candidates/approve-bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...candidateActionHeaders() },
+        body: JSON.stringify({ ids }),
+    });
+    try {
+        let response = await send();
+        if (response.status === 401 && !candidateApiKey) {
+            const entered = window.prompt('This SureBet deployment requires an API key for review actions.');
+            if (entered && entered.trim()) {
+                candidateApiKey = entered.trim();
+                response = await send();
+            }
+        }
+        if (!response.ok) throw new Error(`bulk approve failed (${response.status})`);
+        const data = await response.json();
+        selectedCandidates.clear();
+        showToast(`Approved ${data.approved.length}${data.skipped.length ? `, skipped ${data.skipped.length}` : ''}. Scan again to use them.`);
+        await loadCandidates();
+    } catch (error) {
+        showError(`Could not approve: ${error.message}`);
+    }
 }
 
 function candidateActionHeaders() {
@@ -1190,6 +1466,7 @@ async function submitCandidateDecision(id, action, card) {
     try {
         const response = await candidateActionFetch(`/api/candidates/${encodeURIComponent(id)}/${action}`);
         if (response.ok === false) throw new Error(`Candidate ${action} failed (${response.status})`);
+        selectedCandidates.delete(id);
         await loadCandidates();
     } catch (error) {
         console.error(`Candidate ${action} failed:`, error);
@@ -1221,105 +1498,12 @@ async function rejectCandidate(id) {
     await submitCandidateDecision(id, 'reject', card);
 }
 
-// ─── Recalculate Stakes ───────────────────────────────────────────────────────
-function recalculateAll(investment) {
-    const val = parseFloat(investment) || 100;
-    globalInvestment = val;
-
-    document.querySelectorAll('.surebet-card').forEach(card => {
-        const sbId = card.dataset.id;
-        const sb = allSurebets.find(s => s.id === sbId);
-        if (sb) recalculateCard(card, sb, val);
-        card.querySelector('.card-invest-input').value = val;
-    });
-}
-
-function recalculateCard(card, sb, investment) {
-    if (!investment || investment <= 0 || sb.total_margin >= 1.0) return;
-
-    const totalMargin = sb.total_margin;
-    const guaranteedReturn = investment / totalMargin;
-
-    // Update return display
-    card.querySelector('.return-value').textContent =
-        guaranteedReturn.toFixed(2) + ' KM';
-
-    // Update each stake amount
-    sb.stakes.forEach(stake => {
-        const implied = 1.0 / stake.odds;
-        const newStake = roundStake(investment * (implied / totalMargin));
-        // Find the stake row for this outcome
-        const rows = card.querySelectorAll('.stake-row');
-        rows.forEach(row => {
-            const stakeEl = row.querySelector('[data-stake]');
-            const outcomeEl = row.querySelector('.stake-outcome');
-            if (stakeEl && outcomeEl &&
-                outcomeEl.textContent === stake.outcome_label) {
-                stakeEl.textContent = newStake.toFixed(stakeRounding === 'exact' ? 2 : 0) + ' KM';
-                stakeEl.dataset.stake = newStake;
-            }
-        });
-    });
-}
-
-// ─── Verify Odds ──────────────────────────────────────────────────────────────
-async function verifySurebet(btn) {
-    const card = btn.closest('.surebet-card');
-    if (!card) return;
-    const sbId = card.dataset.id;
-    const original = btn.textContent;
-    btn.textContent = '⟳ Verifying...';
-    btn.disabled = true;
-    btn.classList.remove('verify-ok', 'verify-bad');
-    try {
-        const res = await fetch('/api/verify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ surebet_id: sbId, mode: currentMode }),
-        });
-        const data = await res.json();
-        if (!res.ok) {
-            btn.textContent = data.detail || 'Verify failed';
-            btn.classList.add('verify-bad');
-        } else if (data.still_profitable) {
-            btn.textContent = `✓ Still ${data.current.profit_percent}%`;
-            btn.classList.add('verify-ok');
-        } else if (data.current) {
-            btn.textContent = `✕ Now ${data.current.profit_percent}%`;
-            btn.classList.add('verify-bad');
-        } else {
-            btn.textContent = data.message || 'Verify failed';
-            btn.classList.add('verify-bad');
-        }
-    } catch (e) {
-        btn.textContent = 'Verify failed';
-        btn.classList.add('verify-bad');
-    } finally {
-        btn.disabled = false;
-        setTimeout(() => {
-            btn.textContent = original;
-            btn.classList.remove('verify-ok', 'verify-bad');
-        }, 6000);
-    }
-}
-
-// ─── Scan History ─────────────────────────────────────────────────────────────
-async function toggleHistory() {
-    const panel = document.getElementById('history-panel');
-    if (!panel) return;
-    if (panel.style.display === 'none') {
-        panel.style.display = '';
-        await loadHistory();
-    } else {
-        panel.style.display = 'none';
-    }
-}
-
+// ─── History ──────────────────────────────────────────────────────────────────
 async function loadHistory() {
     const body = document.getElementById('history-body');
     if (!body) return;
     try {
-        const res = await fetch('/api/history');
+        const res = await fetch('/api/history', { headers: candidateActionHeaders() });
         const data = await res.json();
         const entries = data.entries || [];
         if (entries.length === 0) {
@@ -1327,18 +1511,16 @@ async function loadHistory() {
             return;
         }
         body.innerHTML = entries.map(e => {
-            const time = e.scan_time ? new Date(e.scan_time).toLocaleString() : '—';
+            const time = e.scan_time ? escapeHtml(parseKickoff(e.scan_time).toLocaleString()) : '—';
             const errs = (e.errors || []).length;
-            const mode = e.mode === 'live'
-                ? '<span class="history-mode history-mode-live">LIVE</span>'
-                : '<span class="history-mode">FUTURE</span>';
+            const mode = e.mode === 'live' ? '<span class="tag tag-live">Live</span>' : '<span class="tag">Upcoming</span>';
             return `<tr>
                 <td>${mode}</td>
                 <td>${time}</td>
-                <td>${e.total_matches ?? '—'}</td>
-                <td>${e.match_groups ?? '—'}</td>
-                <td class="${e.surebets_found > 0 ? 'history-surebets' : ''}">${e.surebets_found ?? 0}</td>
-                <td class="${errs > 0 ? 'history-errors' : ''}">${errs}</td>
+                <td class="mono">${formatCount(e.total_matches)}</td>
+                <td class="mono">${formatCount(e.match_groups)}</td>
+                <td class="mono${e.surebets_found > 0 ? ' good' : ''}">${formatCount(e.surebets_found)}</td>
+                <td class="mono${errs > 0 ? ' bad' : ''}" title="${escapeHtml((e.errors || []).join(' | '))}">${errs}</td>
             </tr>`;
         }).join('');
     } catch (e) {
@@ -1346,54 +1528,10 @@ async function loadHistory() {
     }
 }
 
-// ─── Copy Bet Details ─────────────────────────────────────────────────────────
-async function copySurebetDetails(btn) {
-    const card = btn.closest('.surebet-card');
-    if (!card) return;
-    const sb = allSurebets.find(s => s.id === card.dataset.id);
-    if (!sb) return;
-
-    const lines = [
-        `🏆 ${formatTeamName(sb.home_team)} vs ${formatTeamName(sb.away_team)}`,
-        `📋 League: ${formatLeague(sb.league) || 'Unknown'}`,
-        `🕒 Kickoff: ${parseKickoff(sb.kickoff) ? formatKickoff(parseKickoff(sb.kickoff)) : 'TBA'}`,
-        `🎯 Market: ${MARKET_LABELS[sb.market_type] || sb.market_type}`,
-        `💰 Profit: ${sb.profit_percent.toFixed(2)}% (Investment: ${globalInvestment} KM)`,
-        ``,
-        `Stakes:`,
-        ...sb.stakes.map(stake => {
-            const name = bookmakersConfig[stake.bookmaker]?.name || capitalize(stake.bookmaker);
-            const stakeAmt = stakeFormat(globalInvestment * (1 / stake.odds) / sb.total_margin);
-            const link = (sb.bet_urls && sb.bet_urls[stake.bookmaker]) ||
-                         (sb.match_urls && sb.match_urls[stake.bookmaker]);
-            const linkSuffix = link ? ` (${link})` : '';
-            return `  • ${name}: ${stake.outcome_label} @ ${stake.odds.toFixed(2)} → ${stakeAmt} KM${linkSuffix}`;
-        }),
-    ];
-    const text = lines.join('\n');
-
-    try {
-        await navigator.clipboard.writeText(text);
-    } catch (e) {
-        // Fallback for non-secure contexts
-        const ta = document.createElement('textarea');
-        ta.value = text;
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand('copy');
-        ta.remove();
-    }
-
-    const original = btn.textContent;
-    btn.textContent = '✓ Copied!';
-    setTimeout(() => { btn.textContent = original; }, 1500);
-}
-
-// ─── UI Helpers ───────────────────────────────────────────────────────────────
+// ─── UI helpers ───────────────────────────────────────────────────────────────
 function showScanProgress() {
     document.getElementById('scan-progress').style.display = '';
     document.getElementById('scan-bar').style.width = '5%';
-    document.getElementById('empty-state').style.display = 'none';
 }
 
 function hideScanProgress() {
@@ -1402,55 +1540,85 @@ function hideScanProgress() {
 
 function setStatus(state, text) {
     const pill = document.getElementById('status-pill');
-    const textEl = document.getElementById('status-text');
     pill.className = 'status-pill ' + state;
-    textEl.textContent = text;
+    document.getElementById('status-text').textContent = text;
 }
 
 function showError(msg) {
-    const banner = document.getElementById('error-banner');
     document.getElementById('error-banner-text').textContent = msg;
-    banner.style.display = '';
+    document.getElementById('error-banner').style.display = '';
 }
 
 function hideError() {
     document.getElementById('error-banner').style.display = 'none';
 }
 
+let toastTimer = null;
+function showToast(message) {
+    const toast = document.getElementById('toast');
+    if (!toast) return;
+    toast.textContent = message;
+    toast.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { toast.hidden = true; }, 2500);
+}
+
+function setText(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+}
+
+function bookName(id) {
+    return bookmakersConfig[id]?.name || capitalize(id);
+}
+
+function bookColor(id) {
+    return bookmakersConfig[id]?.color || BOOKMAKER_COLORS[id] || '#888';
+}
+
+function bookShort(id) {
+    const name = bookName(id);
+    return name.replace(/[^A-Za-z0-9]/g, '').slice(0, 3).toUpperCase();
+}
+
 // ─── Formatting ───────────────────────────────────────────────────────────────
 function parseKickoff(str) {
     if (!str) return null;
-    // Scrapers store naive UTC; JS would interpret a bare ISO string as local time.
-    // Append 'Z' when the string carries no timezone marker.
+    // Scrapers store naive UTC; JS would read a bare ISO string as local time.
     const hasTz = /[zZ]|[+-]\d{2}:?\d{2}$/.test(str);
     const dt = new Date(hasTz ? str : str + 'Z');
     return isNaN(dt) ? null : dt;
 }
 
-function formatTime(dt) {
-    const now = new Date();
-    const diffMs = now - dt;
-    const diffMin = Math.floor(diffMs / 60000);
-
-    if (diffMin < 1) return 'Just now';
-    if (diffMin < 60) return `${diffMin}m ago`;
-    const diffHr = Math.floor(diffMin / 60);
-    if (diffHr < 24) return `${diffHr}h ago`;
+function formatAgo(dt) {
+    if (!dt || isNaN(dt)) return '—';
+    const sec = Math.max(0, Math.round((Date.now() - dt.getTime()) / 1000));
+    if (sec < 60) return `${sec}s ago`;
+    const min = Math.floor(sec / 60);
+    if (min < 60) return `${min}m ago`;
+    const hr = Math.floor(min / 60);
+    if (hr < 24) return `${hr}h ago`;
     return dt.toLocaleDateString();
 }
 
 function formatKickoff(dt) {
     if (!dt || isNaN(dt)) return '';
-    const today = new Date();
-    const isToday = dt.toDateString() === today.toDateString();
     const time = dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    if (isToday) return '🕒 Today ' + time;
-    return '🕒 ' + dt.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + time;
+    const today = new Date();
+    const tomorrow = new Date(today.getTime() + 86400000);
+    if (dt.toDateString() === today.toDateString()) return `Today ${time}`;
+    if (dt.toDateString() === tomorrow.toDateString()) return `Tomorrow ${time}`;
+    return `${dt.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })} ${time}`;
+}
+
+function formatKickoffLong(dt) {
+    const hours = (dt.getTime() - Date.now()) / 3600000;
+    const rel = hours > 0 && hours < 48 ? ` (in ${hours < 1 ? Math.round(hours * 60) + ' min' : Math.round(hours) + ' h'})` : '';
+    return formatKickoff(dt) + rel;
 }
 
 function formatTeamName(name) {
     if (!name) return 'Unknown';
-    // Capitalize first letter of each word, handle underscores from canonical IDs
     return name
         .replace(/_/g, ' ')
         .replace(/\b\w/g, c => c.toUpperCase())
@@ -1471,7 +1639,7 @@ function capitalize(str) {
 }
 
 async function refreshDiagnostics() {
-    // Keep the review queue on the same cadence as the existing health poll.
+    // The review queue rides the same cadence as the health poll.
     await Promise.all([loadHealth(), loadCandidates()]);
 }
 
@@ -1479,9 +1647,8 @@ async function loadHealth() {
     try {
         const res = await fetch('/api/health');
         const data = await res.json();
-        // The bar below discards almost everything in this response. The counts
-        // that say WHY there is no surebet are the rest of it, so the payload is
-        // kept for the diagnostic; the bar itself is unchanged.
+        // The counts that say WHY there is no surebet live in this response, so
+        // the payload is kept for the diagnostic.
         healthSnapshot = data;
         const bar = document.getElementById('health-bar');
         if (!bar) return;
@@ -1496,25 +1663,19 @@ async function loadHealth() {
     } catch (e) { /* ignore */ }
 }
 
-// ─── Alert Sound ──────────────────────────────────────────────────────────────
+// ─── Alert sound ──────────────────────────────────────────────────────────────
 function toggleSound() {
     soundMuted = !soundMuted;
     try { localStorage.setItem('soundMuted', soundMuted ? '1' : '0'); } catch (e) { /* ignore */ }
-    const muteBtn = document.getElementById('mute-btn');
-    if (muteBtn) muteBtn.textContent = soundMuted ? '🔕' : '🔔';
+    const box = document.getElementById('sound-toggle');
+    if (box) box.checked = !soundMuted;
 }
 
 function playAlertSound() {
     if (soundMuted) return;
     try {
-        // Reuse a single AudioContext to avoid leaking one per alert
-        if (!audioContext) {
-            audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        }
-        if (audioContext.state === 'suspended') {
-            audioContext.resume();
-        }
-
+        if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioContext.state === 'suspended') audioContext.resume();
         const playNote = (freq, startTime, duration) => {
             const osc = audioContext.createOscillator();
             const gain = audioContext.createGain();
@@ -1528,12 +1689,10 @@ function playAlertSound() {
             osc.start(startTime);
             osc.stop(startTime + duration + 0.01);
         };
-
-        // Pleasant ascending 3-note chime
-        playNote(523, audioContext.currentTime,       0.2);  // C5
-        playNote(659, audioContext.currentTime + 0.2, 0.2);  // E5
-        playNote(784, audioContext.currentTime + 0.4, 0.3);  // G5
+        playNote(523, audioContext.currentTime, 0.2);
+        playNote(659, audioContext.currentTime + 0.2, 0.2);
+        playNote(784, audioContext.currentTime + 0.4, 0.3);
     } catch (e) {
-        // Audio not available — silent fail
+        // Audio not available — silent.
     }
 }

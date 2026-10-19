@@ -3,369 +3,227 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Surebet Scanner — Bosnian Arbitrage Tool</title>
-    <meta name="description" content="Real-time arbitrage betting detector for Bosnian bookmakers. Find guaranteed profit opportunities across Mozzartbet, MDShop, Admiralbet, MBet, SportPlus, EVLBet, and Betole.">
+    <title>Surebet BiH</title>
+    <meta name="description" content="Find and place surebets across Bosnian bookmakers.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/style.css?v=2">
 </head>
 <body>
 
-<!-- ===== HEADER ===== -->
-<header class="header" id="app-header">
-    <div class="header-inner">
-        <div class="logo">
-            <span class="logo-icon">🎯</span>
-            <div class="logo-text">
-                <span class="logo-title">SureBet<span class="logo-accent">Scanner</span></span>
-                <span class="logo-sub">Bosnian Market Arbitrage</span>
-            </div>
-        </div>
+<header class="topbar">
+    <div class="brand">
+        <span class="brand-mark">S</span>
+        <span class="brand-name">Surebet <span>BiH</span></span>
+    </div>
 
-        <div class="header-center">
-            <div class="mode-toggle" id="mode-toggle" role="tablist" aria-label="Match mode">
-                <button class="mode-btn active" id="mode-prematch" role="tab" aria-selected="true" onclick="switchMode('prematch')">Future Matches</button>
-                <button class="mode-btn" id="mode-live" role="tab" aria-selected="false" onclick="switchMode('live')"><span class="mode-live-dot"></span>Live Matches</button>
-            </div>
-            <div class="status-pill" id="status-pill">
-                <span class="status-dot" id="status-dot"></span>
-                <span class="status-text" id="status-text">Ready</span>
-            </div>
-        </div>
+    <div class="segmented" id="mode-toggle" role="tablist" aria-label="Match mode">
+        <button class="segment active" id="mode-prematch" role="tab" aria-selected="true" onclick="switchMode('prematch')">Upcoming</button>
+        <button class="segment" id="mode-live" role="tab" aria-selected="false" onclick="switchMode('live')"><span class="live-dot"></span>Live</button>
+    </div>
 
-        <div class="header-actions">
-            <span class="autorescan-countdown" id="autorescan-countdown" style="display:none;"></span>
-            <label class="theme-picker" title="Choose dashboard direction">
-                <span>View</span>
-                <select id="theme-select" onchange="setDashboardTheme(this.value)" aria-label="Dashboard visual direction">
-                    <option value="terminal">Terminal</option>
-                    <option value="brief">Market Brief</option>
-                    <option value="signal">Signal Room</option>
-                    <option value="portfolio">Portfolio</option>
-                </select>
-            </label>
-            <button class="btn btn-mute" id="mute-btn" onclick="toggleSound()" title="Toggle alert sound">🔔</button>
-            <button class="btn btn-primary" id="scan-btn" onclick="scanNow()">
-                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-                </svg>
-                Scan Now
-            </button>
+    <div class="topbar-right">
+        <div class="status-pill" id="status-pill">
+            <span class="status-dot"></span>
+            <span id="status-text">Ready</span>
         </div>
+        <span class="autorescan" id="autorescan-countdown" style="display:none;"></span>
+        <button class="btn btn-primary" id="scan-btn" onclick="scanNow()">Scan now</button>
+        <button class="btn btn-icon" id="settings-btn" onclick="toggleSettings(true)" aria-label="Settings" title="Settings">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+        </button>
     </div>
 </header>
 
-<!-- ===== STATS RIBBON ===== -->
-<div class="stats-ribbon" id="stats-ribbon">
-    <div class="stat-item">
-        <span class="stat-icon">📊</span>
-        <div class="stat-content">
-            <span class="stat-value" id="stat-matches">—</span>
-            <span class="stat-label">Matches Scanned</span>
-        </div>
+<div class="scan-progress" id="scan-progress" style="display:none;">
+    <div class="scan-progress-row">
+        <span class="spinner"></span>
+        <span class="scan-progress-sub" id="scan-progress-sub">Opening browsers</span>
+        <div class="scan-bookies" id="scan-bookies-done"></div>
     </div>
-    <div class="stat-divider"></div>
-    <div class="stat-item">
-        <span class="stat-icon">💰</span>
-        <div class="stat-content">
-            <span class="stat-value accent-green" id="stat-surebets">—</span>
-            <span class="stat-label">Surebets Found</span>
-        </div>
-    </div>
-    <div class="stat-divider"></div>
-    <div class="stat-item">
-        <span class="stat-icon">📈</span>
-        <div class="stat-content">
-            <span class="stat-value accent-gold" id="stat-best">—</span>
-            <span class="stat-label">Best Profit</span>
-        </div>
-    </div>
-    <div class="stat-divider"></div>
-    <div class="stat-item">
-        <span class="stat-icon">🕒</span>
-        <div class="stat-content">
-            <span class="stat-value" id="stat-time">Never</span>
-            <span class="stat-label">Last Scan</span>
-        </div>
-    </div>
+    <div class="scan-bar-wrap"><div class="scan-bar" id="scan-bar"></div></div>
 </div>
 
-<!-- ===== HEALTH BAR ===== -->
-<div class="health-bar" id="health-bar" style="display:none;"></div>
-
-<!-- ===== FILTER BAR ===== -->
-<div class="filter-bar" id="filter-bar">
-    <div class="filter-group">
-        <label class="filter-label" for="filter-market">Market</label>
-        <select class="filter-select" id="filter-market" onchange="applyFilters()">
-            <option value="">All Markets</option>
-            <option value="1x2">1X2 (Match Result)</option>
-            <option value="over_under_2_5">Over/Under 2.5</option>
-            <option value="over_under_1_5">Over/Under 1.5</option>
-            <option value="over_under_3_5">Over/Under 3.5</option>
-            <option value="btts">BTTS (GG/NG)</option>
-            <option value="double_chance">Double Chance (1X2 + DC)</option>
-            <option value="first_half_1x2">1st Half 1X2</option>
-            <option value="first_half_ou">1st Half O/U</option>
-            <option value="asian_handicap">Asian Handicap</option>
-        </select>
-    </div>
-
-    <div class="filter-group">
-        <label class="filter-label" for="filter-profit">Min Profit %</label>
-        <input class="filter-input" type="number" id="filter-profit" 
-               value="0.5" min="0" max="50" step="0.1" 
-               onchange="applyFilters()" oninput="applyFilters()">
-    </div>
-
-    <div class="filter-group">
-        <label class="filter-label" for="filter-investment">Investment (KM)</label>
-        <input class="filter-input investment-input" type="number" id="filter-investment"
-               value="100" min="1" max="100000" step="10"
-               oninput="recalculateAll(this.value)">
-    </div>
-
-    <div class="filter-group">
-        <label class="filter-label" for="filter-search">Search</label>
-        <input class="filter-input search-input" type="text" id="filter-search"
-               placeholder="Team or league..." oninput="applyFilters()">
-    </div>
-
-    <div class="filter-group">
-        <label class="filter-label" for="filter-sort">Sort By</label>
-        <select class="filter-select" id="filter-sort" onchange="applyFilters()">
-            <option value="profit">Profit (high → low)</option>
-            <option value="kickoff">Kickoff (soonest)</option>
-            <option value="league">League (A → Z)</option>
-        </select>
-    </div>
-
-    <div class="filter-group">
-        <label class="filter-label" for="filter-rounding">Stake Rounding</label>
-        <select class="filter-select" id="filter-rounding" onchange="setStakeRounding(this.value)">
-            <option value="exact">Exact (2 decimals)</option>
-            <option value="1">Nearest 1 KM</option>
-            <option value="5">Nearest 5 KM</option>
-        </select>
-    </div>
-
-    <div class="filter-group">
-        <label class="filter-label" for="filter-autorescan">Auto-Rescan</label>
-        <select class="filter-select" id="filter-autorescan" onchange="setAutoRescan(parseInt(this.value))">
-            <option value="0">Off</option>
-            <option value="2">Every 2 min</option>
-            <option value="5">Every 5 min</option>
-            <option value="10">Every 10 min</option>
-        </select>
-    </div>
-
-    <div class="filter-group">
-        <label class="filter-label">Bookmakers</label>
-        <div class="bookmaker-filter-chips" id="bookie-chips"></div>
-    </div>
-
-    <div class="filter-group">
-        <label class="filter-label" title="Experimental markets — re-scan to apply">New Markets</label>
-        <div class="experimental-market-checks" id="experimental-checks">
-            <label class="exp-check" data-market="first_half_1x2">
-                <input type="checkbox" value="first_half_1x2" onchange="toggleExperimentalMarket(this)"> 1st Half 1X2
-            </label>
-            <label class="exp-check" data-market="first_half_ou">
-                <input type="checkbox" value="first_half_ou" onchange="toggleExperimentalMarket(this)"> 1st Half O/U
-            </label>
-            <label class="exp-check" data-market="asian_handicap">
-                <input type="checkbox" value="asian_handicap" onchange="toggleExperimentalMarket(this)"> Asian Handicap
-            </label>
-        </div>
-    </div>
+<div class="error-banner" id="error-banner" style="display:none;" role="alert">
+    <span id="error-banner-text"></span>
+    <button class="error-banner-close" onclick="hideError()" aria-label="Dismiss">✕</button>
 </div>
 
-<aside class="design-rail" aria-label="Dashboard sections">
-    <div class="rail-brand">SB<span>/</span>01</div>
-    <nav>
-        <a class="rail-link active" href="#results-grid"><b>◈</b> Opportunities</a>
-        <a class="rail-link" href="#filter-bar"><b>⌁</b> Odds board</a>
-        <a class="rail-link" href="#history-panel"><b>◷</b> History</a>
-    </nav>
-    <div class="rail-note"><span class="rail-live-dot"></span><strong>Scanner online</strong><small>9 bookmakers connected</small></div>
-</aside>
-
-<!-- ===== MAIN CONTENT ===== -->
-<main class="main" id="main-content">
-    <div class="workspace-heading">
-        <div><span class="eyebrow">Live market intelligence / 15 Aug 2026</span><h1>Arbitrage opportunities</h1><p>Fresh edges across your connected bookmakers.</p></div>
-        <div class="heading-actions"><button class="ghost-action">Export view</button><button class="ghost-action">⚙ Settings</button></div>
-    </div>
-
-    <!-- Scanning progress -->
-    <div class="scan-progress" id="scan-progress" style="display:none;">
-        <div class="scan-progress-inner">
-            <div class="scan-spinner"></div>
-            <div class="scan-progress-text">
-                <span class="scan-progress-title">Scanning bookmakers...</span>
-                <span class="scan-progress-sub" id="scan-progress-sub">Opening browsers</span>
-            </div>
-            <div class="scan-bookies-done" id="scan-bookies-done"></div>
-        </div>
-        <div class="scan-bar-wrap">
-            <div class="scan-bar" id="scan-bar"></div>
-        </div>
-    </div>
-
-    <!-- Error banner -->
-    <div class="error-banner" id="error-banner" style="display:none;">
-        <span class="error-banner-icon">⚠️</span>
-        <span class="error-banner-text" id="error-banner-text"></span>
-        <button class="error-banner-close" onclick="hideError()">✕</button>
-    </div>
-
-    <!-- Results tabs -->
-    <div class="results-tabs" role="tablist" aria-label="Dashboard views">
+<main class="main">
+    <nav class="results-tabs" role="tablist" aria-label="Dashboard views">
         <button class="tab-btn active" id="surebets-tab" data-tab="surebets" role="tab"
                 aria-selected="true" aria-controls="surebets-panel" tabindex="0"
                 onclick="switchTab('surebets')">Surebets <span id="surebets-count" class="tab-count">0</span></button>
         <button class="tab-btn" id="review-tab" data-tab="review" role="tab"
                 aria-selected="false" aria-controls="review-panel" tabindex="-1"
                 onclick="switchTab('review')">Review <span id="review-count" class="tab-count">0</span></button>
-    </div>
+        <button class="tab-btn" id="history-tab" data-tab="history" role="tab"
+                aria-selected="false" aria-controls="history-panel" tabindex="-1"
+                onclick="switchTab('history')">History</button>
+        <div class="scan-facts" id="scan-facts">
+            <span><b id="stat-matches">—</b> matches</span>
+            <span><b id="stat-groups">—</b> verified groups</span>
+            <span>scanned <b id="stat-time">never</b></span>
+        </div>
+    </nav>
 
-    <!-- Surebets panel -->
+    <!-- Surebets: list on the left, bet slip on the right -->
     <section id="surebets-panel" class="tab-panel" role="tabpanel" aria-labelledby="surebets-tab"
              aria-hidden="false" data-tab-panel="surebets">
-        <!-- Empty state -->
-        <div class="empty-state" id="empty-state">
-            <div class="empty-state-icon">🔍</div>
-            <h2 class="empty-state-title">Ready to Hunt Surebets</h2>
-            <p class="empty-state-desc">
-                Click <strong>Scan Now</strong> to start scanning your connected bookmakers for arbitrage opportunities. Browser windows will open — solve any CAPTCHA if prompted.
-            </p>
-            <div id="empty-state-actions" hidden></div>
-            <div class="empty-state-bookies">
-                <div class="bookie-badge" style="--color: #FF6B00">Mozzartbet</div>
-                <div class="bookie-badge" style="--color: #22c55e">MDShop</div>
-                <div class="bookie-badge" style="--color: #3b82f6">Admiralbet</div>
-                <div class="bookie-badge" style="--color: #ef4444">Betole</div>
-                <div class="bookie-badge" style="--color: #E91E63">MBet</div>
-                <div class="bookie-badge" style="--color: #FF5722">SportPlus</div>
-                <div class="bookie-badge" style="--color: #9C27B0">EVLBet</div>
-                <div class="bookie-badge" style="--color: #16A34A">Premier Kladionica</div>
-                <div class="bookie-badge" style="--color: #EF4444">WWIN</div>
+        <div class="board">
+            <div class="list-pane">
+                <div class="filters" id="filter-bar">
+                    <input class="input search-input" type="search" id="filter-search"
+                           placeholder="Search team or league" oninput="applyFilters()" aria-label="Search">
+                    <select class="input" id="filter-market" onchange="applyFilters()" aria-label="Market">
+                        <option value="">All markets</option>
+                        <option value="1x2">1X2</option>
+                        <option value="double_chance">1X2 + Double chance</option>
+                        <option value="over_under_1_5">Over/Under 1.5</option>
+                        <option value="over_under_2_5">Over/Under 2.5</option>
+                        <option value="over_under_3_5">Over/Under 3.5</option>
+                        <option value="btts">Both teams score</option>
+                        <option value="first_half_1x2">1st half 1X2</option>
+                        <option value="first_half_ou">1st half O/U</option>
+                        <option value="asian_handicap">Asian handicap</option>
+                    </select>
+                    <label class="inline-field" title="Hide surebets below this profit">
+                        <span>Min %</span>
+                        <input class="input input-narrow" type="number" id="filter-profit"
+                               value="0.5" min="0" max="50" step="0.1" oninput="applyFilters()">
+                    </label>
+                    <select class="input" id="filter-sort" onchange="applyFilters()" aria-label="Sort">
+                        <option value="profit">Best profit</option>
+                        <option value="kickoff">Soonest kickoff</option>
+                        <option value="league">League</option>
+                    </select>
+                </div>
+
+                <div class="results-grid" id="results-grid" role="listbox" aria-label="Surebets"></div>
+
+                <div class="empty-state" id="empty-state">
+                    <h2 class="empty-state-title">Ready to Hunt Surebets</h2>
+                    <p class="empty-state-desc">
+                        Click <strong>Scan Now</strong> to start scanning your connected bookmakers for arbitrage opportunities. Browser windows will open — solve any CAPTCHA if prompted.
+                    </p>
+                    <div id="empty-state-actions" hidden></div>
+                    <div class="empty-state-bookies" id="empty-state-bookies"></div>
+                </div>
+
+                <!-- Copy comes from frontend/js/no-surebet-reasons.json -->
+                <div class="no-results" id="no-results" style="display:none;">
+                    <h3 id="no-results-title"></h3>
+                    <p id="no-results-desc"></p>
+                    <div id="no-results-actions" hidden></div>
+                </div>
             </div>
-        </div>
 
-        <!-- No results state. Its title, description and button are written from
-             frontend/js/no-surebet-reasons.json, and it is only ever shown for the
-             case that the filters really are the cause of. -->
-        <div class="no-results" id="no-results" style="display:none;">
-            <div class="no-results-icon">📭</div>
-            <h3 id="no-results-title"></h3>
-            <p id="no-results-desc"></p>
-            <div id="no-results-actions" hidden></div>
+            <aside class="slip-pane" id="slip" aria-live="polite">
+                <div class="slip-placeholder">
+                    <h3>Bet slip</h3>
+                    <p>Pick a surebet on the left. Its odds are re-checked first, then you get each leg in the order to place it, with the stake to type.</p>
+                </div>
+            </aside>
         </div>
-
-        <!-- Results grid -->
-        <div class="results-grid" id="results-grid"></div>
     </section>
 
-    <!-- Review panel -->
+    <!-- Review -->
     <section id="review-panel" class="tab-panel" role="tabpanel" aria-labelledby="review-tab"
              aria-hidden="true" data-tab-panel="review" hidden>
+        <div class="review-toolbar">
+            <p class="review-intro">Pairings the scanner could not prove because two bookmakers spell a team differently. Approving teaches it the spelling; nothing is bet.</p>
+            <div class="review-bulk">
+                <label class="inline-field" title="Select every candidate whose weakest name pair is at least this alike and whose approval clears every blocker">
+                    <span>Name match ≥</span>
+                    <input class="input input-narrow" type="number" id="review-threshold" value="85" min="50" max="100" step="5">
+                </label>
+                <button class="btn btn-secondary" onclick="selectStrongCandidates()">Select strong</button>
+                <button class="btn btn-primary" id="review-approve-selected" onclick="approveSelectedCandidates()" disabled>Approve selected</button>
+            </div>
+        </div>
         <div id="candidates-list" class="candidates-list">
             <div class="empty-state">
-                <div class="empty-state-icon">✓</div>
                 <h2 class="empty-state-title">Nothing to review yet.</h2>
                 <p class="empty-state-desc">No pairing candidates are queued for human review.</p>
             </div>
         </div>
     </section>
 
-</main>
-
-<!-- ===== SUREBET CARD TEMPLATE ===== -->
-<template id="surebet-card-tpl">
-    <article class="surebet-card" data-id="">
-        <div class="card-header">
-            <div class="card-profit">
-                <span class="profit-value"></span>
-                <span class="profit-label">PROFIT</span>
-            </div>
-            <div class="card-market">
-                <span class="market-badge"></span>
-                <span class="status-badge" hidden></span>
-            </div>
-            <div class="card-meta">
-                <span class="card-live-badge" style="display:none;">● LIVE</span>
-                <span class="card-league"></span>
-                <span class="card-kickoff"></span>
-            </div>
-        </div>
-
-        <div class="card-teams">
-            <span class="team-home"></span>
-            <span class="team-vs">vs</span>
-            <span class="team-away"></span>
-        </div>
-
-        <div class="card-stakes-wrap">
-            <div class="card-stakes"></div>
-        </div>
-
-        <div class="card-footer">
-            <div class="card-invest-row">
-                <span class="invest-label">Investment</span>
-                <div class="invest-input-wrap">
-                    <span class="invest-currency">KM</span>
-                    <input type="number" class="invest-input card-invest-input"
-                           min="1" max="100000" step="10">
-                </div>
-                <svg class="invest-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <path d="M5 12h14M12 5l7 7-7 7"/>
-                </svg>
-                <div class="return-display">
-                    <span class="return-label">Return</span>
-                    <span class="return-value"></span>
-                </div>
-            </div>
-            <div class="card-actions">
-                <button class="btn btn-secondary btn-copy" onclick="verifySurebet(this)">🔄 Verify Odds</button>
-                <button class="btn btn-secondary btn-copy" onclick="copySurebetDetails(this)">📋 Copy Details</button>
-            </div>
-        </div>
-    </article>
-</template>
-
-<!-- ===== HISTORY PANEL ===== -->
-<div class="history-panel" id="history-panel" style="display:none;">
-    <div class="history-header">
-        <span class="history-title">Scan History</span>
-        <button class="btn btn-secondary btn-copy" onclick="toggleHistory()">✕ Close</button>
-    </div>
-    <div class="history-table-wrap">
+    <!-- History -->
+    <section id="history-panel" class="tab-panel" role="tabpanel" aria-labelledby="history-tab"
+             aria-hidden="true" data-tab-panel="history" hidden>
         <table class="history-table">
             <thead>
-                <tr>
-                    <th>Mode</th>
-                    <th>Time</th>
-                    <th>Matches</th>
-                    <th>Groups</th>
-                    <th>Surebets</th>
-                    <th>Errors</th>
-                </tr>
+                <tr><th>Feed</th><th>Time</th><th>Matches</th><th>Groups</th><th>Surebets</th><th>Errors</th></tr>
             </thead>
             <tbody id="history-body"></tbody>
         </table>
+    </section>
+</main>
+
+<!-- Settings drawer -->
+<div class="drawer-backdrop" id="settings-backdrop" onclick="toggleSettings(false)" hidden></div>
+<aside class="drawer" id="settings-drawer" aria-label="Settings" hidden>
+    <div class="drawer-head">
+        <h2>Settings</h2>
+        <button class="btn btn-icon" onclick="toggleSettings(false)" aria-label="Close settings">✕</button>
     </div>
-</div>
 
-<!-- ===== FOOTER ===== -->
-<footer class="footer">
-    <span>SureBet Scanner v1.0 — Bosnian Market</span>
-    <button class="footer-link footer-btn" onclick="toggleHistory()">Scan History</button>
-    <a href="/docs" target="_blank" class="footer-link">API Docs</a>
-    <a href="/api/debug/report" target="_blank" class="footer-link">Match Report</a>
-</footer>
+    <section class="drawer-section">
+        <h3>Staking</h3>
+        <label class="field"><span>Default total stake (KM)</span>
+            <input class="input" type="number" id="filter-investment" value="100" min="1" max="100000" step="10"
+                   oninput="recalculateAll(this.value)"></label>
+        <label class="field"><span>Round stakes to</span>
+            <select class="input" id="filter-rounding" onchange="setStakeRounding(this.value)">
+                <option value="1">Whole KM (recommended)</option>
+                <option value="5">Nearest 5 KM</option>
+                <option value="exact">Exact (2 decimals)</option>
+            </select></label>
+    </section>
 
-<script src="/js/app.js"></script>
+    <section class="drawer-section">
+        <h3>Scanning</h3>
+        <label class="field"><span>Rescan automatically</span>
+            <select class="input" id="filter-autorescan" onchange="setAutoRescan(parseInt(this.value))">
+                <option value="0">Off</option>
+                <option value="2">Every 2 min</option>
+                <option value="5">Every 5 min</option>
+                <option value="10">Every 10 min</option>
+            </select></label>
+        <label class="field field-check"><input type="checkbox" id="sound-toggle" onchange="toggleSound()"> <span>Chime on a new surebet above 3%</span></label>
+    </section>
+
+    <section class="drawer-section">
+        <h3>Bookmakers</h3>
+        <p class="hint">Turned-off books are skipped by the next scan.</p>
+        <div class="chips" id="bookie-chips"></div>
+    </section>
+
+    <section class="drawer-section">
+        <h3>Experimental markets</h3>
+        <p class="hint">Applied on the next scan.</p>
+        <div id="experimental-checks">
+            <label class="field field-check exp-check" data-market="first_half_1x2"><input type="checkbox" value="first_half_1x2" onchange="toggleExperimentalMarket(this)"> <span>1st half 1X2</span></label>
+            <label class="field field-check exp-check" data-market="first_half_ou"><input type="checkbox" value="first_half_ou" onchange="toggleExperimentalMarket(this)"> <span>1st half Over/Under</span></label>
+            <label class="field field-check exp-check" data-market="asian_handicap"><input type="checkbox" value="asian_handicap" onchange="toggleExperimentalMarket(this)"> <span>Asian handicap</span></label>
+        </div>
+    </section>
+
+    <section class="drawer-section">
+        <h3>Diagnostics</h3>
+        <div class="health-bar" id="health-bar" style="display:none;"></div>
+        <p class="drawer-links">
+            <a href="/api/debug/report" target="_blank" rel="noopener">Match report</a>
+            <a href="/api/health" target="_blank" rel="noopener">Health</a>
+            <a href="/docs" target="_blank" rel="noopener">API docs</a>
+        </p>
+    </section>
+</aside>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script src="/js/app.js?v=2"></script>
 </body>
 </html>
