@@ -256,6 +256,23 @@ def test_a_live_scan_leaves_the_prematch_queue_alone(stub_scan_inputs, monkeypat
     assert api.pending_live_candidates
 
 
+def test_a_book_that_returns_nothing_is_flagged_while_others_return_data(
+    stub_scan_inputs, monkeypatch
+):
+    class EmptyScraper:
+        async def scrape(self, live=False, scan_time=None):
+            return []
+
+    monkeypatch.setitem(api.SCRAPERS, "mbet", EmptyScraper)
+    api.cached_per_bookie["wwin"] = 999  # a stale count from an earlier scan
+
+    run(api.run_scan("prematch"))
+
+    assert any(e.startswith("MBet: returned no matches") for e in api.scan_status.errors)
+    assert not any(e.startswith("MDShop") for e in api.scan_status.errors)
+    assert "wwin" not in api.cached_per_bookie, "a disabled book kept its old count"
+
+
 def test_health_pending_count_matches_candidates():
     api.pending_candidates.clear()
 

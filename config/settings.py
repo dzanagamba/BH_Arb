@@ -102,8 +102,9 @@ ODDS_TTL_SECONDS = 600         # Max age of odds before considered stale (premat
 # --- Scraper Settings ---
 SCRAPE_TIMEOUT_MS = 30000      # Max time to wait for JSON payloads (ms)
 NAVIGATION_TIMEOUT_MS = 60000  # Max navigation time (ms)
-# Set True for headless browser execution
-HEADLESS = True
+# Headless browsers by default; set HEADLESS=false in .env to watch them
+# (e.g. to solve a CAPTCHA by hand).
+HEADLESS = os.getenv("HEADLESS", "true").strip().lower() not in ("0", "false", "no")
 SLOW_MO = 0
 # Verify TLS certificates on direct httpx API calls (set VERIFY_SSL=true in .env to enforce)
 VERIFY_SSL = os.getenv("VERIFY_SSL", "false").lower() in ("1", "true", "yes")
@@ -130,6 +131,7 @@ BROWSER_CONCURRENCY = 2        # Max concurrent Playwright browsers (P2)
 # --- Server Settings ---
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8000"))
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").strip().upper()
 # Optional API key — when set, POST /api/scan, /api/config/toggle, /api/recalculate,
 # /api/verify and GET /api/history require an `X-API-Key` header.
 API_KEY = os.getenv("API_KEY", "")

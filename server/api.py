@@ -123,9 +123,7 @@ def _load_market_state() -> None:
 def _save_market_state() -> None:
     """Persist runtime experimental-market toggles to the state file."""
     try:
-        os.makedirs(CACHE_DIR, exist_ok=True)
-        with open(_MARKET_STATE_FILE, "w", encoding="utf-8") as f:
-            json.dump(_market_enabled, f, ensure_ascii=False, indent=2)
+        _atomic_write_json(_MARKET_STATE_FILE, _market_enabled, "market_state")
     except Exception as e:
         logger.warning(f"Market state save failed: {e}")
 
@@ -153,9 +151,7 @@ def _load_bookmaker_state() -> None:
 def _save_bookmaker_state() -> None:
     """Persist runtime bookmaker toggles to the state file."""
     try:
-        os.makedirs(CACHE_DIR, exist_ok=True)
-        with open(_BOOKMAKER_STATE_FILE, "w", encoding="utf-8") as f:
-            json.dump(_bookmaker_enabled, f, ensure_ascii=False, indent=2)
+        _atomic_write_json(_BOOKMAKER_STATE_FILE, _bookmaker_enabled, "bookmaker_state")
     except Exception as e:
         logger.warning(f"Bookmaker state save failed: {e}")
 
@@ -683,9 +679,7 @@ def _load_history() -> None:
 def _save_history() -> None:
     """Persist scan history to disk."""
     try:
-        os.makedirs(CACHE_DIR, exist_ok=True)
-        with open(_HISTORY_FILE, "w", encoding="utf-8") as f:
-            json.dump(scan_history, f, ensure_ascii=False, indent=2)
+        _atomic_write_json(_HISTORY_FILE, scan_history, "scan_history")
     except Exception as e:
         logger.warning(f"History save failed: {e}")
 
@@ -1282,6 +1276,9 @@ async def run_scan(mode: str = "prematch"):
     status.total_matches = 0
     status.surebets_found = 0
     status.current_bookmaker = "Starting..."
+    # Counts are rebuilt per scan; a book disabled since the last scan must not
+    # keep reporting its old count.
+    per_bookie.clear()
 
     try:
         all_matches: list[Match] = []
@@ -1346,6 +1343,17 @@ async def run_scan(mode: str = "prematch"):
             elif isinstance(res, Exception):
                 logger.error(f"Scraper gather exception: {res}")
                 status.errors.append(f"Scraper error: {str(res)[:200]}")
+
+        # A book that "succeeds" with nothing is usually a blocked or changed
+        # feed, not an empty market. Say so while other books did return data,
+        # so it is not mistaken for a quiet day (e.g. no live games at night).
+        if all_matches:
+            for bookie_id, config in BOOKMAKERS.items():
+                if status.bookmaker_progress.get(bookie_id) == "done" and not per_bookie.get(bookie_id):
+                    status.errors.append(
+                        f"{config['name']}: returned no matches (feed empty, blocked or changed?)"
+                    )
+                    logger.warning(f"⚠️ {config['name']} returned no {mode} matches")
 
         # Age spread guard (P0-1): warn if scrapers' fetched_at diverge >90s
         if all_matches:
@@ -1436,23 +1444,20 @@ def _save_cache(mode: str = "prematch"):
     status, surebets_cache, matches_cache, report_cache, _ = _state_for(mode)
     cache_file = _LIVE_CACHE_FILE if mode == "live" else _PREMATCH_CACHE_FILE
     try:
-        os.makedirs(CACHE_DIR, exist_ok=True)
-        # Include fetched_at spread for staleness UI
-        fetched_times = []
-        for m in matches_cache:
-            ft = m.get("fetched_at") if isinstance(m, dict) else getattr(m, "fetched_at", None)
-            if ft:
-                fetched_times.append(str(ft))
-        with open(cache_file, "w", encoding="utf-8") as f:
-            json.dump({
-                "surebets": surebets_cache,
-                "matches": matches_cache,
-                "matches_count": len(matches_cache),
-                "match_groups": list(report_cache),
-                "mode": mode,
-                "scan_time": status.last_scan_time.isoformat() if status.last_scan_time else None,
-                "fetched_at": status.last_scan_time.isoformat() if status.last_scan_time else None,
-            }, f, ensure_ascii=False, indent=2, default=str)
+        scan_time = status.last_scan_time.isoformat() if status.last_scan_time else None
+        # Round-tripped through `default=str` first so any stray datetime is
+        # serialised, then written atomically: a crash mid-write must leave the
+        # previous snapshot, never a truncated file the next boot cannot parse.
+        payload = json.loads(json.dumps({
+            "surebets": surebets_cache,
+            "matches": matches_cache,
+            "matches_count": len(matches_cache),
+            "match_groups": list(report_cache),
+            "mode": mode,
+            "scan_time": scan_time,
+            "fetched_at": scan_time,
+        }, default=str))
+        _atomic_write_json(cache_file, payload, os.path.basename(cache_file))
     except Exception as e:
         logger.warning(f"Cache save failed: {e}")
 

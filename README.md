@@ -113,9 +113,12 @@ python main.py
 
 ## Configuration
 
-Edit `config/settings.py` (or `.env`) to change:
-- `HEADLESS` — `True` for background browser execution (default), or `False` to view browser windows (useful if CAPTCHA solving is required)
+Set these in `.env` (see `.env.example`):
+- `HEADLESS` — `true` for background browser execution (default), or `false` to view browser windows (useful if CAPTCHA solving is required)
+- `LOG_LEVEL` — `DEBUG`, `INFO` (default), `WARNING` or `ERROR`
 - `VERIFY_SSL` — `True` to enforce TLS certificate verification on direct httpx API calls (default `False`)
+
+Edit `config/settings.py` to change:
 - `MIN_PROFIT_PERCENT` — Minimum profit % to show as a surebet (default: 0.5%)
 - `KICKOFF_WINDOW_MINUTES` — Max kickoff time difference to group matches (default: 120)
 - `DEFAULT_INVESTMENT` — Default total investment for stake calculation (default: 100 BAM)
@@ -124,8 +127,10 @@ Edit `config/settings.py` (or `.env`) to change:
 ## Development
 
 ```bash
-# Run the test suite
+# Run the test suite (CI runs this plus the commands below on every push:
+# .github/workflows/ci.yml)
 python -m pytest
+python scripts/generate_market_mapping_doc.py --check
 
 # Lint / type check
 python -m ruff check .
