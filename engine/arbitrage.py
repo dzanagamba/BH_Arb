@@ -11,6 +11,7 @@ Core math:
   This guarantees equal return regardless of which outcome wins.
 
 Sanity checks:
+  - Price only groups the certainty gate verified
   - Reject profit > 20% (almost certainly a data/scraper error)
   - Reject if total_implied ≥ 1.0 (no arbitrage)
   - Require minimum number of outcomes for each market
@@ -120,6 +121,15 @@ class ArbitrageEngine:
         ttl = 60 if allow_past_kickoffs else ODDS_TTL_SECONDS  # live tight, prematch looser
 
         for group in groups:
+            # Only a group the certainty gate VERIFIED may be priced. The matcher
+            # already returns only those, but "never show a surebet built on two
+            # different matches" is this product's central safety property, so it
+            # is enforced here too rather than resting on one caller.
+            if group.status != "verified":
+                logger.debug(
+                    f"Skipping {group.status} group: {group.canonical_home} vs {group.canonical_away}"
+                )
+                continue
             # Skip matches whose kickoff has already passed (prematch mode only;
             # live matches are in play right now and remain actionable)
             if not allow_past_kickoffs and self._is_expired(group.kickoff):

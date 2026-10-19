@@ -192,7 +192,7 @@ def _group_with_past_kickoff():
         ])],
         is_live=True,
     )
-    group = MatchGroup(canonical_home="Sarajevo", canonical_away="Zeljeznicar",
+    group = MatchGroup(status="verified", canonical_home="Sarajevo", canonical_away="Zeljeznicar",
                        league="Premijer Liga", kickoff=kickoff, matches=[m1, m2, m3])
     return group
 

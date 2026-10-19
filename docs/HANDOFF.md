@@ -254,7 +254,8 @@ documentary provenance in `MARKET_MAPPING.md:347`. The spec states a captured fi
 entry as a hard rule; this is the one enabled book that does not meet it.
 
 ### 8. Smaller items
-- `engine/arbitrage.py` has **no status check at all** — "only `verified` groups feed arbitrage"
+- ~~`engine/arbitrage.py` has **no status check at all**~~ (fixed: `find_surebets` and
+  `evaluate_market` now refuse any group that is not `verified`) — "only `verified` groups feed arbitrage"
   rests entirely on one `if` in `engine/matcher.py:279-284`. For a product whose purpose is
   *never show a wrong surebet*, a guard inside `find_surebets` would make the central safety
   property local rather than ambient.

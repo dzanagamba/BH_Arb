@@ -27,6 +27,7 @@ def _group(matches_by_bookie: dict[str, list[Market]]) -> MatchGroup:
         for bookie, markets in matches_by_bookie.items()
     ]
     return MatchGroup(
+        status="verified",
         canonical_home="Sarajevo",
         canonical_away="Zeljeznicar",
         league="premier_liga_bih",
