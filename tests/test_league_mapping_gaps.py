@@ -568,6 +568,14 @@ def test_deliberately_unmapped_pair_still_differs(
 def test_every_deliberately_unmapped_pair_is_refused_by_the_gate(
     matcher: MatchMatcher,
 ) -> None:
+    """An ambiguous label is never *mapped*, and never vouches for different teams.
+
+    The fixture itself can still settle it: the same two teams at the same
+    kickoff are the same match whatever catch-all label one book files them
+    under, so that case is accepted with a `league_unmapped_teams_exact`
+    evidence note. A different team spelling leaves the league as the only
+    signal, and an ambiguous label must then refuse.
+    """
     gate = CertaintyGate(league_equivalences=matcher._equivalences)
     for left, right, reason in DELIBERATELY_UNMAPPED:
         left_match, right_match = _pair("mbet", left, "premier_kladionica", right)
@@ -575,7 +583,20 @@ def test_every_deliberately_unmapped_pair_is_refused_by_the_gate(
         assert not gate._league_ok(
             left_match.league_normalized, right_match.league_normalized
         ), f"{left!r} / {right!r} was mapped: {reason}"
-        result = gate.evaluate_pair(left_match, right_match)
+        exact = gate.evaluate_pair(left_match, right_match)
+        both_mapped = gate._is_mapped_league(left_match.league_normalized) and (
+            gate._is_mapped_league(right_match.league_normalized)
+        )
+        if both_mapped:
+            # Two mapped ids that differ are a contradiction, teams or not.
+            assert exact.status == "rejected", f"{left!r} / {right!r}: {exact.reasons}"
+        else:
+            assert exact.status == "verified", f"{left!r} / {right!r}: {exact.reasons}"
+            assert any(e.reason == "league_unmapped_teams_exact" for e in exact.evidence)
+
+        other = right_match.model_copy(update={"home_team": "Lech", "home_team_normalized": ""})
+        gate.normalize([other])
+        result = gate.evaluate_pair(left_match, other)
         assert "league_mismatch" in result.reasons, f"{left!r} / {right!r} slipped through"
         assert result.status == "rejected"
 

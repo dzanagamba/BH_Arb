@@ -12,6 +12,7 @@ says it has no per-event route, so there is no URL to open. A book that has
 declared neither is not accepted — see :meth:`CertaintyGate._link_evidence`.
 """
 
+import re
 import unicodedata
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -23,6 +24,15 @@ from config.settings import VERIFIED_KICKOFF_WINDOW_MINUTES
 from engine.normalizer import TeamNormalizer
 from models.schemas import Match, MatchEventStatus, MatchEvidence, MatchGroup
 from scrapers.common import declares_no_event_id, supports_event_id
+
+# Characters a bookmaker uses as separators in a team name ("Bodo/Glimt",
+# "St. Mirren", "Paris-SG"); they never distinguish two clubs.
+_TEAM_PUNCTUATION = re.compile(r"[./\\\-'’`,()]+")
+# Letters NFKD does not decompose.
+_LETTER_FOLDS = str.maketrans({"đ": "dj", "ø": "o", "æ": "ae", "ß": "ss", "ł": "l"})
+
+# Evidence note (not a reason) on a league accepted by `_league_settled_by_teams`.
+LEAGUE_UNMAPPED_TEAMS_EXACT = "league_unmapped_teams_exact"
 
 HARD_REJECT_REASONS = frozenset({"league_mismatch", "category_mismatch", "orientation_unresolved"})
 
@@ -50,6 +60,7 @@ class CertaintyGate:
         self.kickoff_window_minutes = kickoff_window_minutes
         self.alias_allowlist = alias_allowlist or set()
         self.league_equivalences = league_equivalences or set()
+        self._canonical_leagues = set(self.normalizer.league_reverse_map.values())
 
     def normalize(self, matches: list[Match]) -> list[Match]:
         """Populate normalized fields for matches that do not already have them."""
@@ -65,6 +76,54 @@ class CertaintyGate:
                 f"{m.home_team} {m.away_team} {m.league}"
             )
         return matches
+
+    def _is_mapped_league(self, league: str) -> bool:
+        return league in self._canonical_leagues
+
+    def _league_settled_by_teams(self, a: Match, b: Match) -> bool:
+        """Accept differently-named leagues when the fixture itself is unambiguous.
+
+        Bookmakers name competitions inconsistently ("Liga Two", "ENGLAND 2",
+        "OBOS Liga"), and a name no mapping covers normalizes to itself, so it
+        could never equal anything. When at least one side's league is such an
+        unmapped name, the pair is accepted on league only if everything else
+        that identifies a fixture already agrees: both teams match exactly
+        (raw spellings, no alias), the kickoff is inside the verified window and
+        the categories are equal. Two *mapped* leagues that differ are a real
+        contradiction and still reject.
+        """
+        a_league, b_league = a.league_normalized or "", b.league_normalized or ""
+        if not a_league or not b_league:
+            return False
+        if self._is_mapped_league(a_league) and self._is_mapped_league(b_league):
+            return False
+        if set(a.category_tags or []) != set(b.category_tags or []):
+            return False
+        delta = self._kickoff_delta_minutes(a, b)
+        if delta is None or delta > self.kickoff_window_minutes:
+            return False
+        return self._exact_raw_teams(a, b)
+
+    def _exact_raw_teams(self, a: Match, b: Match) -> bool:
+        """Both teams agree on raw spelling and canonical form, in either orientation."""
+        ah, aa = a.home_team_normalized, a.away_team_normalized
+        bh, ba = b.home_team_normalized, b.away_team_normalized
+        if not (ah and aa and bh and ba):
+            return False
+        key = self._raw_team_key
+        direct = (
+            key(a.home_team) == key(b.home_team)
+            and key(a.away_team) == key(b.away_team)
+            and ah == bh
+            and aa == ba
+        )
+        swapped = (
+            key(a.home_team) == key(b.away_team)
+            and key(a.away_team) == key(b.home_team)
+            and ah == ba
+            and aa == bh
+        )
+        return direct or swapped
 
     def _league_ok(self, a_league: str, b_league: str) -> bool:
         """Return whether two normalized league IDs are the same or equivalent."""
@@ -98,7 +157,9 @@ class CertaintyGate:
         identity decisions that see different raw forms must go through the
         explicit alias allowlist.
         """
-        return " ".join(name.strip().casefold().split()).rstrip(".")
+        decomposed = unicodedata.normalize("NFKD", name.casefold().translate(_LETTER_FOLDS))
+        plain = "".join(char for char in decomposed if not unicodedata.combining(char))
+        return " ".join(_TEAM_PUNCTUATION.sub(" ", plain).split())
 
     @staticmethod
     def _surface_team_key(name: str) -> str:
@@ -292,6 +353,10 @@ class CertaintyGate:
         # League identity.
         a_league, b_league = a.league_normalized or "", b.league_normalized or ""
         league_ok = self._league_ok(a_league, b_league)
+        league_reason = ""
+        if not league_ok and self._league_settled_by_teams(a, b):
+            league_ok = True
+            league_reason = LEAGUE_UNMAPPED_TEAMS_EXACT
         if not league_ok:
             reasons.append("league_mismatch")
         evidence.append(
@@ -299,6 +364,7 @@ class CertaintyGate:
                 rule="league_identity",
                 source="rule",
                 confidence=1.0 if league_ok else 0.0,
+                reason=league_reason,
                 league_pair=[a_league, b_league],
             )
         )
@@ -505,10 +571,17 @@ class CertaintyGate:
         if group_kickoff_reason and group_kickoff_reason not in result.reasons:
             result.reasons.append(group_kickoff_reason)
 
-        if group.league:
+        league_settled = any(
+            item.rule == "league_identity" and item.reason == LEAGUE_UNMAPPED_TEAMS_EXACT
+            for item in result.evidence
+        )
+        if group.league and not league_settled:
             match_league = match.league_normalized or ""
-            if match_league and match_league != group.league and not self._league_ok(
-                match_league, group.league
+            if (
+                match_league
+                and match_league != group.league
+                and not self._league_ok(match_league, group.league)
+                and (self._is_mapped_league(match_league) and self._is_mapped_league(group.league))
             ):
                 if "league_mismatch" not in result.reasons:
                     result.reasons.append("league_mismatch")
