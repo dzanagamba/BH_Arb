@@ -127,6 +127,7 @@ Edit `config/settings.py` to change:
 ## Development
 
 ```bash
+# Dev tools first: pip install -r requirements-dev.txt
 # Run the test suite (CI runs this plus the commands below on every push:
 # .github/workflows/ci.yml)
 python -m pytest

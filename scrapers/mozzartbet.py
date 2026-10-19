@@ -318,40 +318,6 @@ def _parse_markets(
     return markets
 
 
-def _find_events_in_payload(data, _depth: int = 0) -> list[dict]:
-    """Recursively find event dicts with home/away teams in nested structures."""
-    if _depth > 8:
-        return []
-    events = []
-    if isinstance(data, list):
-        for item in data:
-            if isinstance(item, dict):
-                h, a = _extract_teams(item)
-                if h and a:
-                    events.append(item)
-                else:
-                    for val in item.values():
-                        if isinstance(val, list | dict):
-                            events.extend(_find_events_in_payload(val, _depth + 1))
-    elif isinstance(data, dict):
-        h, a = _extract_teams(data)
-        if h and a:
-            return [data]
-        for key in ["items", "matches", "events", "games", "data", "content",
-                     "results", "fixtures", "list", "offerEvents", "prematch"]:
-            val = data.get(key)
-            if val and isinstance(val, list | dict):
-                found = _find_events_in_payload(val, _depth + 1)
-                if found:
-                    events.extend(found)
-                    break
-        else:
-            for val in data.values():
-                if isinstance(val, list | dict):
-                    events.extend(_find_events_in_payload(val, _depth + 1))
-    return events
-
-
 def _event_to_match(event: dict, seen: set, live: bool = False) -> Match | None:
     home, away = _extract_teams(event)
     if not home or not away:

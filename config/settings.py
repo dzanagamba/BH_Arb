@@ -100,12 +100,10 @@ MAX_SUREBET_PROFIT_PERCENT = 20.0  # Sanity cap — reject higher profits (likel
 ODDS_TTL_SECONDS = 600         # Max age of odds before considered stale (prematch 10 min, live 60s enforced in engine)
 
 # --- Scraper Settings ---
-SCRAPE_TIMEOUT_MS = 30000      # Max time to wait for JSON payloads (ms)
 NAVIGATION_TIMEOUT_MS = 60000  # Max navigation time (ms)
 # Headless browsers by default; set HEADLESS=false in .env to watch them
 # (e.g. to solve a CAPTCHA by hand).
 HEADLESS = os.getenv("HEADLESS", "true").strip().lower() not in ("0", "false", "no")
-SLOW_MO = 0
 # Verify TLS certificates on direct httpx API calls (set VERIFY_SSL=true in .env to enforce)
 VERIFY_SSL = os.getenv("VERIFY_SSL", "false").lower() in ("1", "true", "yes")
 USER_AGENT = (
@@ -113,12 +111,6 @@ USER_AGENT = (
     "AppleWebKit/537.36 (KHTML, like Gecko) "
     "Chrome/120.0.0.0 Safari/537.36"
 )
-BLOCKED_URL_FRAGMENTS = [
-    "google-analytics", "facebook", "doubleclick", "adsystem",
-    "hotjar", "sentry", "intercom", "crisp", "zendesk",
-    "livechat", "analytics", "tracking", "telemetry",
-    "casino", "slots", "poker", "jackpot", "virtual"
-]
 
 
 # --- Matching Settings ---

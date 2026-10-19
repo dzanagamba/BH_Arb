@@ -48,7 +48,6 @@ class Match(BaseModel):
     event_id: str = ""
     deep_link_verified: bool = False
     category_tags: list[str] = []
-    low_confidence: bool = False
     is_swapped: bool = False
     is_live: bool = False
     fetched_at: datetime | None = None  # naive UTC wall-clock when odds were fetched (P0-1)
