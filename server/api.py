@@ -1912,8 +1912,28 @@ async def get_candidates(
         "count": len(window),
         "limit": page,
         "offset": start,
-        "candidates": [candidate.model_dump(mode="json") for candidate in window],
+        "candidates": [
+            {**candidate.model_dump(mode="json"), "name_score": _name_score(candidate)}
+            for candidate in window
+        ],
     }
+
+
+def _name_score(candidate: CandidateReview) -> int:
+    """How alike the two spellings are in the weakest team slot (0–100).
+
+    A ranking aid for the reviewer, never a decision: approval is still a human
+    act. "Slavia P." / "Slavia Prague" scores high; "Sabah" / "Dortmund" low.
+    """
+    scores = [
+        max(
+            fuzz.token_set_ratio(position.team_a.casefold(), position.team_b.casefold()),
+            fuzz.partial_ratio(position.team_a.casefold(), position.team_b.casefold()),
+        )
+        for position in candidate.team_positions
+        if position.team_a and position.team_b
+    ]
+    return int(min(scores)) if scores else 0
 
 
 def _resolve_candidate(
@@ -1937,6 +1957,19 @@ def _resolve_candidate(
     )
 
 
+def _approve(candidate: CandidateReview) -> list[str]:
+    """Grant the aliases a candidate implies and resolve it. Empty when it has none."""
+    entries = _alias_entries(candidate.team_positions)
+    if not entries:
+        return []
+    with _ALLOWLIST_LOCK:
+        aliases = _load_allowlist()
+        aliases.update(entries)
+        _save_allowlist(aliases)
+    _resolve_candidate(candidate, "approved")
+    return entries
+
+
 @router.post("/candidates/{candidate_id}/approve")
 async def approve_candidate(
     candidate_id: str,
@@ -1957,7 +1990,8 @@ async def approve_candidate(
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
 
-    entries = _alias_entries(candidate.team_positions)
+    link_pending = candidate.link_blocked
+    entries = _approve(candidate)
     if not entries:
         raise HTTPException(
             status_code=400,
@@ -1966,13 +2000,6 @@ async def approve_candidate(
                 "re-run a scan to regenerate it"
             ),
         )
-    with _ALLOWLIST_LOCK:
-        aliases = _load_allowlist()
-        aliases.update(entries)
-        _save_allowlist(aliases)
-
-    _resolve_candidate(candidate, "approved")
-    link_pending = candidate.link_blocked
     return {
         "status": "approved",
         "allowlist_entries": entries,
@@ -1985,6 +2012,32 @@ async def approve_candidate(
             "Team aliases granted."
         ),
     }
+
+
+class BulkDecision(BaseModel):
+    ids: list[str]
+
+
+@router.post("/candidates/approve-bulk")
+async def approve_candidates_bulk(
+    body: BulkDecision,
+    _auth: None = Depends(_require_api_key),
+):
+    """Approve several reviewed candidates at once (the reviewer chose each id).
+
+    Same grant as the single approve, per candidate. Ids that are gone or carry
+    no alias are reported back rather than failing the whole batch.
+    """
+    approved: list[str] = []
+    skipped: list[str] = []
+    for candidate_id in dict.fromkeys(body.ids[:CANDIDATE_PAGE_MAX]):
+        queue = _find_pending_candidate(candidate_id)
+        candidate = queue.get(candidate_id) if queue is not None else None
+        if candidate is not None and _approve(candidate):
+            approved.append(candidate_id)
+        else:
+            skipped.append(candidate_id)
+    return {"approved": approved, "skipped": skipped}
 
 
 @router.post("/candidates/{candidate_id}/reject")

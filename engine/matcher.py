@@ -413,6 +413,10 @@ class MatchMatcher:
                 "kickoff": group.kickoff.isoformat() if group.kickoff else "unknown",
                 "status": group.status,
                 "bookmakers": bookmakers,
+                # The gate's trail, including the `no_event_link` note a
+                # route-less book is accepted on — the one place a wrong
+                # declaration would show.
+                "evidence": [item.model_dump() for item in group.evidence],
             }
             for match in group.matches:
                 bookmakers.append({
