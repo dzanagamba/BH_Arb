@@ -42,12 +42,13 @@ from config.settings import (
     ODDS_TTL_SECONDS,
     RATE_LIMIT_WINDOW_SECONDS,
     SCAN_RATE_LIMIT,
+    VERIFIED_KICKOFF_WINDOW_MINUTES,
 )
 from engine.ai import MatchAI, PairProposal
 from engine.arbitrage import ArbitrageEngine
 from engine.certainty import CertaintyGate
 from engine.market_registry import unmapped_markets
-from engine.matcher import MatchMatcher
+from engine.matcher import MatchMatcher, swap_match_teams_and_odds
 from models.schemas import (
     CandidateReview,
     MarketType,
@@ -1977,13 +1978,75 @@ async def get_history(_auth: None = Depends(_require_api_key)):
     return {"count": len(scan_history), "entries": scan_history}
 
 
+def _find_surebet_group(
+    groups: list[MatchGroup], target: dict
+) -> MatchGroup | None:
+    """Find the fresh group for a cached surebet, in the cached orientation.
+
+    The surebet stores the canonical names of the group it was built on. A fresh
+    grouping can anchor the same fixture on a different book, so a member
+    match's normalized names are accepted as well as the group's canonical
+    ones. When the fixture comes back with home and away reversed, every member
+    is flipped into the cached frame, so outcome "1" still means the same team
+    the cached stake backed. Kickoff must agree within the verified window.
+    """
+    home = (target.get("home_team") or "").lower()
+    away = (target.get("away_team") or "").lower()
+    if not home or not away:
+        return None
+    kickoff = target.get("kickoff")
+    target_kickoff: datetime | None = None
+    if isinstance(kickoff, str):
+        try:
+            target_kickoff = datetime.fromisoformat(kickoff)
+        except ValueError:
+            target_kickoff = None
+    if target_kickoff is not None and target_kickoff.tzinfo is not None:
+        target_kickoff = target_kickoff.astimezone(UTC).replace(tzinfo=None)
+
+    for group in groups:
+        names = {((group.canonical_home or "").lower(), (group.canonical_away or "").lower())}
+        names.update(
+            ((m.home_team_normalized or "").lower(), (m.away_team_normalized or "").lower())
+            for m in group.matches
+        )
+        if (home, away) in names:
+            reversed_frame = False
+        elif (away, home) in names:
+            reversed_frame = True
+        else:
+            continue
+        if target_kickoff is not None and group.kickoff is not None:
+            group_kickoff = group.kickoff
+            if group_kickoff.tzinfo is not None:
+                group_kickoff = group_kickoff.astimezone(UTC).replace(tzinfo=None)
+            delta = abs((group_kickoff - target_kickoff).total_seconds()) / 60.0
+            if delta > VERIFIED_KICKOFF_WINDOW_MINUTES:
+                continue
+        if reversed_frame:
+            return group.model_copy(update={
+                "canonical_home": group.canonical_away,
+                "canonical_away": group.canonical_home,
+                "matches": [swap_match_teams_and_odds(m) for m in group.matches],
+            })
+        return group
+    return None
+
+
 @router.post("/verify")
 async def verify_surebet(req: VerifyRequest, _auth: None = Depends(_require_api_key)):
     """
     Live odds verification: re-scrape ONLY the bookmakers involved in a surebet,
-    re-group the match, and compare current odds against the cached ones.
-    Returns whether the surebet is still profitable.
+    re-group the match, and re-price the exact outcome set the surebet was built
+    on. Returns whether that bet is still an arbitrage.
+
+    The fresh matches go through the same pipeline a scan uses — stored
+    deep-link proofs are applied before grouping, so a group the scan verified
+    on a proven link is verified here too, and only `verified` groups are ever
+    priced.
     """
+    if req.mode not in ("prematch", "live"):
+        raise HTTPException(status_code=400, detail="mode must be 'prematch' or 'live'")
     is_live = req.mode == "live"
     surebets_cache, _, _, _ = _state_for(req.mode)[1:]
     target = next((s for s in surebets_cache if s.get("id") == req.surebet_id), None)
@@ -2003,34 +2066,45 @@ async def verify_surebet(req: VerifyRequest, _auth: None = Depends(_require_api_
         if not bookie_ids:
             raise HTTPException(status_code=400, detail="All involved bookmakers are disabled")
 
+        fetched_at = datetime.now(UTC).replace(tzinfo=None)
         fresh_matches: list[Match] = []
         errors: list[str] = []
         for bookie_id in bookie_ids:
             scraper_class = SCRAPERS.get(bookie_id)
             if not scraper_class:
                 continue
+            # Same browser budget as a scan: a verify must not open a third
+            # Chromium alongside a running deep-link check.
+            sem = _browser_sem if bookie_id in PLAYWRIGHT_BOOKIES else None
+            if sem:
+                await sem.acquire()
             try:
                 scraper = scraper_class()
-                fresh_matches.extend(await scraper.scrape(live=is_live))
+                fresh_matches.extend(await scraper.scrape(live=is_live, scan_time=fetched_at))
             except Exception as e:
                 errors.append(f"{bookie_id}: {str(e)[:150]}")
+            finally:
+                if sem:
+                    sem.release()
 
-    # Re-group the fresh data and find the same real-world match
+    for match in fresh_matches:
+        if not match.fetched_at:
+            match.fetched_at = fetched_at
+    missing = sorted(set(bookie_ids) - {m.bookmaker for m in fresh_matches})
+    for bookie_id in missing:
+        if not any(e.startswith(f"{bookie_id}:") for e in errors):
+            errors.append(f"{bookie_id}: returned no matches")
+
+    # Proofs first, exactly as run_scan does, or every group holding a book
+    # with a declared per-event route would be refused as `link_unverified`.
+    _apply_deep_link_verifications(fresh_matches, req.mode)
     groups = MatchMatcher().group_matches(fresh_matches)
-    target_home = (target.get("home_team") or "").lower()
-    target_away = (target.get("away_team") or "").lower()
-    group = None
-    for g in groups:
-        gh = (g.canonical_home or "").lower()
-        ga = (g.canonical_away or "").lower()
-        if (gh == target_home and ga == target_away) or (gh == target_away and ga == target_home):
-            group = g
-            break
+    group = _find_surebet_group(groups, target)
 
     if group is None:
         return {
             "surebet_id": target["id"],
-            "message": "Match not found in fresh data (removed or renamed)",
+            "message": "Match not found in fresh data (removed, renamed or no longer verified)",
             "cached_margin": target["total_margin"],
             "cached_profit_percent": target["profit_percent"],
             "still_profitable": None,
@@ -2043,26 +2117,32 @@ async def verify_surebet(req: VerifyRequest, _auth: None = Depends(_require_api_
     except ValueError:
         market_type = None
 
-    current = engine.evaluate_market(group, market_type) if market_type else None
+    labels = [s["outcome_label"] for s in target["stakes"]]
+    current = engine.evaluate_market(group, market_type, labels=labels) if market_type else None
     if current is None:
         return {
             "surebet_id": target["id"],
-            "message": "No profitable combination remains in current odds",
+            "message": "The outcomes this surebet needs are no longer all offered",
             "cached_margin": target["total_margin"],
             "cached_profit_percent": target["profit_percent"],
             "still_profitable": False,
             "errors": errors,
         }
 
-    old_by_label = {s["outcome_label"]: s["odds"] for s in target["stakes"]}
+    old_by_label = {s["outcome_label"]: s for s in target["stakes"]}
     drift = {}
-    for label, old_odds in old_by_label.items():
+    for label, old in old_by_label.items():
         new = current["odds"].get(label)
         drift[label] = {
-            "old_odds": old_odds,
+            "old_odds": old["odds"],
+            "old_bookmaker": old["bookmaker"],
             "new_odds": new["odds"] if new else None,
             "new_bookmaker": new["bookmaker"] if new else None,
-            "changed": (new is None or abs(new["odds"] - old_odds) > 0.001),
+            "changed": (
+                new is None
+                or abs(new["odds"] - old["odds"]) > 0.001
+                or new["bookmaker"] != old["bookmaker"]
+            ),
         }
 
     return {
@@ -2078,7 +2158,11 @@ async def verify_surebet(req: VerifyRequest, _auth: None = Depends(_require_api_
             "profit_percent": current["profit_percent"],
         },
         "drift": drift,
-        "still_profitable": current["profit_percent"] >= MIN_PROFIT_PERCENT,
+        # Any positive margin is still a guaranteed profit. The scan lists
+        # surebets down to DUST_PROFIT_PERCENT, so judging them against the
+        # higher MIN_PROFIT_PERCENT would report an unchanged dust bet as gone.
+        "still_profitable": current["margin"] < 1.0,
+        "meets_min_profit": current["profit_percent"] >= MIN_PROFIT_PERCENT,
         "errors": errors,
     }
 

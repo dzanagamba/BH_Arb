@@ -284,6 +284,16 @@ since been fixed. Each now has a regression test instead of a tripwire.
   window the committed live fixtures were captured with) and forward 14 days for
   prematch. `tests/test_live_mode.py` pins the window each scraper requests.
 
+### Re-verifying a surebet before betting
+
+The card's **Verify** button calls `POST /api/verify`, which re-scrapes only the
+books in that surebet, runs them through the same pipeline a scan uses (stored
+link proofs applied, certainty gate, verified groups only) and re-prices the
+**exact outcomes the surebet was built on** — the same line, the same 1X2/double
+chance partition, in the cached home/away frame even if a book now lists the
+fixture reversed. `still_profitable` is true for any remaining positive margin;
+`meets_min_profit` says whether it still clears `MIN_PROFIT_PERCENT`.
+
 ## Adding more leagues/teams
 
 - Edit `config/league_mappings.json` to add new league name variations
