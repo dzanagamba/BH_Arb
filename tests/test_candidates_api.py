@@ -31,12 +31,14 @@ _ROUTE_BOOKS = {
 @pytest.fixture(autouse=True)
 def reset_candidate_state(monkeypatch, tmp_path):
     original_pending = api.pending_candidates.copy()
+    original_live_pending = api.pending_live_candidates.copy()
     original_reviews = api.candidate_reviews.copy()
     original_report = api.cached_match_groups_report.copy()
     original_matches = api.cached_matches.copy()
     original_unmapped = api.unmapped_markets.copy()
     original_suppressed = dict(api._suppressed_candidates)
     api.pending_candidates.clear()
+    api.pending_live_candidates.clear()
     api.candidate_reviews.clear()
     api._suppressed_candidates.clear()
     monkeypatch.setattr(api, "ALLOWLIST_FILE", str(tmp_path / "team_alias_allowlist.json"))
@@ -46,6 +48,8 @@ def reset_candidate_state(monkeypatch, tmp_path):
     yield
     api.pending_candidates.clear()
     api.pending_candidates.update(original_pending)
+    api.pending_live_candidates.clear()
+    api.pending_live_candidates.update(original_live_pending)
     api.candidate_reviews[:] = original_reviews
     api.cached_match_groups_report[:] = original_report
     api.cached_matches[:] = original_matches
@@ -113,7 +117,7 @@ def test_candidates_list_empty_initially():
 
 def test_candidates_list_serializes_pending_candidates():
     candidate = _candidate()
-    api.pending_candidates[candidate.id] = candidate
+    api.pending_live_candidates[candidate.id] = candidate
 
     r = client.get("/api/candidates?mode=live")
 
@@ -491,3 +495,24 @@ def test_candidate_payload_carries_both_sides_and_the_link_state():
     ]
     assert body["link_blocked"] is False  # _mapping_match sets deep_link_verified
     assert body["alias_actionable"] is True
+
+
+def test_live_and_prematch_queues_are_separate():
+    prematch = _candidate()
+    live = _candidate().model_copy(update={"id": "live-only-candidate"})
+    api.pending_candidates[prematch.id] = prematch
+    api.pending_live_candidates[live.id] = live
+    try:
+        prematch_ids = {c["id"] for c in client.get("/api/candidates").json()["candidates"]}
+        live_body = client.get("/api/candidates?mode=live").json()
+        assert prematch.id in prematch_ids and live.id not in prematch_ids
+        assert live_body["mode"] == "live"
+        assert [c["id"] for c in live_body["candidates"]] == [live.id]
+        # A live candidate is decided through the same endpoint and leaves its queue.
+        assert client.post(f"/api/candidates/{live.id}/reject").status_code == 200
+        assert live.id not in api.pending_live_candidates
+        assert prematch.id in api.pending_candidates
+    finally:
+        api.pending_live_candidates.pop(live.id, None)
+        api._suppressed_candidates.pop(live.id, None)
+        api._suppressed_premises.pop(live.id, None)

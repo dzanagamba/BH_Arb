@@ -235,6 +235,27 @@ def test_run_scan_creates_pending_candidate_for_gate_failure(stub_scan_inputs):
     assert candidate.created_at.tzinfo is None
 
 
+def test_a_live_scan_leaves_the_prematch_queue_alone(stub_scan_inputs, monkeypatch):
+    from models.schemas import ScanStatus
+
+    # Fresh live state so the run touches nothing a later test reads.
+    monkeypatch.setattr(api, "live_status", ScanStatus(mode="live"))
+    for name in ("cached_live_surebets", "cached_live_matches", "cached_live_match_groups_report"):
+        monkeypatch.setattr(api, name, [])
+    monkeypatch.setattr(api, "cached_live_per_bookie", {})
+    monkeypatch.setattr(api, "pending_live_candidates", {})
+
+    api.pending_candidates.clear()
+    run(api.run_scan("prematch"))
+    prematch_queue = dict(api.pending_candidates)
+    assert prematch_queue
+
+    run(api.run_scan("live"))
+
+    assert api.pending_candidates == prematch_queue
+    assert api.pending_live_candidates
+
+
 def test_health_pending_count_matches_candidates():
     api.pending_candidates.clear()
 

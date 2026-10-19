@@ -259,7 +259,8 @@ entry as a hard rule; this is the one enabled book that does not meet it.
   rests entirely on one `if` in `engine/matcher.py:279-284`. For a product whose purpose is
   *never show a wrong surebet*, a guard inside `find_surebets` would make the central safety
   property local rather than ambient.
-- `pending_candidates` is global and mode-blind; a live scan wipes the prematch queue.
+- ~~`pending_candidates` is global and mode-blind~~ (fixed: one queue per feed, and
+  `/api/candidates` takes `mode`). Original note: a live scan wiped the prematch queue.
   `/api/candidates` takes no `mode` parameter, so the spec's documented contract is unmet.
 - The UI's empty state says *"try reducing the minimum profit threshold or checking all
   markets."* The filters are not the cause — the link gate is. The data to say so is already

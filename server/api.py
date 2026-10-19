@@ -72,6 +72,10 @@ from scrapers.wwin import WWINScraper
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+# The two independent feeds. A query parameter typed with this is validated by
+# FastAPI (422 on anything else) instead of silently falling back to prematch.
+ScanMode = Literal["prematch", "live"]
+
 
 def _require_api_key(x_api_key: str = Header(default="")) -> None:
     """Optional API key auth — enforced when API_KEY is configured."""
@@ -176,7 +180,22 @@ cached_live_match_groups_report: list[dict] = []
 cached_live_per_bookie: dict[str, int] = {}
 scan_history: list[dict] = []           # recent scan entries (newest first)
 
-pending_candidates: dict[str, CandidateReview] = {}
+# One review queue per feed: a live scan rebuilds only the live queue, so it can
+# no longer wipe the prematch queue a reviewer is working through.
+pending_candidates: dict[str, CandidateReview] = {}        # prematch
+pending_live_candidates: dict[str, CandidateReview] = {}   # live
+
+
+def _candidates_for(mode: str) -> dict[str, CandidateReview]:
+    return pending_live_candidates if mode == "live" else pending_candidates
+
+
+def _find_pending_candidate(candidate_id: str) -> dict[str, CandidateReview] | None:
+    """Return the queue that holds `candidate_id`, whichever feed it came from."""
+    for queue in (pending_candidates, pending_live_candidates):
+        if candidate_id in queue:
+            return queue
+    return None
 candidate_reviews: list[CandidateReview] = []
 ALLOWLIST_FILE = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -1363,12 +1382,11 @@ async def run_scan(mode: str = "prematch"):
         # rebuilt every scan so it only ever mirrors the current feed.
         status.current_bookmaker = "Collecting review candidates..."
         try:
-            pending_candidates.clear()
-            pending_candidates.update(
-                await _collect_candidates(all_matches, matcher, groups)
-            )
+            queue = _candidates_for(mode)
+            queue.clear()
+            queue.update(await _collect_candidates(all_matches, matcher, groups))
         except Exception as e:
-            pending_candidates.clear()
+            _candidates_for(mode).clear()
             logger.error(f"❌ Candidate collection failed: {e}", exc_info=True)
             status.errors.append(f"Candidate review failed: {str(e)[:200]}")
 
@@ -1704,6 +1722,7 @@ async def health():
             if report.get("status") == "verified"
         ),
         "pending_candidates": len(pending_candidates),
+        "live_pending_candidates": len(pending_live_candidates),
         "suppressed_candidates": len(_suppressed_candidates),
         # Matches whose per-event link is unproven AND can still block. See
         # `_unverified_link_count` for why the predicate is the gate's and why
@@ -1869,6 +1888,7 @@ class VerifyRequest(BaseModel):
 async def get_candidates(
     limit: int = CANDIDATE_PAGE_SIZE,
     offset: int = 0,
+    mode: ScanMode = "prematch",
     _auth: None = Depends(_require_api_key),
 ):
     """List match candidates awaiting human review, one bounded page at a time.
@@ -1879,9 +1899,11 @@ async def get_candidates(
     """
     page = max(1, min(limit, CANDIDATE_PAGE_MAX))
     start = max(0, offset)
-    window = list(pending_candidates.values())[start:start + page]
+    queue = _candidates_for(mode)
+    window = list(queue.values())[start:start + page]
     return {
-        "total": len(pending_candidates),
+        "mode": mode,
+        "total": len(queue),
         "count": len(window),
         "limit": page,
         "offset": start,
@@ -1901,7 +1923,8 @@ def _resolve_candidate(
     candidate.status = decision
     candidate.resolved_at = datetime.now(UTC).replace(tzinfo=None)
     candidate.resolved_by = "human"
-    pending_candidates.pop(candidate.id, None)
+    for queue in (pending_candidates, pending_live_candidates):
+        queue.pop(candidate.id, None)
     candidate_reviews.insert(0, candidate.model_copy(deep=True))
     del candidate_reviews[CANDIDATE_REVIEW_HISTORY_MAX:]
     _suppress_candidate(
@@ -1924,7 +1947,8 @@ async def approve_candidate(
     pair stays unverified until that check runs. Approving the *pair* here would
     forge a machine result from a name judgement.
     """
-    candidate = pending_candidates.get(candidate_id)
+    queue = _find_pending_candidate(candidate_id)
+    candidate = queue.get(candidate_id) if queue is not None else None
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
 
@@ -1964,7 +1988,8 @@ async def reject_candidate(
     _auth: None = Depends(_require_api_key),
 ):
     """Reject a pending match candidate without changing alias mappings."""
-    candidate = pending_candidates.get(candidate_id)
+    queue = _find_pending_candidate(candidate_id)
+    candidate = queue.get(candidate_id) if queue is not None else None
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
 

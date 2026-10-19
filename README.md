@@ -187,10 +187,12 @@ position and nothing else. A negative verdict sets the confidence to 0 and says
 
 ### The review queue
 
-Pairings the gate refused are collected every scan into `pending_candidates` and
-shown in the dashboard's **Review** tab. There is no dedicated URL: the Review
+Pairings the gate refused are collected every scan into a per-feed queue
+(`pending_candidates` for prematch, `pending_live_candidates` for live, so one
+feed's scan never wipes the other's) and shown in the dashboard's **Review** tab
+for the feed on screen. There is no dedicated URL: the Review
 tab is the second tab of the dashboard, so open `http://localhost:8000` and click
-**Review**. It is populated by `GET /api/candidates`, and deciding an entry is
+**Review**. It is populated by `GET /api/candidates?mode=prematch|live`, and deciding an entry is
 `POST /api/candidates/{candidate_id}/approve` or
 `POST /api/candidates/{candidate_id}/reject`.
 
