@@ -157,19 +157,3 @@ class MatchAI:
         except Exception as e:
             logger.warning("AI suggest_pairs failed: %s", e)
             return []
-
-    async def propose_alias(self, raw: str, candidates: list[str], league: str) -> tuple[str | None, float, str]:
-        if not self.available:
-            return None, 0.0, "ai_unavailable"
-        prompt = {"raw_team": raw, "candidates": candidates, "league": league}
-        messages = [
-            {"role": "system", "content": "Return JSON: {\"alias\":str|null,\"candidate\":str|null,\"confidence\":0..1,\"reason\":str}."},
-            {"role": "user", "content": json.dumps(prompt, ensure_ascii=False)},
-        ]
-        try:
-            raw_resp = await self._chat(messages)
-            data = json.loads(raw_resp)
-            return data.get("candidate"), float(data.get("confidence", 0.0)), str(data.get("reason", ""))
-        except Exception as e:
-            logger.warning("AI propose_alias failed: %s", e)
-            return None, 0.0, f"ai_error: {e}"

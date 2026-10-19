@@ -84,15 +84,6 @@ def test_expired_match_skipped():
     assert len(surebets) == 0
 
 
-def test_recalculate_stakes():
-    group = _group({"mdshop": (2.40, 1.90), "mbet": (2.20, 1.85)})
-    engine = ArbitrageEngine()
-    surebets = engine.find_surebets([group], min_profit=0.5, investment=100.0)
-    sb = surebets[0]
-    new_stakes = engine.recalculate_stakes(sb, 200.0)
-    assert sum(s.stake for s in new_stakes) == 200.0
-
-
 def test_expiry_uses_utc_not_local_time():
     # Naive-UTC kickoff 90 minutes from now must NOT be expired on any machine,
     # even one whose local clock is ahead of UTC (old code expired it ~2h early).

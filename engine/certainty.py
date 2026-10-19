@@ -139,16 +139,6 @@ class CertaintyGate:
         )
         return fuzzy_score >= 90, True
 
-    def _team_pair_ok(self, left: str, right: str) -> bool:
-        """Backward-compatible helper for matching two already-normalized names."""
-        ok, _ = self._team_pair_details(left, left, right, right)
-        return ok
-
-    def _team_pair_uses_allowlist(self, left: str, right: str) -> bool:
-        """Return whether two normalized names use the reviewed alias path."""
-        _, used = self._team_pair_details(left, left, right, right)
-        return used
-
     def _teams_match_details(self, a: Match, b: Match) -> tuple[bool, bool, bool]:
         """Return ``(ok, is_swapped, allowlist_used)`` for raw/canonical teams."""
         ah, aa = a.home_team_normalized, a.away_team_normalized

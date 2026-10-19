@@ -15,7 +15,6 @@ different matches — an arbitrage that does not exist. It also had no way to sa
 believed a pair, and no record of what it had checked.
 
 **Design spec:** `docs/superpowers/specs/2026-09-25-match-and-game-mapping-design.md`
-**Implementation plan:** `docs/superpowers/plans/2026-09-25-match-and-game-mapping.md`
 **Design rationale:** commit `185a9a8`
 
 ---
@@ -325,7 +324,6 @@ behaviour. Whole-branch review is not optional on this kind of work.
 | What | Where |
 |---|---|
 | Design spec (binding authority) | `docs/superpowers/specs/2026-09-25-match-and-game-mapping-design.md` |
-| 13-task plan | `docs/superpowers/plans/2026-09-25-match-and-game-mapping.md` |
 | The gate | `engine/certainty.py` |
 | Market registry + exclusions | `config/bookmaker_markets.json` |
 | Link declarations | `config/bookmaker_deeplinks.json` |
@@ -334,5 +332,4 @@ behaviour. Whole-branch review is not optional on this kind of work.
 | Link checker | `scripts/verify_deeplinks.py` |
 | Fixture regenerator | `scripts/capture_market_fixtures.py` |
 | Generated market doc | `MARKET_MAPPING.md` (between `<!-- GENERATED ... -->` markers) |
-| Per-task ledger (gitignored) | `.superpowers/sdd/2026-09-25-match-and-game-mapping/progress.md` |
 | User-facing docs | `README.md` §"Match & mapping certainty", `PLAN.md` §3 |

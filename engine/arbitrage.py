@@ -605,19 +605,3 @@ class ArbitrageEngine:
             ))
 
         return stakes
-
-    def recalculate_stakes(
-        self, surebet: Surebet, new_investment: float
-    ) -> list[SurebetStake]:
-        """
-        Recalculate stakes for a different investment amount.
-        Used by the frontend stake calculator.
-        """
-        if surebet.total_margin >= 1.0:
-            return surebet.stakes
-
-        best_odds = {
-            s.outcome_label: (s.bookmaker, s.odds) for s in surebet.stakes
-        }
-        labels = [s.outcome_label for s in surebet.stakes]
-        return self._calculate_stakes(best_odds, labels, new_investment, surebet.total_margin)

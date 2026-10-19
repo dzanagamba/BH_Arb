@@ -148,7 +148,6 @@ RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
 
 # --- Cache ---
 CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "cache")
-DEEP_LINK_CONFIG = os.path.join(os.path.dirname(__file__), "bookmaker_deeplinks.json")
 
 # --- Match page URL templates (best-effort; scrapers may override with real per-match URLs) ---
 MATCH_URL_TEMPLATES: dict[str, str] = {

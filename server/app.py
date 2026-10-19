@@ -89,21 +89,3 @@ async def serve_dashboard():
     if os.path.exists(index_path):
         return FileResponse(index_path)
     return {"message": "Surebet Scanner API running. Frontend index.html not found."}
-
-
-@app.get("/demos", include_in_schema=False)
-async def serve_demos():
-    """Serve the UI directions demo gallery."""
-    demos_path = os.path.join(FRONTEND_DIR, "demos", "index.html")
-    if os.path.exists(demos_path):
-        return FileResponse(demos_path)
-    return {"message": "Demos gallery not found."}
-
-
-@app.get("/demos/sportscast", include_in_schema=False)
-async def serve_demo_sportscast():
-    """Serve the refined Sportscast Scoreboard demo."""
-    demo_path = os.path.join(FRONTEND_DIR, "demos", "sportscast.html")
-    if os.path.exists(demo_path):
-        return FileResponse(demo_path)
-    return {"message": "Sportscast demo not found."}

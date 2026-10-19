@@ -43,8 +43,8 @@ A web-based arbitrage betting detection tool for the Bosnian market.
 >
 > That they are *inert* is a measurement, not a repo fact, and it was taken on
 > 2026-09-25 by opening each route in a browser: see
-> `scripts/verify_deeplinks.py` (command in *Tools* below) and the findings in
-> `.superpowers/sdd/2026-09-25-match-and-game-mapping/task-12-report.md`.
+> `scripts/verify_deeplinks.py` (command in *Tools* below), whose module
+> docstring records the findings.
 > Re-running it costs one browser navigation per event and a full pass over one
 > book takes about 92 minutes, so treat the inertness as a dated measurement to
 > re-confirm, not a permanent property. A sweep does converge — one call after

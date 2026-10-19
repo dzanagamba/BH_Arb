@@ -1231,7 +1231,7 @@ _POINTERS = (
     ("tests/test_readme_claims.py", "these claims are themselves checked"),
     ("verify_deeplinks.py", "the script that can re-measure the inertness"),
     ("2026-09-25", "the date the measurement was taken"),
-    ("task-12-report", "where the finding is recorded"),
+    ("docstring records the findings", "where the finding is recorded"),
 )
 
 
@@ -1240,7 +1240,7 @@ def _pointer_problems(text: str) -> list[str]:
 
     Two halves: the part the repo CAN reproduce (which books declare an event
     route) must be pointed at in-repo, and the inertness itself must be attributed
-    to the script and the dated report rather than presented as a repo fact.
+    to the script and its recorded findings rather than presented as a repo fact.
     """
     callout = _callout(text)
     return [
@@ -1258,12 +1258,12 @@ def test_readme_points_at_how_to_recheck_the_headline():
 
 def test_pointer_check_fails_when_the_callout_loses_a_pointer():
     """Proves the previous test reads the pointers out of the callout."""
-    broken = README.replace("task-12-report", "an old thread")
+    broken = README.replace("docstring records the findings", "an old thread")
     assert broken != README, "the mutation did not apply; the check is untested"
-    assert "task-12-report" not in broken, "the mutation left a copy behind; untested"
+    assert "docstring records the findings" not in broken, "the mutation left a copy behind; untested"
     problems = _pointer_problems(broken)
     assert problems, "a callout losing its source passed"
-    assert any("task-12-report" in problem for problem in problems)
+    assert any("docstring records the findings" in problem for problem in problems)
 
 
 # ===========================================================================

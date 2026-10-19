@@ -305,25 +305,3 @@ class BaseScraper(ABC):
             valid_matches.append(match)
 
         return valid_matches
-
-    @staticmethod
-    def safe_float(val) -> float:
-        if val is None:
-            return 0.0
-        try:
-            if isinstance(val, int | float):
-                return float(val)
-            s = str(val).replace(",", ".").strip()
-            return float(s)
-        except (ValueError, TypeError):
-            return 0.0
-
-    @staticmethod
-    def safe_str(val) -> str:
-        """Safely convert a value to a stripped string, returning '' for None/bad types."""
-        if val is None:
-            return ""
-        try:
-            return str(val).strip()
-        except (ValueError, TypeError):
-            return ""

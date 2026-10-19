@@ -35,3 +35,6 @@ test-results/
 
 # Logs
 *.log
+
+# Local agent notes
+.superpowers/

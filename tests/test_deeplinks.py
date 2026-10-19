@@ -33,18 +33,6 @@ def test_unknown_book_returns_base_url():
     assert url == "https://example.test/"
 
 
-def test_declared_true_book_is_distinguishable():
-    assert common.has_declaration("mdshop")
-
-
-def test_declared_false_book_is_still_declared():
-    assert common.has_declaration("wwin")
-
-
-def test_unknown_book_is_not_declared():
-    assert not common.has_declaration("unknownbook")
-
-
 def test_deeplink_config_covers_every_configured_bookmaker():
     assert set(BOOKMAKERS) == set(_read_config())
 

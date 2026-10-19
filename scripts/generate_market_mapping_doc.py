@@ -53,10 +53,6 @@ MARKET_TYPE_LABEL: dict[MarketType, str] = {
 MAPPED_HEADER = "| Bookmaker | Mode | Market | Source IDs | Outcome labels | Min legs | Line | Settlement |"
 EXCLUDED_HEADER = "| Bookmaker | Excluded IDs / name patterns |"
 
-MAPPED_COLUMNS = 8
-EXCLUDED_COLUMNS = 2
-
-
 class MarkerError(RuntimeError):
     """The doc does not carry exactly one well-formed generated-section marker pair."""
 

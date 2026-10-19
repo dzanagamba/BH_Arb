@@ -28,8 +28,7 @@ Admiralbet serves the same 29 KB ``bonus-tickets-with-details`` payload on every
 load, so an id inside it proves nothing about our link; and the Mozzartbet route
 for a dead id answers 200 with 14 bytes instead of 328 KB. Against those controls
 only Mozzartbet survives — which is a fact about the bookmakers, not a broken
-checker. See
-``.superpowers/sdd/2026-09-25-match-and-game-mapping/task-12-report.md``.
+checker.
 
 Run it directly:
 

@@ -18,7 +18,7 @@
 ## 1. Repo Setup (Done / Next)
 
 - [x] `git init surebetmuse12`, copy 52 source files from `claudesurebet` (excluded `.git/venv/cache/__pycache__/.mypy_cache/.pytest_cache`).
-- [ ] Add `cache/.gitkeep` + `screenshots/.gitkeep` (track empty dirs, ignore `*.json` via `.gitignore:20`).
+- [ ] Add `cache/.gitkeep` (track empty dirs, ignore `*.json` via `.gitignore:20`).
 - [ ] Create `venv` (`python -m venv venv; pip install -r requirements.txt -r requirements-dev.txt; playwright install chromium`).
 - [ ] Push to new GitHub remote `surebet-muse12` (private) with branch `main` + `plan/muse12-roadmap` for this doc.
 
@@ -39,7 +39,7 @@ python -m mypy .
 
 | # | Root Cause | Evidence | File |
 |---|------------|----------|------|
-| R1 | **Mozzartbet degraded** 54-56 vs 1150 expected | `cache/scan_history.json` last 3 prematch: 56, 54, 58; `BUILD_SPECIFICATION_V3.md:24` says ~54 “today” | `scrapers/mozzartbet.py:359-401` `pageSize=50` vs spec `15`, `matchCount` vs `totalPages` |
+| R1 | **Mozzartbet degraded** 54-56 vs 1150 expected | `cache/scan_history.json` last 3 prematch: 56, 54, 58; the old build spec said ~54 “today” | `scrapers/mozzartbet.py:359-401` `pageSize=50` vs spec `15`, `matchCount` vs `totalPages` |
 | R2 | **EVLBet single-market** 1X2 only | 1145 matches, all `market_type=1x2` (avg 1.0 mkts/match) | `scrapers/evlbet.py:107-135` |
 | R3 | **Date window skew** 14d vs unbounded | `mdshop`/`mbet` 14d, `evlbet` none, `wwin` 15×24h | `scrapers/mbet.py:302`, `scrapers/mdshop.py:85`, `scrapers/wwin.py:150` |
 | R4 | **League mapping misses** ~30% generic fallback | 262 `1.liga`, 110 `2.liga` as catch-alls; `PANIJA 1` not in map | `engine/matcher.py:43-46`, `config/league_mappings.json:440` |
@@ -72,7 +72,7 @@ Live suspicious arbs: `maardu-tallinn` Over1.5 1.27 vs Under 7.32 (8.22%), `baye
 | P0-1 | **Add `fetched_at` + `scan_id`** to `Match` (`datetime`, naive UTC). Stamp once in `server/api.py:run_scan` `scan_started_at = datetime.now(UTC).replace(tzinfo=None)` and pass to every `scrape(live, fetched_at)`. | `models/schemas.py:31`, `scrapers/*.py`, `server/api.py:217-271` | `GET /api/results` returns `fetched_at`; mixed-age scan fails if spread >90s |
 | P0-2 | **Unified suspend guard.** Extract `is_active_odds(value, status)` to `scrapers/common.py` (checks `market_status`, `isv`, `naPon`, `value>=1.01`). Enforce in `mozzartbet.py:187`, `sportplus.py:381`, `wwin.py:69`, `premier_kladionica.py:265`. | `scrapers/common.py:195-350` | No odds <1.01 or inactive reaches `engine/arbitrage.py:177` |
 | P0-3 | **Fix `parse_dt` everywhere.** Replace ad-hoc `fromisoformat` in `sportplus.py:291` + `mbet.py:376` with `scrapers/common.py:23 parse_dt` (handles `Z`, `+02:00` → UTC). Add `tests/test_scraper_common.py` case for `Z`. | `scrapers/common.py:23`, `scrapers/sportplus.py:291`, `scrapers/mbet.py:302` | `parse_dt("2026-08-15T18:00:00Z")` == `parse_dt("2026-08-15T20:00:00+02:00")` |
-| P0-4 | **Mozzartbet pagination fix.** Use `pageSize=15` per `BUILD_SPECIFICATION_V3.md:127`; read `totalPages` fallback to `matchCount` fallback to `<pageSize` break. Capture fixtures. | `scrapers/mozzartbet.py:358-401` | Mozzartbet prematch ≥800 matches on next live scan (vs 56 today) |
+| P0-4 | **Mozzartbet pagination fix.** Use `pageSize=15` per the old build spec; read `totalPages` fallback to `matchCount` fallback to `<pageSize` break. Capture fixtures. | `scrapers/mozzartbet.py:358-401` | Mozzartbet prematch ≥800 matches on next live scan (vs 56 today) |
 | P0-5 | **Uniform scan window.** `run_scan` computes `window_start = scan_started_at`, `window_end = start+14d` and passes to `mdshop/mbet/wwin`. Remove per-scraper `datetime.now()`. | `server/api.py:217`, `scrapers/mdshop.py:83`, `scrapers/mbet.py:302`, `scrapers/wwin.py:139` | All prematch books report same `dateFrom/dateTo` in logs |
 | P0-6 | **Cache TTL + badge.** `_save_cache` stores `fetched_at` + `scan_id`; `_load_cache` rejects `>30min` old; dashboard shows `Odds age: Xs` + `Verify Odds` auto-prompts if >120s. | `server/api.py:322-367`, `frontend/js/app.js:155-` | Restart doesn’t show 8h-old arbs |
 | P0-7 | **Rate-limit + lock fix.** Hold `_scan_lock` during whole `run_scan` (not just trigger), separate `prematch` vs `live` locks. | `server/api.py:63,403` | Two rapid `POST /api/scan` second returns `already_scanning` reliably |
@@ -114,7 +114,7 @@ Live suspicious arbs: `maardu-tallinn` Over1.5 1.27 vs Under 7.32 (8.22%), `baye
 
 ### Phase 4 — Mapping certainty (Done)
 
-Shipped in `.superpowers/sdd/2026-09-25-match-and-game-mapping/`, 13 tasks.
+Shipped in 13 tasks (see git history and `docs/HANDOFF.md`).
 The premise: the old matcher decided "same match" with a fuzzy score and a
 threshold, so a wrong pairing and a right one looked alike. Phase 4 replaces the
 score with a claim that has to be proven.
