@@ -5,7 +5,6 @@ from datetime import datetime
 from config.settings import MATCH_URL_TEMPLATES
 from engine.arbitrage import _collect_bet_urls, _collect_match_urls
 from models.schemas import Market, MarketType, Match, MatchGroup, OddsValue
-from scrapers.common import nsoft_event_url
 
 
 def _match(bookmaker, *, url="", bet_url=""):
@@ -63,20 +62,6 @@ def test_bet_urls_empty_when_unsupported():
     )
     assert _collect_bet_urls(group) == {"wwin": ""}
 
-
-def test_nsoft_event_url_prematch():
-    url = nsoft_event_url("https://www.mdshop.ba", "12345")
-    assert url == "https://www.mdshop.ba/sport-prematch?sport=Fudbal&event=12345"
-
-
-def test_nsoft_event_url_live():
-    url = nsoft_event_url("https://www.admiralbet.ba", "12345", live=True)
-    assert url == "https://www.admiralbet.ba/sport-live?event=12345"
-
-
-def test_nsoft_event_url_fallback_without_event_id():
-    assert nsoft_event_url("https://www.mdshop.ba", "") == "https://www.mdshop.ba/sport-prematch?sport=Fudbal"
-    assert nsoft_event_url("https://www.mdshop.ba", "", live=True) == "https://www.mdshop.ba/sport-live"
 
 
 def test_mdshop_parse_event_builds_event_deep_link():

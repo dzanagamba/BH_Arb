@@ -17,7 +17,7 @@ from config.settings import VERIFY_SSL
 from models.schemas import Market, Match
 from scrapers.base import fetch_with_retry
 from scrapers.common import (
-    nsoft_event_url,
+    build_event_url,
     nsoft_event_window,
     parse_dt,
     parse_nsoft_bets,
@@ -178,7 +178,7 @@ class MDShopScraper:
             league=league_name,
             kickoff=kickoff,
             markets=markets,
-            url=nsoft_event_url("https://www.mdshop.ba", event_id, live=live),
+            url=build_event_url("mdshop", event_id, "https://www.mdshop.ba", live=live),
             match_code=event_id,
             event_id=event_id,
             deep_link_verified=False,

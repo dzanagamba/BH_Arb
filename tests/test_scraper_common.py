@@ -86,3 +86,15 @@ def test_mdshop_dedup_by_event_id():
     assert scraper._parse_event(ev1, "football", seen) is None
     # Same teams, different event ID (2nd meeting in the window) → kept
     assert scraper._parse_event(ev2, "football", seen) is not None
+
+
+def test_parse_local_dt_reads_naive_values_as_sarajevo_time():
+    from scrapers.common import parse_local_dt
+
+    # Summer (CEST, UTC+2) and winter (CET, UTC+1).
+    assert parse_local_dt("2026-10-20T20:45:00") == datetime(2026, 10, 20, 18, 45)
+    assert parse_local_dt("2026-12-20T20:45:00") == datetime(2026, 12, 20, 19, 45)
+    # An explicit offset is already absolute and is not shifted again.
+    assert parse_local_dt("2026-10-20T20:45:00Z") == datetime(2026, 10, 20, 20, 45)
+    assert parse_local_dt("2026-10-20T20:45:00+02:00") == datetime(2026, 10, 20, 18, 45)
+    assert parse_local_dt(None) is None

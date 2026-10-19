@@ -52,7 +52,10 @@ BOOKMAKERS = {
         "name": "EVLBet",
         "base_url": "https://evlbet.com",
         "soccer_url": "https://evlbet.com",
-        "enabled": True,
+        # Off since 2026-10-20: its offer API returns no football events for any
+        # request variant tried, and no payload has ever been captured, so its
+        # market mapping is untested. Re-enable only with a captured fixture.
+        "enabled": False,
         "color": "#9C27B0",
     },
     "premier_kladionica": {

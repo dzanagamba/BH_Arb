@@ -188,6 +188,7 @@ def _fallback_corpus(declarations: dict) -> list[dict]:
     ]
 
 
+@pytest.mark.real_deeplinks
 def test_a_declared_no_route_book_never_carries_a_per_event_url_in_the_capture():
     """The captured scan must agree with every `supports_event_id: false`.
 
@@ -265,8 +266,8 @@ def test_the_declared_no_route_url_check_ignores_books_that_claim_a_route():
     declarations = _read_config()
     corpus = [
         {
-            "bookmaker": "mdshop",
-            "url": "https://www.mdshop.ba/sport-prematch?sport=Fudbal&event=6676802",
+            "bookmaker": "mozzartbet",
+            "url": "https://www.mozzartbet.ba/sr/kladjenje/sport/1/match/6676802",
             "event_id": "6676802",
             "deep_link_verified": False,
         },

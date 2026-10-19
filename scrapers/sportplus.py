@@ -17,7 +17,7 @@ from config.settings import VERIFY_SSL
 from engine.market_registry import MARKET_REGISTRY, record_unmapped
 from models.schemas import Market, MarketType, Match, OddsValue
 from scrapers.base import fetch_with_retry
-from scrapers.common import normalize_outcome, parse_dt
+from scrapers.common import normalize_outcome, parse_local_dt
 
 logger = logging.getLogger(__name__)
 
@@ -326,8 +326,8 @@ class SportPlusScraper:
             return None
         seen_codes.add(code)
 
-        # Parse match date — normalize to naive UTC via shared helper (handles Z/+02:00)
-        kickoff = parse_dt(m.get("matchDate"))
+        # SportPlus sends Sarajevo wall-clock time with no offset.
+        kickoff = parse_local_dt(m.get("matchDate"))
 
         # Extract league/competition name + country
         league_raw = m.get("leagueName")

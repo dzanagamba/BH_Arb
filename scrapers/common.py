@@ -14,6 +14,7 @@ from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 from urllib.parse import quote
+from zoneinfo import ZoneInfo
 
 from models.schemas import Market, MarketType, OddsValue
 
@@ -28,6 +29,28 @@ DT_FORMATS = [
     "%Y-%m-%d %H:%M:%S",
     "%d.%m.%Y %H:%M",
 ]
+
+
+BOOKMAKER_TZ = ZoneInfo("Europe/Sarajevo")
+
+
+def parse_local_dt(raw) -> datetime | None:
+    """Parse a kickoff a bookmaker sends in Bosnian local time, as naive UTC.
+
+    For feeds whose timestamps carry no offset but mean Sarajevo wall-clock
+    time (SportPlus: ``"2026-10-20T20:45:00"`` is 18:45 UTC in summer time).
+    A value that does carry an offset, or an epoch number, is already absolute
+    and is handled exactly as :func:`parse_dt` does.
+    """
+    if isinstance(raw, str) and raw.strip():
+        s = raw.strip()
+        has_offset = s.endswith(("Z", "z")) or (len(s) > 6 and s[-6] in "+-" and s[-3] == ":")
+        if not has_offset:
+            naive = parse_dt(s)
+            if naive is None:
+                return None
+            return naive.replace(tzinfo=BOOKMAKER_TZ).astimezone(UTC).replace(tzinfo=None)
+    return parse_dt(raw)
 
 
 def parse_dt(raw) -> datetime | None:
@@ -141,24 +164,6 @@ def nsoft_event_window(now: datetime, live: bool) -> tuple[datetime, datetime]:
     if live:
         return now - NSOFT_LIVE_LOOKBACK, now
     return now, now + NSOFT_PREMATCH_HORIZON
-
-
-def nsoft_event_url(site_base: str, event_id: str, live: bool = False) -> str:
-    """Deep link to a single event in an NSoft mbase sports shell (MDShop/Admiralbet).
-
-    Both shells render the NSoft product inside an iframe and forward the
-    URL query params they recognize: `event` is mapped to `eventId` for the
-    product iframe and `ticketItems`/`fastTicket` prefill the bet slip —
-    verified in the shell's checkQueryParams() (chunk-EDF2MGFW / chunk-PD2MVGCC).
-    The `ticketItems` value format is undocumented, so only event links are
-    built here. Falls back to the plain sport page when no event id is known.
-    """
-    route = "sport-live" if live else "sport-prematch"
-    if not event_id:
-        return f"{site_base}/{route}?sport=Fudbal" if not live else f"{site_base}/{route}"
-    if live:
-        return f"{site_base}/{route}?event={event_id}"
-    return f"{site_base}/{route}?sport=Fudbal&event={event_id}"
 
 
 def normalize_outcome(label: str, market_type: MarketType) -> str:
@@ -587,7 +592,7 @@ def build_event_url(
     cfg = _declared_config(bookmaker)
     normalized_event_id = "" if event_id is None else str(event_id)
     if not cfg.get("supports_event_id"):
-        template = cfg.get("template")
+        template = (cfg.get("template_live") if live else None) or cfg.get("template")
         return template if isinstance(template, str) and template else _base_url(base_url)
     if not normalized_event_id:
         return _fallback_url(bookmaker, base_url)
