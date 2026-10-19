@@ -261,23 +261,28 @@ anything. Both numbers are re-derived from that measurement by
 and re-measure the sweep before trusting them: the per-event cost is a real browser
 navigation, so the headroom is a number of events, not a promise.
 
-### Known defects, recorded in-repo
+### Fixed defects, and what keeps them fixed
+
+Two live-mode defects were measured and recorded in-repo on 2026-09-25 and have
+since been fixed. Each now has a regression test instead of a tripwire.
 
 * **`premier_kladionica` live BTTS.** The live feed names the block
-  `LIVE - OBA TIMA DAJU GOL` while the parser's `NAME_BTTS` is `OBA DAJU GOL`,
-  so the registry's live row is unreachable. Guarded by
-  `xfail(strict=True)` in `tests/test_market_fixtures.py`: fixing the parser
-  turns it into an **XPASS**, which pytest reports as a **failure**, so the
-  parser and the marker cannot drift apart. The fix is to make `NAME_BTTS`
-  mode-aware, *not* to rename the registry row.
+  `LIVE - OBA TIMA DAJU GOL` while prematch uses `OBA DAJU GOL`, and the parser
+  compared both modes against the prematch spelling, so the registry's live row
+  was unreachable (it was guarded by a strict xfail whose XPASS would fail the
+  suite). The parser now matches per mode (`NAME_BTTS` / `NAME_BTTS_LIVE`); the
+  registry row was deliberately not renamed, since prematch really is spelled the
+  other way. `tests/test_market_fixtures.py` checks both modes against the
+  captured payloads.
 * **NSoft live window (`mdshop`, `admiralbet`).** NSoft filters events by
-  kickoff against `dateFrom`, and the window is built with `dateFrom=now`, so
-  every already-started in-play game is filtered out. At 2026-09-25 17:00 UTC the
-  request returned `{"events": []}` while 35 live football events were available
-  — and 35 the moment `dateFrom` was moved back 12 hours. Both books therefore
-  most likely return **no live matches at all** today. Recorded as a
-  `KNOWN DEFECT` comment in `scrapers/mdshop.py`; the behaviour is unchanged
-  because it needs its own decision.
+  kickoff against `dateFrom`, and both scrapers built the live request with
+  `dateFrom=now`, so every already-started in-play game was filtered out. At
+  2026-09-25 17:00 UTC that request returned `{"events": []}` while
+  35 live football events were available — and 35 the moment `dateFrom` was
+  moved back 12 hours. Both scrapers now take their window from one shared helper,
+  `scrapers.common.nsoft_event_window`, which looks back 12 hours for live (the
+  window the committed live fixtures were captured with) and forward 14 days for
+  prematch. `tests/test_live_mode.py` pins the window each scraper requests.
 
 ## Adding more leagues/teams
 

@@ -26,7 +26,7 @@ Market decoding (football sport id = 2):
 
 Supported (name-based, verified):
   "UTAKMICA"             -> 1X2 (kods 1/X/2) + double chance (1X/X2/12)
-  "OBA DAJU GOL"         -> BTTS (kods da/ne or o-da/o-ne)
+  "OBA DAJU GOL"         -> BTTS (kods da/ne or o-da/o-ne); live: "OBA TIMA DAJU GOL"
   "ZBROJ GOLOVA"         -> O/U goals; line from setTipVar; only 1.5/2.5/3.5
 In-play markets are prefixed "LIVE - " (used for live mode). All other
 markets (handicaps, halves, HT/FT, correct score, corners, cards, "NAČIN
@@ -64,6 +64,9 @@ ODDS_CHUNK = 150
 # Verified football market names (setTip name, normalised).
 NAME_1X2 = "UTAKMICA"
 NAME_BTTS = "OBA DAJU GOL"
+# The in-play feed spells the same block differently ("LIVE - OBA TIMA DAJU GOL"
+# once the prefix is stripped), so BTTS is matched per mode.
+NAME_BTTS_LIVE = "OBA TIMA DAJU GOL"
 NAME_OU = "ZBROJ GOLOVA"
 NAME_FH_1X2 = "1. POLUVRIJEME"
 # First-half total goals appear under a few name forms:
@@ -334,7 +337,7 @@ class PremierKladionicaScraper:
                         ]
                         if len(dc) >= dc_spec.min_legs:
                             add_market(MarketType.DOUBLE_CHANCE, dc)
-                elif base_name == NAME_BTTS:
+                elif base_name == (NAME_BTTS_LIVE if live else NAME_BTTS):
                     source_id = "LIVE_OBA_DAJU_GOL" if live else "OBA_DAJU_GOL"
                     spec = _registered_spec(
                         "live" if live else "prematch", source_id, MarketType.BTTS

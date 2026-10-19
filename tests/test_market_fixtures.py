@@ -36,13 +36,11 @@ WHAT THESE TESTS DO NOT PROVE
     ``test_a_gap_without_a_capture_requires_a_declared_bookless_book`` covers
     the rule on a synthetic book.
   - ``KNOWN_DEFECT_ROWS`` -- the feed *does* send it and the code cannot read
-    it. There is exactly one today: ``premier_kladionica/live/btts``, where the
-    live block is ``LIVE - OBA TIMA DAJU GOL`` but the parser's ``NAME_BTTS`` is
-    ``OBA DAJU GOL``, so the registry's live row is unreachable. The capture
-    keeps that block as evidence and
-    ``test_premier_live_btts_is_emitted_once_name_btts_is_mode_aware`` is
-    ``xfail(strict=True)``: the suite stays green, and fixing the parser turns
-    it into an XPASS, which pytest reports as a failure. Nobody can half-fix it.
+    it, each guarded by a strict xfail. Empty today: the one entry it held,
+    ``premier_kladionica/live/btts`` (live block ``LIVE - OBA TIMA DAJU GOL``
+    against a prematch-only ``NAME_BTTS``), was fixed by making the name
+    mode-aware, and ``test_premier_live_btts_is_emitted_from_the_live_block``
+    now keeps it fixed.
 
   EVLBet has no fixture at all -- its flat offer endpoint answered with an empty
   list -- and is declared in ``BOOKS_WITHOUT_FIXTURES``.
@@ -121,11 +119,7 @@ BOOKS_WITHOUT_FIXTURES: dict[str, str] = {
 # whereas a code defect does, and the difference decides what the test should
 # assert. Each one names the strict xfail that guards it, so fixing the parser
 # turns that xfail into a failure and forces this entry to be revisited.
-KNOWN_DEFECT_ROWS: dict[tuple[str, str, str], str] = {
-    ("premier_kladionica", "live", "btts"): (
-        "test_premier_live_btts_is_emitted_once_name_btts_is_mode_aware"
-    ),
-}
+KNOWN_DEFECT_ROWS: dict[tuple[str, str, str], str] = {}
 
 # The two subgames a Mozzartbet totals market needs, per the live feed. Used to
 # tell "the feed never sent this leg" from "the parser dropped it".
@@ -518,62 +512,39 @@ def _fixture_for(book: str, mode: str) -> Path:
     return FIXTURE_DIR / f"{book}_{mode}.json"
 
 
-# --- the premier live BTTS defect -------------------------------------------
+# --- the premier live BTTS block ---------------------------------------------
 #
 # The live feed names the both-teams-to-score block 'LIVE - OBA TIMA DAJU GOL';
-# prematch is 'OBA DAJU GOL'. scrapers/premier_kladionica.py strips the 'LIVE - '
-# prefix and compares against a single NAME_BTTS = 'OBA DAJU GOL', so the live
-# block never matches, falls through to record_unmapped, and the registry's
-# live LIVE_OBA_DAJU_GOL row can never be reached.
-#
-# WHY THIS IS AN XFAIL AND NOT A FAILING ASSERTION: we do not ship a red build.
-# The fixture keeps the real 'LIVE - OBA TIMA DAJU GOL' rows, so the evidence is
-# in the repo, and this test waits on the fix. strict=True is the tripwire: the
-# moment NAME_BTTS is fixed the test XPASSes, and pytest reports an XPASS on a
-# strict xfail as a FAILURE. Nobody can fix the parser and leave the marker
-# behind, and nobody can delete the marker without fixing the parser.
-#
-# THE FIX IS NOT A REGISTRY RENAME. Prematch and live genuinely differ, so
-# making NAME_BTTS mode-aware is the change; rewriting the registry row to the
-# live spelling would break prematch. The comment is here because the wrong fix
-# is the obvious one.
+# prematch is 'OBA DAJU GOL'. The parser once compared both modes against the
+# prematch spelling, so the registry's live LIVE_OBA_DAJU_GOL row was
+# unreachable. The fix made the name mode-aware (NAME_BTTS / NAME_BTTS_LIVE);
+# the registry row was deliberately NOT renamed, because prematch genuinely uses
+# the other spelling. These two tests keep both halves of that true.
 
 PREMIER_LIVE_BTTS_NAME = "LIVE - OBA TIMA DAJU GOL"
 
 
-def test_premier_live_fixture_carries_the_btts_block_the_defect_is_about():
-    """The evidence must stay in the fixture, or the xfail below has nothing to test."""
+def test_premier_live_fixture_carries_the_btts_block():
+    """The evidence stays in the fixture, so the test below reads a real block."""
     data = _load(_fixture_for("premier_kladionica", "live"))
     names = {row[2] for row in data["lookup"]["set_tip"]}
     assert PREMIER_LIVE_BTTS_NAME in names, (
         "the premier live capture no longer carries the "
-        f"{PREMIER_LIVE_BTTS_NAME!r} block; re-check whether the feed or the "
-        "parser changed before trusting the xfail below"
+        f"{PREMIER_LIVE_BTTS_NAME!r} block; re-check whether the feed changed"
     )
-    assert "btts" not in data["expected_markets"], (
-        "the capture now declares live BTTS as exercised, so the known-defect "
-        "xfail below should be removed"
-    )
+    assert "btts" in data["expected_markets"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "KNOWN DEFECT: the live feed's both-teams-to-score block is named "
-        f"{PREMIER_LIVE_BTTS_NAME!r} while the parser's NAME_BTTS is 'OBA DAJU GOL', "
-        "so the registry's live LIVE_OBA_DAJU_GOL row is unreachable. The fix is to "
-        "make NAME_BTTS mode-aware (prematch and live really do spell it "
-        "differently), NOT to rename the registry row, which would break prematch. "
-        "strict=True so that fixing the parser fails this test until the marker and "
-        "the KNOWN_DEFECT_ROWS entry are removed together."
-    ),
-)
-def test_premier_live_btts_is_emitted_once_name_btts_is_mode_aware():
-    """Passes only once the parser reads the live BTTS block."""
+def test_premier_live_btts_is_emitted_from_the_live_block():
     data = _load(_fixture_for("premier_kladionica", "live"))
     assert "btts" in _emitted(data), (
-        "the captured 'LIVE - OBA TIMA DAJU GOL' block still produces no BTTS market"
+        "the captured 'LIVE - OBA TIMA DAJU GOL' block produces no BTTS market"
     )
+
+
+def test_premier_prematch_btts_still_reads_the_prematch_spelling():
+    data = _load(_fixture_for("premier_kladionica", "prematch"))
+    assert "btts" in _emitted(data)
 
 
 def test_a_captured_unregistered_id_is_counted_not_dropped():

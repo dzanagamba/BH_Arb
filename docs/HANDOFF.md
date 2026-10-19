@@ -218,8 +218,10 @@ is unchanged at 2 calls/min; a cursor is what made those calls worth making.
 16 → 106 groups from the same input is a 6× swing driven by iteration order. It affects yield
 and makes every measurement unstable.
 
-### 5. Fix `premier_kladionica/live/btts` and the NSoft live window
-Both **recorded in-repo, neither fixed.**
+### 5. ~~Fix `premier_kladionica/live/btts` and the NSoft live window~~ (fixed)
+**Now:** the Premier parser matches BTTS per mode (`NAME_BTTS_LIVE`), and both NSoft
+scrapers build their window from `scrapers.common.nsoft_event_window` (live looks back
+12h). Both have regression tests in place of the tripwires. The original notes follow.
 
 - *Premier live BTTS* — an `xfail(strict=True)` tripwire at `tests/test_market_fixtures.py:559`.
   The feed says `LIVE - OBA TIMA DAJU GOL`; the parser's `NAME_BTTS` is `OBA DAJU GOL`. The fix
