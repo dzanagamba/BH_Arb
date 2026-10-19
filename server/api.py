@@ -2141,6 +2141,27 @@ async def verify_surebet(req: VerifyRequest, _auth: None = Depends(_require_api_
             "errors": errors,
         }
 
+    # The fixture can verify without one of the bet's books (its fresh listing
+    # failed the gate, e.g. an unproven link, or the book is now disabled).
+    # Re-pricing would then silently swap that leg for another book's price —
+    # a verdict on a different bet. The leg this surebet was built on is
+    # unknown, so the answer is too.
+    unverified_books = sorted(
+        {s["bookmaker"] for s in target["stakes"]} - {m.bookmaker for m in group.matches}
+    )
+    if unverified_books:
+        return {
+            "surebet_id": target["id"],
+            "message": (
+                "Not every leg's bookmaker is in the verified fresh group "
+                f"({', '.join(unverified_books)})"
+            ),
+            "cached_margin": target["total_margin"],
+            "cached_profit_percent": target["profit_percent"],
+            "still_profitable": None,
+            "errors": errors,
+        }
+
     engine = ArbitrageEngine()
     try:
         market_type = MarketType(target["market_type"])
