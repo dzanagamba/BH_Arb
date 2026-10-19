@@ -165,7 +165,12 @@ def test_without_a_proof_the_route_book_leg_stays_unverified(harness):
 
     body = _verify(cached["id"])
 
-    assert body["still_profitable"] is None
+    # The unproven Mozzartbet listing cannot join the fixture, but SportPlus
+    # and WWIN still verify with each other (the matcher tries the next-best
+    # group when the gate refuses the best one). Verify then finds that
+    # two-book group and re-prices without the Mozzartbet leg, so the answer
+    # is False, or None if no group verifies — never a claim of profit.
+    assert body["still_profitable"] is not True
 
 
 def test_a_fixture_that_comes_back_reversed_is_priced_in_the_cached_frame(harness):
