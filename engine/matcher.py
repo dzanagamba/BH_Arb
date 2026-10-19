@@ -29,10 +29,12 @@ matches from 2+ distinct bookmakers.
 import json
 import logging
 import os
+from datetime import UTC
 
 from rapidfuzz import fuzz
 
 from config.settings import (
+    BOOKMAKERS,
     FUZZY_MATCH_THRESHOLD,
     KICKOFF_WINDOW_MINUTES,
     TEAM_MATCH_MIN_PERCENT,
@@ -69,6 +71,10 @@ GENERIC_LEAGUES = {
 # Derived thresholds (from config.settings)
 TEAM_MATCH_RATIO = TEAM_MATCH_MIN_PERCENT / 100.0      # per-team similarity gate
 GROUP_MIN_CONFIDENCE = FUZZY_MATCH_THRESHOLD / 100.0   # overall composite confidence gate
+
+# Registry position per book: decides which book anchors (and orients) a group
+# when listings otherwise tie. Unregistered books follow, by name.
+_BOOKMAKER_RANK = {bookmaker: rank for rank, bookmaker in enumerate(BOOKMAKERS)}
 
 
 class MatchMatcher:
@@ -164,21 +170,22 @@ class MatchMatcher:
         all_matches = self.normalize_matches(all_matches)
 
         # --- Cluster all normalized matches into MatchGroups ---
-        # Sort matches so specific league matches are processed first to establish canonical groups
-        sorted_matches = sorted(
-            all_matches,
-            key=lambda m: (0 if m.league_normalized not in GENERIC_LEAGUES else 1)
-        )
+        # A total order makes the result a function of the input *set*: the
+        # first match in a group is its anchor, so a partial key (specific
+        # league first, then input order) let the same scan yield 6x
+        # different group counts. Specific leagues still come first so they
+        # establish canonical groups.
+        sorted_matches = sorted(all_matches, key=_processing_order_key)
 
         groups: list[MatchGroup] = []
+        # Creation index per group (by identity) — the deterministic tie-break
+        # between candidates of equal confidence.
+        group_index: dict[int, int] = {}
         # League index: normalized league → groups in it. Generic leagues keyed under "".
         # Cuts the candidate list per match from O(all groups) to O(same-league groups).
         groups_by_league: dict[str, list[MatchGroup]] = {}
 
         for match in sorted_matches:
-            best_group: MatchGroup | None = None
-            best_conf = 0.0
-
             m_league = match.league_normalized or match.league or ""
             candidate_groups: list[MatchGroup]
             if m_league in GENERIC_LEAGUES:
@@ -197,6 +204,7 @@ class MatchMatcher:
                 for league_key in league_keys:
                     candidate_groups.extend(groups_by_league.get(league_key, []))
 
+            scored: list[tuple[float, int, MatchGroup]] = []
             for group in candidate_groups:
                 # Skip if this bookmaker already contributed a match to this group
                 group_bookmakers = {m.bookmaker for m in group.matches}
@@ -205,12 +213,17 @@ class MatchMatcher:
 
                 confidence, _ = self._calculate_confidence(match, group)
 
-                if confidence >= GROUP_MIN_CONFIDENCE and confidence > best_conf:
-                    best_conf = confidence
-                    best_group = group
+                if confidence >= GROUP_MIN_CONFIDENCE:
+                    scored.append((confidence, group_index[id(group)], group))
+
+            # Best confidence first, ties by creation order. The scorer only
+            # ranks; the gate decides. A refusal of the best candidate (e.g. its
+            # anchor's link is unproven) moves on to the next one instead of
+            # orphaning the match in a new group.
+            scored.sort(key=lambda item: (-item[0], item[1]))
 
             accepted = False
-            if best_group and best_conf >= GROUP_MIN_CONFIDENCE:
+            for best_conf, _, best_group in scored:
                 gate_result: GateResult = self.gate.evaluate(match, best_group)
                 if gate_result.status == "verified":
                     # The gate owns orientation; the scorer only prunes candidates.
@@ -245,12 +258,13 @@ class MatchMatcher:
                         f"[conf={best_conf:.2f}, swapped={gate_result.is_swapped}]"
                     )
                     accepted = True
-                else:
-                    logger.debug(
-                        f"⛔ GATE REJECTED [{match.bookmaker}] "
-                        f"'{match.home_team}' vs '{match.away_team}' "
-                        f"→ reasons={gate_result.reasons}"
-                    )
+                    break
+                logger.debug(
+                    f"⛔ GATE REJECTED [{match.bookmaker}] "
+                    f"'{match.home_team}' vs '{match.away_team}' "
+                    f"→ group ('{best_group.canonical_home}' vs '{best_group.canonical_away}') "
+                    f"reasons={gate_result.reasons}"
+                )
 
             if not accepted:
                 new_group = MatchGroup(
@@ -268,6 +282,7 @@ class MatchMatcher:
                         )
                     ],
                 )
+                group_index[id(new_group)] = len(groups)
                 groups.append(new_group)
                 bucket_key = (
                     new_group.league if new_group.league not in GENERIC_LEAGUES else ""
@@ -413,6 +428,39 @@ class MatchMatcher:
                 })
             report.append(entry)
         return report
+
+
+def _processing_order_key(match: Match) -> tuple[object, ...]:
+    """Total order over normalized matches, independent of input position.
+
+    Specific leagues sort before generic ones, then by league, kickoff (naive
+    UTC; missing last within a league), bookmaker (registry order, so the
+    anchoring book is a configured choice), normalized teams and the
+    remaining identifying fields so no two distinct listings tie.
+    """
+    kickoff = ""
+    if match.kickoff:
+        kickoff_utc = (
+            match.kickoff.astimezone(UTC).replace(tzinfo=None)
+            if match.kickoff.tzinfo
+            else match.kickoff
+        )
+        kickoff = kickoff_utc.isoformat()
+    return (
+        1 if match.league_normalized in GENERIC_LEAGUES else 0,
+        match.league_normalized,
+        kickoff == "",
+        kickoff,
+        _BOOKMAKER_RANK.get(match.bookmaker, len(_BOOKMAKER_RANK)),
+        match.bookmaker,
+        match.home_team_normalized,
+        match.away_team_normalized,
+        match.event_id,
+        match.home_team,
+        match.away_team,
+        match.league,
+        match.url,
+    )
 
 
 def swap_match_teams_and_odds(match: Match) -> Match:

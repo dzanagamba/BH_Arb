@@ -26,6 +26,7 @@ def _group(bookie_odds, kickoff=None):
             )],
         ))
     return MatchGroup(
+        status="verified",
         canonical_home="Sarajevo",
         canonical_away="Zeljeznicar",
         league="premier_liga_bih",
@@ -124,6 +125,7 @@ def _dc_group():
         ])],
     )
     return MatchGroup(
+        status="verified",
         canonical_home="Sarajevo", canonical_away="Zeljeznicar",
         league="premier_liga_bih", kickoff=kickoff, matches=[m_a, m_b],
     )
@@ -176,6 +178,7 @@ def test_cross_market_dc_rejects_same_bookmaker_both_legs():
         ],
     )
     group = MatchGroup(
+        status="verified",
         canonical_home="Sarajevo", canonical_away="Zeljeznicar",
         league="premier_liga_bih", kickoff=kickoff, matches=[m_a, m_b],
     )
@@ -186,3 +189,15 @@ def test_cross_market_dc_rejects_same_bookmaker_both_legs():
     assert len({s.bookmaker for s in dc[0].stakes}) == 2
     # The optimal-but-forbidden A+A combo (margin 0.9698) must not be used
     assert dc[0].total_margin >= 0.99
+
+
+def test_an_unverified_group_is_never_priced():
+    """The engine enforces the gate itself: only `verified` groups are priced."""
+    group = _group({"mdshop": (2.40, 1.90), "mbet": (2.20, 1.85)})
+    engine = ArbitrageEngine()
+    assert engine.find_surebets([group], min_profit=0.0)
+    assert engine.evaluate_market(group, MarketType.BTTS) is not None
+    for status in ("suggested", "rejected"):
+        unproven = group.model_copy(update={"status": status})
+        assert engine.find_surebets([unproven], min_profit=0.0) == []
+        assert engine.evaluate_market(unproven, MarketType.BTTS) is None

@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import os
 from collections.abc import Iterable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 from urllib.parse import quote
 
@@ -156,6 +156,28 @@ def get_active_odds_value(entry) -> float | None:
         return f if f >= 1.01 else None
     except (ValueError, TypeError):
         return None
+
+
+# How far back the NSoft live window reaches. NSoft filters `getwebevents` by
+# KICKOFF against dateFrom, so an in-play game is only returned when the window
+# starts before it kicked off. Measured 2026-09-25 17:00 UTC: dateFrom=now
+# returned {"events": []} while 35 live football events were available, and all
+# 35 came back with dateFrom=now-12h — the window the committed fixtures
+# tests/fixtures/markets/{mdshop,admiralbet}_live.json were captured with.
+NSOFT_LIVE_LOOKBACK = timedelta(hours=12)
+NSOFT_PREMATCH_HORIZON = timedelta(days=14)
+
+
+def nsoft_event_window(now: datetime, live: bool) -> tuple[datetime, datetime]:
+    """Return the (dateFrom, dateTo) window for an NSoft getwebevents request.
+
+    Prematch looks forward from `now`; live looks BACK, because a game that is
+    in play has already kicked off. MDShop and Admiralbet share this, so the two
+    books cannot drift apart again.
+    """
+    if live:
+        return now - NSOFT_LIVE_LOOKBACK, now
+    return now, now + NSOFT_PREMATCH_HORIZON
 
 
 def nsoft_event_url(site_base: str, event_id: str, live: bool = False) -> str:

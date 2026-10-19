@@ -1,6 +1,8 @@
 import asyncio
 import os
 import sys
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,10 +29,19 @@ from server.api import (
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    """Restore last scan results, runtime toggles, and scan history on boot."""
+    _restore_state()
+    yield
+
+
 app = FastAPI(
     title="Surebet Scanner",
     description="Arbitrage betting detector for the Bosnian market",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 # Allow any origin for local use (allow_credentials must be False when allow_origins=["*"])
@@ -46,9 +57,8 @@ app.add_middleware(
 app.include_router(router, prefix="/api")
 
 
-@app.on_event("startup")
-async def on_startup() -> None:
-    """Restore last scan results, runtime toggles, and scan history on boot."""
+def _restore_state() -> None:
+    """Load every persisted store back into memory."""
     # Proven deep links first: `_load_cache` re-stamps the restored matches
     # with them, so without them every group reads `link_unverified` until the
     # next on-demand check.

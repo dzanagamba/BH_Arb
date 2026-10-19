@@ -8,10 +8,10 @@ import uvicorn
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
-from config.settings import HOST, PORT
+from config.settings import HOST, LOG_LEVEL, PORT
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, LOG_LEVEL, logging.INFO),
     format="%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
     datefmt="%H:%M:%S",
 )
@@ -26,4 +26,6 @@ if __name__ == "__main__":
       API Docs:  http://localhost:{PORT}/docs
     ==========================================
     """)
-    uvicorn.run("server.app:app", host=HOST, port=PORT, reload=False, log_level="info")
+    uvicorn.run(
+        "server.app:app", host=HOST, port=PORT, reload=False, log_level=LOG_LEVEL.lower()
+    )

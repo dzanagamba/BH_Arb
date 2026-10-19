@@ -1034,67 +1034,57 @@ def test_link_lifetime_check_fails_when_a_lifetime_is_dropped_from_the_document(
 
 
 # ===========================================================================
-# 9. The two known defects, and the tripwires that guard them
+# 9. The two fixed defects, and the regression guards that keep them fixed
 # ===========================================================================
 
-_DEFECT_TOKENS = ("premier", "XPASS", "dateFrom=now")
-# What the README says, and the code comment that measured it. The README phrases
-# it in prose and the comment in a URL, so each side has its own literal.
+_DEFECT_TOKENS = ("premier", "NAME_BTTS_LIVE", "dateFrom=now", "nsoft_event_window")
+# The measurement the README quotes, and the code comment that carries it.
 _README_FIGURES = ("35 live football events", "12 hours")
 _CODE_FIGURES = ("35 live football events", "now-12h")
 
 
 def _defect_problems(text: str) -> list[str]:
-    """The known-defects section, against the tripwires recorded in-repo."""
+    """The fixed-defects section, against the fixes and guards in the code."""
     problems: list[str] = []
     section = _section(text, "## Match & mapping certainty")
     for token in _DEFECT_TOKENS:
         if token not in section:
-            problems.append(f"the known-defects section no longer mentions {token!r}")
+            problems.append(f"the fixed-defects section no longer mentions {token!r}")
 
+    premier = (REPO_ROOT / "scrapers" / "premier_kladionica.py").read_text(encoding="utf-8")
+    if "NAME_BTTS_LIVE" not in premier:
+        problems.append("the premier parser no longer reads the live BTTS spelling")
     fixtures = (REPO_ROOT / "tests" / "test_market_fixtures.py").read_text(encoding="utf-8")
-    if "@pytest.mark.xfail" not in fixtures or "strict=True" not in fixtures:
-        problems.append(
-            "test_market_fixtures.py no longer holds a strict xfail, so the XPASS "
-            "tripwire the README describes does not exist"
-        )
-    if "LIVE - OBA TIMA DAJU GOL" not in fixtures:
-        problems.append("the premier live BTTS block name is no longer in the test file")
+    if "test_premier_live_btts_is_emitted_from_the_live_block" not in fixtures:
+        problems.append("the premier live BTTS regression test is gone")
 
-    mdshop = (REPO_ROOT / "scrapers" / "mdshop.py").read_text(encoding="utf-8")
-    if "KNOWN DEFECT" not in mdshop:
-        problems.append("scrapers/mdshop.py no longer records the live-window KNOWN DEFECT")
+    common = (REPO_ROOT / "scrapers" / "common.py").read_text(encoding="utf-8")
     for figure in _CODE_FIGURES:
-        if figure not in mdshop:
-            problems.append(f"scrapers/mdshop.py no longer carries the figure {figure!r}")
+        if figure not in common:
+            problems.append(f"scrapers/common.py no longer carries the figure {figure!r}")
+    for book in ("mdshop", "admiralbet"):
+        scraper = (REPO_ROOT / "scrapers" / f"{book}.py").read_text(encoding="utf-8")
+        if "nsoft_event_window(" not in scraper:
+            problems.append(f"scrapers/{book}.py no longer builds its window from the helper")
     for figure in _README_FIGURES:
         if figure not in text:
             problems.append(f"the README no longer quotes the measurement {figure!r}")
     return problems
 
 
-def test_defect_pointer_matches_the_tripwires_in_repo():
-    """The two known defects the README lists are the two recorded in-repo.
-
-    ``premier_kladionica`` live BTTS is guarded by a strict xfail, so the README
-    must name both the defect and the tripwire; the NSoft live window is guarded
-    by a ``KNOWN DEFECT`` comment that carries the measurement the README quotes,
-    so the quoted figures must still be there.
-    """
+def test_defect_pointer_matches_the_fixes_in_repo():
+    """The two defects the README lists as fixed are fixed, and guarded, in code."""
     problems = _defect_problems(README)
     assert problems == [], "; ".join(problems)
 
 
-def test_defect_check_fails_when_the_readme_drops_a_tripwire():
-    """Proves the previous test reads the tripwires out of the document."""
-    broken = README.replace("XPASS", "a pass")
+def test_defect_check_fails_when_the_readme_drops_a_fix():
+    """Proves the previous test reads the fixes out of the document."""
+    broken = README.replace("nsoft_event_window", "a helper")
     assert broken != README, "the mutation did not apply; the check is untested"
-    assert "strict=True" in (REPO_ROOT / "tests" / "test_market_fixtures.py").read_text(
-        encoding="utf-8"
-    ), "the code side must still say it, or this proves nothing"
     problems = _defect_problems(broken)
-    assert problems, "a README dropping the tripwire passed"
-    assert any("XPASS" in problem for problem in problems)
+    assert problems, "a README dropping the fix passed"
+    assert any("nsoft_event_window" in problem for problem in problems)
 
 
 # ===========================================================================

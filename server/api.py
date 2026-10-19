@@ -42,12 +42,13 @@ from config.settings import (
     ODDS_TTL_SECONDS,
     RATE_LIMIT_WINDOW_SECONDS,
     SCAN_RATE_LIMIT,
+    VERIFIED_KICKOFF_WINDOW_MINUTES,
 )
 from engine.ai import MatchAI, PairProposal
 from engine.arbitrage import ArbitrageEngine
 from engine.certainty import CertaintyGate
 from engine.market_registry import unmapped_markets
-from engine.matcher import MatchMatcher
+from engine.matcher import MatchMatcher, swap_match_teams_and_odds
 from models.schemas import (
     CandidateReview,
     MarketType,
@@ -70,6 +71,10 @@ from scrapers.wwin import WWINScraper
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# The two independent feeds. A query parameter typed with this is validated by
+# FastAPI (422 on anything else) instead of silently falling back to prematch.
+ScanMode = Literal["prematch", "live"]
 
 
 def _require_api_key(x_api_key: str = Header(default="")) -> None:
@@ -118,9 +123,7 @@ def _load_market_state() -> None:
 def _save_market_state() -> None:
     """Persist runtime experimental-market toggles to the state file."""
     try:
-        os.makedirs(CACHE_DIR, exist_ok=True)
-        with open(_MARKET_STATE_FILE, "w", encoding="utf-8") as f:
-            json.dump(_market_enabled, f, ensure_ascii=False, indent=2)
+        _atomic_write_json(_MARKET_STATE_FILE, _market_enabled, "market_state")
     except Exception as e:
         logger.warning(f"Market state save failed: {e}")
 
@@ -148,9 +151,7 @@ def _load_bookmaker_state() -> None:
 def _save_bookmaker_state() -> None:
     """Persist runtime bookmaker toggles to the state file."""
     try:
-        os.makedirs(CACHE_DIR, exist_ok=True)
-        with open(_BOOKMAKER_STATE_FILE, "w", encoding="utf-8") as f:
-            json.dump(_bookmaker_enabled, f, ensure_ascii=False, indent=2)
+        _atomic_write_json(_BOOKMAKER_STATE_FILE, _bookmaker_enabled, "bookmaker_state")
     except Exception as e:
         logger.warning(f"Bookmaker state save failed: {e}")
 
@@ -175,7 +176,22 @@ cached_live_match_groups_report: list[dict] = []
 cached_live_per_bookie: dict[str, int] = {}
 scan_history: list[dict] = []           # recent scan entries (newest first)
 
-pending_candidates: dict[str, CandidateReview] = {}
+# One review queue per feed: a live scan rebuilds only the live queue, so it can
+# no longer wipe the prematch queue a reviewer is working through.
+pending_candidates: dict[str, CandidateReview] = {}        # prematch
+pending_live_candidates: dict[str, CandidateReview] = {}   # live
+
+
+def _candidates_for(mode: str) -> dict[str, CandidateReview]:
+    return pending_live_candidates if mode == "live" else pending_candidates
+
+
+def _find_pending_candidate(candidate_id: str) -> dict[str, CandidateReview] | None:
+    """Return the queue that holds `candidate_id`, whichever feed it came from."""
+    for queue in (pending_candidates, pending_live_candidates):
+        if candidate_id in queue:
+            return queue
+    return None
 candidate_reviews: list[CandidateReview] = []
 ALLOWLIST_FILE = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -663,9 +679,7 @@ def _load_history() -> None:
 def _save_history() -> None:
     """Persist scan history to disk."""
     try:
-        os.makedirs(CACHE_DIR, exist_ok=True)
-        with open(_HISTORY_FILE, "w", encoding="utf-8") as f:
-            json.dump(scan_history, f, ensure_ascii=False, indent=2)
+        _atomic_write_json(_HISTORY_FILE, scan_history, "scan_history")
     except Exception as e:
         logger.warning(f"History save failed: {e}")
 
@@ -1262,6 +1276,9 @@ async def run_scan(mode: str = "prematch"):
     status.total_matches = 0
     status.surebets_found = 0
     status.current_bookmaker = "Starting..."
+    # Counts are rebuilt per scan; a book disabled since the last scan must not
+    # keep reporting its old count.
+    per_bookie.clear()
 
     try:
         all_matches: list[Match] = []
@@ -1327,6 +1344,17 @@ async def run_scan(mode: str = "prematch"):
                 logger.error(f"Scraper gather exception: {res}")
                 status.errors.append(f"Scraper error: {str(res)[:200]}")
 
+        # A book that "succeeds" with nothing is usually a blocked or changed
+        # feed, not an empty market. Say so while other books did return data,
+        # so it is not mistaken for a quiet day (e.g. no live games at night).
+        if all_matches:
+            for bookie_id, config in BOOKMAKERS.items():
+                if status.bookmaker_progress.get(bookie_id) == "done" and not per_bookie.get(bookie_id):
+                    status.errors.append(
+                        f"{config['name']}: returned no matches (feed empty, blocked or changed?)"
+                    )
+                    logger.warning(f"⚠️ {config['name']} returned no {mode} matches")
+
         # Age spread guard (P0-1): warn if scrapers' fetched_at diverge >90s
         if all_matches:
             times = [
@@ -1362,12 +1390,11 @@ async def run_scan(mode: str = "prematch"):
         # rebuilt every scan so it only ever mirrors the current feed.
         status.current_bookmaker = "Collecting review candidates..."
         try:
-            pending_candidates.clear()
-            pending_candidates.update(
-                await _collect_candidates(all_matches, matcher, groups)
-            )
+            queue = _candidates_for(mode)
+            queue.clear()
+            queue.update(await _collect_candidates(all_matches, matcher, groups))
         except Exception as e:
-            pending_candidates.clear()
+            _candidates_for(mode).clear()
             logger.error(f"❌ Candidate collection failed: {e}", exc_info=True)
             status.errors.append(f"Candidate review failed: {str(e)[:200]}")
 
@@ -1417,23 +1444,20 @@ def _save_cache(mode: str = "prematch"):
     status, surebets_cache, matches_cache, report_cache, _ = _state_for(mode)
     cache_file = _LIVE_CACHE_FILE if mode == "live" else _PREMATCH_CACHE_FILE
     try:
-        os.makedirs(CACHE_DIR, exist_ok=True)
-        # Include fetched_at spread for staleness UI
-        fetched_times = []
-        for m in matches_cache:
-            ft = m.get("fetched_at") if isinstance(m, dict) else getattr(m, "fetched_at", None)
-            if ft:
-                fetched_times.append(str(ft))
-        with open(cache_file, "w", encoding="utf-8") as f:
-            json.dump({
-                "surebets": surebets_cache,
-                "matches": matches_cache,
-                "matches_count": len(matches_cache),
-                "match_groups": list(report_cache),
-                "mode": mode,
-                "scan_time": status.last_scan_time.isoformat() if status.last_scan_time else None,
-                "fetched_at": status.last_scan_time.isoformat() if status.last_scan_time else None,
-            }, f, ensure_ascii=False, indent=2, default=str)
+        scan_time = status.last_scan_time.isoformat() if status.last_scan_time else None
+        # Round-tripped through `default=str` first so any stray datetime is
+        # serialised, then written atomically: a crash mid-write must leave the
+        # previous snapshot, never a truncated file the next boot cannot parse.
+        payload = json.loads(json.dumps({
+            "surebets": surebets_cache,
+            "matches": matches_cache,
+            "matches_count": len(matches_cache),
+            "match_groups": list(report_cache),
+            "mode": mode,
+            "scan_time": scan_time,
+            "fetched_at": scan_time,
+        }, default=str))
+        _atomic_write_json(cache_file, payload, os.path.basename(cache_file))
     except Exception as e:
         logger.warning(f"Cache save failed: {e}")
 
@@ -1703,6 +1727,7 @@ async def health():
             if report.get("status") == "verified"
         ),
         "pending_candidates": len(pending_candidates),
+        "live_pending_candidates": len(pending_live_candidates),
         "suppressed_candidates": len(_suppressed_candidates),
         # Matches whose per-event link is unproven AND can still block. See
         # `_unverified_link_count` for why the predicate is the gate's and why
@@ -1868,6 +1893,7 @@ class VerifyRequest(BaseModel):
 async def get_candidates(
     limit: int = CANDIDATE_PAGE_SIZE,
     offset: int = 0,
+    mode: ScanMode = "prematch",
     _auth: None = Depends(_require_api_key),
 ):
     """List match candidates awaiting human review, one bounded page at a time.
@@ -1878,9 +1904,11 @@ async def get_candidates(
     """
     page = max(1, min(limit, CANDIDATE_PAGE_MAX))
     start = max(0, offset)
-    window = list(pending_candidates.values())[start:start + page]
+    queue = _candidates_for(mode)
+    window = list(queue.values())[start:start + page]
     return {
-        "total": len(pending_candidates),
+        "mode": mode,
+        "total": len(queue),
         "count": len(window),
         "limit": page,
         "offset": start,
@@ -1900,7 +1928,8 @@ def _resolve_candidate(
     candidate.status = decision
     candidate.resolved_at = datetime.now(UTC).replace(tzinfo=None)
     candidate.resolved_by = "human"
-    pending_candidates.pop(candidate.id, None)
+    for queue in (pending_candidates, pending_live_candidates):
+        queue.pop(candidate.id, None)
     candidate_reviews.insert(0, candidate.model_copy(deep=True))
     del candidate_reviews[CANDIDATE_REVIEW_HISTORY_MAX:]
     _suppress_candidate(
@@ -1923,7 +1952,8 @@ async def approve_candidate(
     pair stays unverified until that check runs. Approving the *pair* here would
     forge a machine result from a name judgement.
     """
-    candidate = pending_candidates.get(candidate_id)
+    queue = _find_pending_candidate(candidate_id)
+    candidate = queue.get(candidate_id) if queue is not None else None
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
 
@@ -1963,7 +1993,8 @@ async def reject_candidate(
     _auth: None = Depends(_require_api_key),
 ):
     """Reject a pending match candidate without changing alias mappings."""
-    candidate = pending_candidates.get(candidate_id)
+    queue = _find_pending_candidate(candidate_id)
+    candidate = queue.get(candidate_id) if queue is not None else None
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
 
@@ -1977,13 +2008,75 @@ async def get_history(_auth: None = Depends(_require_api_key)):
     return {"count": len(scan_history), "entries": scan_history}
 
 
+def _find_surebet_group(
+    groups: list[MatchGroup], target: dict
+) -> MatchGroup | None:
+    """Find the fresh group for a cached surebet, in the cached orientation.
+
+    The surebet stores the canonical names of the group it was built on. A fresh
+    grouping can anchor the same fixture on a different book, so a member
+    match's normalized names are accepted as well as the group's canonical
+    ones. When the fixture comes back with home and away reversed, every member
+    is flipped into the cached frame, so outcome "1" still means the same team
+    the cached stake backed. Kickoff must agree within the verified window.
+    """
+    home = (target.get("home_team") or "").lower()
+    away = (target.get("away_team") or "").lower()
+    if not home or not away:
+        return None
+    kickoff = target.get("kickoff")
+    target_kickoff: datetime | None = None
+    if isinstance(kickoff, str):
+        try:
+            target_kickoff = datetime.fromisoformat(kickoff)
+        except ValueError:
+            target_kickoff = None
+    if target_kickoff is not None and target_kickoff.tzinfo is not None:
+        target_kickoff = target_kickoff.astimezone(UTC).replace(tzinfo=None)
+
+    for group in groups:
+        names = {((group.canonical_home or "").lower(), (group.canonical_away or "").lower())}
+        names.update(
+            ((m.home_team_normalized or "").lower(), (m.away_team_normalized or "").lower())
+            for m in group.matches
+        )
+        if (home, away) in names:
+            reversed_frame = False
+        elif (away, home) in names:
+            reversed_frame = True
+        else:
+            continue
+        if target_kickoff is not None and group.kickoff is not None:
+            group_kickoff = group.kickoff
+            if group_kickoff.tzinfo is not None:
+                group_kickoff = group_kickoff.astimezone(UTC).replace(tzinfo=None)
+            delta = abs((group_kickoff - target_kickoff).total_seconds()) / 60.0
+            if delta > VERIFIED_KICKOFF_WINDOW_MINUTES:
+                continue
+        if reversed_frame:
+            return group.model_copy(update={
+                "canonical_home": group.canonical_away,
+                "canonical_away": group.canonical_home,
+                "matches": [swap_match_teams_and_odds(m) for m in group.matches],
+            })
+        return group
+    return None
+
+
 @router.post("/verify")
 async def verify_surebet(req: VerifyRequest, _auth: None = Depends(_require_api_key)):
     """
     Live odds verification: re-scrape ONLY the bookmakers involved in a surebet,
-    re-group the match, and compare current odds against the cached ones.
-    Returns whether the surebet is still profitable.
+    re-group the match, and re-price the exact outcome set the surebet was built
+    on. Returns whether that bet is still an arbitrage.
+
+    The fresh matches go through the same pipeline a scan uses — stored
+    deep-link proofs are applied before grouping, so a group the scan verified
+    on a proven link is verified here too, and only `verified` groups are ever
+    priced.
     """
+    if req.mode not in ("prematch", "live"):
+        raise HTTPException(status_code=400, detail="mode must be 'prematch' or 'live'")
     is_live = req.mode == "live"
     surebets_cache, _, _, _ = _state_for(req.mode)[1:]
     target = next((s for s in surebets_cache if s.get("id") == req.surebet_id), None)
@@ -2003,34 +2096,45 @@ async def verify_surebet(req: VerifyRequest, _auth: None = Depends(_require_api_
         if not bookie_ids:
             raise HTTPException(status_code=400, detail="All involved bookmakers are disabled")
 
+        fetched_at = datetime.now(UTC).replace(tzinfo=None)
         fresh_matches: list[Match] = []
         errors: list[str] = []
         for bookie_id in bookie_ids:
             scraper_class = SCRAPERS.get(bookie_id)
             if not scraper_class:
                 continue
+            # Same browser budget as a scan: a verify must not open a third
+            # Chromium alongside a running deep-link check.
+            sem = _browser_sem if bookie_id in PLAYWRIGHT_BOOKIES else None
+            if sem:
+                await sem.acquire()
             try:
                 scraper = scraper_class()
-                fresh_matches.extend(await scraper.scrape(live=is_live))
+                fresh_matches.extend(await scraper.scrape(live=is_live, scan_time=fetched_at))
             except Exception as e:
                 errors.append(f"{bookie_id}: {str(e)[:150]}")
+            finally:
+                if sem:
+                    sem.release()
 
-    # Re-group the fresh data and find the same real-world match
+    for match in fresh_matches:
+        if not match.fetched_at:
+            match.fetched_at = fetched_at
+    missing = sorted(set(bookie_ids) - {m.bookmaker for m in fresh_matches})
+    for bookie_id in missing:
+        if not any(e.startswith(f"{bookie_id}:") for e in errors):
+            errors.append(f"{bookie_id}: returned no matches")
+
+    # Proofs first, exactly as run_scan does, or every group holding a book
+    # with a declared per-event route would be refused as `link_unverified`.
+    _apply_deep_link_verifications(fresh_matches, req.mode)
     groups = MatchMatcher().group_matches(fresh_matches)
-    target_home = (target.get("home_team") or "").lower()
-    target_away = (target.get("away_team") or "").lower()
-    group = None
-    for g in groups:
-        gh = (g.canonical_home or "").lower()
-        ga = (g.canonical_away or "").lower()
-        if (gh == target_home and ga == target_away) or (gh == target_away and ga == target_home):
-            group = g
-            break
+    group = _find_surebet_group(groups, target)
 
     if group is None:
         return {
             "surebet_id": target["id"],
-            "message": "Match not found in fresh data (removed or renamed)",
+            "message": "Match not found in fresh data (removed, renamed or no longer verified)",
             "cached_margin": target["total_margin"],
             "cached_profit_percent": target["profit_percent"],
             "still_profitable": None,
@@ -2043,26 +2147,32 @@ async def verify_surebet(req: VerifyRequest, _auth: None = Depends(_require_api_
     except ValueError:
         market_type = None
 
-    current = engine.evaluate_market(group, market_type) if market_type else None
+    labels = [s["outcome_label"] for s in target["stakes"]]
+    current = engine.evaluate_market(group, market_type, labels=labels) if market_type else None
     if current is None:
         return {
             "surebet_id": target["id"],
-            "message": "No profitable combination remains in current odds",
+            "message": "The outcomes this surebet needs are no longer all offered",
             "cached_margin": target["total_margin"],
             "cached_profit_percent": target["profit_percent"],
             "still_profitable": False,
             "errors": errors,
         }
 
-    old_by_label = {s["outcome_label"]: s["odds"] for s in target["stakes"]}
+    old_by_label = {s["outcome_label"]: s for s in target["stakes"]}
     drift = {}
-    for label, old_odds in old_by_label.items():
+    for label, old in old_by_label.items():
         new = current["odds"].get(label)
         drift[label] = {
-            "old_odds": old_odds,
+            "old_odds": old["odds"],
+            "old_bookmaker": old["bookmaker"],
             "new_odds": new["odds"] if new else None,
             "new_bookmaker": new["bookmaker"] if new else None,
-            "changed": (new is None or abs(new["odds"] - old_odds) > 0.001),
+            "changed": (
+                new is None
+                or abs(new["odds"] - old["odds"]) > 0.001
+                or new["bookmaker"] != old["bookmaker"]
+            ),
         }
 
     return {
@@ -2078,7 +2188,11 @@ async def verify_surebet(req: VerifyRequest, _auth: None = Depends(_require_api_
             "profit_percent": current["profit_percent"],
         },
         "drift": drift,
-        "still_profitable": current["profit_percent"] >= MIN_PROFIT_PERCENT,
+        # Any positive margin is still a guaranteed profit. The scan lists
+        # surebets down to DUST_PROFIT_PERCENT, so judging them against the
+        # higher MIN_PROFIT_PERCENT would report an unchanged dust bet as gone.
+        "still_profitable": current["margin"] < 1.0,
+        "meets_min_profit": current["profit_percent"] >= MIN_PROFIT_PERCENT,
         "errors": errors,
     }
 

@@ -127,6 +127,8 @@ function switchMode(mode) {
     hideError();
     // Load the other mode's cached results (silent, no alert sound)
     loadResults(true);
+    // Each feed has its own review queue.
+    if (activeTab === 'review') loadCandidates();
 }
 
 function surebetSignature(sb) {
@@ -1029,7 +1031,7 @@ async function candidateListFetch(url) {
 
 async function loadCandidates() {
     try {
-        const response = await candidateListFetch(`/api/candidates?limit=${CANDIDATE_PAGE_SIZE}&offset=0`);
+        const response = await candidateListFetch(`/api/candidates?limit=${CANDIDATE_PAGE_SIZE}&offset=0&mode=${currentMode}`);
         if (response.ok === false) throw new Error(`Candidate request failed (${response.status})`);
         const data = await response.json();
         renderCandidates(

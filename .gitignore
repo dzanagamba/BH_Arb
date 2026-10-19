@@ -15,6 +15,11 @@ env/
 
 # Environment variables
 .env
+.env.*
+!.env.example
+
+# Worktrees (isolated workspaces branched off this repo)
+.worktrees/
 
 # Cache directory (runtime)
 cache/*.json

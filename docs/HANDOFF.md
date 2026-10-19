@@ -218,8 +218,10 @@ is unchanged at 2 calls/min; a cursor is what made those calls worth making.
 16 → 106 groups from the same input is a 6× swing driven by iteration order. It affects yield
 and makes every measurement unstable.
 
-### 5. Fix `premier_kladionica/live/btts` and the NSoft live window
-Both **recorded in-repo, neither fixed.**
+### 5. ~~Fix `premier_kladionica/live/btts` and the NSoft live window~~ (fixed)
+**Now:** the Premier parser matches BTTS per mode (`NAME_BTTS_LIVE`), and both NSoft
+scrapers build their window from `scrapers.common.nsoft_event_window` (live looks back
+12h). Both have regression tests in place of the tripwires. The original notes follow.
 
 - *Premier live BTTS* — an `xfail(strict=True)` tripwire at `tests/test_market_fixtures.py:559`.
   The feed says `LIVE - OBA TIMA DAJU GOL`; the parser's `NAME_BTTS` is `OBA DAJU GOL`. The fix
@@ -252,11 +254,13 @@ documentary provenance in `MARKET_MAPPING.md:347`. The spec states a captured fi
 entry as a hard rule; this is the one enabled book that does not meet it.
 
 ### 8. Smaller items
-- `engine/arbitrage.py` has **no status check at all** — "only `verified` groups feed arbitrage"
+- ~~`engine/arbitrage.py` has **no status check at all**~~ (fixed: `find_surebets` and
+  `evaluate_market` now refuse any group that is not `verified`) — "only `verified` groups feed arbitrage"
   rests entirely on one `if` in `engine/matcher.py:279-284`. For a product whose purpose is
   *never show a wrong surebet*, a guard inside `find_surebets` would make the central safety
   property local rather than ambient.
-- `pending_candidates` is global and mode-blind; a live scan wipes the prematch queue.
+- ~~`pending_candidates` is global and mode-blind~~ (fixed: one queue per feed, and
+  `/api/candidates` takes `mode`). Original note: a live scan wiped the prematch queue.
   `/api/candidates` takes no `mode` parameter, so the spec's documented contract is unmet.
 - The UI's empty state says *"try reducing the minimum profit threshold or checking all
   markets."* The filters are not the cause — the link gate is. The data to say so is already

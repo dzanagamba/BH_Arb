@@ -9,7 +9,7 @@ Parameters: sportId, isLive, dateFrom, dateTo, eventMappingTypes
 """
 
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 import httpx
 
@@ -18,6 +18,7 @@ from models.schemas import Market, Match
 from scrapers.base import fetch_with_retry
 from scrapers.common import (
     nsoft_event_url,
+    nsoft_event_window,
     parse_dt,
     parse_nsoft_bets,
     parse_nsoft_live_bets,
@@ -78,30 +79,17 @@ class MDShopScraper:
         """
         Fetch events for all sports and parse into Match objects.
         `live=True` fetches the in-play feed, which uses a different bet type
-        ID space handled by parse_nsoft_live_bets(). Note the 14-day window is
-        shared between the two modes, which is wrong for live — see the KNOWN
-        DEFECT comment on the dateFrom construction below.
+        ID space handled by parse_nsoft_live_bets(), and a backward-looking
+        window (see `scrapers.common.nsoft_event_window`).
         `scan_time` (naive UTC) is the single wall-clock for this scan — passed from
         server/api.py:run_scan. When None, falls back to now for standalone/test usage.
         """
         now_aware = (scan_time.replace(tzinfo=UTC) if scan_time and scan_time.tzinfo is None else scan_time) if scan_time else datetime.now(UTC)
-        now_str = now_aware.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3]
-        future = now_aware + timedelta(days=14)
-        future_str = future.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3]
-        # KNOWN DEFECT (live mode only) -- the window below is correct for
-        # prematch but wrong for isLive=true, and the behaviour is NOT changed
-        # here because it needs its own decision. NSoft filters events by
-        # kickoff against dateFrom, so with dateFrom=now every already-started
-        # in-play game falls outside the window and is filtered out of the
-        # response: at 2026-09-25 17:00 UTC this request returned
-        # {"events": []} while 35 live football events were available, and 35
-        # events the moment dateFrom was moved back to now-12h. That means this
-        # scraper most likely returns no live matches at all today.
-        # Receipt for the working window (committed, not prose):
-        #   tests/fixtures/markets/mdshop_live.json -> "endpoint" field, which
-        #   embeds dateFrom=<now-12h>&dateTo=<now> and produced a real capture.
-        # See also scrapers/admiralbet.py, which builds the same window, and
-        # scripts/capture_market_fixtures.py, which uses the working one.
+        # Live looks back 12h: NSoft filters by kickoff, so a window starting at
+        # now drops every game already in play. See `nsoft_event_window`.
+        date_from, date_to = nsoft_event_window(now_aware, live)
+        now_str = date_from.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3]
+        future_str = date_to.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3]
 
         all_matches: list[Match] = []
         seen_codes: set[tuple] = set()  # (home, away, sport)

@@ -113,9 +113,12 @@ python main.py
 
 ## Configuration
 
-Edit `config/settings.py` (or `.env`) to change:
-- `HEADLESS` — `True` for background browser execution (default), or `False` to view browser windows (useful if CAPTCHA solving is required)
+Set these in `.env` (see `.env.example`):
+- `HEADLESS` — `true` for background browser execution (default), or `false` to view browser windows (useful if CAPTCHA solving is required)
+- `LOG_LEVEL` — `DEBUG`, `INFO` (default), `WARNING` or `ERROR`
 - `VERIFY_SSL` — `True` to enforce TLS certificate verification on direct httpx API calls (default `False`)
+
+Edit `config/settings.py` to change:
 - `MIN_PROFIT_PERCENT` — Minimum profit % to show as a surebet (default: 0.5%)
 - `KICKOFF_WINDOW_MINUTES` — Max kickoff time difference to group matches (default: 120)
 - `DEFAULT_INVESTMENT` — Default total investment for stake calculation (default: 100 BAM)
@@ -124,8 +127,10 @@ Edit `config/settings.py` (or `.env`) to change:
 ## Development
 
 ```bash
-# Run the test suite
+# Run the test suite (CI runs this plus the commands below on every push:
+# .github/workflows/ci.yml)
 python -m pytest
+python scripts/generate_market_mapping_doc.py --check
 
 # Lint / type check
 python -m ruff check .
@@ -187,10 +192,12 @@ position and nothing else. A negative verdict sets the confidence to 0 and says
 
 ### The review queue
 
-Pairings the gate refused are collected every scan into `pending_candidates` and
-shown in the dashboard's **Review** tab. There is no dedicated URL: the Review
+Pairings the gate refused are collected every scan into a per-feed queue
+(`pending_candidates` for prematch, `pending_live_candidates` for live, so one
+feed's scan never wipes the other's) and shown in the dashboard's **Review** tab
+for the feed on screen. There is no dedicated URL: the Review
 tab is the second tab of the dashboard, so open `http://localhost:8000` and click
-**Review**. It is populated by `GET /api/candidates`, and deciding an entry is
+**Review**. It is populated by `GET /api/candidates?mode=prematch|live`, and deciding an entry is
 `POST /api/candidates/{candidate_id}/approve` or
 `POST /api/candidates/{candidate_id}/reject`.
 
@@ -261,23 +268,38 @@ anything. Both numbers are re-derived from that measurement by
 and re-measure the sweep before trusting them: the per-event cost is a real browser
 navigation, so the headroom is a number of events, not a promise.
 
-### Known defects, recorded in-repo
+### Fixed defects, and what keeps them fixed
+
+Two live-mode defects were measured and recorded in-repo on 2026-09-25 and have
+since been fixed. Each now has a regression test instead of a tripwire.
 
 * **`premier_kladionica` live BTTS.** The live feed names the block
-  `LIVE - OBA TIMA DAJU GOL` while the parser's `NAME_BTTS` is `OBA DAJU GOL`,
-  so the registry's live row is unreachable. Guarded by
-  `xfail(strict=True)` in `tests/test_market_fixtures.py`: fixing the parser
-  turns it into an **XPASS**, which pytest reports as a **failure**, so the
-  parser and the marker cannot drift apart. The fix is to make `NAME_BTTS`
-  mode-aware, *not* to rename the registry row.
+  `LIVE - OBA TIMA DAJU GOL` while prematch uses `OBA DAJU GOL`, and the parser
+  compared both modes against the prematch spelling, so the registry's live row
+  was unreachable (it was guarded by a strict xfail whose XPASS would fail the
+  suite). The parser now matches per mode (`NAME_BTTS` / `NAME_BTTS_LIVE`); the
+  registry row was deliberately not renamed, since prematch really is spelled the
+  other way. `tests/test_market_fixtures.py` checks both modes against the
+  captured payloads.
 * **NSoft live window (`mdshop`, `admiralbet`).** NSoft filters events by
-  kickoff against `dateFrom`, and the window is built with `dateFrom=now`, so
-  every already-started in-play game is filtered out. At 2026-09-25 17:00 UTC the
-  request returned `{"events": []}` while 35 live football events were available
-  — and 35 the moment `dateFrom` was moved back 12 hours. Both books therefore
-  most likely return **no live matches at all** today. Recorded as a
-  `KNOWN DEFECT` comment in `scrapers/mdshop.py`; the behaviour is unchanged
-  because it needs its own decision.
+  kickoff against `dateFrom`, and both scrapers built the live request with
+  `dateFrom=now`, so every already-started in-play game was filtered out. At
+  2026-09-25 17:00 UTC that request returned `{"events": []}` while
+  35 live football events were available — and 35 the moment `dateFrom` was
+  moved back 12 hours. Both scrapers now take their window from one shared helper,
+  `scrapers.common.nsoft_event_window`, which looks back 12 hours for live (the
+  window the committed live fixtures were captured with) and forward 14 days for
+  prematch. `tests/test_live_mode.py` pins the window each scraper requests.
+
+### Re-verifying a surebet before betting
+
+The card's **Verify** button calls `POST /api/verify`, which re-scrapes only the
+books in that surebet, runs them through the same pipeline a scan uses (stored
+link proofs applied, certainty gate, verified groups only) and re-prices the
+**exact outcomes the surebet was built on** — the same line, the same 1X2/double
+chance partition, in the cached home/away frame even if a book now lists the
+fixture reversed. `still_profitable` is true for any remaining positive margin;
+`meets_min_profit` says whether it still clears `MIN_PROFIT_PERCENT`.
 
 ## Adding more leagues/teams
 

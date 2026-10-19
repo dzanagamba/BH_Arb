@@ -192,7 +192,7 @@ def _group_with_past_kickoff():
         ])],
         is_live=True,
     )
-    group = MatchGroup(canonical_home="Sarajevo", canonical_away="Zeljeznicar",
+    group = MatchGroup(status="verified", canonical_home="Sarajevo", canonical_away="Zeljeznicar",
                        league="Premijer Liga", kickoff=kickoff, matches=[m1, m2, m3])
     return group
 
@@ -207,3 +207,47 @@ def test_prematch_mode_drops_past_kickoff_groups():
     group = _group_with_past_kickoff()
     engine = ArbitrageEngine()
     assert engine.find_surebets([group], min_profit=0.0, allow_past_kickoffs=False) == []
+
+
+# ─── NSoft request window ─────────────────────────────────────────────────────
+#
+# NSoft filters getwebevents by KICKOFF against dateFrom. A live window that
+# starts at "now" therefore drops every game already in play — measured on
+# 2026-09-25 as {"events": []} against 35 available. Live must look back.
+
+def test_nsoft_live_window_looks_back_so_started_games_are_returned():
+    from scrapers.common import nsoft_event_window
+
+    now = datetime(2026, 9, 25, 17, 0, tzinfo=UTC)
+    date_from, date_to = nsoft_event_window(now, live=True)
+    assert date_from == now - timedelta(hours=12)
+    assert date_to == now
+
+
+def test_nsoft_prematch_window_looks_forward():
+    from scrapers.common import nsoft_event_window
+
+    now = datetime(2026, 9, 25, 17, 0, tzinfo=UTC)
+    assert nsoft_event_window(now, live=False) == (now, now + timedelta(days=14))
+
+
+def test_mdshop_requests_the_backward_live_window(monkeypatch):
+    import asyncio
+
+    import scrapers.mdshop as mdshop
+
+    requested: list[str] = []
+
+    async def fake_fetch(client, url, headers=None, params=None, **_kwargs):
+        requested.append(url)
+        return None
+
+    monkeypatch.setattr(mdshop, "fetch_with_retry", fake_fetch)
+    scan_time = datetime(2026, 9, 25, 17, 0)
+    asyncio.run(mdshop.MDShopScraper().scrape(live=True, scan_time=scan_time))
+    asyncio.run(mdshop.MDShopScraper().scrape(live=False, scan_time=scan_time))
+
+    live_url, prematch_url = requested
+    assert "isLive=true" in live_url
+    assert "dateFrom=2026-09-25T05:00:00.000&dateTo=2026-09-25T17:00:00.000" in live_url
+    assert "dateFrom=2026-09-25T17:00:00.000&dateTo=2026-10-09T17:00:00.000" in prematch_url

@@ -11,6 +11,7 @@ Core math:
   This guarantees equal return regardless of which outcome wins.
 
 Sanity checks:
+  - Price only groups the certainty gate verified
   - Reject profit > 20% (almost certainly a data/scraper error)
   - Reject if total_implied ≥ 1.0 (no arbitrage)
   - Require minimum number of outcomes for each market
@@ -120,6 +121,15 @@ class ArbitrageEngine:
         ttl = 60 if allow_past_kickoffs else ODDS_TTL_SECONDS  # live tight, prematch looser
 
         for group in groups:
+            # Only a group the certainty gate VERIFIED may be priced. The matcher
+            # already returns only those, but "never show a surebet built on two
+            # different matches" is this product's central safety property, so it
+            # is enforced here too rather than resting on one caller.
+            if group.status != "verified":
+                logger.debug(
+                    f"Skipping {group.status} group: {group.canonical_home} vs {group.canonical_away}"
+                )
+                continue
             # Skip matches whose kickoff has already passed (prematch mode only;
             # live matches are in play right now and remain actionable)
             if not allow_past_kickoffs and self._is_expired(group.kickoff):
@@ -240,6 +250,7 @@ class ArbitrageEngine:
         market_type: MarketType,
         min_profit: float,
         investment: float,
+        max_profit: float = MAX_SUREBET_PROFIT_PERCENT,
     ) -> Surebet | None:
         """
         Check a line-embedded market (FIRST_HALF_OU, ASIAN_HANDICAP) across all
@@ -302,7 +313,7 @@ class ArbitrageEngine:
 
         if profit_percent < min_profit:
             return None
-        if profit_percent > MAX_SUREBET_PROFIT_PERCENT:
+        if profit_percent > max_profit:
             logger.warning(
                 f"Rejected line-market surebet with {profit_percent:.1f}% profit "
                 f"(likely data error) — {group.canonical_home} vs {group.canonical_away}"
@@ -465,13 +476,56 @@ class ArbitrageEngine:
             found_at=datetime.now(UTC).replace(tzinfo=None),
         )
 
-    def evaluate_market(self, group: MatchGroup, market_type: MarketType) -> dict | None:
+    def evaluate_market(
+        self,
+        group: MatchGroup,
+        market_type: MarketType,
+        labels: list[str] | None = None,
+    ) -> dict | None:
         """
         Evaluate the current best combination for a market without profit filtering.
         Used by the live odds verification endpoint. Returns
         {margin, profit_percent, odds: {label: {bookmaker, odds}}} or None.
+
+        `labels` pins the evaluation to one exact outcome set — the one a cached
+        surebet was built on, e.g. ["Over 1.5", "Under 1.5"] or ["1", "X2"] — so
+        verification answers "is THIS bet still an arbitrage" rather than
+        silently switching to a different line or partition. The one-bet-per-
+        bookmaker rule still applies. A group the gate has not verified is never
+        priced.
         """
-        if market_type == MarketType.DOUBLE_CHANCE:
+        if group.status != "verified":
+            return None
+        if labels:
+            source_types = (
+                (MarketType.MATCH_RESULT, MarketType.DOUBLE_CHANCE)
+                if market_type == MarketType.DOUBLE_CHANCE
+                else (market_type,)
+            )
+            wanted = set(labels)
+            pinned: dict[str, dict[str, float]] = {}
+            for match in group.matches:
+                for market in match.markets:
+                    if market.market_type not in source_types:
+                        continue
+                    for ov in market.odds:
+                        if ov.label in wanted and ov.value > 1.0:
+                            book = pinned.setdefault(match.bookmaker, {})
+                            book[ov.label] = max(book.get(ov.label, 0.0), ov.value)
+            pinned_best = self._best_combination(pinned, list(labels))
+            if pinned_best is None:
+                return None
+            best_implied, best_odds_map = pinned_best
+        elif market_type in (MarketType.FIRST_HALF_OU, MarketType.ASIAN_HANDICAP):
+            line_result = self._check_line_market(
+                group, market_type, min_profit=-100.0, investment=DEFAULT_INVESTMENT,
+                max_profit=float("inf"),
+            )
+            if line_result is None:
+                return None
+            best_odds_map = {s.outcome_label: (s.bookmaker, s.odds) for s in line_result.stakes}
+            best_implied = sum(1.0 / odd for _book, odd in best_odds_map.values())
+        elif market_type == MarketType.DOUBLE_CHANCE:
             merged: dict[str, dict[str, float]] = {}
             for match in group.matches:
                 for market in match.markets:
