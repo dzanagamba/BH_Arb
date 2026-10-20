@@ -99,6 +99,16 @@ MIN_PROFIT_PERCENT = 0.5       # Minimum profit % to show as surebet
 DUST_PROFIT_PERCENT = 0.2      # Lower bound for "dust" (low-value) surebets shown in separate tab
 DEFAULT_INVESTMENT = 100.0     # Default total investment (BAM/KM)
 EXPIRY_BUFFER_MINUTES = 15     # Grace period (min) before treating a match as expired
+# Books that run on one odds feed quote identical prices, so a bet at one and a
+# bet at the other is not two independent prices: the engine takes at most one
+# leg per price source. MDShop and Admiralbet are both NSoft (see MARKET_MAPPING.md).
+PRICE_SOURCES = {"mdshop": "nsoft", "admiralbet": "nsoft"}
+
+
+def price_source(bookmaker: str) -> str:
+    return PRICE_SOURCES.get(bookmaker, bookmaker)
+
+
 MAX_SUREBET_PROFIT_PERCENT = 20.0  # Sanity cap — reject higher profits (likely scraper/data errors)
 ODDS_TTL_SECONDS = 600         # Max age of odds before considered stale (prematch 10 min, live 60s enforced in engine)
 

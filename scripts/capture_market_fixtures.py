@@ -135,13 +135,12 @@ NSOFT_PREMATCH_IDS = {
     "DOUBLE_CHANCE": 152,
     "BTTS": 151,
 }
-NSOFT_LIVE_IDS = {
-    "MATCH_RESULT": 6,
-    "DOUBLE_CHANCE": (18, 42),
-    "BTTS": 995,
-}
+# NSoft live reads the match total only (id 22). Its 1X2 / double chance / BTTS
+# (6, 18, 42, 995) disagreed with every other book on 2026-10-20 and are kept in
+# the fixture as excluded controls, never as expected markets.
+NSOFT_LIVE_IDS: dict[str, Any] = {}
 NSOFT_PREMATCH_EXCLUDED = [136, 148, 140, 166]
-NSOFT_LIVE_EXCLUDED = [24, 261, 56, 41]
+NSOFT_LIVE_EXCLUDED = [6, 42, 995, 24, 261, 56, 41]
 # NSoft spells the totals legs in the site's language; both books use the
 # "Manje"/"Više" pair, MDShop also serves the ASCII "Vise" spelling.
 NSOFT_OU_LEGS = {"manje": "under", "vise": "over", "više": "over", "over": "over", "under": "under"}
@@ -202,6 +201,7 @@ async def capture_nsoft(client: httpx.AsyncClient, bookmaker: str, mode: str) ->
         date_from, date_to = now, now + timedelta(days=14)
         ids = dict(NSOFT_PREMATCH_IDS)
         ids["MATCH_RESULT"] = result_id
+        ou_ids: tuple[int, ...]
         ou_ids, ou_lines, excluded = (137, 138), ("1.5", "2.5", "3.5"), NSOFT_PREMATCH_EXCLUDED
     else:
         # The live feed only returns events whose kickoff falls inside the
@@ -209,7 +209,8 @@ async def capture_nsoft(client: httpx.AsyncClient, bookmaker: str, mode: str) ->
         # in-play games are filtered out of the response entirely.
         date_from, date_to = now - timedelta(hours=12), now
         ids = dict(NSOFT_LIVE_IDS)
-        ou_ids, ou_lines, excluded = (22, 28), ("1.5", "2.5", "3.5"), NSOFT_LIVE_EXCLUDED
+        # 28 is "Domaćin ukupno" (the HOME team's goals): never the match total.
+        ou_ids, ou_lines, excluded = (22,), ("1.5", "2.5", "3.5"), NSOFT_LIVE_EXCLUDED
 
     url = (
         f"{base}?sportId=1&isLive={'true' if mode == 'live' else 'false'}"
@@ -257,7 +258,7 @@ async def capture_nsoft(client: httpx.AsyncClient, bookmaker: str, mode: str) ->
                 wanted = []
                 break
             wanted.append((candidates, spec))
-        if not wanted:
+        if not wanted and mode != "live":
             continue
         ou_pairs = {
             str(b.get("sBV")): b
@@ -274,13 +275,11 @@ async def capture_nsoft(client: httpx.AsyncClient, bookmaker: str, mode: str) ->
             match = next((b for b in bets if b.get("betTypeId") == excluded_id), None)
             if match is not None:
                 kept.append(_trim_nsoft_bet(match))
-                break
-        exercised = ["1x2", "double_chance", "btts"] + ["over_under_1_5", "over_under_2_5", "over_under_3_5"]
-        if mode == "live" and bookmaker == "admiralbet":
-            # admiralbet declares no live O/U row, so the 22/28 totals stay in
-            # the payload purely as the unregistered-ID control: they must be
-            # counted by record_unmapped and must not produce a market.
-            exercised = ["1x2", "double_chance", "btts"]
+                if mode != "live":
+                    break
+        exercised = ["over_under_1_5", "over_under_2_5", "over_under_3_5"]
+        if mode == "prematch":
+            exercised = ["1x2", "double_chance", "btts"] + exercised
         _finish(
             {
                 "bookmaker": bookmaker,
@@ -610,8 +609,17 @@ async def capture_premier(client: httpx.AsyncClient, _bookmaker: str, mode: str)
         # kept as evidence of the defect but is not emitted, so it is not
         # claimed as exercised.
         exercised = ["1x2", "double_chance"]
-        if PREMIER_BTTS_NAMES["prematch"] in by_name:
+        # A block listed with only its header row offers nothing to read, so the
+        # claim needs at least two priced outcomes under the mode's spelling.
+        btts_tips = by_name.get(PREMIER_BTTS_NAMES[mode], set())
+        priced = [
+            row for row in rows
+            if row[2] in btts_tips and row[4] != 0 and _active(row[5])
+        ]
+        if len(priced) >= 2:
             exercised.append("btts")
+        elif mode == "live":
+            continue  # keep looking for an in-play event that really offers BTTS
         if mode == "prematch":
             exercised += ["over_under_1_5", "over_under_2_5", "over_under_3_5"]
         # An excluded market carried by the same event, kept as a control.

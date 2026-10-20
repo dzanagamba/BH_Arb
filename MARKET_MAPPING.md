@@ -8,9 +8,8 @@ parsed directly by individual scrapers rather than declared in the registry. Any
 offer with a similar-looking outcome label is ignored unless its settlement
 meaning and complete outcome set are known.
 
-Audit date: 2026-08-14; prematch captures re-taken 2026-10-20 (live captures
-still 2026-09-25, no in-play football was on offer at re-capture time — see
-PLAN.md M0). Live sources were checked where the bookmaker API was
+Audit date: 2026-08-14; prematch and live captures re-taken 2026-10-20 (EVLBet has no
+feed to capture). Live sources were checked where the bookmaker API was
 reachable. Decimal odds are for the regular match settlement, not extra time,
 penalties, or a different period.
 
@@ -34,7 +33,7 @@ Verify without writing: `python scripts/generate_market_mapping_doc.py --check`
 Source of truth: `config/bookmaker_markets.json`, loaded by
 `engine/market_registry.py`. Values below are resolved through the loader,
 so registry defaults (outcome labels, min legs, settlement) are included.
-Covers 9 bookmakers and 91 book/mode/market rows.
+Covers 9 bookmakers and 85 book/mode/market rows.
 
 Scope: these are the IDs the **registry declares**. It is the authority on
 the declared mapping, not on parser dispatch — a book's parser may read a
@@ -53,9 +52,6 @@ bottom of this file say so.
 | `mdshop` | prematch | Over/Under 1.5 (`over_under_1_5`) | `137`, `138` | Over 1.5, Under 1.5 | 2 | 1.5 | full_time |
 | `mdshop` | prematch | Over/Under 2.5 (`over_under_2_5`) | `137`, `138` | Over 2.5, Under 2.5 | 2 | 2.5 | full_time |
 | `mdshop` | prematch | Over/Under 3.5 (`over_under_3_5`) | `137`, `138` | Over 3.5, Under 3.5 | 2 | 3.5 | full_time |
-| `mdshop` | live | Full-time 1X2 (`1x2`) | `6` | 1, 2, X | 3 | — | full_time, only at specifier 0-0 |
-| `mdshop` | live | Double Chance (`double_chance`) | `18`, `42` | 12, 1X, X2 | 2 | — | full_time |
-| `mdshop` | live | BTTS (`btts`) | `995` | GG, NG | 2 | — | full_time, only at specifier 0-0 |
 | `mdshop` | live | Over/Under 1.5 (`over_under_1_5`) | `22` | Over 1.5, Under 1.5 | 2 | 1.5 | full_time |
 | `mdshop` | live | Over/Under 2.5 (`over_under_2_5`) | `22` | Over 2.5, Under 2.5 | 2 | 2.5 | full_time |
 | `mdshop` | live | Over/Under 3.5 (`over_under_3_5`) | `22` | Over 3.5, Under 3.5 | 2 | 3.5 | full_time |
@@ -65,9 +61,6 @@ bottom of this file say so.
 | `admiralbet` | prematch | Over/Under 1.5 (`over_under_1_5`) | `137`, `138` | Over 1.5, Under 1.5 | 2 | 1.5 | full_time |
 | `admiralbet` | prematch | Over/Under 2.5 (`over_under_2_5`) | `137`, `138` | Over 2.5, Under 2.5 | 2 | 2.5 | full_time |
 | `admiralbet` | prematch | Over/Under 3.5 (`over_under_3_5`) | `137`, `138` | Over 3.5, Under 3.5 | 2 | 3.5 | full_time |
-| `admiralbet` | live | Full-time 1X2 (`1x2`) | `6` | 1, 2, X | 3 | — | full_time, only at specifier 0-0 |
-| `admiralbet` | live | Double Chance (`double_chance`) | `18`, `42` | 12, 1X, X2 | 2 | — | full_time |
-| `admiralbet` | live | BTTS (`btts`) | `995` | GG, NG | 2 | — | full_time, only at specifier 0-0 |
 | `admiralbet` | live | Over/Under 1.5 (`over_under_1_5`) | `22` | Over 1.5, Under 1.5 | 2 | 1.5 | full_time |
 | `admiralbet` | live | Over/Under 2.5 (`over_under_2_5`) | `22` | Over 2.5, Under 2.5 | 2 | 2.5 | full_time |
 | `admiralbet` | live | Over/Under 3.5 (`over_under_3_5`) | `22` | Over 3.5, Under 3.5 | 2 | 3.5 | full_time |
@@ -152,12 +145,12 @@ A name pattern applies to any source ID that matches it.
 
 | Bookmaker | Excluded IDs / name patterns |
 | --- | --- |
-| `admiralbet` | `1`, `10`, `11`, `14`, `17`, `24`, `28`, `30`, `39`, `41`, `43`, `56`, `136`, `140`, `143`, `144`, `148`, `149`, `153`, `154`, `161`, `162`, `166`, `174`, `261`, `303`, `304`, `437`, `1064` |
+| `admiralbet` | `1`, `6`, `9`, `10`, `11`, `12`, `14`, `16`, `17`, `18`, `24`, `27`, `28`, `30`, `33`, `35`, `37`, `38`, `39`, `41`, `42`, `43`, `44`, `54`, `56`, `57`, `59`, `60`, `136`, `140`, `143`, `144`, `148`, `149`, `153`, `154`, `161`, `162`, `166`, `174`, `261`, `303`, `304`, `418`, `419`, `437`, `534`, `688`, `689`, `973`, `974`, `975`, `976`, `977`, `978`, `995`, `1064`, `1065`, `1066`, `1067`, `1112`, `1236`, `1237`, `1238`, `1239`, `1240`, `1241`, `1242`, `1243`, `1244`, `1245`, `1246`, `1247`, `1248`, `1249`, `1250`, `1251`, `1252`, `1685`, `1686`, `1687`, `1688`, `1690`, `1691` |
 | `betole` | `335`, `336` |
-| `mbet` | `lfb:tg1sth`, `ofb:1hfg`, `ofb:2hfg`, `ofb:acar`, `ofb:asom`, `ofb:asot`, `ofb:atc`, `ofb:atfo`, `ofb:atg`, `ofb:atgc`, `ofb:aweh`, `ofb:btrc`, `ofb:btrc2`, `ofb:car1`, `ofb:cgg`, `ofb:coh`, `ofb:cor`, `ofb:corfh`, `ofb:cr`, `ofb:crfh`, `ofb:ctg`, `ofb:dcg`, `ofb:dchtft2`, `ofb:dchtft3`, `ofb:dchtft32`, `ofb:dnb`, `ofb:dnbfh`, `ofb:dnbsh`, `ofb:dw`, `ofb:etc`, `ofb:etcfh`, `ofb:fgm`, `ofb:fgs`, `ofb:fhatg`, `ofb:fhcar`, `ofb:fhg`, `ofb:fhhtg`, `ofb:fhoff`, `ofb:fi`, `ofb:frcor`, `ofb:fsg`, `ofb:fsgg`, `ofb:fts`, `ofb:gg2+`, `ofb:ggg`, `ofb:ggi`, `ofb:ggii`, `ofb:hcar`, `ofb:hsom`, `ofb:hsot`, `ofb:htc`, `ofb:htdc`, `ofb:htfo`, `ofb:htft`, `ofb:htftg`, `ofb:htfthcg`, `ofb:htg`, `ofb:htgc`, `ofb:hthc`, `ofb:hweh`, `ofb:hwmg`, `ofb:lts`, `ofb:mbc1`, `ofb:oe`, `ofb:or`, `ofb:owg`, `ofb:paaw`, `ofb:paho`, `ofb:pn`, `ofb:rc`, `ofb:sh`, `ofb:shatg`, `ofb:shdc`, `ofb:shg`, `ofb:shhtg`, `ofb:som`, `ofb:sot`, `ofb:sott`, `ofb:sw`, `ofb:t1g`, `ofb:tc`, `ofb:tcfh`, `ofb:tfo`, `ofb:tgra`, `ofb:tgrh`, `ofb:tof`, `ofb:tofa`, `ofb:tofh`, `ofb:toq`, `ofb:twfb`, `ofb:wma`, `ofb:wmh` |
-| `mdshop` | `1`, `10`, `11`, `14`, `17`, `24`, `28`, `30`, `39`, `41`, `43`, `56`, `136`, `140`, `143`, `144`, `148`, `149`, `153`, `154`, `161`, `162`, `166`, `174`, `261`, `303`, `304`, `437`, `1064` |
+| `mbet` | `lfb:3waagn`, `lfb:atg`, `lfb:atgi1sth`, `lfb:bhats`, `lfb:bhhts`, `lfb:btts1hny`, `lfb:cs`, `lfb:dc1sth`, `lfb:dc2ndh`, `lfb:dcag`, `lfb:dnb`, `lfb:dnb1sth`, `lfb:dnb2ndh`, `lfb:eg`, `lfb:eg1sth`, `lfb:eo`, `lfb:gg3ny`, `lfb:h`, `lfb:hf`, `lfb:htg`, `lfb:htgi1sth`, `lfb:hwmg1ste2nd`, `lfb:ng`, `lfb:tco`, `lfb:tg1sth`, `lfb:tg2ndh`, `lfb:tw1sth`, `lfb:tw2ndh`, `lfb:wag`, `ofb:1hfg`, `ofb:2hfg`, `ofb:acar`, `ofb:asom`, `ofb:asot`, `ofb:atc`, `ofb:atfo`, `ofb:atg`, `ofb:atgc`, `ofb:aweh`, `ofb:btrc`, `ofb:btrc2`, `ofb:car1`, `ofb:cgg`, `ofb:coh`, `ofb:cor`, `ofb:corfh`, `ofb:cr`, `ofb:crfh`, `ofb:ctg`, `ofb:dcg`, `ofb:dchtft2`, `ofb:dchtft3`, `ofb:dchtft32`, `ofb:dnb`, `ofb:dnbfh`, `ofb:dnbsh`, `ofb:dw`, `ofb:etc`, `ofb:etcfh`, `ofb:fgm`, `ofb:fgs`, `ofb:fhatg`, `ofb:fhcar`, `ofb:fhg`, `ofb:fhhtg`, `ofb:fhoff`, `ofb:fi`, `ofb:frcor`, `ofb:fsg`, `ofb:fsgg`, `ofb:fts`, `ofb:gg2+`, `ofb:ggg`, `ofb:ggi`, `ofb:ggii`, `ofb:hcar`, `ofb:hsom`, `ofb:hsot`, `ofb:htc`, `ofb:htdc`, `ofb:htfo`, `ofb:htft`, `ofb:htftg`, `ofb:htfthcg`, `ofb:htg`, `ofb:htgc`, `ofb:hthc`, `ofb:hweh`, `ofb:hwmg`, `ofb:lts`, `ofb:mbc1`, `ofb:oe`, `ofb:or`, `ofb:owg`, `ofb:paaw`, `ofb:paho`, `ofb:pn`, `ofb:rc`, `ofb:sh`, `ofb:shatg`, `ofb:shdc`, `ofb:shg`, `ofb:shhtg`, `ofb:som`, `ofb:sot`, `ofb:sott`, `ofb:sw`, `ofb:t1g`, `ofb:tc`, `ofb:tcfh`, `ofb:tfo`, `ofb:tgra`, `ofb:tgrh`, `ofb:tof`, `ofb:tofa`, `ofb:tofh`, `ofb:toq`, `ofb:twfb`, `ofb:wma`, `ofb:wmh` |
+| `mdshop` | `1`, `6`, `9`, `10`, `11`, `12`, `14`, `16`, `17`, `18`, `24`, `27`, `28`, `30`, `33`, `35`, `37`, `38`, `39`, `41`, `42`, `43`, `44`, `54`, `56`, `57`, `59`, `60`, `136`, `140`, `143`, `144`, `148`, `149`, `153`, `154`, `161`, `162`, `166`, `174`, `261`, `303`, `304`, `418`, `419`, `437`, `534`, `688`, `689`, `973`, `974`, `975`, `976`, `977`, `978`, `995`, `1064`, `1065`, `1066`, `1067`, `1112`, `1236`, `1237`, `1238`, `1239`, `1240`, `1241`, `1242`, `1243`, `1244`, `1245`, `1246`, `1247`, `1248`, `1249`, `1250`, `1251`, `1252`, `1685`, `1686`, `1687`, `1688`, `1690`, `1691` |
 | `mozzartbet` | `141`, `*DALJE*`, `*KVALIFIKACIJE*`, `*PROLAZ*` |
-| `premier_kladionica` | `1435`, `1440`, `*DAJE GOL*`, `*DVOZNAK*`, `*FINALE*`, `*GOL+*`, `*HENDIKEP*`, `*HT/FT*`, `*IGRAČ*`, `*IZMJENU*`, `*JEDANAESTERAC*`, `*KARTICE*`, `*KARTON*`, `*KLAĐENJE*POBJEDU*`, `*KOMBINACIJA*`, `*KORNER*`, `*KUTOVI*`, `*PAR/NEPAR*`, `*PENAL*`, `*POBJEDA*`, `*POL -*`, `*POL-*`, `*POL.*`, `*POL/*`, `*POLUVREM*`, `*POLUVRIJEME*`, `*POLUVRIJEME*KRAJ*`, `*PREKRŠ*`, `*PROLAZ*`, `*RASPON*`, `*REZULTAT*`, `*STRIJELAC*`, `*STRIJELCI*`, `*TIP + *`, `*TIP I *`, `*TOČAN*`, `*UDAR*`, `*ZALE*`, `BROJ GOLOVA *`, `KOJI TIM*`, `PRVI *`, `PRVIH 10*`, `RAZDOBLJE *`, `RAZLIKA *`, `TIM S VIŠE*`, `TIM SA VIŠE*`, `TKO *`, `TOČAN REZULTAT`, `UTAKMICA I *`, `ZADNJI GOL`, `ZBROJ GOLOVA I *`, `ZBROJ GOLOVA MANJI*`, `ZBROJ GOLOVA VEĆI*` |
+| `premier_kladionica` | `1435`, `1440`, `*DAJE GOL*`, `*DVOZNAK*`, `*FINALE*`, `*GOL+*`, `*HENDIKEP*`, `*HT/FT*`, `*IGRAČ*`, `*IZMJENU*`, `*JEDANAESTERAC*`, `*KARTICE*`, `*KARTON*`, `*KLAĐENJE*POBJEDU*`, `*KOMBINACIJA*`, `*KORNER*`, `*KUTOVI*`, `*PAR/NEPAR*`, `*PENAL*`, `*POBJEDA*`, `*POL -*`, `*POL-*`, `*POL.*`, `*POL/*`, `*POLUVREM*`, `*POLUVRIJEME*`, `*POLUVRIJEME*KRAJ*`, `*PREKRŠ*`, `*PROLAZ*`, `*RASPON*`, `*REZULTAT*`, `*STRIJELAC*`, `*STRIJELCI*`, `*TIP + *`, `*TIP I *`, `*TOČAN*`, `*UDAR*`, `*ZALE*`, `BROJ GOLOVA *`, `KOJI TIM*`, `OBA TIMA DAJU 2 ILI*`, `POBJEDNIK OSTATKA*`, `PRVI *`, `PRVIH 10*`, `RAZDOBLJE *`, `RAZLIKA *`, `TIM S VIŠE*`, `TIM SA VIŠE*`, `TKO *`, `TOČAN REZULTAT`, `UTAKMICA I *`, `UTAKMICA/ZBROJ`, `VRIJEME POSTIZANJA*`, `X-TI GOL`, `ZADNJI GOL`, `ZBROJ GOLOVA I *`, `ZBROJ GOLOVA MANJI*`, `ZBROJ GOLOVA VEĆI*` |
 | `sportplus` | `5`, `178`, `308`, `309`, `310`, `311`, `1285`, `*ADVANCE*`, `*DAJE GOL*`, `*DALJE*`, `*DVOZNAK*`, `*FINALE*`, `*GOL+*`, `*IGRAČ*`, `*IZMJENU*`, `*JEDANAESTERAC*`, `*KARTON*`, `*KORNER*`, `*KVALIFIKACIJE*`, `*PENAL*`, `*POBJEDA*`, `*POL -*`, `*POL-*`, `*POL.*`, `*POL/*`, `*POLUVREM*`, `*POLUVRIJEME*`, `*PREKRŠ*`, `*PROLAZ*`, `*QUALIF*`, `*STRIJELAC*`, `*TIP + *`, `*TIP I *`, `*UDAR*`, `*ZALE*`, `BROJ GOLOVA *`, `KOJI TIM*`, `PRVI *`, `PRVIH 10*`, `RAZDOBLJE *`, `RAZLIKA *`, `TIM S VIŠE*`, `TIM SA VIŠE*`, `TKO *`, `TOČAN REZULTAT`, `UTAKMICA I *`, `ZADNJI GOL`, `ZBROJ GOLOVA I *`, `ZBROJ GOLOVA MANJI*`, `ZBROJ GOLOVA VEĆI*` |
 | `wwin` | `4`, `7`, `10`, `51`, `443`, `476` |
 <!-- END GENERATED FROM bookmaker_markets.json -->
@@ -185,7 +178,7 @@ book are in the generated table above; the operational details are here.
 
 | Bookmaker | Live feed | Operational notes |
 | --- | --- | --- |
-| MDShop / Admiralbet | `getwebevents?isLive=true` | Different ID space from prematch; for the live result offer `sbv` carries the running score rather than a threshold, and for the totals offers it carries the threshold. SRL simulated events skipped; dead sides (e.g. under 2.5 at 3-0) are dropped |
+| MDShop / Admiralbet | `getwebevents?isLive=true` | Different ID space from prematch. **Only the match total (`22`, threshold in `sbv`) is read.** The live "rest of match" 1X2 (`6`), BTTS (`995`) and double chance (`18`/`42`) are excluded since 2026-10-20: even at `sbv` 0-0 they disagreed with three or four independent books (a Thai FA Cup game priced 11.5 / 5.4 / 1.23 against 2.7 / 2.95 / 2.7 everywhere else) and produced a fake 19.8% double-chance surebet. They return only once checked against a live score. `59` ("Oba tima daju gol") looks like a full-match BTTS and is the first candidate. SRL simulated events skipped; dead sides (e.g. under 2.5 at 3-0) are dropped |
 | MBet | `events_cached?live=true` | `finished` events and CLOSED markets skipped; the first-half totals key `lfb:tg1sth` is excluded |
 | SportPlus | `/api/v1/live/offer` | Markets are keyed by name, not ID: `Pobjednik`, `Dvostruka Prilika`, `Oba daju gol` (outcomes `1(D)`/`2(N)`), `Zbroj golova X.5` (outcomes `1(M)`/`2(V)`). Matches with `betting: false` skipped; `ML/`-style team prefixes stripped |
 | Mozzartbet | `betting/matches` with `date:"live"` | The feed also returns upcoming fixtures — only events whose `startTime` has passed are kept |

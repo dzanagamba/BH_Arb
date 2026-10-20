@@ -29,6 +29,7 @@ from config.settings import (
     MAX_SUREBET_PROFIT_PERCENT,
     MIN_PROFIT_PERCENT,
     ODDS_TTL_SECONDS,
+    price_source,
 )
 from models.schemas import Market, MarketType, Match, MatchGroup, Surebet, SurebetStake
 from scrapers.common import parse_ah_label
@@ -464,6 +465,9 @@ class ArbitrageEngine:
         best_odds_map: dict[str, tuple[str, float]] | None = None
 
         for perm in permutations(available_bms, n):
+            # One leg per price source: two books on the same feed are one price.
+            if len({price_source(bm) for bm in perm}) < n:
+                continue
             valid = True
             total_implied = 0.0
             odds_map: dict[str, tuple[str, float]] = {}

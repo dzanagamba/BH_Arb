@@ -2,7 +2,7 @@
   "bookmaker": "admiralbet",
   "mode": "prematch",
   "captured_at": "2026-10-20",
-  "endpoint": "https://bihoffer.admiralbet.ba/api/offer/getwebevents?sportId=1&isLive=false&dateFrom=2026-10-20T07:23:37.000&dateTo=2026-11-03T07:23:37.000&eventMappingTypes=1,2,3,4,5",
+  "endpoint": "https://bihoffer.admiralbet.ba/api/offer/getwebevents?sportId=1&isLive=false&dateFrom=2026-10-20T09:25:36.000&dateTo=2026-11-03T09:25:36.000&eventMappingTypes=1,2,3,4,5",
   "source": "live_api_response",
   "payload_kind": "nsoft_event_bets",
   "provenance": "bets[] of one football event (id 6917979) from the live NSoft getwebevents response for admiralbet in prematch mode, hand-trimmed to the registry's betTypeIds, the three declared O/U lines, and one excluded betTypeId that must not produce a market.",

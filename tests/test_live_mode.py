@@ -18,37 +18,26 @@ def _live_bet(btid, outcomes, sbv=None):
 
 # ─── NSoft live parsing ───────────────────────────────────────────────────────
 
-def test_nsoft_live_1x2_with_score_specifier():
-    for sbv in ("0:0", "0-0"):
-        bets = [_live_bet(6, [("1", 2.1), ("X", 3.2), ("2", 3.5)], sbv=sbv)]
-        markets = parse_nsoft_live_bets(bets)
-        assert len(markets) == 1
-        assert markets[0].market_type == MarketType.MATCH_RESULT
-        assert {o.label for o in markets[0].odds} == {"1", "X", "2"}
+def test_nsoft_live_result_dc_and_btts_are_not_read():
+    """6, 18, 42 and 995 disagreed with every independent book on 2026-10-20.
 
-
-def test_nsoft_live_rest_of_match_markets_need_a_goalless_score():
-    """6 and 995 are REST-of-match markets: from 1-0 they are not the full-time bet."""
-    for sbv in ("1:0", "0-1", "2-2", "", None):
-        assert parse_nsoft_live_bets(
-            [_live_bet(6, [("1", 2.1), ("X", 3.2), ("2", 3.5)], sbv=sbv)]
-        ) == [], f"1X2 read at sbv={sbv!r}"
-        assert parse_nsoft_live_bets(
-            [_live_bet(995, [("GG", 2.1), ("NG", 1.7)], sbv=sbv)]
-        ) == [], f"BTTS read at sbv={sbv!r}"
-
-
-def test_nsoft_live_double_chance_ids():
-    for btid in (18, 42):
-        markets = parse_nsoft_live_bets([_live_bet(btid, [("1X", 1.4), ("12", 1.3), ("X2", 1.5)])])
-        assert len(markets) == 1
-        assert markets[0].market_type == MarketType.DOUBLE_CHANCE
-
-
-def test_nsoft_live_btts():
-    markets = parse_nsoft_live_bets([_live_bet(995, [("GG", 2.1), ("NG", 1.7)], sbv="0:0")])
-    assert len(markets) == 1
-    assert markets[0].market_type == MarketType.BTTS
+    NSoft live "rest of match" 1X2 / BTTS (even at sbv 0-0) and its double chance
+    were priced for a different state than the other books' full-time markets, and
+    produced a fake 19.8% double-chance "surebet". They stay unread until proven
+    against a live score. The match total (22) is still read.
+    """
+    cases = [
+        (6, [("1", 2.1), ("X", 3.2), ("2", 3.5)], "0-0"),
+        (6, [("1", 2.1), ("X", 3.2), ("2", 3.5)], "0:0"),
+        (18, [("1X", 1.4), ("12", 1.3), ("X2", 1.5)], None),
+        (42, [("1X", 1.4), ("12", 1.3), ("X2", 1.5)], None),
+        (995, [("GG", 2.1), ("NG", 1.7)], "0:0"),
+    ]
+    for book in ("mdshop", "admiralbet"):
+        for btid, outcomes, sbv in cases:
+            assert parse_nsoft_live_bets(
+                [_live_bet(btid, outcomes, sbv=sbv)], bookmaker=book
+            ) == [], f"{book} id {btid} sbv={sbv!r} was read"
 
 
 def test_nsoft_live_ou_lines():

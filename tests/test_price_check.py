@@ -62,3 +62,17 @@ def test_swapped_home_away_is_flagged():
 def test_two_books_are_not_enough_to_judge():
     group = _group(_match("a", 1.5, 4.0, 6.0), _match("b", 6.0, 4.0, 1.5))
     assert find_outliers([group], 0.10) == ([], 0)
+
+
+def test_books_on_one_feed_vote_once():
+    # mdshop and admiralbet quote identical NSoft prices; as two votes they would
+    # outweigh two honest independent books.
+    group = _group(
+        _match("mdshop", 6.0, 4.0, 1.5),
+        _match("admiralbet", 6.0, 4.0, 1.5),
+        _match("a", 1.5, 4.0, 6.0),
+        _match("b", 1.48, 4.1, 6.2),
+        _match("c", 1.52, 3.9, 5.8),
+    )
+    outliers, _ = find_outliers([group], 0.10)
+    assert {o["bookmaker"] for o in outliers} == {"mdshop+admiralbet"}

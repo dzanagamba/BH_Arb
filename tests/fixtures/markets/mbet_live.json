@@ -1,11 +1,11 @@
 {
   "bookmaker": "mbet",
   "mode": "live",
-  "captured_at": "2026-09-25",
-  "endpoint": "https://api.mbet.ba/events_cached?live=true&offer_plan=true&fields=all&lang=ba&limit=100&offset=0&start=2026-09-25T17:05:38.387832Z&end=2026-10-09T17:05:38.387832Z&orderBy=startTimeAsc",
+  "captured_at": "2026-10-20",
+  "endpoint": "https://api.mbet.ba/events_cached?live=true&offer_plan=true&fields=all&lang=ba&limit=100&offset=0&start=2026-10-20T09:14:11.417047Z&end=2026-11-03T09:14:11.417047Z&orderBy=startTimeAsc",
   "source": "live_api_response",
   "payload_kind": "mbet_event_odds",
-  "provenance": "odds{} of one football event (id 'e:fb:ktp-mik:0003') from the live MBet events_cached response, filtered to the oddtype keys the registry maps plus one excluded market family.",
+  "provenance": "odds{} of one football event (id 'e:fb:ise-jav:0000') from the live MBet events_cached response, filtered to the oddtype keys the registry maps plus one excluded market family.",
   "dropped_fields": [
     "extras",
     "manual_status",
@@ -27,109 +27,109 @@
   },
   "bets": {
     "lfb:ft:1": {
-      "value": 8.5,
+      "value": 4.9,
       "market_key": "lfb:ft",
       "oddtype_key": "lfb:ft:1",
       "market_status": "ACTIVE",
       "oddtype_status": 1
     },
     "lfb:ft:X": {
-      "value": 3.1,
+      "value": 2.9,
       "market_key": "lfb:ft",
       "oddtype_key": "lfb:ft:X",
       "market_status": "ACTIVE",
       "oddtype_status": 1
     },
     "lfb:ft:2": {
-      "value": 1.45,
+      "value": 1.77,
       "market_key": "lfb:ft",
       "oddtype_key": "lfb:ft:2",
       "market_status": "ACTIVE",
       "oddtype_status": 1
     },
     "lfb:dc:1X": {
-      "value": 2.44,
+      "value": 1.93,
       "market_key": "lfb:dc",
       "oddtype_key": "lfb:dc:1X",
       "market_status": "ACTIVE",
       "oddtype_status": 1
     },
     "lfb:dc:12": {
-      "value": 1.27,
+      "value": 1.36,
       "market_key": "lfb:dc",
       "oddtype_key": "lfb:dc:12",
       "market_status": "ACTIVE",
       "oddtype_status": 1
     },
     "lfb:dc:X2": {
-      "value": 1.04,
+      "value": 1.16,
       "market_key": "lfb:dc",
       "oddtype_key": "lfb:dc:X2",
       "market_status": "ACTIVE",
       "oddtype_status": 1
     },
     "lfb:bttsny:Yes": {
-      "value": 2.0,
+      "value": 2.7,
       "market_key": "lfb:bttsny",
       "oddtype_key": "lfb:bttsny:Yes",
       "market_status": "ACTIVE",
       "oddtype_status": 1
     },
     "lfb:bttsny:No": {
-      "value": 1.67,
+      "value": 1.4,
       "market_key": "lfb:bttsny",
       "oddtype_key": "lfb:bttsny:No",
       "market_status": "ACTIVE",
       "oddtype_status": 1
     },
     "lfb:tg:over|1.5": {
-      "value": 1.57,
+      "value": 1.65,
       "market_key": "lfb:tg",
       "oddtype_key": "lfb:tg:over|1.5",
       "market_status": "ACTIVE",
       "oddtype_status": 1
     },
     "lfb:tg:under|1.5": {
-      "value": 2.15,
+      "value": 2,
       "market_key": "lfb:tg",
       "oddtype_key": "lfb:tg:under|1.5",
       "market_status": "ACTIVE",
       "oddtype_status": 1
     },
     "lfb:tg:over|2.5": {
-      "value": 3.9,
+      "value": 3,
       "market_key": "lfb:tg",
       "oddtype_key": "lfb:tg:over|2.5",
       "market_status": "ACTIVE",
       "oddtype_status": 1
     },
     "lfb:tg:under|2.5": {
-      "value": 1.19,
+      "value": 1.31,
       "market_key": "lfb:tg",
       "oddtype_key": "lfb:tg:under|2.5",
       "market_status": "ACTIVE",
       "oddtype_status": 1
     },
     "lfb:tg:over|3.5": {
-      "value": 8.5,
+      "value": 6.5,
       "market_key": "lfb:tg",
       "oddtype_key": "lfb:tg:over|3.5",
       "market_status": "ACTIVE",
       "oddtype_status": 1
     },
     "lfb:tg:under|3.5": {
-      "value": 1.03,
+      "value": 1.09,
       "market_key": "lfb:tg",
       "oddtype_key": "lfb:tg:under|3.5",
       "market_status": "ACTIVE",
       "oddtype_status": 1
     },
     "lfb:tg1sth:over|0.5": {
-      "value": 1.27,
+      "value": 5,
       "market_key": "lfb:tg1sth",
       "oddtype_key": "lfb:tg1sth:over|0.5",
-      "market_status": "CLOSED",
-      "oddtype_status": -1
+      "market_status": "ACTIVE",
+      "oddtype_status": 1
     }
   },
   "expected_markets": [

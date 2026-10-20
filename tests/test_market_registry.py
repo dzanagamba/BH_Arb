@@ -25,7 +25,8 @@ def test_registry_distinguishes_prematch_from_live_ids():
     r = MarketRegistry()
     assert r.lookup("mdshop", "prematch", 135) is not None
     assert r.lookup("mdshop", "live", 135) is None
-    assert r.lookup("mdshop", "live", 6) is not None
+    assert r.lookup("mdshop", "live", 22) is not None
+    assert r.lookup("mdshop", "live", 6) is None  # rest-of-match: not read
 
 
 def test_registry_rejects_unmapped_id():

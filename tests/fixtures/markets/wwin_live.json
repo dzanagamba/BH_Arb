@@ -1,11 +1,11 @@
 {
   "bookmaker": "wwin",
   "mode": "live",
-  "captured_at": "2026-09-25",
-  "endpoint": "https://wwin.ba/content/sport-livecontent/api/LiveEvents/headerBets?bets=95,6,3,11,4,7&ids=30 football event ids",
+  "captured_at": "2026-10-20",
+  "endpoint": "https://wwin.ba/content/sport-livecontent/api/LiveEvents/headerBets?bets=95,6,3,11,4,7&ids=8 football event ids",
   "source": "live_api_response",
   "payload_kind": "wwin_bets",
-  "provenance": "bets[] of one football event (id '4618701') from the live WWIN LiveEvents/headerBets response, hand-trimmed to idBt 95/6/3 plus idBt 11 for the three declared totals, and one excluded idBt.",
+  "provenance": "bets[] of one football event (id '4680901') from the live WWIN LiveEvents/headerBets response, hand-trimmed to idBt 95/6/3 plus idBt 11 for the three declared totals, and one excluded idBt.",
   "dropped_bet_fields": [
     "id",
     "idmSt",
@@ -35,17 +35,17 @@
       "odds": [
         {
           "t": "1",
-          "va": 2.53,
+          "va": 2.51,
           "isv": 1
         },
         {
           "t": "X",
-          "va": 3.07,
+          "va": 2.99,
           "isv": 1
         },
         {
           "t": "2",
-          "va": 2.78,
+          "va": 2.65,
           "isv": 1
         }
       ]
@@ -55,18 +55,18 @@
       "spec": "",
       "odds": [
         {
+          "t": "1X",
+          "va": 1.36,
+          "isv": 1
+        },
+        {
           "t": "12",
-          "va": 1.32,
+          "va": 1.29,
           "isv": 1
         },
         {
           "t": "X2",
-          "va": 1.46,
-          "isv": 1
-        },
-        {
-          "t": "1X",
-          "va": 1.39,
+          "va": 1.4,
           "isv": 1
         }
       ]
@@ -77,12 +77,12 @@
       "odds": [
         {
           "t": "Yes",
-          "va": 1.93,
+          "va": 1.84,
           "isv": 1
         },
         {
           "t": "No",
-          "va": 1.78,
+          "va": 1.76,
           "isv": 1
         }
       ]
@@ -93,12 +93,12 @@
       "odds": [
         {
           "t": "Over",
-          "va": 1.4,
+          "va": 1.36,
           "isv": 1
         },
         {
           "t": "Under",
-          "va": 2.73,
+          "va": 2.69,
           "isv": 1
         }
       ]
@@ -109,12 +109,12 @@
       "odds": [
         {
           "t": "Over",
-          "va": 2.24,
+          "va": 2.11,
           "isv": 1
         },
         {
           "t": "Under",
-          "va": 1.58,
+          "va": 1.57,
           "isv": 1
         }
       ]
@@ -125,7 +125,7 @@
       "odds": [
         {
           "t": "Over",
-          "va": 4.0,
+          "va": 3.62,
           "isv": 1
         },
         {
@@ -141,12 +141,12 @@
       "odds": [
         {
           "t": "1",
-          "va": 1.77,
+          "va": 1.76,
           "isv": 1
         },
         {
           "t": "2",
-          "va": 1.94,
+          "va": 1.85,
           "isv": 1
         }
       ]

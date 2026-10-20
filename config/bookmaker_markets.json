@@ -1,12 +1,18 @@
 {
   "_excluded": {
     "mdshop": [
-      136, 140, 143, 144, 148, 149, 153, 154, 161, 162, 166, 174,
-      1, 14, 17, 24, 261, 10, 30, 39, 43, 303, 304, 11, 437, 1064, 56, 41, 28
+      136, 140, 143, 144, 148, 149, 153, 154, 161, 162, 166, 174, 1, 14, 17, 24, 261, 10, 30,
+      39, 43, 303, 304, 11, 437, 1064, 56, 41, 28, 6, 18, 42, 995, 1065, 1066, 1067, 1112,
+      12, 1236, 1237, 1238, 1239, 1240, 1241, 1242, 1243, 1244, 1245, 1246, 1247, 1248, 1249,
+      1250, 1251, 1252, 16, 1685, 1686, 1687, 1688, 1690, 1691, 27, 33, 35, 37, 38, 418, 419,
+      44, 534, 54, 57, 59, 60, 688, 689, 9, 973, 974, 975, 976, 977, 978
     ],
     "admiralbet": [
-      136, 140, 143, 144, 148, 149, 153, 154, 161, 162, 166, 174,
-      1, 14, 17, 24, 261, 10, 30, 39, 43, 303, 304, 11, 437, 1064, 56, 41, 28
+      136, 140, 143, 144, 148, 149, 153, 154, 161, 162, 166, 174, 1, 14, 17, 24, 261, 10, 30,
+      39, 43, 303, 304, 11, 437, 1064, 56, 41, 28, 6, 18, 42, 995, 1065, 1066, 1067, 1112,
+      12, 1236, 1237, 1238, 1239, 1240, 1241, 1242, 1243, 1244, 1245, 1246, 1247, 1248, 1249,
+      1250, 1251, 1252, 16, 1685, 1686, 1687, 1688, 1690, 1691, 27, 33, 35, 37, 38, 418, 419,
+      44, 534, 54, 57, 59, 60, 688, 689, 9, 973, 974, 975, 976, 977, 978
     ],
     "mozzartbet": [141, "*DALJE*", "*PROLAZ*", "*KVALIFIKACIJE*"],
     "wwin": [7, 10, 4, 476, 443, 51],
@@ -19,7 +25,8 @@
       "*POBJEDA*", "KOJI TIM*", "*FINALE*", "RAZLIKA *", "RAZDOBLJE *", "PRVIH 10*",
       "*JEDANAESTERAC*", "*PENAL*", "*IZMJENU*", "*DVOZNAK*", "*TIP + *", "*TIP I *",
       "UTAKMICA I *", "ZBROJ GOLOVA I *", "ZBROJ GOLOVA MANJI*", "ZBROJ GOLOVA VEĆI*",
-      "*GOL+*", "TOČAN REZULTAT", "TKO *", "TIM SA VIŠE*", "TIM S VIŠE*"
+      "*GOL+*", "TOČAN REZULTAT", "TKO *", "TIM SA VIŠE*", "TIM S VIŠE*", "X-TI GOL",
+      "UTAKMICA/ZBROJ", "VRIJEME POSTIZANJA*", "OBA TIMA DAJU 2 ILI*", "POBJEDNIK OSTATKA*"
     ],
     "mbet": [
       "ofb:fts", "ofb:sh", "ofb:htdc", "ofb:shdc", "ofb:dnb", "ofb:fi", "lfb:tg1sth",
@@ -35,7 +42,11 @@
       "ofb:paho", "ofb:pn", "ofb:rc", "ofb:shatg", "ofb:shg", "ofb:shhtg", "ofb:som",
       "ofb:sot", "ofb:sott", "ofb:sw", "ofb:t1g", "ofb:tc", "ofb:tcfh", "ofb:tfo",
       "ofb:tgra", "ofb:tgrh", "ofb:tof", "ofb:tofa", "ofb:tofh", "ofb:toq", "ofb:twfb",
-      "ofb:wma", "ofb:wmh"
+      "ofb:wma", "ofb:wmh", "lfb:3waagn", "lfb:atg", "lfb:atgi1sth", "lfb:bhats",
+      "lfb:bhhts", "lfb:btts1hny", "lfb:cs", "lfb:dc1sth", "lfb:dc2ndh", "lfb:dcag",
+      "lfb:dnb", "lfb:dnb1sth", "lfb:dnb2ndh", "lfb:eg", "lfb:eg1sth", "lfb:eo", "lfb:gg3ny",
+      "lfb:h", "lfb:hf", "lfb:htg", "lfb:htgi1sth", "lfb:hwmg1ste2nd", "lfb:ng", "lfb:tco",
+      "lfb:tg2ndh", "lfb:tw1sth", "lfb:tw2ndh", "lfb:wag"
     ],
     "betole": [335, 336],
     "sportplus": [
@@ -59,9 +70,6 @@
       "over_under_3_5": { "ids": [137, 138], "line": 3.5, "min_legs": 2 }
     },
     "live": {
-      "1x2": { "ids": [6], "labels": ["1", "X", "2"], "min_legs": 3, "requires_sbv": "0-0" },
-      "double_chance": { "ids": [18, 42], "labels": ["1X", "12", "X2"], "min_legs": 2 },
-      "btts": { "ids": [995], "labels": ["GG", "NG"], "min_legs": 2, "requires_sbv": "0-0" },
       "over_under_1_5": { "ids": [22], "line": 1.5, "min_legs": 2 },
       "over_under_2_5": { "ids": [22], "line": 2.5, "min_legs": 2 },
       "over_under_3_5": { "ids": [22], "line": 3.5, "min_legs": 2 }
@@ -77,9 +85,6 @@
       "over_under_3_5": { "ids": [137, 138], "line": 3.5, "min_legs": 2 }
     },
     "live": {
-      "1x2": { "ids": [6], "labels": ["1", "X", "2"], "min_legs": 3, "requires_sbv": "0-0" },
-      "double_chance": { "ids": [18, 42], "labels": ["1X", "12", "X2"], "min_legs": 2 },
-      "btts": { "ids": [995], "labels": ["GG", "NG"], "min_legs": 2, "requires_sbv": "0-0" },
       "over_under_1_5": { "ids": [22], "line": 1.5, "min_legs": 2 },
       "over_under_2_5": { "ids": [22], "line": 2.5, "min_legs": 2 },
       "over_under_3_5": { "ids": [22], "line": 3.5, "min_legs": 2 }

@@ -28,6 +28,7 @@ from collections import defaultdict
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from config.settings import price_source  # noqa: E402
 from engine.matcher import MatchMatcher  # noqa: E402
 from models.schemas import MarketType, Match  # noqa: E402
 
@@ -63,11 +64,16 @@ def find_outliers(groups, threshold: float) -> tuple[list[dict], int]:
     compared = 0
     for group in groups:
         by_market: dict[MarketType, dict[str, dict[str, float]]] = defaultdict(dict)
+        names: dict[str, list[str]] = defaultdict(list)
+        for match in group.matches:
+            if match.bookmaker not in names[price_source(match.bookmaker)]:
+                names[price_source(match.bookmaker)].append(match.bookmaker)
         for match in group.matches:
             for market in match.markets:
                 probs = devigged(market.market_type, {o.label: o.value for o in market.odds})
                 if probs is not None:
-                    by_market[market.market_type][match.bookmaker] = probs
+                    # Books on one feed quote one price: count that source once.
+                    by_market[market.market_type].setdefault(price_source(match.bookmaker), probs)
         for market_type, per_book in by_market.items():
             if len(per_book) < 3:  # a median of one other book is no reference
                 continue
@@ -82,7 +88,7 @@ def find_outliers(groups, threshold: float) -> tuple[list[dict], int]:
                                 "match": f"{group.canonical_home} - {group.canonical_away}",
                                 "league": group.league,
                                 "market": market_type.value,
-                                "bookmaker": book,
+                                "bookmaker": "+".join(names[book]),
                                 "label": label,
                                 "prob": round(p, 3),
                                 "median_others": round(statistics.median(others), 3),

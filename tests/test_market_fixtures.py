@@ -97,12 +97,6 @@ UNCOVERED_ROWS: dict[tuple[str, str, str], str] = {
     ("mozzartbet", "prematch", "over_under_3_5"): "same: no 4+/0-3 pair on the feed.",
     ("mozzartbet", "live", "over_under_1_5"): "same as prematch on the live feed.",
     ("mozzartbet", "live", "over_under_3_5"): "same as prematch on the live feed.",
-    ("mdshop", "live", "over_under_1_5"): (
-        "the 2026-09-25 capture's only 1.5/2.5 totals are id 28, 'Domacin ukupno' "
-        "(the home team's goals), which the old registry misread as the match total; "
-        "the capture holds id 22 at 3.5 only. Re-capture to cover 22 at 1.5/2.5."
-    ),
-    ("mdshop", "live", "over_under_2_5"): "same: only id 28 at 2.5 in the capture.",
     **{
         ("premier_kladionica", "live", f"over_under_{line}"): (
             "'LIVE - ZBROJ GOLOVA' is declared since 2026-10-20 (it used to be read "
@@ -113,11 +107,6 @@ UNCOVERED_ROWS: dict[tuple[str, str, str], str] = {
         )
         for line in ("1_5", "2_5", "3_5")
     },
-    ("admiralbet", "live", "over_under_1_5"): (
-        "id 22 is registered since 2026-10-20 (same NSoft feed as mdshop); the "
-        "capture holds it at 3.5 only. Re-capture to cover 22 at 1.5/2.5."
-    ),
-    ("admiralbet", "live", "over_under_2_5"): "same: only id 22 at 3.5 in the capture.",
     # betole is disabled in config/settings.py and is not in this layer's scope.
     # Its desk feed IS reachable and carries picks 1/2/3 and 272/273, but
     # _parse_betole_markets also emits the experimental first_half_1x2 market

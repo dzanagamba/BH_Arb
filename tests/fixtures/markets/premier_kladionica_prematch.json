@@ -2,7 +2,7 @@
   "bookmaker": "premier_kladionica",
   "mode": "prematch",
   "captured_at": "2026-10-20",
-  "endpoint": "POST https://svc-test.premier-kladionica.com/PrSync/PrSync.ashx body=[[[4,1,0],7,{\"dogadjajIDs\":\"918 football event ids\",\"clientVer\":1304324817}]]",
+  "endpoint": "POST https://svc-test.premier-kladionica.com/PrSync/PrSync.ashx body=[[[4,1,0],7,{\"dogadjajIDs\":\"991 football event ids\",\"clientVer\":1304349777}]]",
   "source": "live_api_response",
   "payload_kind": "premier_dogtipk",
   "provenance": "dogTipK rows for one football event (id 4490799) from the live PrSync delta response, with the setTip/setTipVar/setTipTip definition rows for exactly the setTip ids those odds belong to. All rows are stored verbatim because PrSync is positional: setTipVar's line is column 9, setTipTip's outcome code is column 4 and dogTipK's price is column 5.",

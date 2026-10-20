@@ -1,11 +1,11 @@
 {
   "bookmaker": "sportplus",
   "mode": "live",
-  "captured_at": "2026-09-25",
+  "captured_at": "2026-10-20",
   "endpoint": "https://www.sportplus.ba/api/v1/live/offer",
   "source": "live_api_response",
   "payload_kind": "sportplus_match_markets",
-  "provenance": "markets[] of one football match (id 68932406) from the live SportPlus live offer response, filtered to the blocks the registry maps plus one block the parser must ignore.",
+  "provenance": "markets[] of one football match (id 73577166) from the live SportPlus live offer response, filtered to the blocks the registry maps plus one block the parser must ignore.",
   "dropped_market_fields": [
     "competitors",
     "description",
@@ -47,15 +47,15 @@
       "odds": [
         {
           "alias": "1",
-          "value": 1.22
+          "value": 5.5
         },
         {
           "alias": "X",
-          "value": 5.1
+          "value": 3.1
         },
         {
           "alias": "2",
-          "value": 17.0
+          "value": 1.75
         }
       ]
     },
@@ -65,15 +65,15 @@
       "odds": [
         {
           "alias": "1X",
-          "value": 0.0
+          "value": 2.0
         },
         {
           "alias": "X2",
-          "value": 3.9
+          "value": 1.12
         },
         {
           "alias": "12",
-          "value": 1.14
+          "value": 1.32
         }
       ]
     },
@@ -83,11 +83,11 @@
       "odds": [
         {
           "alias": "1(D)",
-          "value": 2.3
+          "value": 2.75
         },
         {
           "alias": "2(N)",
-          "value": 1.57
+          "value": 1.4
         }
       ]
     },
@@ -97,11 +97,11 @@
       "odds": [
         {
           "alias": "1(M)",
-          "value": 3.45
+          "value": 2.1
         },
         {
           "alias": "2(V)",
-          "value": 1.32
+          "value": 1.65
         }
       ]
     },
@@ -111,11 +111,11 @@
       "odds": [
         {
           "alias": "1(M)",
-          "value": 1.57
+          "value": 1.35
         },
         {
           "alias": "2(V)",
-          "value": 2.45
+          "value": 3.0
         }
       ]
     },
@@ -125,11 +125,11 @@
       "odds": [
         {
           "alias": "1(M)",
-          "value": 1.14
+          "value": 1.1
         },
         {
           "alias": "2(V)",
-          "value": 5.7
+          "value": 6.0
         }
       ]
     },
@@ -139,11 +139,11 @@
       "odds": [
         {
           "alias": "1",
-          "value": 1.22
+          "value": 2.0
         },
         {
           "alias": "2",
-          "value": 4.25
+          "value": 1.7
         }
       ]
     }

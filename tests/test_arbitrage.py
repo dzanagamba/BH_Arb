@@ -76,6 +76,22 @@ def test_one_bet_per_bookmaker_rule():
     assert len(surebets) == 0
 
 
+def test_books_on_one_feed_are_one_price_source():
+    # mdshop and admiralbet both run on NSoft: GG at one and NG at the other is
+    # not two independent prices, however good it looks.
+    group = _group({"mdshop": (2.40, 1.50), "admiralbet": (1.50, 2.40)})
+    engine = ArbitrageEngine()
+    assert engine.find_surebets([group], min_profit=0.5, investment=100.0) == []
+
+
+def test_a_nsoft_book_still_pairs_with_an_independent_book():
+    group = _group({"mdshop": (2.40, 1.50), "admiralbet": (2.40, 1.50), "mbet": (1.50, 2.40)})
+    engine = ArbitrageEngine()
+    surebets = engine.find_surebets([group], min_profit=0.5, investment=100.0)
+    assert len(surebets) == 1
+    assert {s.bookmaker for s in surebets[0].stakes} in ({"mdshop", "mbet"}, {"admiralbet", "mbet"})
+
+
 def test_expired_match_skipped():
     past = datetime(2020, 1, 1, 12, 0)
     group = _group({"mdshop": (2.40, 1.90), "mbet": (2.20, 1.85)}, kickoff=past)
