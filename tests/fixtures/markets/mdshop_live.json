@@ -45,6 +45,10 @@
     {
       "id": 24,
       "context": "Tacan rezultat"
+    },
+    {
+      "id": 28,
+      "context": "Domacin ukupno (home team goals, not the match total)"
     }
   ],
   "bets": [
@@ -302,9 +306,10 @@
     "1x2",
     "btts",
     "double_chance",
-    "over_under_1_5",
-    "over_under_2_5",
     "over_under_3_5"
   ],
-  "uncovered_registry_rows": []
+  "uncovered_registry_rows": [
+    "over_under_1_5",
+    "over_under_2_5"
+  ]
 }

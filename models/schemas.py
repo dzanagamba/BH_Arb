@@ -46,6 +46,9 @@ class Match(BaseModel):
     bet_url: str = ""  # deep link that prefills a new bet slip/ticket for this match
     match_code: str = ""
     event_id: str = ""
+    # Betradar match id, when the book's feed carries one. Books on the same id
+    # list the same real match, whatever they call the teams.
+    betradar_id: str = ""
     deep_link_verified: bool = False
     category_tags: list[str] = []
     is_swapped: bool = False

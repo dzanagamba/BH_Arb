@@ -94,6 +94,38 @@ def parse_dt(raw) -> datetime | None:
     return None
 
 
+def betradar_id(*values: object) -> str:
+    """The Betradar match id out of a feed field ("74235704", "sr:match:74235704")."""
+    for value in values:
+        if value is None or isinstance(value, bool):
+            continue
+        text = str(value).strip()
+        if text.startswith("sr:match:"):
+            text = text[len("sr:match:"):]
+        if text.isdigit() and int(text) > 0:
+            return text
+    return ""
+
+
+def qualify_league(league: str, country: str) -> str:
+    """A competition name qualified by its country, unless it already carries it.
+
+    Several books send the competition and the country as separate fields and
+    name the competition without the country ("Serija A" is Italy's and
+    Brazil's, "1. Division" Denmark's and Norway's), so the name alone cannot
+    identify a league.
+    """
+    league = (league or "").strip()
+    country = (country or "").strip()
+    if country in ("", "-"):
+        return league
+    if not league or league == "-":
+        return country
+    if country.casefold() in league.casefold():
+        return league
+    return f"{country} - {league}"
+
+
 def parse_teams_from_name(event_name: str) -> tuple[str, str]:
     """Parse 'Girona - Castellon' or 'Girona vs Castellon' into (home, away)."""
     if not event_name:
@@ -259,20 +291,24 @@ NSOFT_OU_BET_IDS = {137, 138}       # O/U goals, threshold in sbv
 
 # Live in-play NSoft bet types — VERIFIED against the live catalog (2026-08).
 # Live events use a DIFFERENT bet type ID space than prematch:
-#   6   = live 1X2 (sbv carries the current score specifier, e.g. "0:0")
+#   6   = "Pobednik ostatka meča" — REST-of-match winner; sbv = current score
 #   18/42 = live double chance (1X/12/X2)
-#   995 = live BTTS (GG/NG)
-#   22/28 = live total goals O/U (threshold in sbv: "2.5" etc.)
-# Everything else (handicap 1/14/17, correct score 24, HT/FT 261, next-goal
-# 10/30, team-goal counts 39/43, cards/corners 303/304, combos 11/437/1064-…)
-# is deliberately excluded.
+#   995 = "Ostatak meča - Oba daju gol" — REST-of-match BTTS; sbv = current score
+#   22  = live total goals O/U (threshold in sbv: "2.5" etc.)
+# 6 and 995 settle like the full-time market only from 0-0, so they are read
+# only while sbv is "0-0" (registry `requires_sbv`). 28 is "Domaćin ukupno",
+# the HOME team's goals, not the match total — excluded. Everything else
+# (handicap 1/14/17, correct score 24, HT/FT 261, next-goal 10/30, team-goal
+# counts 39/43, cards/corners 303/304, combos 11/437/1064-…) is excluded too.
 NSOFT_LIVE_BET_TYPE_MAP: dict[int, MarketType] = {
-    6: MarketType.MATCH_RESULT,     # live 1X2, sbv = current score
+    6: MarketType.MATCH_RESULT,     # rest-of-match 1X2, only at sbv 0-0
     18: MarketType.DOUBLE_CHANCE,   # live DC
     42: MarketType.DOUBLE_CHANCE,   # live DC (variant ID)
-    995: MarketType.BTTS,           # live BTTS
+    995: MarketType.BTTS,           # rest-of-match BTTS, only at sbv 0-0
 }
-NSOFT_LIVE_OU_BET_IDS = {22, 28}    # live O/U goals, threshold in sbv
+NSOFT_LIVE_OU_BET_IDS = {22}        # live O/U goals, threshold in sbv
+# Fallback-path twin of the registry's `requires_sbv`.
+NSOFT_LIVE_REQUIRED_SBV: dict[int, str] = {6: "0-0", 995: "0-0"}
 
 # Registry loading is lazy so importing shared scraper helpers remains cheap
 # for callers that do not parse an NSoft payload.
@@ -323,6 +359,11 @@ _MARKET_LABEL_SETS: dict[MarketType, set[str]] = {
 }
 
 
+def _score_key(raw) -> str:
+    """Canonical form of a score specifier: '0:0', '0 - 0' and '0-0' agree."""
+    return "".join(str(raw or "").split()).replace(":", "-")
+
+
 def parse_nsoft_bets(
     bets: list,
     extra_bet_types: dict[int, MarketType] | None = None,
@@ -331,6 +372,7 @@ def parse_nsoft_bets(
     base_ou_bet_ids: set[int] | None = None,
     bookmaker: str = "mdshop",
     mode: str = "prematch",
+    base_required_sbv: dict[int, str] | None = None,
 ) -> list[Market]:
     """
     Parse an NSoft ``bets[]`` array into Market objects.
@@ -345,6 +387,10 @@ def parse_nsoft_bets(
     registry's ``min_legs`` rule and no label falls outside the registered set.
     This is the defense that keeps an NSoft 2-way "Ide dalje" market out of the
     1X2 pool.
+
+    A spec with ``requires_sbv`` (or, on the fallback path, an entry in
+    ``base_required_sbv``) is read only while the bet's specifier equals it:
+    NSoft's live rest-of-match markets match the full-time ones only at 0-0.
     """
     registry = _nsoft_registry()
     has_mode = getattr(registry, "has_mode", None)
@@ -361,6 +407,7 @@ def parse_nsoft_bets(
         (base_ou_bet_ids if base_ou_bet_ids is not None else NSOFT_OU_BET_IDS)
         | (extra_ou_bet_ids or set())
     )
+    required_sbv_map = base_required_sbv or {}
     markets: list[Market] = []
     for bet in bets:
         if not isinstance(bet, dict):
@@ -389,6 +436,10 @@ def parse_nsoft_bets(
             expected_labels = set(spec.labels)
             required_line = spec.line
             required_legs = spec.min_legs
+            if spec.requires_sbv is not None and (
+                _score_key(raw_sbv) != _score_key(spec.requires_sbv)
+            ):
+                continue
             if required_line is not None and (
                 sbv_val is None or abs(required_line - sbv_val) > 1e-9
             ):
@@ -402,6 +453,9 @@ def parse_nsoft_bets(
                     3.5: MarketType.OVER_UNDER_3_5,
                 }.get(sbv_val)
             if market_type is None:
+                continue
+            required_sbv = required_sbv_map.get(btid)
+            if required_sbv is not None and _score_key(raw_sbv) != _score_key(required_sbv):
                 continue
             expected_labels = _MARKET_LABEL_SETS.get(market_type, set())
             required_legs = 2 if market_type == MarketType.DOUBLE_CHANCE else len(expected_labels)
@@ -449,6 +503,7 @@ def parse_nsoft_live_bets(
         bets,
         base_bet_type_map=NSOFT_LIVE_BET_TYPE_MAP,
         base_ou_bet_ids=NSOFT_LIVE_OU_BET_IDS,
+        base_required_sbv=NSOFT_LIVE_REQUIRED_SBV,
         bookmaker=bookmaker,
         mode="live",
     )

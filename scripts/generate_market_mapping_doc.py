@@ -83,6 +83,12 @@ def _line_cell(line: float | None) -> str:
     return EM_DASH if line is None else f"{line:g}"
 
 
+def _settlement_cell(spec: MarketSpec) -> str:
+    if spec.requires_sbv is None:
+        return spec.settlement
+    return f"{spec.settlement}, only at specifier {spec.requires_sbv}"
+
+
 def _specs_for(
     registry: MarketRegistry, book: str, mode: str, market_type: MarketType
 ) -> list[MarketSpec]:
@@ -104,6 +110,7 @@ def _specs_for(
                 spec.min_legs,
                 spec.line,
                 spec.settlement,
+                spec.requires_sbv,
             )
             specs.setdefault(key, spec)
     return list(specs.values())
@@ -157,7 +164,7 @@ def build_section(registry_path: str = REGISTRY_PATH) -> str:
                     f"| `{book}` | {mode} | {label} (`{market_type.value}`) | "
                     f"{_code_list(spec.ids)} | "
                     f"{_label_list(spec.labels)} | {spec.min_legs} | "
-                    f"{_line_cell(spec.line)} | {spec.settlement} |"
+                    f"{_line_cell(spec.line)} | {_settlement_cell(spec)} |"
                 )
                 mapped_rows += 1
 

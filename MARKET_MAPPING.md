@@ -51,21 +51,21 @@ bottom of this file say so.
 | `mdshop` | prematch | Over/Under 1.5 (`over_under_1_5`) | `137`, `138` | Over 1.5, Under 1.5 | 2 | 1.5 | full_time |
 | `mdshop` | prematch | Over/Under 2.5 (`over_under_2_5`) | `137`, `138` | Over 2.5, Under 2.5 | 2 | 2.5 | full_time |
 | `mdshop` | prematch | Over/Under 3.5 (`over_under_3_5`) | `137`, `138` | Over 3.5, Under 3.5 | 2 | 3.5 | full_time |
-| `mdshop` | live | Full-time 1X2 (`1x2`) | `6` | 1, 2, X | 3 | — | full_time |
+| `mdshop` | live | Full-time 1X2 (`1x2`) | `6` | 1, 2, X | 3 | — | full_time, only at specifier 0-0 |
 | `mdshop` | live | Double Chance (`double_chance`) | `18`, `42` | 12, 1X, X2 | 2 | — | full_time |
-| `mdshop` | live | BTTS (`btts`) | `995` | GG, NG | 2 | — | full_time |
-| `mdshop` | live | Over/Under 1.5 (`over_under_1_5`) | `22`, `28` | Over 1.5, Under 1.5 | 2 | 1.5 | full_time |
-| `mdshop` | live | Over/Under 2.5 (`over_under_2_5`) | `22`, `28` | Over 2.5, Under 2.5 | 2 | 2.5 | full_time |
-| `mdshop` | live | Over/Under 3.5 (`over_under_3_5`) | `22`, `28` | Over 3.5, Under 3.5 | 2 | 3.5 | full_time |
+| `mdshop` | live | BTTS (`btts`) | `995` | GG, NG | 2 | — | full_time, only at specifier 0-0 |
+| `mdshop` | live | Over/Under 1.5 (`over_under_1_5`) | `22` | Over 1.5, Under 1.5 | 2 | 1.5 | full_time |
+| `mdshop` | live | Over/Under 2.5 (`over_under_2_5`) | `22` | Over 2.5, Under 2.5 | 2 | 2.5 | full_time |
+| `mdshop` | live | Over/Under 3.5 (`over_under_3_5`) | `22` | Over 3.5, Under 3.5 | 2 | 3.5 | full_time |
 | `admiralbet` | prematch | Full-time 1X2 (`1x2`) | `1639` | 1, 2, X | 3 | — | full_time |
 | `admiralbet` | prematch | Double Chance (`double_chance`) | `152` | 12, 1X, X2 | 2 | — | full_time |
 | `admiralbet` | prematch | BTTS (`btts`) | `151` | GG, NG | 2 | — | full_time |
 | `admiralbet` | prematch | Over/Under 1.5 (`over_under_1_5`) | `137`, `138` | Over 1.5, Under 1.5 | 2 | 1.5 | full_time |
 | `admiralbet` | prematch | Over/Under 2.5 (`over_under_2_5`) | `137`, `138` | Over 2.5, Under 2.5 | 2 | 2.5 | full_time |
 | `admiralbet` | prematch | Over/Under 3.5 (`over_under_3_5`) | `137`, `138` | Over 3.5, Under 3.5 | 2 | 3.5 | full_time |
-| `admiralbet` | live | Full-time 1X2 (`1x2`) | `6` | 1, 2, X | 3 | — | full_time |
+| `admiralbet` | live | Full-time 1X2 (`1x2`) | `6` | 1, 2, X | 3 | — | full_time, only at specifier 0-0 |
 | `admiralbet` | live | Double Chance (`double_chance`) | `18`, `42` | 12, 1X, X2 | 2 | — | full_time |
-| `admiralbet` | live | BTTS (`btts`) | `995` | GG, NG | 2 | — | full_time |
+| `admiralbet` | live | BTTS (`btts`) | `995` | GG, NG | 2 | — | full_time, only at specifier 0-0 |
 | `wwin` | prematch | Full-time 1X2 (`1x2`) | `95` | 1, 2, X | 3 | — | full_time |
 | `wwin` | prematch | Double Chance (`double_chance`) | `6` | 12, 1X, X2 | 2 | — | full_time |
 | `wwin` | prematch | BTTS (`btts`) | `3` | GG, NG | 2 | — | full_time |
@@ -144,10 +144,10 @@ A name pattern applies to any source ID that matches it.
 
 | Bookmaker | Excluded IDs / name patterns |
 | --- | --- |
-| `admiralbet` | `1`, `10`, `11`, `14`, `17`, `24`, `30`, `39`, `41`, `43`, `56`, `136`, `140`, `143`, `144`, `148`, `149`, `153`, `154`, `161`, `162`, `166`, `174`, `261`, `303`, `304`, `437`, `1064` |
+| `admiralbet` | `1`, `10`, `11`, `14`, `17`, `24`, `28`, `30`, `39`, `41`, `43`, `56`, `136`, `140`, `143`, `144`, `148`, `149`, `153`, `154`, `161`, `162`, `166`, `174`, `261`, `303`, `304`, `437`, `1064` |
 | `betole` | `335`, `336` |
 | `mbet` | `lfb:tg1sth`, `ofb:dnb`, `ofb:fi`, `ofb:fts`, `ofb:htdc`, `ofb:sh`, `ofb:shdc` |
-| `mdshop` | `1`, `10`, `11`, `14`, `17`, `24`, `30`, `39`, `41`, `43`, `56`, `136`, `140`, `143`, `144`, `148`, `149`, `153`, `154`, `161`, `162`, `166`, `174`, `261`, `303`, `304`, `437`, `1064` |
+| `mdshop` | `1`, `10`, `11`, `14`, `17`, `24`, `28`, `30`, `39`, `41`, `43`, `56`, `136`, `140`, `143`, `144`, `148`, `149`, `153`, `154`, `161`, `162`, `166`, `174`, `261`, `303`, `304`, `437`, `1064` |
 | `mozzartbet` | `141`, `*DALJE*`, `*KVALIFIKACIJE*`, `*PROLAZ*` |
 | `premier_kladionica` | `1435`, `1440`, `*HENDIKEP*`, `*HT/FT*`, `*KARTICE*`, `*KLAĐENJE*POBJEDU*`, `*KOMBINACIJA*`, `*KUTOVI*`, `*PAR/NEPAR*`, `*POLUVRIJEME*KRAJ*`, `*PROLAZ*`, `*RASPON*`, `*REZULTAT*`, `*STRIJELCI*`, `*TOČAN*` |
 | `sportplus` | `5`, `178`, `308`, `309`, `310`, `311`, `1285`, `*ADVANCE*`, `*DALJE*`, `*KVALIFIKACIJE*`, `*PROLAZ*`, `*QUALIF*` |

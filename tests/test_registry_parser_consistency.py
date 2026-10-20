@@ -196,7 +196,9 @@ def _expected_row_tuples(data: dict) -> Counter:
                 tuple(sorted(spec.labels)),
                 spec.min_legs,
                 _line_text(spec.line),
-                spec.settlement,
+                spec.settlement
+                if spec.requires_sbv is None
+                else f"{spec.settlement}, only at specifier {spec.requires_sbv}",
             )
         ] += 1
     return expected

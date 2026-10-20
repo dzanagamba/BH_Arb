@@ -175,7 +175,15 @@ class MatchMatcher:
         # league first, then input order) let the same scan yield 6x
         # different group counts. Specific leagues still come first so they
         # establish canonical groups.
-        sorted_matches = sorted(all_matches, key=_processing_order_key)
+        # A league name no mapping covers can never equal another book's name
+        # for the same competition, so bucketing it by that name would hide it
+        # from its real group. Such a listing is offered every group, like a
+        # generic league, and the gate decides (it accepts an unmapped league
+        # only when both teams and the kickoff match exactly).
+        is_open = self._open_league
+        sorted_matches = sorted(
+            all_matches, key=lambda m: (is_open(m), _processing_order_key(m))
+        )
 
         groups: list[MatchGroup] = []
         # Creation index per group (by identity) — the deterministic tie-break
@@ -188,8 +196,8 @@ class MatchMatcher:
         for match in sorted_matches:
             m_league = match.league_normalized or match.league or ""
             candidate_groups: list[MatchGroup]
-            if m_league in GENERIC_LEAGUES:
-                # Generic league — eligible against every group
+            if is_open(match):
+                # Generic or unmapped league — eligible against every group
                 candidate_groups = list(groups)
             else:
                 # Specific leagues are candidate buckets only when they are
@@ -237,10 +245,13 @@ class MatchMatcher:
                     if len({m.bookmaker for m in best_group.matches}) >= 2:
                         best_group.status = "verified"
 
-                    # Upgrade group's canonical league/kickoff if generic.
+                    # Upgrade group's canonical league/kickoff if generic or unmapped.
                     if (
-                        best_group.league in GENERIC_LEAGUES
-                        and match.league_normalized not in GENERIC_LEAGUES
+                        (
+                            best_group.league in GENERIC_LEAGUES
+                            or not self.gate._is_mapped_league(best_group.league)
+                        )
+                        and not is_open(match)
                     ):
                         old_key = ""
                         best_group.league = match.league_normalized
@@ -284,9 +295,7 @@ class MatchMatcher:
                 )
                 group_index[id(new_group)] = len(groups)
                 groups.append(new_group)
-                bucket_key = (
-                    new_group.league if new_group.league not in GENERIC_LEAGUES else ""
-                )
+                bucket_key = "" if is_open(match) else new_group.league
                 groups_by_league.setdefault(bucket_key, []).append(new_group)
 
         # Only return groups whose every accepted addition passed the gate and
@@ -306,6 +315,13 @@ class MatchMatcher:
 
         return multi_bookie_groups
 
+    def _open_league(self, match: Match) -> bool:
+        """Whether a listing's league is generic or names no known competition."""
+        return self._open_name(match.league_normalized or match.league or "")
+
+    def _open_name(self, league: str) -> bool:
+        return league in GENERIC_LEAGUES or not self.gate._is_mapped_league(league)
+
     def _calculate_confidence(self, match: Match, group: MatchGroup) -> tuple[float, bool]:
         """
         Confidence score (0.0–1.0) that a match belongs to a group,
@@ -324,12 +340,13 @@ class MatchMatcher:
         if match_tags != group_tags:
             return 0.0, False
 
-        # Hard gate: specific leagues must be identical or explicitly
-        # equivalent; no blanket competition compatibility is allowed.
+        # Hard gate: two KNOWN leagues must be identical or explicitly
+        # equivalent; no blanket competition compatibility is allowed. An
+        # unmapped name proves nothing either way, so it is left to the gate.
+        leagues_known = not self._open_name(m_league) and not self._open_name(g_league)
         if (
             m_league and g_league
-            and m_league not in GENERIC_LEAGUES
-            and g_league not in GENERIC_LEAGUES
+            and leagues_known
             and m_league != g_league
             and (m_league, g_league) not in self._equivalences
             and (g_league, m_league) not in self._equivalences
@@ -343,7 +360,7 @@ class MatchMatcher:
         g_country = ""
         if group.matches:
             g_country = (group.matches[0].country_normalized or "").strip().lower()
-        if m_country and g_country and m_country != g_country:
+        if m_country and g_country and m_country != g_country and not leagues_known:
             # Allow empty/generic country to pass, but hard mismatch rejects
             # Exception: friendlies/cups often have empty country — already handled above
             return 0.0, False

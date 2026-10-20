@@ -163,7 +163,7 @@ class TeamNormalizer:
                 if canonical_id.startswith("_"):
                     continue
                 for name in variations:
-                    cleaned = self._full_clean(name)
+                    cleaned = self._league_clean(name)
                     self.league_reverse_map[cleaned] = canonical_id
                     count += 1
             logger.info(f"Loaded {len(self.league_mappings)} league mappings ({count} variations)")
@@ -244,6 +244,15 @@ class TeamNormalizer:
         """Remove neutral venue indicators like (N), [N], (n)."""
         return re.sub(r'\s*[\(\[]n[\)\]]\s*', ' ', name, flags=re.IGNORECASE).strip()
 
+    def _league_clean(self, name: str) -> str:
+        """Clean a competition name: like a team name, minus club designators.
+
+        Stripping "AFC"/"FC" is right for clubs and wrong for competitions:
+        "AFC Champions League" became "champions league" and resolved to UEFA's.
+        """
+        name = self._remove_diacritics(self._cyrillic_to_latin(self._clean(name)))
+        return self._strip_neutral_venue(name).strip()
+
     def _full_clean(self, name: str) -> str:
         """Run all cleaning stages to produce a normalized string."""
         name = self._clean(name)
@@ -318,7 +327,7 @@ class TeamNormalizer:
         if not league_name:
             return ""
 
-        cleaned = self._full_clean(league_name)
+        cleaned = self._league_clean(league_name)
 
         # Keep ambiguous/vague league strings generic — prevents false hard rejects
         # on short names like "Premier Liga" that appear for both BIH and ENG fixtures.
@@ -330,24 +339,11 @@ class TeamNormalizer:
         if cleaned in self.league_reverse_map:
             return self.league_reverse_map[cleaned]
 
-        # Fuzzy fallback — skip for numeric leagues to avoid "Bugarska 2" -> "Bugarska 1" false matches
-        # and for any cleaned that contains a digit (tier-specific)
-        if self.league_reverse_map and not any(ch.isdigit() for ch in cleaned):
-            result = process.extractOne(
-                cleaned,
-                list(self.league_reverse_map.keys()),
-                scorer=fuzz.token_sort_ratio,
-                score_cutoff=90,
-            )
-            if result:
-                matched_name, score, _ = result
-                canonical = self.league_reverse_map[matched_name]
-                logger.debug(
-                    f"Fuzzy league match: '{league_name}' → '{canonical}' "
-                    f"(via '{matched_name}', score={score})"
-                )
-                return canonical
-
+        # No fuzzy fallback: a near-miss league name is a different competition
+        # as often as not ("Liga Prvaka" scored 90 against Slovenia's "Prva
+        # Liga", "Parva Liga" — Bulgaria — 95). An unmapped name stays
+        # unmapped; the gate settles it on exact teams, and
+        # scripts/derive_mappings.py maps it from shared fixtures.
         return cleaned
 
     def normalize_country(self, country_name: str) -> str:

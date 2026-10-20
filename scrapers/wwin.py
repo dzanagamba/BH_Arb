@@ -32,6 +32,7 @@ from datetime import UTC, datetime, timedelta
 from engine.market_registry import MARKET_REGISTRY, record_unmapped
 from models.schemas import Market, MarketType, Match, OddsValue
 from scrapers.base import launch_browser
+from scrapers.common import betradar_id, qualify_league
 
 logger = logging.getLogger(__name__)
 
@@ -216,6 +217,19 @@ def _build_markets_from_bets(bets: list, mode: str = "prematch") -> list[Market]
     return markets
 
 
+def _remember_countries(data: object, countries: dict[object, str]) -> None:
+    """Collect ``categories`` (country id -> name); events carry only ``idc``."""
+    if not isinstance(data, dict):
+        return
+    for category in data.get("categories") or []:
+        if isinstance(category, dict) and category.get("id") is not None:
+            countries[category["id"]] = str(category.get("cname") or "")
+
+
+def _country(event: dict, countries: dict[object, str]) -> str:
+    return str(event.get("cname") or countries.get(event.get("idc")) or "")
+
+
 class WWINScraper:
     """Scraper for wwin.ba — Playwright session + REST API."""
 
@@ -229,6 +243,7 @@ class WWINScraper:
         seen_ids: set[str] = set()
         now = (scan_time.replace(tzinfo=UTC) if scan_time and scan_time.tzinfo is None else scan_time) if scan_time else datetime.now(UTC)
 
+        countries: dict[object, str] = {}
         p, browser, context = await launch_browser()
         try:
             page = await context.new_page()
@@ -270,6 +285,7 @@ class WWINScraper:
                             return day_offset, bets, []
                         try:
                             data = await resp.json()
+                            _remember_countries(data, countries)
                             events = (data.get("events") or data.get("p") or []) if isinstance(data, dict) else []
                             return day_offset, bets, events
                         except Exception:
@@ -321,13 +337,14 @@ class WWINScraper:
                         bookmaker=BOOKMAKER_ID,
                         home_team=home,
                         away_team=away,
-                        league=str(event.get("tname") or event.get("cname") or "Fudbal"),
-                        country=str(event.get("cname") or ""),
+                        league=qualify_league(str(event.get("tname") or ""), _country(event, countries)) or "Fudbal",
+                        country=_country(event, countries),
                         kickoff=kickoff,
                         markets=markets,
                         url=f"{BASE_URL}/kladjenje/",
                         match_code=event_id,
                         event_id=event_id,
+                        betradar_id=betradar_id(event.get("brid")),
                         deep_link_verified=False,
                         fetched_at=datetime.now(UTC).replace(tzinfo=None),
                     ))
@@ -358,6 +375,8 @@ class WWINScraper:
                 data = await resp.json()
             except Exception:
                 return []
+            countries: dict[object, str] = {}
+            _remember_countries(data, countries)
             events = data.get("events", []) if isinstance(data, dict) else []
             football = [e for e in events if isinstance(e, dict) and e.get("ids") == FOOTBALL_SPORT_ID]
             if not football:
@@ -412,13 +431,14 @@ class WWINScraper:
                     bookmaker=BOOKMAKER_ID,
                     home_team=home,
                     away_team=away,
-                    league=str(event.get("tname") or event.get("cname") or "Fudbal"),
-                    country=str(event.get("cname") or ""),
+                    league=qualify_league(str(event.get("tname") or ""), _country(event, countries)) or "Fudbal",
+                    country=_country(event, countries),
                     kickoff=kickoff,
                     markets=markets,
                     url=f"{BASE_URL}/kladjenje-uzivo/",
                     match_code=event_id,
                     event_id=event_id,
+                    betradar_id=betradar_id(event.get("brid")),
                     deep_link_verified=False,
                     is_live=True,
                     fetched_at=datetime.now(UTC).replace(tzinfo=None),

@@ -203,7 +203,8 @@ yield now depends on scanning often (M4) and on more books/markets (M5).
 - [x] **Mozzartbet links.** 422 of 426 proven (≈10 min). The CLI used to throw its verdicts away — it now merges them into `cache/deep_link_verifications.json` like the API does.
 - [x] **Funnel measured; the biggest losses fixed.** (a) SportPlus sends Sarajevo local time, stored as UTC → every SportPlus pair failed the 15-min kickoff check; fixed with `parse_local_dt` (+ `tzdata`). (b) Unmapped league names blocked exact fixtures; the gate now settles those on exact teams + kickoff. (c) Team names compare ignoring punctuation/accents ("Bodo/Glimt" = "Bodø Glimt").
 - [x] **EVLBet** disabled until a payload can be captured (feed returns no football events).
-- [ ] Work the review queue: ~920 pairs are blocked only by team spellings ("Slavia P." / "Slavia Prague"). Use **Select strong** → **Approve selected** in the Review tab after each scan.
+- [x] **Names mapped from evidence (2026-10-20).** `scripts/derive_mappings.py` learns league names and team spellings from fixtures two books share (exact teams + kickoff, or the same Betradar id — MDShop, Admiralbet, SportPlus and WWIN carry it). Admiralbet, SportPlus and WWIN league names now carry the country; league fuzzy-guessing is off; unmapped leagues reach their group. Listings in multi-book groups on one scan: 2,137 → 3,970.
+- [ ] Re-run `scripts/derive_mappings.py --apply` on fresh scans now and then; review its `below_gate_similarity` pairs ("Man. City" / "Manchester City"), which the gate's 90 floor still refuses.
 
 ### M2 — Make every shown surebet placeable (done 2026-10-20)
 

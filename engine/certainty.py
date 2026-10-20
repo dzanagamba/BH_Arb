@@ -261,8 +261,22 @@ class CertaintyGate:
         """Return whether the unordered raw/canonical pair is explicitly reviewed."""
         if not self.alias_allowlist:
             return False
-        pair = {self._raw_team_key(left), self._raw_team_key(right)}
-        return any(entry == pair for entry in self.alias_allowlist_entries)
+        pair = frozenset((self._raw_team_key(left), self._raw_team_key(right)))
+        return pair in self._allowlist_index()
+
+    def _allowlist_index(self) -> frozenset[frozenset[str]]:
+        """The allowlist as a set of normalized pairs, rebuilt when it changes.
+
+        Grouping asks this for every candidate pair; re-parsing a thousand-entry
+        allowlist on each call made a scan's grouping several times slower.
+        """
+        snapshot = frozenset(self.alias_allowlist)
+        cached = getattr(self, "_allowlist_cache", None)
+        if cached is None or cached[0] != snapshot:
+            index = frozenset(frozenset(entry) for entry in self.alias_allowlist_entries)
+            cached = (snapshot, index)
+            self._allowlist_cache = cached
+        return cached[1]
 
     @property
     def alias_allowlist_entries(self) -> list[set[str]]:

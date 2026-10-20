@@ -79,6 +79,10 @@ class MarketSpec:
     min_legs: int = 3
     line: float | None = None
     settlement: str = "full_time"
+    # The only specifier value this market may be read at. NSoft's live
+    # "rest of match" markets (1X2 id 6, BTTS id 995) carry the current score as
+    # their specifier, and settle like the full-time market only from 0-0.
+    requires_sbv: str | None = None
 
 
 class MarketRegistry:
@@ -148,6 +152,11 @@ class MarketRegistry:
                         min_legs=int(raw_spec.get("min_legs", 3)),
                         line=line,
                         settlement=str(raw_spec.get("settlement", "full_time")),
+                        requires_sbv=(
+                            None
+                            if raw_spec.get("requires_sbv") is None
+                            else str(raw_spec["requires_sbv"])
+                        ),
                     )
                     for source_id in spec.ids:
                         key = (str(bookmaker), str(mode), str(source_id))

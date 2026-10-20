@@ -17,6 +17,7 @@ from config.settings import VERIFY_SSL
 from models.schemas import Market, Match
 from scrapers.base import fetch_with_retry
 from scrapers.common import (
+    betradar_id,
     build_event_url,
     nsoft_event_window,
     parse_dt,
@@ -181,6 +182,7 @@ class MDShopScraper:
             url=build_event_url("mdshop", event_id, "https://www.mdshop.ba", live=live),
             match_code=event_id,
             event_id=event_id,
+            betradar_id=betradar_id(ev.get("betRadarEventId"), ev.get("externalEventId")),
             deep_link_verified=False,
             is_live=live,
             fetched_at=datetime.now(UTC).replace(tzinfo=None),

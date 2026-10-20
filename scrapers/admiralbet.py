@@ -13,11 +13,13 @@ from datetime import UTC, datetime
 from models.schemas import Market, Match
 from scrapers.base import launch_browser
 from scrapers.common import (
+    betradar_id,
     build_event_url,
     nsoft_event_window,
     parse_dt,
     parse_nsoft_bets,
     parse_nsoft_live_bets,
+    qualify_league,
 )
 
 logger = logging.getLogger(__name__)
@@ -56,6 +58,12 @@ def _parse_teams(event: dict) -> tuple[str, str]:
         parts = name.split(" - ", 1)
         return parts[0].strip(), parts[1].strip()
     return "", ""
+
+
+def _league_name(event: dict) -> str:
+    """Admiralbet names competitions without the country, so it is prefixed."""
+    competition = str(event.get("competitionName") or event.get("leagueName") or "")
+    return qualify_league(competition, str(event.get("regionName") or ""))
 
 
 def _parse_bets(bets: list, live: bool = False) -> list[Market]:
@@ -141,7 +149,7 @@ class AdmiralbetScraper:
             if code in seen:
                 continue
             seen.add(code)
-            league = str(ev.get("competitionName") or ev.get("regionName") or ev.get("leagueName") or "")
+            league = _league_name(ev)
             kickoff = _parse_dt(ev.get("dateTime") or ev.get("dateFrom") or ev.get("kickoff"))
             markets = _parse_bets(ev.get("bets", []), live=live)
             if not markets:
@@ -151,6 +159,7 @@ class AdmiralbetScraper:
                 league=league, kickoff=kickoff, markets=markets,
                 url=build_event_url("admiralbet", mid, BASE_URL, live=live), match_code=mid,
                 event_id=mid, deep_link_verified=False,
+                betradar_id=betradar_id(ev.get("betRadarEventId"), ev.get("externalEventId")),
                 is_live=live,
                 fetched_at=datetime.now(UTC).replace(tzinfo=None),
             ))

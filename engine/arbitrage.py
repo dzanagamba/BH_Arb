@@ -30,7 +30,7 @@ from config.settings import (
     MIN_PROFIT_PERCENT,
     ODDS_TTL_SECONDS,
 )
-from models.schemas import MarketType, MatchGroup, Surebet, SurebetStake
+from models.schemas import Market, MarketType, Match, MatchGroup, Surebet, SurebetStake
 from scrapers.common import parse_ah_label
 
 logger = logging.getLogger(__name__)
@@ -95,6 +95,32 @@ def _evidence_summary(group: MatchGroup) -> list[str]:
         if text and text not in lines:
             lines.append(text)
     return lines
+
+
+def _priced_markets(match: Match) -> list[Market]:
+    """The markets a listing may be priced from.
+
+    One listing quoting the same outcome in two markets of one type is two
+    different bets under one name (NSoft live once sent the match total and the
+    home team's total both as "Over/Under 2.5"). Taking the better price would
+    price a bet that does not exist, so the whole type is dropped for that
+    listing instead.
+    """
+    seen: dict[MarketType, set[str]] = {}
+    ambiguous: set[MarketType] = set()
+    for market in match.markets:
+        labels = {odd.label for odd in market.odds}
+        quoted = seen.setdefault(market.market_type, set())
+        if quoted & labels:
+            ambiguous.add(market.market_type)
+        quoted |= labels
+    if not ambiguous:
+        return match.markets
+    logger.warning(
+        f"[{match.bookmaker}] {match.home_team} - {match.away_team}: "
+        f"{sorted(t.value for t in ambiguous)} quoted twice; not priced"
+    )
+    return [m for m in match.markets if m.market_type not in ambiguous]
 
 
 def _oldest_fetch(group: MatchGroup) -> datetime | None:
@@ -241,7 +267,7 @@ class ArbitrageEngine:
         bookie_odds: dict[str, dict[str, float]] = {}
         for match in group.matches:
             bm = match.bookmaker
-            for market in match.markets:
+            for market in _priced_markets(match):
                 if market.market_type == market_type:
                     if bm not in bookie_odds:
                         bookie_odds[bm] = {}
@@ -314,7 +340,7 @@ class ArbitrageEngine:
         bookie_odds: dict[str, dict[str, float]] = {}
         for match in group.matches:
             bm = match.bookmaker
-            for market in match.markets:
+            for market in _priced_markets(match):
                 if market.market_type != market_type:
                     continue
                 for ov in market.odds:
@@ -475,7 +501,7 @@ class ArbitrageEngine:
         merged: dict[str, dict[str, float]] = {}
         for match in group.matches:
             bm = match.bookmaker
-            for market in match.markets:
+            for market in _priced_markets(match):
                 if market.market_type not in (MarketType.MATCH_RESULT, MarketType.DOUBLE_CHANCE):
                     continue
                 for odds_val in market.odds:
@@ -554,7 +580,7 @@ class ArbitrageEngine:
             wanted = set(labels)
             pinned: dict[str, dict[str, float]] = {}
             for match in group.matches:
-                for market in match.markets:
+                for market in _priced_markets(match):
                     if market.market_type not in source_types:
                         continue
                     for ov in market.odds:
@@ -577,7 +603,7 @@ class ArbitrageEngine:
         elif market_type == MarketType.DOUBLE_CHANCE:
             merged: dict[str, dict[str, float]] = {}
             for match in group.matches:
-                for market in match.markets:
+                for market in _priced_markets(match):
                     if market.market_type not in (MarketType.MATCH_RESULT, MarketType.DOUBLE_CHANCE):
                         continue
                     for ov in market.odds:
@@ -600,7 +626,7 @@ class ArbitrageEngine:
                 return None
             bookie_odds: dict[str, dict[str, float]] = {}
             for match in group.matches:
-                for market in match.markets:
+                for market in _priced_markets(match):
                     if market.market_type != market_type:
                         continue
                     for ov in market.odds:

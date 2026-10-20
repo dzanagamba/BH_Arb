@@ -192,3 +192,34 @@ def test_an_unverified_group_is_never_priced():
         unproven = group.model_copy(update={"status": status})
         assert engine.find_surebets([unproven], min_profit=0.0) == []
         assert engine.evaluate_market(unproven, MarketType.BTTS) is None
+
+
+def _ou(over, under):
+    return Market(
+        market_type=MarketType.OVER_UNDER_2_5,
+        odds=[OddsValue(label="Over 2.5", value=over), OddsValue(label="Under 2.5", value=under)],
+    )
+
+
+def test_a_market_type_quoted_twice_in_one_listing_is_not_priced():
+    """The 2026-10-19 live fake: NSoft sent the match total and the home team's
+    total both as O/U 2.5, and the better of the two made a 13.2% "surebet"."""
+    group = _group({"mdshop": (2.0, 1.8), "mbet": (1.9, 1.9)})
+    mdshop, mbet = group.matches
+    mdshop.markets = [_ou(3.05, 1.34), _ou(1.83, 1.91)]
+    mbet.markets = [_ou(1.88, 1.80)]
+    engine = ArbitrageEngine()
+
+    assert engine.find_surebets([group], min_profit=0.0, investment=100.0) == []
+    assert engine.evaluate_market(group, MarketType.OVER_UNDER_2_5) is None
+    assert engine.evaluate_market(
+        group, MarketType.OVER_UNDER_2_5, labels=["Over 2.5", "Under 2.5"]
+    ) is None
+
+
+def test_the_duplicate_guard_leaves_other_market_types_priced():
+    group = _group({"mdshop": (2.40, 1.90), "mbet": (2.20, 1.85)})
+    mdshop = group.matches[0]
+    mdshop.markets = [*mdshop.markets, _ou(3.05, 1.34), _ou(1.83, 1.91)]
+    surebets = ArbitrageEngine().find_surebets([group], min_profit=0.5, investment=100.0)
+    assert [s.market_type for s in surebets] == [MarketType.BTTS]

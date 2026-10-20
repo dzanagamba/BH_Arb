@@ -108,7 +108,11 @@ def test_unverified_link_yields_suggested_or_dropped_not_verified():
 def test_unreviewed_mapping_variation_is_not_verified():
     a = _m("mdshop", "Sporting", "Alverca", "Primeira Liga", event_id="1")
     b = _m("mbet", "Sporting CP", "Alverca", "Liga Portugal", event_id="2")
-    groups = MatchMatcher().group_matches([a, b])
+    matcher = MatchMatcher()
+    # The shipped allowlist may hold this pair (derived from shared fixtures);
+    # the rule under test is about a pair nobody has reviewed.
+    matcher.gate.alias_allowlist = set()
+    groups = matcher.group_matches([a, b])
     assert groups == []
 
 

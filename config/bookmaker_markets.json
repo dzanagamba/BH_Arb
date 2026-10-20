@@ -2,11 +2,11 @@
   "_excluded": {
     "mdshop": [
       136, 140, 143, 144, 148, 149, 153, 154, 161, 162, 166, 174,
-      1, 14, 17, 24, 261, 10, 30, 39, 43, 303, 304, 11, 437, 1064, 56, 41
+      1, 14, 17, 24, 261, 10, 30, 39, 43, 303, 304, 11, 437, 1064, 56, 41, 28
     ],
     "admiralbet": [
       136, 140, 143, 144, 148, 149, 153, 154, 161, 162, 166, 174,
-      1, 14, 17, 24, 261, 10, 30, 39, 43, 303, 304, 11, 437, 1064, 56, 41
+      1, 14, 17, 24, 261, 10, 30, 39, 43, 303, 304, 11, 437, 1064, 56, 41, 28
     ],
     "mozzartbet": [141, "*DALJE*", "*PROLAZ*", "*KVALIFIKACIJE*"],
     "wwin": [7, 10, 4, 476, 443, 51],
@@ -33,12 +33,12 @@
       "over_under_3_5": { "ids": [137, 138], "line": 3.5, "min_legs": 2 }
     },
     "live": {
-      "1x2": { "ids": [6], "labels": ["1", "X", "2"], "min_legs": 3 },
+      "1x2": { "ids": [6], "labels": ["1", "X", "2"], "min_legs": 3, "requires_sbv": "0-0" },
       "double_chance": { "ids": [18, 42], "labels": ["1X", "12", "X2"], "min_legs": 2 },
-      "btts": { "ids": [995], "labels": ["GG", "NG"], "min_legs": 2 },
-      "over_under_1_5": { "ids": [22, 28], "line": 1.5, "min_legs": 2 },
-      "over_under_2_5": { "ids": [22, 28], "line": 2.5, "min_legs": 2 },
-      "over_under_3_5": { "ids": [22, 28], "line": 3.5, "min_legs": 2 }
+      "btts": { "ids": [995], "labels": ["GG", "NG"], "min_legs": 2, "requires_sbv": "0-0" },
+      "over_under_1_5": { "ids": [22], "line": 1.5, "min_legs": 2 },
+      "over_under_2_5": { "ids": [22], "line": 2.5, "min_legs": 2 },
+      "over_under_3_5": { "ids": [22], "line": 3.5, "min_legs": 2 }
     }
   },
   "admiralbet": {
@@ -51,9 +51,9 @@
       "over_under_3_5": { "ids": [137, 138], "line": 3.5, "min_legs": 2 }
     },
     "live": {
-      "1x2": { "ids": [6], "labels": ["1", "X", "2"], "min_legs": 3 },
+      "1x2": { "ids": [6], "labels": ["1", "X", "2"], "min_legs": 3, "requires_sbv": "0-0" },
       "double_chance": { "ids": [18, 42], "labels": ["1X", "12", "X2"], "min_legs": 2 },
-      "btts": { "ids": [995], "labels": ["GG", "NG"], "min_legs": 2 }
+      "btts": { "ids": [995], "labels": ["GG", "NG"], "min_legs": 2, "requires_sbv": "0-0" }
     }
   },
   "wwin": {

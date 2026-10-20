@@ -97,6 +97,12 @@ UNCOVERED_ROWS: dict[tuple[str, str, str], str] = {
     ("mozzartbet", "prematch", "over_under_3_5"): "same: no 4+/0-3 pair on the feed.",
     ("mozzartbet", "live", "over_under_1_5"): "same as prematch on the live feed.",
     ("mozzartbet", "live", "over_under_3_5"): "same as prematch on the live feed.",
+    ("mdshop", "live", "over_under_1_5"): (
+        "the 2026-09-25 capture's only 1.5/2.5 totals are id 28, 'Domacin ukupno' "
+        "(the home team's goals), which the old registry misread as the match total; "
+        "the capture holds id 22 at 3.5 only. Re-capture to cover 22 at 1.5/2.5."
+    ),
+    ("mdshop", "live", "over_under_2_5"): "same: only id 28 at 2.5 in the capture.",
     # betole is disabled in config/settings.py and is not in this layer's scope.
     # Its desk feed IS reachable and carries picks 1/2/3 and 272/273, but
     # _parse_betole_markets also emits the experimental first_half_1x2 market
@@ -550,22 +556,25 @@ def test_premier_prematch_btts_still_reads_the_prematch_spelling():
 def test_a_captured_unregistered_id_is_counted_not_dropped():
     """The one global constraint the exact-set test cannot see on its own.
 
-    admiralbet's live feed serves the 22/28 totals, but its registry declares no
-    live Over/Under row, so those IDs are neither mapped nor excluded: they must
-    be recorded in the process-wide diagnostic rather than vanish.
+    admiralbet's live feed serves the 22 match totals, but its registry declares
+    no live Over/Under row, so 22 is neither mapped nor excluded: it must be
+    recorded in the process-wide diagnostic rather than vanish. (28, the home
+    team's total, is excluded on purpose and so is not counted.)
     """
     from engine.market_registry import unmapped_markets
 
     data = _load(_fixture_for("admiralbet", "live"))
     carried = _source_ids_in(data)
+    registry = MarketRegistry()
     unregistered = [
         source_id
         for source_id in ("22", "28")
         if source_id in carried
-        and not MarketRegistry().has_source_id("admiralbet", "live", source_id)
+        and not registry.has_source_id("admiralbet", "live", source_id)
+        and not registry.is_excluded("admiralbet", "live", source_id)
     ]
     assert unregistered, (
-        "the admiralbet live capture is supposed to carry the unregistered 22/28 "
+        "the admiralbet live capture is supposed to carry the unregistered 22 "
         "totals; without them nothing tests the 'counted, never dropped' rule"
     )
     before = dict(unmapped_markets)

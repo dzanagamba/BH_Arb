@@ -17,7 +17,7 @@ from config.settings import VERIFY_SSL
 from engine.market_registry import MARKET_REGISTRY, record_unmapped
 from models.schemas import Market, MarketType, Match, OddsValue
 from scrapers.base import fetch_with_retry
-from scrapers.common import normalize_outcome, parse_local_dt
+from scrapers.common import betradar_id, normalize_outcome, parse_local_dt, qualify_league
 
 logger = logging.getLogger(__name__)
 
@@ -182,6 +182,7 @@ class SportPlusScraper:
             url="https://www.sportplus.ba/live",
             match_code=match_id,
             event_id=match_id,
+            betradar_id=betradar_id(m.get("betRadarId")),
             deep_link_verified=False,
             is_live=True,
             fetched_at=datetime.now(UTC).replace(tzinfo=None),
@@ -332,14 +333,8 @@ class SportPlusScraper:
         # Extract league/competition name + country
         league_raw = m.get("leagueName")
         country_raw = m.get("countryName")
-        country = ""
-        if league_raw and str(league_raw).strip() not in ("-", ""):
-            league_name = str(league_raw).strip()
-            country = str(country_raw).strip() if country_raw else ""
-        elif country_raw and str(country_raw).strip() not in ("-", ""):
-            league_name = str(country_raw).strip()
-        else:
-            league_name = sport_name.capitalize()
+        country = str(country_raw).strip() if country_raw else ""
+        league_name = qualify_league(str(league_raw or ""), country) or sport_name.capitalize()
 
         markets = self._parse_markets(m.get("markets", []))
         if not markets:
@@ -356,6 +351,7 @@ class SportPlusScraper:
             url="https://www.sportplus.ba/prematch/betting",
             match_code=match_id,
             event_id=match_id,
+            betradar_id=betradar_id(m.get("betRadarId")),
             deep_link_verified=False,
             fetched_at=datetime.now(UTC).replace(tzinfo=None),
         )

@@ -278,6 +278,13 @@ the whole system runs on rules plus human review.
 python scripts/generate_market_mapping_doc.py
 python scripts/generate_market_mapping_doc.py --check
 
+# Learn league names and team spellings from fixtures the books share (same
+# two teams + kickoff, or the same Betradar match id). Prints a summary; --report
+# writes every proposal with its fixtures; --apply writes config/league_mappings.json
+# and config/team_alias_allowlist.json. Run it on a fresh scan now and then.
+python scripts/derive_mappings.py cache/last_scan.json --report proposals.json
+python scripts/derive_mappings.py cache/last_scan.json --apply
+
 # Prove a bookmaker's per-event deep links, one browser navigation per event.
 # Reads cache/last_scan.json, so run a scan first. Defaults to every book that
 # declares a per-event route; --limit defaults to 3, --offset defaults to 0.

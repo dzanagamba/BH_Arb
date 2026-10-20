@@ -19,11 +19,23 @@ def _live_bet(btid, outcomes, sbv=None):
 # ─── NSoft live parsing ───────────────────────────────────────────────────────
 
 def test_nsoft_live_1x2_with_score_specifier():
-    bets = [_live_bet(6, [("1", 2.1), ("X", 3.2), ("2", 3.5)], sbv="0:0")]
-    markets = parse_nsoft_live_bets(bets)
-    assert len(markets) == 1
-    assert markets[0].market_type == MarketType.MATCH_RESULT
-    assert {o.label for o in markets[0].odds} == {"1", "X", "2"}
+    for sbv in ("0:0", "0-0"):
+        bets = [_live_bet(6, [("1", 2.1), ("X", 3.2), ("2", 3.5)], sbv=sbv)]
+        markets = parse_nsoft_live_bets(bets)
+        assert len(markets) == 1
+        assert markets[0].market_type == MarketType.MATCH_RESULT
+        assert {o.label for o in markets[0].odds} == {"1", "X", "2"}
+
+
+def test_nsoft_live_rest_of_match_markets_need_a_goalless_score():
+    """6 and 995 are REST-of-match markets: from 1-0 they are not the full-time bet."""
+    for sbv in ("1:0", "0-1", "2-2", "", None):
+        assert parse_nsoft_live_bets(
+            [_live_bet(6, [("1", 2.1), ("X", 3.2), ("2", 3.5)], sbv=sbv)]
+        ) == [], f"1X2 read at sbv={sbv!r}"
+        assert parse_nsoft_live_bets(
+            [_live_bet(995, [("GG", 2.1), ("NG", 1.7)], sbv=sbv)]
+        ) == [], f"BTTS read at sbv={sbv!r}"
 
 
 def test_nsoft_live_double_chance_ids():
@@ -34,20 +46,29 @@ def test_nsoft_live_double_chance_ids():
 
 
 def test_nsoft_live_btts():
-    markets = parse_nsoft_live_bets([_live_bet(995, [("GG", 2.1), ("NG", 1.7)], sbv="1:0")])
+    markets = parse_nsoft_live_bets([_live_bet(995, [("GG", 2.1), ("NG", 1.7)], sbv="0:0")])
     assert len(markets) == 1
     assert markets[0].market_type == MarketType.BTTS
 
 
 def test_nsoft_live_ou_lines():
-    for btid, sbv, expected in (
-        (22, "1.5", MarketType.OVER_UNDER_1_5),
-        (28, "2.5", MarketType.OVER_UNDER_2_5),
-        (22, "3.5", MarketType.OVER_UNDER_3_5),
+    for sbv, expected in (
+        ("1.5", MarketType.OVER_UNDER_1_5),
+        ("2.5", MarketType.OVER_UNDER_2_5),
+        ("3.5", MarketType.OVER_UNDER_3_5),
     ):
-        markets = parse_nsoft_live_bets([_live_bet(btid, [("Manje", 1.9), ("Vise", 1.9)], sbv=sbv)])
-        assert len(markets) == 1, f"id={btid} sbv={sbv}"
+        markets = parse_nsoft_live_bets([_live_bet(22, [("Manje", 1.9), ("Vise", 1.9)], sbv=sbv)])
+        assert len(markets) == 1, f"sbv={sbv}"
         assert markets[0].market_type == expected
+
+
+def test_nsoft_live_home_team_total_is_not_the_match_total():
+    """28 is "Domaćin ukupno" — the home side's goals, never match Over/Under."""
+    for book in ("mdshop", "admiralbet"):
+        for sbv in ("1.5", "2.5", "3.5"):
+            assert parse_nsoft_live_bets(
+                [_live_bet(28, [("Manje", 1.42), ("Vise", 2.55)], sbv=sbv)], bookmaker=book
+            ) == []
 
 
 def test_nsoft_live_dead_ou_side_dropped():
