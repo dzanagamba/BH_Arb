@@ -191,6 +191,17 @@ moves that goal, and each has a "done when" that can be checked. Do the
 milestones in order: there is no point polishing placement while the scanner
 shows zero surebets.
 
+### M0 — Market mappings correct for every book (first priority)
+
+A wrong mapping makes a fake surebet that loses money, so this comes before
+any yield work. `MARKET_MAPPING.md` is the reference; its audit date is
+2026-08-14 and the NSoft live ids were wrong until 2026-10-20.
+
+- [ ] **Re-audit every book/mode/market row** of the generated table in `MARKET_MAPPING.md` against a fresh capture: source id, outcome labels, line, and settlement (full time, no extra time, no period, no score-specifier). Record the new audit date. *Done when:* each of the 85 rows has a captured fixture under `tests/fixtures/markets/` taken on or after the audit date, and the fixture test passes.
+- [ ] **Cross-book price check.** For every verified group, compare each book's implied probabilities per market with the group median, and flag outliers (a wrong market or a swapped label shows up as a big gap). Make it a script that runs on any scan. *Done when:* a fresh prematch and a fresh live scan show no unexplained outlier.
+- [ ] **Known gaps in the table.** Admiralbet live has no O/U row though it shares MDShop's feed (id `22`). Premier live O/U (`LIVE - ZBROJ GOLOVA`) has no row and is read through prematch rows, and its live DC uses the prematch `UTAKMICA_DC` id. SportPlus prematch 1X2 and DC share id `1`. Betole declares more pick codes than it parses. Fix or document each. *Done when:* every row the parser reads is declared, and every declared row is read.
+- [ ] **Unmapped-market diagnostic stays empty.** Every source id a book sends is either mapped or in `_excluded` with a reason. *Done when:* `/api/health` shows no unmapped ids on a fresh scan of each book, prematch and live.
+
 ### M1 — Show a real surebet (done 2026-10-20 — the pipeline is no longer the blocker)
 
 Funnel on a fresh prematch scan, before → after: 217 → **818** verified groups
@@ -208,7 +219,6 @@ yield now depends on scanning often (M4) and on more books/markets (M5).
 - [ ] **Mozzartbet coverage.** On the 2026-10-20 scan only 85 of Mozzartbet's 285 listings reached a multi-book group, and 285 is far below the ~1,150 matches the site lists. Raise the page size to 100 or fetch per competition, then prove links for the new events (`/api/verify-links?bookmaker=mozzartbet`), since Mozzartbet is the one book whose route must be proven. *Done when:* Mozzartbet's listing count is close to the site's, and its grouped share is close to the other books'.
 - [ ] **Betradar id as identity proof.** MDShop, Admiralbet, SportPlus and WWIN carry the same Betradar match id (`Match.betradar_id`). Two listings with the same id are the same fixture whatever their names say. Let the gate accept that as team and league identity, with its own evidence rule. *Done when:* a pair with matching ids and differently spelled teams verifies, and a pair with different ids never does.
 - [ ] **MDShop and Admiralbet are one price source.** Both run on the NSoft feed and quote identical odds, so an "arb" between them is impossible, and counting both inflates group and book counts. Treat them as one source in the engine (one leg per source) and in the funnel stats. *Done when:* no surebet or near-arb pairs MDShop with Admiralbet, and the stats count them once.
-- [ ] **Premier live over/under.** Live O/U is read through the prematch registry rows and has no live fixture. Capture a live payload and add registry rows or exclude it. *Done when:* a fixture test covers `premier_kladionica/live/over_under`.
 - [ ] **SportPlus around clock changes.** SportPlus sends Sarajevo local time. One game near the 2026-10-25 DST change was an hour off. Add a test for kickoffs in the repeated hour, and check a real scan after the change. *Done when:* SportPlus kickoffs match the other books across the change.
 
 ### M2 — Make every shown surebet placeable (done 2026-10-20)
