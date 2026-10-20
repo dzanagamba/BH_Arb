@@ -205,6 +205,11 @@ yield now depends on scanning often (M4) and on more books/markets (M5).
 - [x] **EVLBet** disabled until a payload can be captured (feed returns no football events).
 - [x] **Names mapped from evidence (2026-10-20).** `scripts/derive_mappings.py` learns league names and team spellings from fixtures two books share (exact teams + kickoff, or the same Betradar id — MDShop, Admiralbet, SportPlus and WWIN carry it). Admiralbet, SportPlus and WWIN league names now carry the country; league fuzzy-guessing is off; unmapped leagues reach their group. Listings in multi-book groups on one scan: 2,137 → 3,970.
 - [ ] Re-run `scripts/derive_mappings.py --apply` on fresh scans now and then; review its `below_gate_similarity` pairs ("Man. City" / "Manchester City"), which the gate's 90 floor still refuses.
+- [ ] **Mozzartbet coverage.** On the 2026-10-20 scan only 85 of Mozzartbet's 285 listings reached a multi-book group, and 285 is far below the ~1,150 matches the site lists. Raise the page size to 100 or fetch per competition, then prove links for the new events (`/api/verify-links?bookmaker=mozzartbet`), since Mozzartbet is the one book whose route must be proven. *Done when:* Mozzartbet's listing count is close to the site's, and its grouped share is close to the other books'.
+- [ ] **Betradar id as identity proof.** MDShop, Admiralbet, SportPlus and WWIN carry the same Betradar match id (`Match.betradar_id`). Two listings with the same id are the same fixture whatever their names say. Let the gate accept that as team and league identity, with its own evidence rule. *Done when:* a pair with matching ids and differently spelled teams verifies, and a pair with different ids never does.
+- [ ] **MDShop and Admiralbet are one price source.** Both run on the NSoft feed and quote identical odds, so an "arb" between them is impossible, and counting both inflates group and book counts. Treat them as one source in the engine (one leg per source) and in the funnel stats. *Done when:* no surebet or near-arb pairs MDShop with Admiralbet, and the stats count them once.
+- [ ] **Premier live over/under.** Live O/U is read through the prematch registry rows and has no live fixture. Capture a live payload and add registry rows or exclude it. *Done when:* a fixture test covers `premier_kladionica/live/over_under`.
+- [ ] **SportPlus around clock changes.** SportPlus sends Sarajevo local time. One game near the 2026-10-25 DST change was an hour off. Add a test for kickoffs in the repeated hour, and check a real scan after the change. *Done when:* SportPlus kickoffs match the other books across the change.
 
 ### M2 — Make every shown surebet placeable (done 2026-10-20)
 
@@ -239,7 +244,8 @@ Without records there is no way to know whether the platform makes money.
 
 - [ ] `orientation_unresolved`: emit it from the gate or delete it. Today `engine/certainty.py`, `frontend/js/app.js` and `tests/test_frontend_review.py` must change together.
 - [ ] Reload `config/bookmaker_deeplinks.json` without restarting the server.
-- [ ] Re-read the six `supports_event_id: false` notes against the live sites every few months, and date the check.
+- [ ] `.claude/launch.json` points to a venv that no longer exists; point it at the project's own environment so the preview server starts.
+- [ ] Re-read the eight `supports_event_id: false` notes against the live sites every few months, and date the check.
 
 ---
 
