@@ -103,6 +103,21 @@ UNCOVERED_ROWS: dict[tuple[str, str, str], str] = {
         "the capture holds id 22 at 3.5 only. Re-capture to cover 22 at 1.5/2.5."
     ),
     ("mdshop", "live", "over_under_2_5"): "same: only id 28 at 2.5 in the capture.",
+    **{
+        ("premier_kladionica", "live", f"over_under_{line}"): (
+            "'LIVE - ZBROJ GOLOVA' is declared since 2026-10-20 (it used to be read "
+            "through the prematch rows). The 2026-09-25 live capture has no such "
+            "block, so the row is unproven against a payload. Its prices agreed with "
+            "mbet/wwin/mdshop on the 2026-10-19 live scan, but re-capture it and run "
+            "scripts/price_check.py --live before trusting it."
+        )
+        for line in ("1_5", "2_5", "3_5")
+    },
+    ("admiralbet", "live", "over_under_1_5"): (
+        "id 22 is registered since 2026-10-20 (same NSoft feed as mdshop); the "
+        "capture holds it at 3.5 only. Re-capture to cover 22 at 1.5/2.5."
+    ),
+    ("admiralbet", "live", "over_under_2_5"): "same: only id 22 at 3.5 in the capture.",
     # betole is disabled in config/settings.py and is not in this layer's scope.
     # Its desk feed IS reachable and carries picks 1/2/3 and 272/273, but
     # _parse_betole_markets also emits the experimental first_half_1x2 market
@@ -553,35 +568,34 @@ def test_premier_prematch_btts_still_reads_the_prematch_spelling():
     assert "btts" in _emitted(data)
 
 
-def test_a_captured_unregistered_id_is_counted_not_dropped():
+def test_an_unregistered_id_is_counted_not_dropped():
     """The one global constraint the exact-set test cannot see on its own.
 
-    admiralbet's live feed serves the 22 match totals, but its registry declares
-    no live Over/Under row, so 22 is neither mapped nor excluded: it must be
-    recorded in the process-wide diagnostic rather than vanish. (28, the home
-    team's total, is excluded on purpose and so is not counted.)
+    An id that is neither mapped nor excluded must be recorded in the
+    process-wide diagnostic rather than vanish. Every id the live captures carry
+    is now registered or excluded, so a synthetic id is spliced into a real
+    payload: only the id is invented, the surrounding bets are the capture.
     """
+    import copy
+
     from engine.market_registry import unmapped_markets
 
-    data = _load(_fixture_for("admiralbet", "live"))
-    carried = _source_ids_in(data)
+    fake_id = "99999"
+    data = copy.deepcopy(_load(_fixture_for("admiralbet", "live")))
     registry = MarketRegistry()
-    unregistered = [
-        source_id
-        for source_id in ("22", "28")
-        if source_id in carried
-        and not registry.has_source_id("admiralbet", "live", source_id)
-        and not registry.is_excluded("admiralbet", "live", source_id)
-    ]
-    assert unregistered, (
-        "the admiralbet live capture is supposed to carry the unregistered 22 "
-        "totals; without them nothing tests the 'counted, never dropped' rule"
+    assert not registry.has_source_id("admiralbet", "live", fake_id)
+    assert not registry.is_excluded("admiralbet", "live", fake_id)
+    data["bets"].append(
+        {
+            "betTypeId": int(fake_id),
+            "sBV": "",
+            "betTypeName": "Synthetic unmapped market",
+            "betOutcomes": [{"name": "1", "odd": 2.0, "orderNo": 1}],
+        }
     )
-    before = dict(unmapped_markets)
+    before = unmapped_markets.get(f"admiralbet:{fake_id}", 0)
     _run_parser(data)
-    after = unmapped_markets
-    for source_id in unregistered:
-        assert after.get(f"admiralbet:{source_id}", 0) > before.get(f"admiralbet:{source_id}", 0), (
-            f"admiralbet:{source_id} is not in the registry and not excluded, so parsing "
-            "the capture must have recorded it in engine.market_registry.unmapped_markets"
-        )
+    assert unmapped_markets.get(f"admiralbet:{fake_id}", 0) > before, (
+        f"admiralbet:{fake_id} is not in the registry and not excluded, so parsing "
+        "must have recorded it in engine.market_registry.unmapped_markets"
+    )

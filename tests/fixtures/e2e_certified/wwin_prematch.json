@@ -1,0 +1,164 @@
+{
+  "bookmaker": "wwin",
+  "mode": "prematch",
+  "captured_at": "2026-09-25",
+  "endpoint": "https://wwin.ba/content/sport-livecontent/api/PrematchEvents/events?bets=95,6&key=bs&spid=2&tfrom=1790290800&tto=1790388000 + https://wwin.ba/content/sport-livecontent/api/PrematchEvents/events?bets=3,11&key=bs&spid=2&tfrom=1790290800&tto=1790388000 + https://wwin.ba/content/sport-livecontent/api/PrematchEvents/events?bets=4,7&key=bs&spid=2&tfrom=1790290800&tto=1790388000 + https://wwin.ba/content/sport-livecontent/api/PrematchEvents/events?bets=95,6&key=bs&spid=2&tfrom=1790377200&tto=1790474400 + https://wwin.ba/content/sport-livecontent/api/PrematchEvents/events?bets=3,11&key=bs&spid=2&tfrom=1790377200&tto=1790474400 + https://wwin.ba/content/sport-livecontent/api/PrematchEvents/events?bets=4,7&key=bs&spid=2&tfrom=1790377200&tto=1790474400 + https://wwin.ba/content/sport-livecontent/api/PrematchEvents/events?bets=95,6&key=bs&spid=2&tfrom=1790463600&tto=1790560800 + https://wwin.ba/content/sport-livecontent/api/PrematchEvents/events?bets=3,11&key=bs&spid=2&tfrom=1790463600&tto=1790560800 + https://wwin.ba/content/sport-livecontent/api/PrematchEvents/events?bets=4,7&key=bs&spid=2&tfrom=1790463600&tto=1790560800",
+  "source": "live_api_response",
+  "payload_kind": "wwin_bets",
+  "provenance": "bets[] of one football event (id 4620444) from the live WWIN PrematchEvents/events response, hand-trimmed to idBt 95/6/3 plus idBt 11 for the three declared totals, and one excluded idBt.",
+  "dropped_bet_fields": [
+    "id",
+    "idmSt",
+    "fav",
+    "sty",
+    "mxb",
+    "mxbv",
+    "mne"
+  ],
+  "dropped_odd_fields": [
+    "id",
+    "mg",
+    "idtm",
+    "idfree",
+    "idtft"
+  ],
+  "excluded_ids_present": [
+    {
+      "id": 7,
+      "context": null
+    }
+  ],
+  "bets": [
+    {
+      "idBt": 95,
+      "spec": "",
+      "odds": [
+        {
+          "t": "1",
+          "va": 2.06,
+          "isv": 1
+        },
+        {
+          "t": "X",
+          "va": 3.5,
+          "isv": 1
+        },
+        {
+          "t": "2",
+          "va": 3.05,
+          "isv": 1
+        }
+      ]
+    },
+    {
+      "idBt": 6,
+      "spec": "",
+      "odds": [
+        {
+          "t": "12",
+          "va": 1.24,
+          "isv": 1
+        },
+        {
+          "t": "X2",
+          "va": 1.56,
+          "isv": 1
+        },
+        {
+          "t": "1X",
+          "va": 1.29,
+          "isv": 1
+        }
+      ]
+    },
+    {
+      "idBt": 3,
+      "spec": "",
+      "odds": [
+        {
+          "t": "Yes",
+          "va": 1.49,
+          "isv": 1
+        },
+        {
+          "t": "No",
+          "va": 2.34,
+          "isv": 1
+        }
+      ]
+    },
+    {
+      "idBt": 11,
+      "spec": "total=1,5",
+      "odds": [
+        {
+          "t": "Over",
+          "va": 1.16,
+          "isv": 1
+        },
+        {
+          "t": "Under",
+          "va": 4.2,
+          "isv": 1
+        }
+      ]
+    },
+    {
+      "idBt": 11,
+      "spec": "total=2,5",
+      "odds": [
+        {
+          "t": "Over",
+          "va": 1.55,
+          "isv": 1
+        },
+        {
+          "t": "Under",
+          "va": 2.2,
+          "isv": 1
+        }
+      ]
+    },
+    {
+      "idBt": 11,
+      "spec": "total=3,5",
+      "odds": [
+        {
+          "t": "Over",
+          "va": 2.32,
+          "isv": 1
+        },
+        {
+          "t": "Under",
+          "va": 1.5,
+          "isv": 1
+        }
+      ]
+    },
+    {
+      "idBt": 7,
+      "spec": "",
+      "odds": [
+        {
+          "t": "1",
+          "va": 1.52,
+          "isv": 1
+        },
+        {
+          "t": "2",
+          "va": 2.22,
+          "isv": 1
+        }
+      ]
+    }
+  ],
+  "expected_markets": [
+    "1x2",
+    "btts",
+    "double_chance",
+    "over_under_1_5",
+    "over_under_2_5",
+    "over_under_3_5"
+  ],
+  "uncovered_registry_rows": []
+}

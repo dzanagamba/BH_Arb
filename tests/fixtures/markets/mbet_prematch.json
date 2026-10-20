@@ -1,11 +1,11 @@
 {
   "bookmaker": "mbet",
   "mode": "prematch",
-  "captured_at": "2026-09-25",
-  "endpoint": "https://api.mbet.ba/events_cached?live=false&offer_plan=true&fields=all&lang=ba&limit=100&offset=0&start=2026-09-25T17:05:37.305438Z&end=2026-10-09T17:05:37.305438Z&orderBy=startTimeAsc",
+  "captured_at": "2026-10-20",
+  "endpoint": "https://api.mbet.ba/events_cached?live=false&offer_plan=true&fields=all&lang=ba&limit=100&offset=0&start=2026-10-20T07:24:09.239113Z&end=2026-11-03T07:24:09.239113Z&orderBy=startTimeAsc",
   "source": "live_api_response",
   "payload_kind": "mbet_event_odds",
-  "provenance": "odds{} of one football event (id 'e:fb:van-ahl:0005') from the live MBet events_cached response, filtered to the oddtype keys the registry maps plus one excluded market family.",
+  "provenance": "odds{} of one football event (id 'e:fb:ise-jav:0000') from the live MBet events_cached response, filtered to the oddtype keys the registry maps plus one excluded market family.",
   "dropped_fields": [
     "extras",
     "manual_status",
@@ -18,8 +18,8 @@
   ],
   "excluded_ids_present": [
     {
-      "id": "ofb:sh",
-      "context": "ofb:sh:1"
+      "id": "ofb:dnb",
+      "context": "ofb:dnb:1"
     }
   ],
   "context": {
@@ -27,107 +27,107 @@
   },
   "bets": {
     "ofb:fs:1": {
-      "value": 5.0,
+      "value": 4.5,
       "market_key": "ofb:fs",
       "oddtype_key": "ofb:fs:1",
       "market_status": "ACTIVE",
       "oddtype_status": 1
     },
     "ofb:fs:X": {
-      "value": 4.33,
+      "value": 3.8,
       "market_key": "ofb:fs",
       "oddtype_key": "ofb:fs:X",
       "market_status": "ACTIVE",
       "oddtype_status": 1
     },
     "ofb:fs:2": {
-      "value": 1.45,
+      "value": 1.61,
       "market_key": "ofb:fs",
       "oddtype_key": "ofb:fs:2",
       "market_status": "ACTIVE",
       "oddtype_status": 1
     },
     "ofb:dc:1X": {
-      "value": 2.47,
+      "value": 2.18,
       "market_key": "ofb:dc",
       "oddtype_key": "ofb:dc:1X",
       "market_status": "ACTIVE",
       "oddtype_status": 1
     },
     "ofb:dc:12": {
-      "value": 1.14,
+      "value": 1.2,
       "market_key": "ofb:dc",
       "oddtype_key": "ofb:dc:12",
       "market_status": "ACTIVE",
       "oddtype_status": 1
     },
     "ofb:dc:X2": {
-      "value": 1.11,
+      "value": 1.14,
       "market_key": "ofb:dc",
       "oddtype_key": "ofb:dc:X2",
       "market_status": "ACTIVE",
       "oddtype_status": 1
     },
     "ofb:gg:GG": {
-      "value": 1.48,
+      "value": 1.62,
       "market_key": "ofb:gg",
       "oddtype_key": "ofb:gg:GG",
       "market_status": "ACTIVE",
       "oddtype_status": 1
     },
     "ofb:gg:NG": {
-      "value": 2.4,
+      "value": 2.14,
       "market_key": "ofb:gg",
       "oddtype_key": "ofb:gg:NG",
       "market_status": "ACTIVE",
       "oddtype_status": 1
     },
     "ofb:tg:2+": {
-      "value": 1.1,
+      "value": 1.18,
       "market_key": "ofb:tg",
       "oddtype_key": "ofb:tg:2+",
       "market_status": "ACTIVE",
       "oddtype_status": 1
     },
     "ofb:tg:0-1": {
-      "value": 5.5,
+      "value": 4.15,
       "market_key": "ofb:tg",
       "oddtype_key": "ofb:tg:0-1",
       "market_status": "ACTIVE",
       "oddtype_status": 1
     },
     "ofb:tg:3+": {
-      "value": 1.36,
+      "value": 1.59,
       "market_key": "ofb:tg",
       "oddtype_key": "ofb:tg:3+",
       "market_status": "ACTIVE",
       "oddtype_status": 1
     },
     "ofb:tg:0-2": {
-      "value": 2.8,
+      "value": 2.2,
       "market_key": "ofb:tg",
       "oddtype_key": "ofb:tg:0-2",
       "market_status": "ACTIVE",
       "oddtype_status": 1
     },
     "ofb:tg:4+": {
-      "value": 1.88,
+      "value": 2.4,
       "market_key": "ofb:tg",
       "oddtype_key": "ofb:tg:4+",
       "market_status": "ACTIVE",
       "oddtype_status": 1
     },
     "ofb:tg:0-3": {
-      "value": 1.79,
+      "value": 1.48,
       "market_key": "ofb:tg",
       "oddtype_key": "ofb:tg:0-3",
       "market_status": "ACTIVE",
       "oddtype_status": 1
     },
-    "ofb:sh:1": {
-      "value": 4.75,
-      "market_key": "ofb:sh",
-      "oddtype_key": "ofb:sh:1",
+    "ofb:dnb:1": {
+      "value": 3.5,
+      "market_key": "ofb:dnb",
+      "oddtype_key": "ofb:dnb:1",
       "market_status": "ACTIVE",
       "oddtype_status": 1
     }

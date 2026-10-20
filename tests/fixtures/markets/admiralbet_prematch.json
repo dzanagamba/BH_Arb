@@ -1,11 +1,11 @@
 {
   "bookmaker": "admiralbet",
   "mode": "prematch",
-  "captured_at": "2026-09-25",
-  "endpoint": "https://bihoffer.admiralbet.ba/api/offer/getwebevents?sportId=1&isLive=false&dateFrom=2026-09-25T17:04:55.000&dateTo=2026-10-09T17:04:55.000&eventMappingTypes=1,2,3,4,5",
+  "captured_at": "2026-10-20",
+  "endpoint": "https://bihoffer.admiralbet.ba/api/offer/getwebevents?sportId=1&isLive=false&dateFrom=2026-10-20T07:23:37.000&dateTo=2026-11-03T07:23:37.000&eventMappingTypes=1,2,3,4,5",
   "source": "live_api_response",
   "payload_kind": "nsoft_event_bets",
-  "provenance": "bets[] of one football event (id 6828117) from the live NSoft getwebevents response for admiralbet in prematch mode, hand-trimmed to the registry's betTypeIds, the three declared O/U lines, and one excluded betTypeId that must not produce a market.",
+  "provenance": "bets[] of one football event (id 6917979) from the live NSoft getwebevents response for admiralbet in prematch mode, hand-trimmed to the registry's betTypeIds, the three declared O/U lines, and one excluded betTypeId that must not produce a market.",
   "dropped_bet_fields": [
     "id",
     "eventId",
@@ -55,17 +55,17 @@
       "betOutcomes": [
         {
           "name": "1",
-          "odd": 1.56,
+          "odd": 2.81,
           "orderNo": 1
         },
         {
           "name": "X",
-          "odd": 4.3,
+          "odd": 3.16,
           "orderNo": 2
         },
         {
           "name": "2",
-          "odd": 5.4,
+          "odd": 2.51,
           "orderNo": 3
         }
       ]
@@ -77,17 +77,17 @@
       "betOutcomes": [
         {
           "name": "1X",
-          "odd": 1.14,
+          "odd": 1.49,
           "orderNo": 1
         },
         {
           "name": "12",
-          "odd": 1.21,
+          "odd": 1.33,
           "orderNo": 2
         },
         {
           "name": "X2",
-          "odd": 2.4,
+          "odd": 1.4,
           "orderNo": 3
         }
       ]
@@ -99,12 +99,12 @@
       "betOutcomes": [
         {
           "name": "GG",
-          "odd": 1.75,
+          "odd": 1.84,
           "orderNo": 1
         },
         {
           "name": "NG",
-          "odd": 2.07,
+          "odd": 1.92,
           "orderNo": 2
         }
       ]
@@ -116,12 +116,12 @@
       "betOutcomes": [
         {
           "name": "Manje",
-          "odd": 4.55,
+          "odd": 3.17,
           "orderNo": 1
         },
         {
           "name": "Više",
-          "odd": 1.21,
+          "odd": 1.35,
           "orderNo": 2
         }
       ]
@@ -133,12 +133,12 @@
       "betOutcomes": [
         {
           "name": "Manje",
-          "odd": 2.25,
+          "odd": 1.73,
           "orderNo": 1
         },
         {
           "name": "Više",
-          "odd": 1.66,
+          "odd": 2.07,
           "orderNo": 2
         }
       ]
@@ -150,12 +150,12 @@
       "betOutcomes": [
         {
           "name": "Manje",
-          "odd": 1.48,
+          "odd": 1.25,
           "orderNo": 1
         },
         {
           "name": "Više",
-          "odd": 2.66,
+          "odd": 3.78,
           "orderNo": 2
         }
       ]
@@ -167,17 +167,17 @@
       "betOutcomes": [
         {
           "name": "1",
-          "odd": 2.12,
+          "odd": 3.49,
           "orderNo": 1
         },
         {
           "name": "X",
-          "odd": 2.36,
+          "odd": 2.05,
           "orderNo": 2
         },
         {
           "name": "2",
-          "odd": 5.3,
+          "odd": 3.15,
           "orderNo": 3
         }
       ]

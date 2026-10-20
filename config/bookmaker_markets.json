@@ -11,16 +11,42 @@
     "mozzartbet": [141, "*DALJE*", "*PROLAZ*", "*KVALIFIKACIJE*"],
     "wwin": [7, 10, 4, 476, 443, 51],
     "premier_kladionica": [
-      1435, 1440, "*HENDIKEP*", "*HT/FT*", "*KUTOVI*", "*KARTICE*",
-      "*STRIJELCI*", "*KOMBINACIJA*", "*PROLAZ*", "*REZULTAT*",
-      "*KLAĐENJE*POBJEDU*", "*POLUVRIJEME*KRAJ*", "*TOČAN*", "*RASPON*",
-      "*PAR/NEPAR*"
+      1435, 1440, "*HENDIKEP*", "*HT/FT*", "*KUTOVI*", "*KARTICE*", "*STRIJELCI*",
+      "*KOMBINACIJA*", "*PROLAZ*", "*REZULTAT*", "*KLAĐENJE*POBJEDU*", "*POLUVRIJEME*KRAJ*",
+      "*TOČAN*", "*RASPON*", "*PAR/NEPAR*", "*POLUVRIJEME*", "*POLUVREM*", "*POL.*",
+      "*POL -*", "*POL-*", "*POL/*", "*KARTON*", "*KORNER*", "*UDAR*", "*PREKRŠ*", "*ZALE*",
+      "*STRIJELAC*", "*IGRAČ*", "PRVI *", "ZADNJI GOL", "*DAJE GOL*", "BROJ GOLOVA *",
+      "*POBJEDA*", "KOJI TIM*", "*FINALE*", "RAZLIKA *", "RAZDOBLJE *", "PRVIH 10*",
+      "*JEDANAESTERAC*", "*PENAL*", "*IZMJENU*", "*DVOZNAK*", "*TIP + *", "*TIP I *",
+      "UTAKMICA I *", "ZBROJ GOLOVA I *", "ZBROJ GOLOVA MANJI*", "ZBROJ GOLOVA VEĆI*",
+      "*GOL+*", "TOČAN REZULTAT", "TKO *", "TIM SA VIŠE*", "TIM S VIŠE*"
     ],
-    "mbet": ["ofb:fts", "ofb:sh", "ofb:htdc", "ofb:shdc", "ofb:dnb", "ofb:fi", "lfb:tg1sth"],
+    "mbet": [
+      "ofb:fts", "ofb:sh", "ofb:htdc", "ofb:shdc", "ofb:dnb", "ofb:fi", "lfb:tg1sth",
+      "ofb:1hfg", "ofb:2hfg", "ofb:acar", "ofb:asom", "ofb:asot", "ofb:atc", "ofb:atfo",
+      "ofb:atg", "ofb:atgc", "ofb:aweh", "ofb:btrc", "ofb:btrc2", "ofb:car1", "ofb:cgg",
+      "ofb:coh", "ofb:cor", "ofb:corfh", "ofb:cr", "ofb:crfh", "ofb:ctg", "ofb:dcg",
+      "ofb:dchtft2", "ofb:dchtft3", "ofb:dchtft32", "ofb:dnbfh", "ofb:dnbsh", "ofb:dw",
+      "ofb:etc", "ofb:etcfh", "ofb:fgm", "ofb:fgs", "ofb:fhatg", "ofb:fhcar", "ofb:fhg",
+      "ofb:fhhtg", "ofb:fhoff", "ofb:frcor", "ofb:fsg", "ofb:fsgg", "ofb:gg2+", "ofb:ggg",
+      "ofb:ggi", "ofb:ggii", "ofb:hcar", "ofb:hsom", "ofb:hsot", "ofb:htc", "ofb:htfo",
+      "ofb:htft", "ofb:htftg", "ofb:htfthcg", "ofb:htg", "ofb:htgc", "ofb:hthc", "ofb:hweh",
+      "ofb:hwmg", "ofb:lts", "ofb:mbc1", "ofb:oe", "ofb:or", "ofb:owg", "ofb:paaw",
+      "ofb:paho", "ofb:pn", "ofb:rc", "ofb:shatg", "ofb:shg", "ofb:shhtg", "ofb:som",
+      "ofb:sot", "ofb:sott", "ofb:sw", "ofb:t1g", "ofb:tc", "ofb:tcfh", "ofb:tfo",
+      "ofb:tgra", "ofb:tgrh", "ofb:tof", "ofb:tofa", "ofb:tofh", "ofb:toq", "ofb:twfb",
+      "ofb:wma", "ofb:wmh"
+    ],
     "betole": [335, 336],
     "sportplus": [
-      5, 178, 308, 309, 310, 311, 1285,
-      "*DALJE*", "*PROLAZ*", "*KVALIFIKACIJE*", "*ADVANCE*", "*QUALIF*"
+      5, 178, 308, 309, 310, 311, 1285, "*DALJE*", "*PROLAZ*", "*KVALIFIKACIJE*",
+      "*ADVANCE*", "*QUALIF*", "*POLUVRIJEME*", "*POLUVREM*", "*POL.*", "*POL -*", "*POL-*",
+      "*POL/*", "*KARTON*", "*KORNER*", "*UDAR*", "*PREKRŠ*", "*ZALE*", "*STRIJELAC*",
+      "*IGRAČ*", "PRVI *", "ZADNJI GOL", "*DAJE GOL*", "BROJ GOLOVA *", "*POBJEDA*",
+      "KOJI TIM*", "*FINALE*", "RAZLIKA *", "RAZDOBLJE *", "PRVIH 10*", "*JEDANAESTERAC*",
+      "*PENAL*", "*IZMJENU*", "*DVOZNAK*", "*TIP + *", "*TIP I *", "UTAKMICA I *",
+      "ZBROJ GOLOVA I *", "ZBROJ GOLOVA MANJI*", "ZBROJ GOLOVA VEĆI*", "*GOL+*",
+      "TOČAN REZULTAT", "TKO *", "TIM SA VIŠE*", "TIM S VIŠE*"
     ]
   },
   "mdshop": {
@@ -53,7 +79,10 @@
     "live": {
       "1x2": { "ids": [6], "labels": ["1", "X", "2"], "min_legs": 3, "requires_sbv": "0-0" },
       "double_chance": { "ids": [18, 42], "labels": ["1X", "12", "X2"], "min_legs": 2 },
-      "btts": { "ids": [995], "labels": ["GG", "NG"], "min_legs": 2, "requires_sbv": "0-0" }
+      "btts": { "ids": [995], "labels": ["GG", "NG"], "min_legs": 2, "requires_sbv": "0-0" },
+      "over_under_1_5": { "ids": [22], "line": 1.5, "min_legs": 2 },
+      "over_under_2_5": { "ids": [22], "line": 2.5, "min_legs": 2 },
+      "over_under_3_5": { "ids": [22], "line": 3.5, "min_legs": 2 }
     }
   },
   "wwin": {
@@ -85,8 +114,11 @@
     },
     "live": {
       "1x2": { "ids": ["LIVE_UTAKMICA"], "labels": ["1", "X", "2"], "min_legs": 3 },
-      "double_chance": { "ids": ["UTAKMICA_DC"], "labels": ["1X", "12", "X2"], "min_legs": 2 },
-      "btts": { "ids": ["LIVE_OBA_DAJU_GOL"], "labels": ["GG", "NG"], "min_legs": 2 }
+      "double_chance": { "ids": ["LIVE_UTAKMICA_DC"], "labels": ["1X", "12", "X2"], "min_legs": 2 },
+      "btts": { "ids": ["LIVE_OBA_DAJU_GOL"], "labels": ["GG", "NG"], "min_legs": 2 },
+      "over_under_1_5": { "ids": ["LIVE_ZBROJ_GOLOVA"], "line": 1.5, "min_legs": 2 },
+      "over_under_2_5": { "ids": ["LIVE_ZBROJ_GOLOVA"], "line": 2.5, "min_legs": 2 },
+      "over_under_3_5": { "ids": ["LIVE_ZBROJ_GOLOVA"], "line": 3.5, "min_legs": 2 }
     }
   },
   "mbet": {

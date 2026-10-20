@@ -280,7 +280,7 @@ def test_wwin_live_parser_keeps_dc_btts_and_ou():
 def test_premier_live_double_chance_resolves_and_is_not_unmapped():
     from scrapers.premier_kladionica import PremierKladionicaScraper
 
-    unmapped_markets.pop("premier_kladionica:UTAKMICA_DC", None)
+    unmapped_markets.pop("premier_kladionica:LIVE_UTAKMICA_DC", None)
     scraper = PremierKladionicaScraper()
     set_tip = {(2, 2338): "LIVE - UTAKMICA"}
     set_tip_tip = {
@@ -299,7 +299,7 @@ def test_premier_live_double_chance_resolves_and_is_not_unmapped():
     ]
     markets = scraper._build_markets(rows, set_tip, {}, set_tip_tip, live=True)
     assert any(market.market_type == MarketType.DOUBLE_CHANCE for market in markets)
-    assert "premier_kladionica:UTAKMICA_DC" not in unmapped_markets
+    assert "premier_kladionica:LIVE_UTAKMICA_DC" not in unmapped_markets
 
 
 def test_betole_shared_parser_files_unknown_ids_under_betole():

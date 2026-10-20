@@ -301,7 +301,8 @@
   "expected_markets": [
     "1x2",
     "btts",
-    "double_chance"
+    "double_chance",
+    "over_under_3_5"
   ],
   "uncovered_registry_rows": []
 }

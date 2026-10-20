@@ -1,11 +1,11 @@
 {
   "bookmaker": "wwin",
   "mode": "prematch",
-  "captured_at": "2026-09-25",
-  "endpoint": "https://wwin.ba/content/sport-livecontent/api/PrematchEvents/events?bets=95,6&key=bs&spid=2&tfrom=1790290800&tto=1790388000 + https://wwin.ba/content/sport-livecontent/api/PrematchEvents/events?bets=3,11&key=bs&spid=2&tfrom=1790290800&tto=1790388000 + https://wwin.ba/content/sport-livecontent/api/PrematchEvents/events?bets=4,7&key=bs&spid=2&tfrom=1790290800&tto=1790388000 + https://wwin.ba/content/sport-livecontent/api/PrematchEvents/events?bets=95,6&key=bs&spid=2&tfrom=1790377200&tto=1790474400 + https://wwin.ba/content/sport-livecontent/api/PrematchEvents/events?bets=3,11&key=bs&spid=2&tfrom=1790377200&tto=1790474400 + https://wwin.ba/content/sport-livecontent/api/PrematchEvents/events?bets=4,7&key=bs&spid=2&tfrom=1790377200&tto=1790474400 + https://wwin.ba/content/sport-livecontent/api/PrematchEvents/events?bets=95,6&key=bs&spid=2&tfrom=1790463600&tto=1790560800 + https://wwin.ba/content/sport-livecontent/api/PrematchEvents/events?bets=3,11&key=bs&spid=2&tfrom=1790463600&tto=1790560800 + https://wwin.ba/content/sport-livecontent/api/PrematchEvents/events?bets=4,7&key=bs&spid=2&tfrom=1790463600&tto=1790560800",
+  "captured_at": "2026-10-20",
+  "endpoint": "https://wwin.ba/content/sport-livecontent/api/PrematchEvents/events?bets=95,6&key=bs&spid=2&tfrom=1792450800&tto=1792548000 + https://wwin.ba/content/sport-livecontent/api/PrematchEvents/events?bets=3,11&key=bs&spid=2&tfrom=1792450800&tto=1792548000 + https://wwin.ba/content/sport-livecontent/api/PrematchEvents/events?bets=4,7&key=bs&spid=2&tfrom=1792450800&tto=1792548000 + https://wwin.ba/content/sport-livecontent/api/PrematchEvents/events?bets=95,6&key=bs&spid=2&tfrom=1792537200&tto=1792634400 + https://wwin.ba/content/sport-livecontent/api/PrematchEvents/events?bets=3,11&key=bs&spid=2&tfrom=1792537200&tto=1792634400 + https://wwin.ba/content/sport-livecontent/api/PrematchEvents/events?bets=4,7&key=bs&spid=2&tfrom=1792537200&tto=1792634400 + https://wwin.ba/content/sport-livecontent/api/PrematchEvents/events?bets=95,6&key=bs&spid=2&tfrom=1792623600&tto=1792720800 + https://wwin.ba/content/sport-livecontent/api/PrematchEvents/events?bets=3,11&key=bs&spid=2&tfrom=1792623600&tto=1792720800 + https://wwin.ba/content/sport-livecontent/api/PrematchEvents/events?bets=4,7&key=bs&spid=2&tfrom=1792623600&tto=1792720800",
   "source": "live_api_response",
   "payload_kind": "wwin_bets",
-  "provenance": "bets[] of one football event (id 4620444) from the live WWIN PrematchEvents/events response, hand-trimmed to idBt 95/6/3 plus idBt 11 for the three declared totals, and one excluded idBt.",
+  "provenance": "bets[] of one football event (id 4679952) from the live WWIN PrematchEvents/events response, hand-trimmed to idBt 95/6/3 plus idBt 11 for the three declared totals, and one excluded idBt.",
   "dropped_bet_fields": [
     "id",
     "idmSt",
@@ -35,17 +35,17 @@
       "odds": [
         {
           "t": "1",
-          "va": 2.06,
+          "va": 7.8,
           "isv": 1
         },
         {
           "t": "X",
-          "va": 3.5,
+          "va": 3.95,
           "isv": 1
         },
         {
           "t": "2",
-          "va": 3.05,
+          "va": 1.37,
           "isv": 1
         }
       ]
@@ -56,17 +56,17 @@
       "odds": [
         {
           "t": "12",
-          "va": 1.24,
+          "va": 1.18,
           "isv": 1
         },
         {
           "t": "X2",
-          "va": 1.56,
+          "va": 1.07,
           "isv": 1
         },
         {
           "t": "1X",
-          "va": 1.29,
+          "va": 2.38,
           "isv": 1
         }
       ]
@@ -77,12 +77,12 @@
       "odds": [
         {
           "t": "Yes",
-          "va": 1.49,
+          "va": 2.54,
           "isv": 1
         },
         {
           "t": "No",
-          "va": 2.34,
+          "va": 1.46,
           "isv": 1
         }
       ]
@@ -93,12 +93,12 @@
       "odds": [
         {
           "t": "Over",
-          "va": 1.16,
+          "va": 1.36,
           "isv": 1
         },
         {
           "t": "Under",
-          "va": 4.2,
+          "va": 2.68,
           "isv": 1
         }
       ]
@@ -109,12 +109,12 @@
       "odds": [
         {
           "t": "Over",
-          "va": 1.55,
+          "va": 2.1,
           "isv": 1
         },
         {
           "t": "Under",
-          "va": 2.2,
+          "va": 1.58,
           "isv": 1
         }
       ]
@@ -125,12 +125,12 @@
       "odds": [
         {
           "t": "Over",
-          "va": 2.32,
+          "va": 3.65,
           "isv": 1
         },
         {
           "t": "Under",
-          "va": 1.5,
+          "va": 1.2,
           "isv": 1
         }
       ]
@@ -141,12 +141,12 @@
       "odds": [
         {
           "t": "1",
-          "va": 1.52,
+          "va": 5.1,
           "isv": 1
         },
         {
           "t": "2",
-          "va": 2.22,
+          "va": 1.09,
           "isv": 1
         }
       ]

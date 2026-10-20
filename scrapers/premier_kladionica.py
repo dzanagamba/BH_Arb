@@ -312,7 +312,7 @@ class PremierKladionicaScraper:
                     mr_spec = _registered_spec(
                         "live" if live else "prematch", source_prefix, MarketType.MATCH_RESULT
                     )
-                    dc_source = "UTAKMICA_DC"
+                    dc_source = "LIVE_UTAKMICA_DC" if live else "UTAKMICA_DC"
                     dc_spec = _registered_spec(
                         "live" if live else "prematch", dc_source, MarketType.DOUBLE_CHANCE
                     )
@@ -388,7 +388,10 @@ class PremierKladionicaScraper:
                         continue
                     market_type = OU_LINES[line]
                     spec = _registered_spec(
-                        "prematch", "ZBROJ_GOLOVA", market_type, line=float(line)
+                        "live" if live else "prematch",
+                        "LIVE_ZBROJ_GOLOVA" if live else "ZBROJ_GOLOVA",
+                        market_type,
+                        line=float(line),
                     )
                     by_kod = {str(set_tip_tip.get((FOOTBALL_SPORT_ID, set_tip_id, tip_id), "?")): koef
                               for tip_id, koef, _n in tips}

@@ -108,7 +108,9 @@ from scrapers.sportplus import SportPlusScraper
 from scrapers.wwin import _build_markets_from_bets
 from server import api
 
-FIXTURE_DIR = Path(__file__).parent / "fixtures" / "markets"
+# Frozen copies of the 2026-09-25 captures. This test pins their prices (see
+# EXPECTED_LEGS), so it must not follow tests/fixtures/markets/ when that is refreshed.
+FIXTURE_DIR = Path(__file__).parent / "fixtures" / "e2e_certified"
 
 # Far enough out that neither the engine's expiry buffer nor its odds-TTL check
 # can expire the group while the test runs.
