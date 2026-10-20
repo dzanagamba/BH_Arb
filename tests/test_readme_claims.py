@@ -57,6 +57,8 @@ from engine.certainty import HARD_REJECT_REASONS, CertaintyGate
 from models.schemas import Market, MarketType, Match, OddsValue
 from server import api, app
 
+pytestmark = pytest.mark.real_deeplinks
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 README = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
 PLAN = (REPO_ROOT / "PLAN.md").read_text(encoding="utf-8")
@@ -199,8 +201,9 @@ def test_headline_names_exactly_the_declared_but_inert_books():
     The inertness itself is a dated browser measurement this file cannot derive,
     which is why the README says so and points at the script.
     """
-    assert _declaring_books() == {"admiralbet", "mdshop", "mozzartbet"}, (
-        "the declared-route set changed, so the README headline naming three books "
+    assert _declaring_books() == {"mozzartbet"}, (
+        "the declared-route set changed, so the README headline naming Mozzartbet as "
+        "the one route-declaring book "
         "must be revisited before this test can be trusted"
     )
     problems = _headline_problems(README)
@@ -257,7 +260,7 @@ def test_headline_check_fails_when_a_route_less_book_is_called_inert():
 # both matches carry an unproven link, so the only thing being compared is the
 # declaration.
 _ROUTE_LESS_BOOK = "mbet"      # config: supports_event_id false
-_ROUTE_BEARING_BOOK = "mdshop"  # config: supports_event_id true
+_ROUTE_BEARING_BOOK = "mozzartbet"  # config: supports_event_id true
 
 
 def _gate_status_for(bookmaker: str) -> str:
@@ -458,11 +461,11 @@ def _observed_reasons() -> tuple[set[str], set[str]]:
         _match(bookmaker="mbet", event_id="e2", kickoff=None),
         _match(bookmaker="mbet", event_id="e2", kickoff=kickoff + timedelta(minutes=30)),
         _match(bookmaker="mbet", event_id="e2", home_team="Gamma SC", away_team="Delta Club"),
-        # `link_unverified` needs a book that DECLARES a per-event route: the six
+        # `link_unverified` needs a book that DECLARES a per-event route: the
         # books declaring `supports_event_id: false` are accepted with a
-        # `no_event_link` evidence note instead, so mbet can no longer produce
-        # this reason. The default bookmaker is mdshop, which declares a route.
-        _match(deep_link_verified=False),
+        # `no_event_link` evidence note instead. Mozzartbet is the one book whose
+        # shipped declaration names a route.
+        _match(bookmaker="mozzartbet", event_id="e4", deep_link_verified=False),
         # ...and `no_event_link` is now reachable only through a book that has
         # declared nothing at all, which is the fail-safe branch. It also needs
         # the link UNPROVEN as well as absent: _link_evidence returns
@@ -1206,9 +1209,9 @@ def test_plan_header_check_fails_when_the_header_regresses_to_the_old_claim():
     current = [
         line
         for line in PLAN.splitlines()
-        if line.startswith("> **Status (2026-09-26):**")
+        if line.startswith("> **Status (2026-10-20):**")
     ]
-    assert len(current) == 1, f"expected one 2026-09-26 status line, found {len(current)}"
+    assert len(current) == 1, f"expected one 2026-10-20 status line, found {len(current)}"
 
     regressed = PLAN.replace(current[0], retired, 1)
     assert regressed != PLAN, "the first mutation did not apply; untested"
@@ -1216,7 +1219,7 @@ def test_plan_header_check_fails_when_the_header_regresses_to_the_old_claim():
     assert problems, "the retired 2026-09-25 header passed the check"
     assert any("needs a proven deep link" in problem for problem in problems)
     assert any("on purpose" in problem for problem in problems)
-    assert any("6 of the 9 books" in problem for problem in problems)
+    assert any("8 of the 9 books" in problem for problem in problems)
     assert any("bookmaker_deeplinks.json" in problem for problem in problems)
 
     # The drift this item was raised for, isolated: §3 untouched, header stale.
@@ -1231,7 +1234,7 @@ _POINTERS = (
     ("tests/test_readme_claims.py", "these claims are themselves checked"),
     ("verify_deeplinks.py", "the script that can re-measure the inertness"),
     ("2026-09-25", "the date the measurement was taken"),
-    ("task-12-report", "where the finding is recorded"),
+    ("docstring records the findings", "where the finding is recorded"),
 )
 
 
@@ -1240,7 +1243,7 @@ def _pointer_problems(text: str) -> list[str]:
 
     Two halves: the part the repo CAN reproduce (which books declare an event
     route) must be pointed at in-repo, and the inertness itself must be attributed
-    to the script and the dated report rather than presented as a repo fact.
+    to the script and its recorded findings rather than presented as a repo fact.
     """
     callout = _callout(text)
     return [
@@ -1258,12 +1261,12 @@ def test_readme_points_at_how_to_recheck_the_headline():
 
 def test_pointer_check_fails_when_the_callout_loses_a_pointer():
     """Proves the previous test reads the pointers out of the callout."""
-    broken = README.replace("task-12-report", "an old thread")
+    broken = README.replace("docstring records the findings", "an old thread")
     assert broken != README, "the mutation did not apply; the check is untested"
-    assert "task-12-report" not in broken, "the mutation left a copy behind; untested"
+    assert "docstring records the findings" not in broken, "the mutation left a copy behind; untested"
     problems = _pointer_problems(broken)
     assert problems, "a callout losing its source passed"
-    assert any("task-12-report" in problem for problem in problems)
+    assert any("docstring records the findings" in problem for problem in problems)
 
 
 # ===========================================================================

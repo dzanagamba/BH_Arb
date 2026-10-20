@@ -101,27 +101,6 @@ def _extract_kickoff(event: dict) -> datetime | None:
     return None
 
 
-def _map_market_type(market_name: str) -> MarketType | None:
-    name = str(market_name).lower().strip()
-    if any(x in name for x in ["1x2", "krajnji ishod", "ishod meca", "full time result",
-                                "match result", "winner", "1 x 2", "konacan ishod"]):
-        return MarketType.MATCH_RESULT
-    if any(x in name for x in ["gg/ng", "btts", "both teams", "gg ng", "gol-gol",
-                                "oba tima da daju", "oba tima daju gol"]):
-        return MarketType.BTTS
-    if any(x in name for x in ["double chance", "dupla sansa", "dupla šansa"]):
-        return MarketType.DOUBLE_CHANCE
-    if any(x in name for x in ["over/under", "vise/manje", "vise", "manje",
-                                "total goals", "ukupno golova"]):
-        if "1.5" in name:
-            return MarketType.OVER_UNDER_1_5
-        if "3.5" in name:
-            return MarketType.OVER_UNDER_3_5
-        if "2.5" in name:
-            return MarketType.OVER_UNDER_2_5
-    return None
-
-
 def _map_outcome_label(label: str, market_type: MarketType) -> str:
     raw = str(label).strip()
     rl = raw.lower()
@@ -337,40 +316,6 @@ def _parse_markets(
             markets.append(Market(market_type=market_type, odds=ou_odds))
 
     return markets
-
-
-def _find_events_in_payload(data, _depth: int = 0) -> list[dict]:
-    """Recursively find event dicts with home/away teams in nested structures."""
-    if _depth > 8:
-        return []
-    events = []
-    if isinstance(data, list):
-        for item in data:
-            if isinstance(item, dict):
-                h, a = _extract_teams(item)
-                if h and a:
-                    events.append(item)
-                else:
-                    for val in item.values():
-                        if isinstance(val, list | dict):
-                            events.extend(_find_events_in_payload(val, _depth + 1))
-    elif isinstance(data, dict):
-        h, a = _extract_teams(data)
-        if h and a:
-            return [data]
-        for key in ["items", "matches", "events", "games", "data", "content",
-                     "results", "fixtures", "list", "offerEvents", "prematch"]:
-            val = data.get(key)
-            if val and isinstance(val, list | dict):
-                found = _find_events_in_payload(val, _depth + 1)
-                if found:
-                    events.extend(found)
-                    break
-        else:
-            for val in data.values():
-                if isinstance(val, list | dict):
-                    events.extend(_find_events_in_payload(val, _depth + 1))
-    return events
 
 
 def _event_to_match(event: dict, seen: set, live: bool = False) -> Match | None:

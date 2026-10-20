@@ -14,6 +14,7 @@ from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 from urllib.parse import quote
+from zoneinfo import ZoneInfo
 
 from models.schemas import Market, MarketType, OddsValue
 
@@ -28,6 +29,28 @@ DT_FORMATS = [
     "%Y-%m-%d %H:%M:%S",
     "%d.%m.%Y %H:%M",
 ]
+
+
+BOOKMAKER_TZ = ZoneInfo("Europe/Sarajevo")
+
+
+def parse_local_dt(raw) -> datetime | None:
+    """Parse a kickoff a bookmaker sends in Bosnian local time, as naive UTC.
+
+    For feeds whose timestamps carry no offset but mean Sarajevo wall-clock
+    time (SportPlus: ``"2026-10-20T20:45:00"`` is 18:45 UTC in summer time).
+    A value that does carry an offset, or an epoch number, is already absolute
+    and is handled exactly as :func:`parse_dt` does.
+    """
+    if isinstance(raw, str) and raw.strip():
+        s = raw.strip()
+        has_offset = s.endswith(("Z", "z")) or (len(s) > 6 and s[-6] in "+-" and s[-3] == ":")
+        if not has_offset:
+            naive = parse_dt(s)
+            if naive is None:
+                return None
+            return naive.replace(tzinfo=BOOKMAKER_TZ).astimezone(UTC).replace(tzinfo=None)
+    return parse_dt(raw)
 
 
 def parse_dt(raw) -> datetime | None:
@@ -121,43 +144,6 @@ def flip_ah_label(label: str) -> str:
     return ah_label("2" if idx == "1" else "1", line)
 
 
-def get_active_odds_value(entry) -> float | None:
-    """Return float odds if entry is active/not suspended, else None (P0-2 unified guard).
-
-    Checks common suspend signals across providers:
-      - market_status != ACTIVE / oddtype_status !=1 (MBet/Alea)
-      - isv ==0 (WWIN)
-      - naPon !=1 (Premier)
-      - value <1.01 (all)
-    Accepts dict {value, market_status, ...} or bare float/str.
-    """
-    if entry is None:
-        return None
-    if isinstance(entry, dict):
-        # WWIN-style isv
-        if entry.get("isv") == 0:
-            return None
-        # Premier naPon
-        if "naPon" in entry and entry.get("naPon") != 1:
-            return None
-        # MBet Alea market_status / oddtype_status
-        if entry.get("market_status") is not None and entry.get("market_status") != "ACTIVE":
-            return None
-        if entry.get("oddtype_status") is not None and entry.get("oddtype_status") != 1:
-            return None
-        # Generic suspended/active flags
-        if entry.get("suspended") is True or entry.get("active") is False:
-            return None
-        val = entry.get("value", entry.get("va", entry.get("odd", entry.get("odds", entry.get("koef")))))
-    else:
-        val = entry
-    try:
-        f = float(val) if val is not None else 0.0
-        return f if f >= 1.01 else None
-    except (ValueError, TypeError):
-        return None
-
-
 # How far back the NSoft live window reaches. NSoft filters `getwebevents` by
 # KICKOFF against dateFrom, so an in-play game is only returned when the window
 # starts before it kicked off. Measured 2026-09-25 17:00 UTC: dateFrom=now
@@ -178,24 +164,6 @@ def nsoft_event_window(now: datetime, live: bool) -> tuple[datetime, datetime]:
     if live:
         return now - NSOFT_LIVE_LOOKBACK, now
     return now, now + NSOFT_PREMATCH_HORIZON
-
-
-def nsoft_event_url(site_base: str, event_id: str, live: bool = False) -> str:
-    """Deep link to a single event in an NSoft mbase sports shell (MDShop/Admiralbet).
-
-    Both shells render the NSoft product inside an iframe and forward the
-    URL query params they recognize: `event` is mapped to `eventId` for the
-    product iframe and `ticketItems`/`fastTicket` prefill the bet slip —
-    verified in the shell's checkQueryParams() (chunk-EDF2MGFW / chunk-PD2MVGCC).
-    The `ticketItems` value format is undocumented, so only event links are
-    built here. Falls back to the plain sport page when no event id is known.
-    """
-    route = "sport-live" if live else "sport-prematch"
-    if not event_id:
-        return f"{site_base}/{route}?sport=Fudbal" if not live else f"{site_base}/{route}"
-    if live:
-        return f"{site_base}/{route}?event={event_id}"
-    return f"{site_base}/{route}?sport=Fudbal&event={event_id}"
 
 
 def normalize_outcome(label: str, market_type: MarketType) -> str:
@@ -355,21 +323,6 @@ _MARKET_LABEL_SETS: dict[MarketType, set[str]] = {
 }
 
 
-def resolve_nsoft_market_type(btid: int, sbv: float | None) -> MarketType | None:
-    """Resolve an NSoft betTypeId + optional sbv threshold to a MarketType."""
-    mt = NSOFT_BET_TYPE_MAP.get(btid)
-    if mt is not None:
-        return mt
-    if btid in NSOFT_OU_BET_IDS and sbv is not None:
-        if sbv == 1.5:
-            return MarketType.OVER_UNDER_1_5
-        if sbv == 2.5:
-            return MarketType.OVER_UNDER_2_5
-        if sbv == 3.5:
-            return MarketType.OVER_UNDER_3_5
-    return None
-
-
 def parse_nsoft_bets(
     bets: list,
     extra_bet_types: dict[int, MarketType] | None = None,
@@ -523,11 +476,6 @@ def _declared_config(bookmaker: str) -> dict:
     return value if isinstance(value, dict) else {}
 
 
-def has_declaration(bookmaker: str) -> bool:
-    """Return whether the configuration explicitly declares this bookmaker."""
-    return isinstance(_load_deeplink_config().get(bookmaker), dict)
-
-
 def supports_event_id(bookmaker: str) -> bool:
     """Return whether a bookmaker declares a per-event deep-link route.
 
@@ -644,7 +592,7 @@ def build_event_url(
     cfg = _declared_config(bookmaker)
     normalized_event_id = "" if event_id is None else str(event_id)
     if not cfg.get("supports_event_id"):
-        template = cfg.get("template")
+        template = (cfg.get("template_live") if live else None) or cfg.get("template")
         return template if isinstance(template, str) and template else _base_url(base_url)
     if not normalized_event_id:
         return _fallback_url(bookmaker, base_url)

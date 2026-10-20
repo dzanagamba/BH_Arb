@@ -102,7 +102,7 @@ from engine.arbitrage import ArbitrageEngine
 from engine.market_registry import MarketRegistry
 from engine.matcher import MatchMatcher
 from models.schemas import MarketType, Match, MatchGroup, Surebet
-from scrapers.common import build_event_url, parse_nsoft_bets
+from scrapers.common import BOOKMAKER_TZ, build_event_url, parse_nsoft_bets
 from scrapers.mbet import MBetScraper
 from scrapers.sportplus import SportPlusScraper
 from scrapers.wwin import _build_markets_from_bets
@@ -243,7 +243,11 @@ def _sportplus_match() -> Match:
             "id": "3289374",
             "sportName": "NOGOMET",
             "competitors": f"{AWAY} - {HOME}",
-            "matchDate": KICKOFF.isoformat(),
+            # SportPlus sends Sarajevo wall-clock time without an offset.
+            "matchDate": KICKOFF.replace(tzinfo=UTC)
+            .astimezone(BOOKMAKER_TZ)
+            .replace(tzinfo=None)
+            .isoformat(),
             "leagueName": LEAGUE,
             "countryName": "BiH",
             "markets": data["bets"],

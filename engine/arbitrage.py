@@ -56,6 +56,52 @@ def _collect_bet_urls(group: MatchGroup) -> dict[str, str]:
     return urls
 
 
+_EVIDENCE_TEXT = {
+    "exact": "teams match exactly",
+    "swapped": "teams match with home/away reversed",
+    "allowlisted_alias": "a team spelling was approved in review",
+    "league_unmapped_teams_exact": "league named differently, settled by exact teams and kickoff",
+    "verified_link": "event link proven by a browser check",
+    "no_event_link": "book has no per-event page (declared)",
+}
+
+
+def _collect_listings(group: MatchGroup) -> dict[str, dict[str, str]]:
+    """Bookmaker → how that book lists the fixture (its own spelling)."""
+    listings: dict[str, dict[str, str]] = {}
+    for match in group.matches:
+        listings[match.bookmaker] = {
+            "home": match.home_team,
+            "away": match.away_team,
+            "league": match.league,
+            "kickoff": match.kickoff.isoformat() if match.kickoff else "",
+        }
+    return listings
+
+
+def _evidence_summary(group: MatchGroup) -> list[str]:
+    """Distinct, human-readable statements of why the group is one match."""
+    lines: list[str] = []
+    for item in group.evidence:
+        text = _EVIDENCE_TEXT.get(item.reason)
+        if item.rule == "league_identity" and not item.reason and item.confidence >= 1.0:
+            text = "same league"
+        if item.rule == "kickoff" and item.kickoff_delta_minutes is not None:
+            text = (
+                "same kickoff"
+                if item.kickoff_delta_minutes < 1
+                else f"kickoffs {item.kickoff_delta_minutes:.0f} min apart"
+            )
+        if text and text not in lines:
+            lines.append(text)
+    return lines
+
+
+def _oldest_fetch(group: MatchGroup) -> datetime | None:
+    times = [m.fetched_at for m in group.matches if m.fetched_at]
+    return min(times) if times else None
+
+
 # Required outcome labels for each market type
 REQUIRED_LABELS: dict[MarketType, list[str]] = {
     MarketType.MATCH_RESULT: ["1", "X", "2"],
@@ -161,6 +207,9 @@ class ArbitrageEngine:
                     result = self._check_market(group, market_type, min_profit, investment)
 
                 if result:
+                    result.listings = _collect_listings(group)
+                    result.evidence = _evidence_summary(group)
+                    result.odds_fetched_at = _oldest_fetch(group)
                     surebets.append(result)
                     logger.info(
                         f"🎯 SUREBET: {group.canonical_home} vs {group.canonical_away} | "
@@ -605,19 +654,3 @@ class ArbitrageEngine:
             ))
 
         return stakes
-
-    def recalculate_stakes(
-        self, surebet: Surebet, new_investment: float
-    ) -> list[SurebetStake]:
-        """
-        Recalculate stakes for a different investment amount.
-        Used by the frontend stake calculator.
-        """
-        if surebet.total_margin >= 1.0:
-            return surebet.stakes
-
-        best_odds = {
-            s.outcome_label: (s.bookmaker, s.odds) for s in surebet.stakes
-        }
-        labels = [s.outcome_label for s in surebet.stakes]
-        return self._calculate_stakes(best_odds, labels, new_investment, surebet.total_margin)

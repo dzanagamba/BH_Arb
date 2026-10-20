@@ -48,7 +48,6 @@ class Match(BaseModel):
     event_id: str = ""
     deep_link_verified: bool = False
     category_tags: list[str] = []
-    low_confidence: bool = False
     is_swapped: bool = False
     is_live: bool = False
     fetched_at: datetime | None = None  # naive UTC wall-clock when odds were fetched (P0-1)
@@ -165,6 +164,12 @@ class Surebet(BaseModel):
     stakes: list[SurebetStake]
     match_urls: dict[str, str] = {}  # bookmaker -> match page URL
     bet_urls: dict[str, str] = {}  # bookmaker -> bet-slip prefill URL (empty when unsupported)
+    # How each book in the group lists the fixture, so the operator can find it
+    # on a site that has no per-event page: bookmaker -> {home, away, league, kickoff}.
+    listings: dict[str, dict[str, str]] = {}
+    # Why the certainty gate trusts that every leg is the same match, in words.
+    evidence: list[str] = []
+    odds_fetched_at: datetime | None = None  # oldest leg's fetch time (naive UTC)
     found_at: datetime
 
 

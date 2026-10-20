@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from models.schemas import Market, Match
 from scrapers.base import launch_browser
 from scrapers.common import (
-    nsoft_event_url,
+    build_event_url,
     nsoft_event_window,
     parse_dt,
     parse_nsoft_bets,
@@ -149,7 +149,7 @@ class AdmiralbetScraper:
             matches.append(Match(
                 bookmaker=BOOKMAKER_ID, home_team=home, away_team=away,
                 league=league, kickoff=kickoff, markets=markets,
-                url=nsoft_event_url(BASE_URL, mid, live=live), match_code=mid,
+                url=build_event_url("admiralbet", mid, BASE_URL, live=live), match_code=mid,
                 event_id=mid, deep_link_verified=False,
                 is_live=live,
                 fetched_at=datetime.now(UTC).replace(tzinfo=None),

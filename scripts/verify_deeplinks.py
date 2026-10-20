@@ -28,8 +28,7 @@ Admiralbet serves the same 29 KB ``bonus-tickets-with-details`` payload on every
 load, so an id inside it proves nothing about our link; and the Mozzartbet route
 for a dead id answers 200 with 14 bytes instead of 328 KB. Against those controls
 only Mozzartbet survives — which is a fact about the bookmakers, not a broken
-checker. See
-``.superpowers/sdd/2026-09-25-match-and-game-mapping/task-12-report.md``.
+checker.
 
 Run it directly:
 
@@ -604,7 +603,7 @@ def main(argv: list[str] | None = None) -> int:
         default=0,
         help=(
             "resume at this undecided event (0 = the first one). The CLI has no store of "
-            "its own, so this is how a sweep is driven here; the HTTP endpoint derives "
+            "its own cursor, so this is how a sweep is driven here; the HTTP endpoint derives "
             "the equivalent from the events it has already decided"
         ),
     )
@@ -621,6 +620,19 @@ def main(argv: list[str] | None = None) -> int:
                 bookmaker, matches, mode=args.mode, limit=args.limit, offset=args.offset
             )
         )
+        # Store the verdicts exactly as `POST /api/verify-links` does, so the next
+        # scan applies the proofs. Imported here: the server module loads its
+        # state files on import, which only this branch needs.
+        from server import api
+
+        # Merge into what is already stored, never replace it: the module's
+        # stores start empty until the server's startup loads them.
+        if not api._deep_link_verifications:
+            api._deep_link_verifications.update(api._load_deep_link_verifications())
+        if not api._deep_link_decisions:
+            api._deep_link_decisions.update(api._load_deep_link_decisions())
+        api._record_deep_link_outcomes(args.mode, bookmaker, report.outcomes)
+        api._record_deep_link_decisions(args.mode, bookmaker, report.outcomes)
         # `asdict`, not `__dict__`: a report's `outcomes` are `LinkOutcome`s, which
         # are not JSON-serialisable, so printing `__dict__` raised TypeError on the
         # first completed check — the command in this module's own docstring.

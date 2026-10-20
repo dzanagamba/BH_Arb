@@ -215,23 +215,20 @@ Headers:
 
 ## 6. Betole (`scrapers/betole.py`)
 
-**Type:** Direct httpx prematch feed, with legacy Playwright interception fallback
+**Type:** Direct httpx feed
 
 **Status:** Direct prematch parser implemented and live-verified. The feed is
 available at `/restapi/offer/ba/sport/S/desk`; its `esMatches[].odds` object uses
-numeric Betole pick codes rather than NSoft `betTypeId` objects. The legacy
-browser/ExeFeed resolver remains as a fallback for captured reference payloads.
+numeric Betole pick codes rather than NSoft `betTypeId` objects.
 
 **Flow:**
 1. Fetches `/restapi/offer/ba/sport/S/desk` in `from=1500` pages
 2. Skips live/blocked events and parses `home`, `away`, `kickOffTime`, and `odds{}`
 3. Maps verified pick codes: `1/2/3` = 1X2, `7/8/9` = DC, `272/273` = BTTS, `242/21`, `24/22`, `25/219` = O/U 1.5/2.5/3.5
 4. Excludes first-half, handicap, combination, and `IDE DALJE` picks
-5. Retains the browser/ExeFeed resolver only for legacy captured payloads
 
 The direct feed paginates with the `from` offset and skips live or blocked
-events. Synthetic coverage verifies both direct pick-code mappings and legacy
-reference resolution.
+events. Synthetic coverage verifies the direct pick-code mappings.
 
 ---
 
@@ -301,10 +298,9 @@ Odds are `dogTipK` rows: `[dogID, grupaTipID, setTipID, setTipVarID, setTipTipID
 - `normalize_outcome(label, market_type)` — unified outcome label normalization (1/X/2, Over/Under, GG/NG, Double Chance) recognizing English + Bosnian aliases
 - `parse_teams_from_name(name)` — split "Team A - Team B" / "Team A vs Team B"
 
-### `scrapers/mozzartbet.py` (imported by betole)
+### `scrapers/mozzartbet.py` (Betole reuses `_extract_kickoff`)
 
 - `_extract_teams(event)` — tries 12+ key names for home/away teams, falls back to parsing `name` field with " - " separator
 - `_extract_league(event)` — tries 8 key names for league/competition/tournament
 - `_extract_kickoff(event)` — tries 10 key names for start time, supports multiple datetime formats
 - `_parse_markets(event)` — parses the `odds[]` array into `Market` objects with type detection + outcome normalization
-- `_find_events_in_payload(data)` — recursively searches nested dicts/lists for objects that have home+away teams (used for interception-based scrapers)

@@ -71,7 +71,6 @@ from config.settings import DUST_PROFIT_PERCENT
 from engine.arbitrage import ArbitrageEngine
 from engine.matcher import MatchMatcher
 from models.schemas import Market, MarketType, Match, OddsValue
-from scrapers.common import effective_deeplink_declarations
 from server import api
 from server.app import app
 
@@ -466,13 +465,13 @@ def _cadence_problems(js: str) -> list[str]:
     """
     problems: list[str] = []
     intervals = js.count("setInterval(")
-    if intervals != 3:
+    if intervals != 4:
         problems.append(
-            f"expected the three existing intervals (scan polling, auto-rescan, diagnostics), "
-            f"found {intervals}"
+            f"expected the four intervals (scan polling, auto-rescan, diagnostics, the 1s "
+            f"age ticker), found {intervals}"
         )
-    if js.count("setTimeout(") != 3:
-        problems.append(f"expected the three existing timeouts, found {js.count('setTimeout(')}")
+    if "fetch(" in _js_function(js, "tickAges"):
+        problems.append("tickAges() fetches; the 1s ticker may only repaint ages already held")
     if js.count("setInterval(refreshDiagnostics, 30000)") != 1:
         problems.append("the 30s diagnostics interval is gone or duplicated")
     refresh = _js_function(js, "refreshDiagnostics")
@@ -801,6 +800,7 @@ def _run_node(source: str, payload) -> str:
         [NODE, "-e", source, str(REASON_TABLE), json.dumps(payload)],
         capture_output=True,
         text=True,
+        encoding="utf-8",
         timeout=120,
         check=False,
     )
@@ -990,7 +990,7 @@ def test_cadence_check_fails_on_a_new_interval_and_on_a_refetching_renderer():
         "setInterval(refreshDiagnostics, 30000);\n    setInterval(loadHealth, 30000);",
     )
     assert extra != JS, "the mutation did not apply; the companion is untested"
-    assert any("three existing intervals" in p for p in _cadence_problems(extra))
+    assert any("four intervals" in p for p in _cadence_problems(extra))
 
     fetching = JS.replace(
         "function diagnosticValues(health, results, counts) {\n    const live = counts.mode === 'live';",
@@ -1103,16 +1103,9 @@ def test_the_copy_table_is_served_from_the_mount_the_script_uses():
 # 5. The states the real backend can produce
 # ===========================================================================
 
-# The two books the link fixtures use are the first two that declare a per-event
-# route, read through the declaration the certainty gate itself uses. On a book
-# that declares `supports_event_id: false` there is no link to prove, so an
-# unproven link there is a blocker the health counter deliberately does not count,
-# and the fixture would not reproduce the live measurement.
-LEFT, RIGHT = [
-    book
-    for book, entry in sorted(effective_deeplink_declarations(list(api.BOOKMAKERS)).items())
-    if entry["supports_event_id"] is True
-][:2]
+# Two books that declare a per-event route (see tests/conftest.py), so an
+# unproven link on them really blocks.
+LEFT, RIGHT = "mdshop", "mozzartbet"
 
 
 def _btts(bookmaker: str, gg: float, ng: float, *, verified: bool, kickoff=None) -> Match:

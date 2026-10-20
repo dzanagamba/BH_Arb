@@ -21,11 +21,12 @@ client = TestClient(app)
 
 # Read through the loader the gate itself uses, so the expectation cannot drift
 # from the declarations it is about and needs no second copy of the config.
-_ROUTE_BOOKS = {
-    book
-    for book, entry in effective_deeplink_declarations(BOOKMAKERS).items()
-    if entry["supports_event_id"] is True
-}
+def _route_books() -> set[str]:
+    return {
+        book
+        for book, entry in effective_deeplink_declarations(BOOKMAKERS).items()
+        if entry["supports_event_id"] is True
+    }
 
 
 @pytest.fixture(autouse=True)
@@ -262,7 +263,7 @@ def test_health_echoes_the_declaration_map_the_gate_is_using():
     # The gate is reading the same thing, which is the only reason this is useful.
     for bookmaker, entry in declarations.items():
         assert entry["declared_no_event_id"] == declares_no_event_id(bookmaker), bookmaker
-        assert entry["supports_event_id"] is (bookmaker in _ROUTE_BOOKS), bookmaker
+        assert entry["supports_event_id"] is (bookmaker in _route_books()), bookmaker
 
     # And the effective map, not the file: a book the gate cannot see is reported
     # as unconfigured rather than silently omitted.
@@ -308,6 +309,28 @@ def test_approve_candidate_writes_reviewed_alias_and_resolves_it():
     assert api.candidate_reviews[0].id == candidate.id
     # A decided pair is not re-queued on the next scan.
     assert api._suppressed_candidates == {candidate.id: "approved"}
+
+
+def test_bulk_approve_grants_each_candidate_and_reports_the_rest():
+    first = _candidate("c-1")
+    second = _candidate("c-2", "Slavia Prague", "Fenerbahce", "Slavia P.", "Fenerbahce")
+    api.pending_candidates[first.id] = first
+    api.pending_candidates[second.id] = second
+
+    r = client.post("/api/candidates/approve-bulk", json={"ids": ["c-1", "c-2", "gone"]})
+
+    assert r.status_code == 200
+    assert r.json() == {"approved": ["c-1", "c-2"], "skipped": ["gone"]}
+    with open(api.ALLOWLIST_FILE, encoding="utf-8") as file:
+        saved = set(json.load(file)["aliases"])
+    assert {"FC Thun|Thun", "Lech P.|Lech Poznan", "Slavia P.|Slavia Prague"} <= saved
+    assert not api.pending_candidates
+
+
+def test_candidates_carry_a_name_score_for_ranking():
+    api.pending_candidates["c-1"] = _candidate("c-1")
+    body = client.get("/api/candidates").json()
+    assert 0 < body["candidates"][0]["name_score"] <= 100
 
 
 def test_approved_alias_is_loaded_by_real_matcher(monkeypatch):

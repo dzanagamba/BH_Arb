@@ -15,7 +15,6 @@ different matches — an arbitrage that does not exist. It also had no way to sa
 believed a pair, and no record of what it had checked.
 
 **Design spec:** `docs/superpowers/specs/2026-09-25-match-and-game-mapping-design.md`
-**Implementation plan:** `docs/superpowers/plans/2026-09-25-match-and-game-mapping.md`
 **Design rationale:** commit `185a9a8`
 
 ---
@@ -165,10 +164,16 @@ Scenario C is **bit-identical** before and after the fix, which is the monotonic
 figure is unproducible by the shipped pipeline at any link state. The quoted surebet is a pair
 **120 minutes apart** against a 15-minute window, so the gate refuses it. Do not quote it.
 
-**Another caveat:** `MatchMatcher.group_matches` is **order-sensitive** — the same cache yields
-16 / 34 / 106 groups by input order alone. No group count is a fact until the input order is
-stated. Pre-existing, documented, not fixed. Scenario A's 16 was re-verified independently at
-handoff time from the cache (6,999 matches parsed).
+**Another caveat — the table above predates the order fix.** `MatchMatcher.group_matches` *was*
+order-sensitive: that cache yielded 16 / 34 / 106 groups by input order alone, so the 16 / 179 /
+516 are one input order's numbers. It is now order-independent (§5 item 4), and the `2026-08-20`
+cache is no longer on disk to re-measure. On the `2026-09-26` cache (5,373 matches, 7 books),
+across 7 input orders:
+
+| Scenario | Before the fix | After |
+|---|---|---|
+| Links as cached | 251–304 groups, 7 different results | **365** groups, every order |
+| Every link proven | 470–555 groups, 7 different results | **704** groups, every order |
 
 **Why zero, precisely:** mdshop and admiralbet declare per-event routes that are measurably
 inert, so they still block — correctly, and that is a bookmaker fact this code keeps reporting
@@ -214,9 +219,18 @@ those, so without the decisions store a book whose links do not verify can never
 clear it — `?recheck=1` is the way back for a decided event). The throttle was never the blocker and
 is unchanged at 2 calls/min; a cursor is what made those calls worth making.
 
-### 4. Make `group_matches` order-insensitive, or document the order
-16 → 106 groups from the same input is a 6× swing driven by iteration order. It affects yield
-and makes every measurement unstable.
+### 4. ~~Make `group_matches` order-insensitive, or document the order~~ (fixed)
+**Now:** listings are processed in a total order (`engine/matcher.py:_processing_order_key` —
+specific leagues first, then league, kickoff, bookmaker *registry* order, normalized teams, ids),
+and when the gate refuses the best-scoring group the listing tries the next one, highest
+confidence first, before opening a new group. The gate is untouched and still decides every join.
+`tests/test_matcher_order.py` shuffles a multi-book fixture set across seeds and pins the
+fall-through. Two things worth knowing before changing it: the bookmaker's position in
+`config.settings.BOOKMAKERS` decides which book anchors (and orients) a group, so reordering that
+dict changes canonical orientation; and the fall-through is why `/api/verify` now answers
+`still_profitable: None` when a cached leg's book is missing from the fresh group — two route-less
+books can verify with each other without it, and pricing that pair would judge a different bet.
+The original note: 16 → 106 groups from the same input was a 6× swing driven by iteration order.
 
 ### 5. ~~Fix `premier_kladionica/live/btts` and the NSoft live window~~ (fixed)
 **Now:** the Premier parser matches BTTS per mode (`NAME_BTTS_LIVE`), and both NSoft
@@ -310,7 +324,6 @@ behaviour. Whole-branch review is not optional on this kind of work.
 | What | Where |
 |---|---|
 | Design spec (binding authority) | `docs/superpowers/specs/2026-09-25-match-and-game-mapping-design.md` |
-| 13-task plan | `docs/superpowers/plans/2026-09-25-match-and-game-mapping.md` |
 | The gate | `engine/certainty.py` |
 | Market registry + exclusions | `config/bookmaker_markets.json` |
 | Link declarations | `config/bookmaker_deeplinks.json` |
@@ -319,5 +332,4 @@ behaviour. Whole-branch review is not optional on this kind of work.
 | Link checker | `scripts/verify_deeplinks.py` |
 | Fixture regenerator | `scripts/capture_market_fixtures.py` |
 | Generated market doc | `MARKET_MAPPING.md` (between `<!-- GENERATED ... -->` markers) |
-| Per-task ledger (gitignored) | `.superpowers/sdd/2026-09-25-match-and-game-mapping/progress.md` |
 | User-facing docs | `README.md` §"Match & mapping certainty", `PLAN.md` §3 |

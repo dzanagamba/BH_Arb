@@ -39,7 +39,6 @@ BOOKMAKER_ID = "wwin"
 BASE_URL = "https://wwin.ba"
 API_ROOT = f"{BASE_URL}/content/sport-livecontent/api"
 FOOTBALL_SPORT_ID = 2
-MARKET_IDS = "95,6,3,11,2"
 
 
 def _request_market_ids(mode: str) -> list[int | str]:

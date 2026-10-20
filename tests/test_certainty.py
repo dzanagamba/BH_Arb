@@ -199,7 +199,9 @@ def test_reason_vocabulary_except_orientation_is_reachable():
     gate = CertaintyGate()
 
     league_a = _m("a", "Sarajevo", "Zeljeznicar", "BiH - Premier Liga", event_id="1")
-    league_b = _m("b", "Sarajevo", "Zeljeznicar", "Other League", event_id="2")
+    # Both leagues mapped and different: a real contradiction. (An unmapped name
+    # with exact teams is settled by the fixture — see the next tests.)
+    league_b = _m("b", "Sarajevo", "Zeljeznicar", "Serie A", event_id="2")
     missing_a = _m("a", "Sarajevo", "Zeljeznicar", "BiH - Premier Liga", event_id="1")
     missing_b = _m(
         "b", "Sarajevo", "Zeljeznicar", "Premijer Liga BiH", kickoff=None, event_id="2"
@@ -469,12 +471,19 @@ def test_evaluate_against_group_uses_group_as_canonical():
     g = _g(a)
     r = gate.evaluate(b, g)
     assert r.status == "verified"
-    # Unknown league on the candidate is a hard reject even when the group is known
+    # An unmapped league name on the candidate is settled by the fixture itself
+    # when both teams match exactly, and the acceptance is recorded as evidence.
     c = _m("wwin", "Sarajevo", "Zeljeznicar", "Liga totally unknown", event_id="3")
     gate.normalize([c])
     r2 = gate.evaluate(c, g)
-    assert r2.status == "rejected"
-    assert "league_mismatch" in r2.reasons
+    assert r2.status == "verified"
+    assert any(e.reason == "league_unmapped_teams_exact" for e in r2.evidence)
+    # ...but not when a team spelling differs: then the league is a hard reject.
+    d = _m("wwin", "Sarajevo", "Zeljo", "Liga totally unknown", event_id="4")
+    gate.normalize([d])
+    r3 = gate.evaluate(d, g)
+    assert r3.status == "rejected"
+    assert "league_mismatch" in r3.reasons
 
 
 def test_evaluate_records_group_league_mismatch_with_soft_pair_failure():
@@ -493,7 +502,7 @@ def test_evaluate_records_group_league_mismatch_with_soft_pair_failure():
     )
     gate.normalize([a, b])
     group = _g(a)
-    group.league = "different_group_league"
+    group.league = "serie_a"  # a mapped league that contradicts both matches
     r = gate.evaluate(b, group)
     assert r.status == "rejected"
     assert r.reasons == ["link_unverified", "league_mismatch"]
@@ -777,6 +786,7 @@ def test_an_unreadable_deep_link_config_fails_safe(monkeypatch):
     assert r.reasons == ["no_event_link"]
 
 
+@pytest.mark.real_deeplinks
 def test_every_declared_route_book_blocks_and_every_other_book_is_accepted():
     """Driven from the JSON, so flipping a declaration is a reviewed diff.
 
@@ -787,7 +797,7 @@ def test_every_declared_route_book_blocks_and_every_other_book_is_accepted():
     """
     raw = _deeplink_config()
     declared = {book for book, cfg in raw.items() if cfg.get("supports_event_id") is True}
-    assert declared == {"mdshop", "admiralbet", "mozzartbet"}, (
+    assert declared == {"mozzartbet"}, (
         "the declared-route set changed; the spec's inert-route claim and the "
         "README headline both name these books, so revisit them before trusting "
         "this test"

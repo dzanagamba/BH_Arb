@@ -52,7 +52,10 @@ BOOKMAKERS = {
         "name": "EVLBet",
         "base_url": "https://evlbet.com",
         "soccer_url": "https://evlbet.com",
-        "enabled": True,
+        # Off since 2026-10-20: its offer API returns no football events for any
+        # request variant tried, and no payload has ever been captured, so its
+        # market mapping is untested. Re-enable only with a captured fixture.
+        "enabled": False,
         "color": "#9C27B0",
     },
     "premier_kladionica": {
@@ -100,12 +103,10 @@ MAX_SUREBET_PROFIT_PERCENT = 20.0  # Sanity cap — reject higher profits (likel
 ODDS_TTL_SECONDS = 600         # Max age of odds before considered stale (prematch 10 min, live 60s enforced in engine)
 
 # --- Scraper Settings ---
-SCRAPE_TIMEOUT_MS = 30000      # Max time to wait for JSON payloads (ms)
 NAVIGATION_TIMEOUT_MS = 60000  # Max navigation time (ms)
 # Headless browsers by default; set HEADLESS=false in .env to watch them
 # (e.g. to solve a CAPTCHA by hand).
 HEADLESS = os.getenv("HEADLESS", "true").strip().lower() not in ("0", "false", "no")
-SLOW_MO = 0
 # Verify TLS certificates on direct httpx API calls (set VERIFY_SSL=true in .env to enforce)
 VERIFY_SSL = os.getenv("VERIFY_SSL", "false").lower() in ("1", "true", "yes")
 USER_AGENT = (
@@ -113,12 +114,6 @@ USER_AGENT = (
     "AppleWebKit/537.36 (KHTML, like Gecko) "
     "Chrome/120.0.0.0 Safari/537.36"
 )
-BLOCKED_URL_FRAGMENTS = [
-    "google-analytics", "facebook", "doubleclick", "adsystem",
-    "hotjar", "sentry", "intercom", "crisp", "zendesk",
-    "livechat", "analytics", "tracking", "telemetry",
-    "casino", "slots", "poker", "jackpot", "virtual"
-]
 
 
 # --- Matching Settings ---
@@ -148,7 +143,6 @@ RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
 
 # --- Cache ---
 CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "cache")
-DEEP_LINK_CONFIG = os.path.join(os.path.dirname(__file__), "bookmaker_deeplinks.json")
 
 # --- Match page URL templates (best-effort; scrapers may override with real per-match URLs) ---
 MATCH_URL_TEMPLATES: dict[str, str] = {
