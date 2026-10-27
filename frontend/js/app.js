@@ -105,6 +105,7 @@ function outcomeDescription(label, marketType) {
 document.addEventListener('DOMContentLoaded', async () => {
     restorePreferences();
     restoreMode();
+    updateThemeButton();
     await loadConfig();
     initBookmakerChips();
     // The diagnostic copy table is static and local, so it is read once, before
@@ -237,6 +238,29 @@ function switchMode(mode) {
     if (activeTab === 'review') loadCandidates();
 }
 
+// System → light → dark. The choice is applied before first paint by an inline
+// script in index.html; here it is only changed and saved.
+const THEMES = ['system', 'light', 'dark'];
+
+function currentTheme() {
+    const pinned = document.documentElement.dataset.theme;
+    return pinned === 'light' || pinned === 'dark' ? pinned : 'system';
+}
+
+function cycleTheme() {
+    const next = THEMES[(THEMES.indexOf(currentTheme()) + 1) % THEMES.length];
+    if (next === 'system') delete document.documentElement.dataset.theme;
+    else document.documentElement.dataset.theme = next;
+    try { localStorage.setItem('theme', next); } catch (e) { /* ignore */ }
+    updateThemeButton();
+    showToast(`Theme: ${next}`);
+}
+
+function updateThemeButton() {
+    const button = document.getElementById('theme-btn');
+    if (button) button.title = `Theme: ${currentTheme()} (click to change)`;
+}
+
 function toggleSettings(open) {
     const drawer = document.getElementById('settings-drawer');
     const backdrop = document.getElementById('settings-backdrop');
@@ -321,7 +345,8 @@ function recalculateAll(investment) {
     globalInvestment = value;
     // A slip the user has not touched follows the default.
     Object.values(slipState).forEach(state => { if (!state.touched) state.investment = value; });
-    renderSlip();
+    // Rows and the summary quote earnings on the default stake, so they redraw too.
+    applyFilters();
 }
 
 // ─── Scan ─────────────────────────────────────────────────────────────────────
@@ -521,10 +546,49 @@ function resetFilters() {
     applyFilters();
 }
 
+// One chip per market the scan found, with its count; the active one is kept
+// even when it has none, so a filter can always be switched off.
+function renderMarketChips() {
+    const wrap = document.getElementById('market-chips');
+    const active = document.getElementById('filter-market').value;
+    if (!wrap) return;
+    const counts = {};
+    allSurebets.forEach(sb => { counts[sb.market_type] = (counts[sb.market_type] || 0) + 1; });
+    const markets = Object.keys(MARKET_LABELS).filter(m => counts[m] || m === active);
+    wrap.hidden = allSurebets.length === 0;
+    wrap.innerHTML = [['', 'All', allSurebets.length], ...markets.map(m => [m, MARKET_LABELS[m], counts[m] || 0])]
+        .map(([value, label, count]) => `<button type="button" class="mchip${value === active ? ' active' : ''}" aria-pressed="${value === active}" onclick="setMarketFilter('${escapeHtml(value)}')">${escapeHtml(label)} <b>${count}</b></button>`)
+        .join('');
+}
+
+function setMarketFilter(market) {
+    document.getElementById('filter-market').value = market;
+    applyFilters();
+}
+
+function renderKpis(surebets) {
+    const best = surebets.reduce((top, sb) => (!top || sb.profit_percent > top.profit_percent ? sb : top), null);
+    const hero = document.querySelector('.kpi-hero');
+    if (hero) hero.toggleAttribute('data-empty', !best);
+    setText('kpi-best', best ? `${best.profit_percent.toFixed(2)}%` : '—');
+    setText('kpi-best-sub', best
+        ? `+${money(globalInvestment * best.profit_percent / 100)} KM on ${globalInvestment} KM · ${formatTeamName(best.home_team)}`
+        : 'no surebet yet');
+    setText('kpi-count', surebets.length);
+    setText('kpi-count-sub', allSurebets.length > surebets.length
+        ? `of ${allSurebets.length} found · ${allSurebets.length - surebets.length} filtered out`
+        : 'above your minimum');
+    setText('kpi-mode-sub', currentMode === 'live' ? 'live matches' : 'upcoming matches');
+}
+
 function renderSurebets(surebets) {
     const grid = document.getElementById('results-grid');
     setText('surebets-count', surebets.length);
+    renderKpis(surebets);
+    renderMarketChips();
     grid.innerHTML = '';
+    const hint = document.getElementById('list-hint');
+    if (hint) hint.hidden = surebets.length < 2;
 
     // Anything the list cannot show is handed to the diagnostic, which decides
     // which panel is up and what it says. It is never told "show the empty
@@ -560,16 +624,27 @@ function buildSurebetRow(sb) {
     row.dataset.tier = profitTier(sb.profit_percent);
     const kickoff = parseKickoff(sb.kickoff);
     const when = currentMode === 'live' ? 'In play' : (kickoff ? formatKickoff(kickoff) : '');
-    const books = sb.stakes.map(s => `<span class="book-dot" style="--color:${escapeHtml(bookColor(s.bookmaker))}" title="${escapeHtml(bookName(s.bookmaker))}">${escapeHtml(bookShort(s.bookmaker))}</span>`).join('');
+    // Kickoff inside the hour is flagged: the window to place all legs is closing.
+    const minutesAway = kickoff ? (kickoff.getTime() - Date.now()) / 60000 : null;
+    const whenClass = currentMode === 'live' ? ' live' : (minutesAway != null && minutesAway >= 0 && minutesAway < 60 ? ' soon' : '');
+    const whenText = whenClass === ' soon' ? `in ${Math.max(1, Math.round(minutesAway))} min` : when;
+    const legs = placementOrder(sb.stakes).map(s => `
+        <span class="leg-pill" title="${escapeHtml(bookName(s.bookmaker))}: ${escapeHtml(outcomeDescription(s.outcome_label, sb.market_type))} at ${s.odds.toFixed(2)}">
+            <span class="book-dot" style="--color:${escapeHtml(bookColor(s.bookmaker))}">${escapeHtml(bookShort(s.bookmaker))}</span>
+            <span class="leg-pick">${escapeHtml(s.outcome_label)}</span>
+            <span class="leg-odds">${s.odds.toFixed(2)}</span>
+        </span>`).join('');
     const check = verifyState[sb.id];
     const badge = check ? `<span class="row-check row-check-${escapeHtml(check.state)}">${escapeHtml(verifyShortLabel(check))}</span>` : '';
+    // What the default stake would earn at the scanned, unrounded prices.
+    const earns = globalInvestment * sb.profit_percent / 100;
     row.innerHTML = `
-        <span class="row-profit">${sb.profit_percent.toFixed(2)}%</span>
+        <span class="row-profit"><b>${sb.profit_percent.toFixed(2)}%</b><small>+${money(earns)} KM</small></span>
         <span class="row-main">
             <span class="row-teams">${escapeHtml(formatTeamName(sb.home_team))} – ${escapeHtml(formatTeamName(sb.away_team))}</span>
-            <span class="row-meta">${escapeHtml(MARKET_LABELS[sb.market_type] || sb.market_type)} · ${escapeHtml(when)} · ${escapeHtml(formatLeague(sb.league))}</span>
+            <span class="row-meta"><span class="mkt">${escapeHtml(MARKET_LABELS[sb.market_type] || sb.market_type)}</span><span class="row-when${whenClass}">${escapeHtml(whenText)}</span><span class="row-league">${escapeHtml(formatLeague(sb.league))}</span></span>
         </span>
-        <span class="row-side">${books}${badge}</span>
+        <span class="row-legs">${legs}</span>${badge}
     `;
     row.addEventListener('click', () => selectSurebet(sb.id));
     return row;
@@ -758,35 +833,52 @@ function renderSlip() {
     }).join('');
 
     const evidence = (sb.evidence || []).map(line => `<li>${escapeHtml(line)}</li>`).join('');
+    const placedCount = Object.keys(state.placed).length;
+    const locked = placedCount ? ' disabled title="Fixed once a leg is placed"' : '';
+    const presets = [50, 100, 200, 500].map(amount => `
+        <button type="button" class="${Number(state.investment) === amount ? 'active' : ''}"${locked}
+                onclick="setSlipInvestment('${escapeHtml(sb.id)}', ${amount})">${amount}</button>`).join('');
 
     pane.innerHTML = `
         <div class="slip-head">
             <button type="button" class="link-btn slip-back" onclick="closeSlip()">← All surebets</button>
+            <div class="slip-eyebrow">
+                <span class="mkt">${escapeHtml(MARKET_LABELS[sb.market_type] || sb.market_type)}</span>
+                <span>${escapeHtml(formatLeague(sb.league))}</span>
+                <span class="status-badge" hidden></span>
+            </div>
             <div class="slip-title">
                 <h2>${escapeHtml(formatTeamName(sb.home_team))} – ${escapeHtml(formatTeamName(sb.away_team))}</h2>
-                <p>${escapeHtml(formatLeague(sb.league))} · ${escapeHtml(currentMode === 'live' ? 'In play' : (kickoff ? formatKickoffLong(kickoff) : 'Kickoff unknown'))}</p>
+                <p>${escapeHtml(currentMode === 'live' ? 'In play' : (kickoff ? formatKickoffLong(kickoff) : 'Kickoff unknown'))}</p>
             </div>
+        </div>
+
+        <div class="slip-hero${plan.profit > 0 ? '' : ' is-loss'}">
             <div class="slip-profit" data-tier="${profitTier(plan.profitPercent)}" title="Profit of the stakes below, after rounding">
                 <span class="mono">${plan.profitPercent.toFixed(2)}%</span>
-                <small>${escapeHtml(MARKET_LABELS[sb.market_type] || sb.market_type)} · ${exactProfit.toFixed(2)}% at scan, exact stakes</small>
+                <small>${exactProfit.toFixed(2)}% at scan, exact stakes</small>
+            </div>
+            <div class="slip-stake">
+                <label class="inline-field"><span>Total stake</span>
+                    <input class="input mono" type="number" min="1" step="10" value="${state.investment}"
+                           oninput="setSlipInvestment('${escapeHtml(sb.id)}', this.value)"${locked}> KM</label>
+                <div class="slip-presets" aria-label="Quick stake">${presets}</div>
             </div>
         </div>
-        <span class="status-badge" hidden></span>
+
+        <div class="slip-totals">
+            <span>Staked <b class="mono">${money(plan.total)}</b></span>
+            <span>Worst return <b class="mono">${money(plan.worst)}</b></span>
+            <span class="${plan.profit > 0 ? 'good' : 'bad'}">Profit <b class="mono">${plan.profit >= 0 ? '+' : ''}${money(plan.profit)} KM</b></span>
+        </div>
 
         ${renderVerifyBanner(sb, check)}
-
-        <div class="slip-stake">
-            <label class="inline-field"><span>Total stake</span>
-                <input class="input mono" type="number" min="1" step="10" value="${state.investment}"
-                       oninput="setSlipInvestment('${escapeHtml(sb.id)}', this.value)" ${Object.keys(state.placed).length ? 'disabled title="Fixed once a leg is placed"' : ''}> KM</label>
-            <div class="slip-totals">
-                <span>Staked <b class="mono">${money(plan.total)}</b></span>
-                <span>Worst return <b class="mono">${money(plan.worst)}</b></span>
-                <span class="${plan.profit > 0 ? 'good' : 'bad'}">Profit <b class="mono">${plan.profit >= 0 ? '+' : ''}${money(plan.profit)} KM</b></span>
-            </div>
-        </div>
         ${warnings.join('')}
 
+        <div class="slip-progress">
+            <span>${placedCount ? `${placedCount} of ${plan.legs.length} placed` : `Place ${plan.legs.length} bets, top to bottom`}</span>
+            <span class="slip-progress-bar"><i style="width:${(placedCount / plan.legs.length) * 100}%"></i></span>
+        </div>
         <ol class="legs">${legsHtml}</ol>
 
         <details class="slip-howto">
@@ -1157,6 +1249,8 @@ function renderNoSurebetState() {
     // `display: flex` in the stylesheet, which outranks `[hidden]`.
     const bookies = emptyState.querySelector('.empty-state-bookies');
     if (bookies) bookies.style.display = reason.id === 'never_scanned' ? '' : 'none';
+    const cta = emptyState.querySelector('.empty-cta');
+    if (cta) cta.style.display = reason.id === 'never_scanned' ? '' : 'none';
     writeDiagnosticPanel(panel, reason, renderCaseCopy(
         reason,
         diagnosticValues(healthSnapshot, resultsSnapshot, counts),
@@ -1182,6 +1276,8 @@ function renderDiagnosticUnavailable() {
         : DIAGNOSTIC_UNAVAILABLE.noCopyTable;
     const bookies = emptyState.querySelector('.empty-state-bookies');
     if (bookies) bookies.style.display = 'none';
+    const cta = emptyState.querySelector('.empty-cta');
+    if (cta) cta.style.display = 'none';
     const actions = document.getElementById('empty-state-actions');
     if (actions) {
         actions.innerHTML = '';

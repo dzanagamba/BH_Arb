@@ -5,16 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Surebet BiH</title>
     <meta name="description" content="Find and place surebets across Bosnian bookmakers.">
+    <script>
+        // Apply the saved theme before first paint, so the page never flashes.
+        try { const t = localStorage.getItem('theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/css/style.css?v=2">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/style.css?v=5">
 </head>
 <body>
 
 <header class="topbar">
     <div class="brand">
-        <span class="brand-mark">S</span>
+        <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l5-5 4 4 7-8"/><path d="M15 8h5v5"/></svg>
+        </span>
         <span class="brand-name">Surebet <span>BiH</span></span>
     </div>
 
@@ -29,10 +35,13 @@
             <span id="status-text">Ready</span>
         </div>
         <span class="autorescan" id="autorescan-countdown" style="display:none;"></span>
-        <button class="btn btn-primary" id="scan-btn" onclick="scanNow()">Scan now</button>
-        <button class="btn btn-icon" id="settings-btn" onclick="toggleSettings(true)" aria-label="Settings" title="Settings">
+        <button class="btn btn-icon btn-ghost" id="theme-btn" onclick="cycleTheme()" aria-label="Theme" title="Theme: system">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 3v18" /><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg>
+        </button>
+        <button class="btn btn-icon btn-ghost" id="settings-btn" onclick="toggleSettings(true)" aria-label="Settings" title="Settings">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
         </button>
+        <button class="btn btn-primary btn-scan" id="scan-btn" onclick="scanNow()">Scan now</button>
     </div>
 </header>
 
@@ -46,6 +55,7 @@
 </div>
 
 <div class="error-banner" id="error-banner" style="display:none;" role="alert">
+    <svg class="error-banner-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
     <span id="error-banner-text"></span>
     <button class="error-banner-close" onclick="hideError()" aria-label="Dismiss">✕</button>
 </div>
@@ -61,37 +71,47 @@
         <button class="tab-btn" id="history-tab" data-tab="history" role="tab"
                 aria-selected="false" aria-controls="history-panel" tabindex="-1"
                 onclick="switchTab('history')">History</button>
-        <div class="scan-facts" id="scan-facts">
-            <span><b id="stat-matches">—</b> matches</span>
-            <span><b id="stat-groups">—</b> verified groups</span>
-            <span>scanned <b id="stat-time">never</b></span>
-        </div>
     </nav>
 
-    <!-- Surebets: list on the left, bet slip on the right -->
+    <!-- Surebets: summary strip, then list on the left and bet slip on the right -->
     <section id="surebets-panel" class="tab-panel" role="tabpanel" aria-labelledby="surebets-tab"
              aria-hidden="false" data-tab-panel="surebets">
+        <div class="kpis" aria-label="Scan summary">
+            <div class="kpi kpi-hero">
+                <span class="kpi-k">Best edge</span>
+                <span class="kpi-v mono" id="kpi-best">—</span>
+                <span class="kpi-sub" id="kpi-best-sub">no surebet yet</span>
+            </div>
+            <div class="kpi">
+                <span class="kpi-k">Surebets</span>
+                <span class="kpi-v mono" id="kpi-count">0</span>
+                <span class="kpi-sub" id="kpi-count-sub">above your minimum</span>
+            </div>
+            <div class="kpi">
+                <span class="kpi-k">Matches scanned</span>
+                <span class="kpi-v mono" id="stat-matches">—</span>
+                <span class="kpi-sub"><b class="mono" id="stat-groups">—</b> verified across books</span>
+            </div>
+            <div class="kpi">
+                <span class="kpi-k">Last scan</span>
+                <span class="kpi-v" id="stat-time">never</span>
+                <span class="kpi-sub" id="kpi-mode-sub">upcoming matches</span>
+            </div>
+        </div>
+
         <div class="board">
             <div class="list-pane">
                 <div class="filters" id="filter-bar">
-                    <input class="input search-input" type="search" id="filter-search"
-                           placeholder="Search team or league" oninput="applyFilters()" aria-label="Search">
-                    <select class="input" id="filter-market" onchange="applyFilters()" aria-label="Market">
-                        <option value="">All markets</option>
-                        <option value="1x2">1X2</option>
-                        <option value="double_chance">1X2 + Double chance</option>
-                        <option value="over_under_1_5">Over/Under 1.5</option>
-                        <option value="over_under_2_5">Over/Under 2.5</option>
-                        <option value="over_under_3_5">Over/Under 3.5</option>
-                        <option value="btts">Both teams score</option>
-                        <option value="first_half_1x2">1st half 1X2</option>
-                        <option value="first_half_ou">1st half O/U</option>
-                        <option value="asian_handicap">Asian handicap</option>
-                    </select>
+                    <label class="search">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                        <input class="input search-input" type="search" id="filter-search"
+                               placeholder="Search team or league" oninput="applyFilters()" aria-label="Search">
+                    </label>
                     <label class="inline-field" title="Hide surebets below this profit">
-                        <span>Min %</span>
-                        <input class="input input-narrow" type="number" id="filter-profit"
+                        <span>Min</span>
+                        <input class="input input-narrow mono" type="number" id="filter-profit"
                                value="0.5" min="0" max="50" step="0.1" oninput="applyFilters()">
+                        <span>%</span>
                     </label>
                     <select class="input" id="filter-sort" onchange="applyFilters()" aria-label="Sort">
                         <option value="profit">Best profit</option>
@@ -99,20 +119,31 @@
                         <option value="league">League</option>
                     </select>
                 </div>
+                <!-- Market filter: the chips write this field; applyFilters reads it. -->
+                <input type="hidden" id="filter-market" value="">
+                <div class="market-chips" id="market-chips" role="group" aria-label="Market" hidden></div>
 
                 <div class="results-grid" id="results-grid" role="listbox" aria-label="Surebets"></div>
+                <p class="list-hint" id="list-hint" hidden><kbd>J</kbd> <kbd>K</kbd> move through the list · click a surebet to open its bet slip</p>
 
                 <div class="empty-state" id="empty-state">
+                    <div class="empty-state-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/><path d="M8 12l2-2 2 2 3-3"/></svg>
+                    </div>
                     <h2 class="empty-state-title">Ready to Hunt Surebets</h2>
                     <p class="empty-state-desc">
                         Click <strong>Scan Now</strong> to start scanning your connected bookmakers for arbitrage opportunities. Browser windows will open — solve any CAPTCHA if prompted.
                     </p>
                     <div id="empty-state-actions" hidden></div>
+                    <button type="button" class="btn btn-primary btn-lg empty-cta" onclick="scanNow()">Scan now</button>
                     <div class="empty-state-bookies" id="empty-state-bookies"></div>
                 </div>
 
                 <!-- Copy comes from frontend/js/no-surebet-reasons.json -->
                 <div class="no-results" id="no-results" style="display:none;">
+                    <div class="empty-state-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4-2v-4z"/></svg>
+                    </div>
                     <h3 id="no-results-title"></h3>
                     <p id="no-results-desc"></p>
                     <div id="no-results-actions" hidden></div>
@@ -153,12 +184,14 @@
     <!-- History -->
     <section id="history-panel" class="tab-panel" role="tabpanel" aria-labelledby="history-tab"
              aria-hidden="true" data-tab-panel="history" hidden>
-        <table class="history-table">
-            <thead>
-                <tr><th>Feed</th><th>Time</th><th>Matches</th><th>Groups</th><th>Surebets</th><th>Errors</th></tr>
-            </thead>
-            <tbody id="history-body"></tbody>
-        </table>
+        <div class="table-wrap">
+            <table class="history-table">
+                <thead>
+                    <tr><th>Feed</th><th>Time</th><th>Matches</th><th>Groups</th><th>Surebets</th><th>Errors</th></tr>
+                </thead>
+                <tbody id="history-body"></tbody>
+            </table>
+        </div>
     </section>
 </main>
 
@@ -167,13 +200,13 @@
 <aside class="drawer" id="settings-drawer" aria-label="Settings" hidden>
     <div class="drawer-head">
         <h2>Settings</h2>
-        <button class="btn btn-icon" onclick="toggleSettings(false)" aria-label="Close settings">✕</button>
+        <button class="btn btn-icon btn-ghost" onclick="toggleSettings(false)" aria-label="Close settings">✕</button>
     </div>
 
     <section class="drawer-section">
         <h3>Staking</h3>
         <label class="field"><span>Default total stake (KM)</span>
-            <input class="input" type="number" id="filter-investment" value="100" min="1" max="100000" step="10"
+            <input class="input mono" type="number" id="filter-investment" value="100" min="1" max="100000" step="10"
                    oninput="recalculateAll(this.value)"></label>
         <label class="field"><span>Round stakes to</span>
             <select class="input" id="filter-rounding" onchange="setStakeRounding(this.value)">
@@ -224,6 +257,6 @@
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="/js/app.js?v=2"></script>
+<script src="/js/app.js?v=5"></script>
 </body>
 </html>
