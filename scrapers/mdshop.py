@@ -20,6 +20,7 @@ from scrapers.common import (
     betradar_id,
     build_event_url,
     nsoft_event_window,
+    nsoft_offered,
     parse_dt,
     parse_nsoft_bets,
     parse_nsoft_live_bets,
@@ -141,7 +142,7 @@ class MDShopScraper:
     ) -> Match | None:
         """Parse a single API event dictionary into a Match."""
         event_name = ev.get("name", "")
-        if " - " not in event_name:
+        if " - " not in event_name or not nsoft_offered(ev):
             return None
 
         if live:

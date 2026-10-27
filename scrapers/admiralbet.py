@@ -16,6 +16,7 @@ from scrapers.common import (
     betradar_id,
     build_event_url,
     nsoft_event_window,
+    nsoft_offered,
     parse_dt,
     parse_nsoft_bets,
     parse_nsoft_live_bets,
@@ -134,6 +135,8 @@ class AdmiralbetScraper:
         seen = set()
         matches: list[Match] = []
         for ev in all_raw_events:
+            if not isinstance(ev, dict) or not nsoft_offered(ev):
+                continue
             if live:
                 # Skip simulated-reality events ("SRL ...") — not real matches
                 name_l = str(ev.get("name", "")).lower()
