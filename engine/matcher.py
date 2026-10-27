@@ -50,6 +50,9 @@ logger = logging.getLogger(__name__)
 _LEAGUE_EQUIV_FILE = os.path.join(
     os.path.dirname(__file__), "..", "config", "league_equivalences.json"
 )
+_TEAM_ALIAS_REVIEWED_FILE = os.path.join(
+    os.path.dirname(__file__), "..", "config", "team_alias_reviewed.json"
+)
 _TEAM_ALIAS_FILE = os.path.join(
     os.path.dirname(__file__), "..", "config", "team_alias_allowlist.json"
 )
@@ -146,9 +149,30 @@ class MatchMatcher:
                 "team_alias_allowlist.json not found or invalid — no fuzzy aliases"
             )
 
+        # Reviewed pairs below the allowlist's similarity floor; the gate accepts
+        # them without it (see CertaintyGate.reviewed_aliases).
+        self._reviewed_aliases: set[str] = set()
+        self._reviewed_partners: dict[str, set[str]] = {}
+        try:
+            with open(_TEAM_ALIAS_REVIEWED_FILE, encoding="utf-8") as f:
+                reviewed_data = json.load(f)
+            for entry in reviewed_data.get("approved", []):
+                alias = entry.get("alias") if isinstance(entry, dict) else None
+                if not isinstance(alias, str) or alias.count("|") != 1:
+                    continue
+                left, right = (part.strip() for part in alias.split("|", 1))
+                if left and right:
+                    self._reviewed_aliases.add(f"{left}|{right}")
+                    key = CertaintyGate._raw_team_key
+                    self._reviewed_partners.setdefault(key(left), set()).add(right)
+                    self._reviewed_partners.setdefault(key(right), set()).add(left)
+        except (OSError, TypeError, ValueError, AttributeError):
+            logger.warning("team_alias_reviewed.json not found or invalid — no reviewed aliases")
+
         self.gate = CertaintyGate(
             alias_allowlist=self._alias_allowlist,
             league_equivalences=self._equivalences,
+            reviewed_aliases=self._reviewed_aliases,
         )
 
     def normalize_matches(self, matches: list[Match]) -> list[Match]:
@@ -189,7 +213,7 @@ class MatchMatcher:
         whole allowlist into the evidence of every alias it accepts. The gate
         still requires league, kickoff and category to agree.
         """
-        if not self._alias_partners:
+        if not self._alias_partners and not self._reviewed_partners:
             return
         key = CertaintyGate._raw_team_key
         for m in matches:
@@ -200,6 +224,8 @@ class MatchMatcher:
                 base, suffix = name[: hit.start()], hit.group(0)
                 for partner in self._alias_partners.get(key(base), ()):
                     self._alias_allowlist.add(f"{base}{suffix}|{partner}{suffix}")
+                for partner in self._reviewed_partners.get(key(base), ()):
+                    self._reviewed_aliases.add(f"{base}{suffix}|{partner}{suffix}")
 
     def group_matches(self, all_matches: list[Match]) -> list[MatchGroup]:
         """
@@ -437,13 +463,34 @@ class MatchMatcher:
             # One has time, other doesn't — mild penalty
             time_score = 0.65
 
+        # A reviewed pair is one club however differently it is spelled
+        # ("Chiba" / "JEF Utd" scores 0), so it scores as a full match here and
+        # reaches the gate, which still decides on league, kickoff and category.
+        anchor = group.matches[0] if group.matches else None
+
+        def similarity(raw: str, normalized: str, group_normalized: str, group_raw: str) -> float:
+            if group_raw and self.gate._is_reviewed(raw, group_raw):
+                return 1.0
+            return fuzz.token_set_ratio(normalized, group_normalized) / 100.0
+
+        anchor_home = anchor.home_team if anchor else ""
+        anchor_away = anchor.away_team if anchor else ""
+
         # Check direct orientation
-        dir_home = fuzz.token_set_ratio(match.home_team_normalized, group.canonical_home) / 100.0
-        dir_away = fuzz.token_set_ratio(match.away_team_normalized, group.canonical_away) / 100.0
+        dir_home = similarity(
+            match.home_team, match.home_team_normalized, group.canonical_home, anchor_home
+        )
+        dir_away = similarity(
+            match.away_team, match.away_team_normalized, group.canonical_away, anchor_away
+        )
 
         # Check swapped orientation
-        swap_home = fuzz.token_set_ratio(match.home_team_normalized, group.canonical_away) / 100.0
-        swap_away = fuzz.token_set_ratio(match.away_team_normalized, group.canonical_home) / 100.0
+        swap_home = similarity(
+            match.home_team, match.home_team_normalized, group.canonical_away, anchor_away
+        )
+        swap_away = similarity(
+            match.away_team, match.away_team_normalized, group.canonical_home, anchor_home
+        )
 
         dir_conf = ((dir_home + dir_away) / 2.0) * 0.80 + time_score * 0.20 if (dir_home >= TEAM_MATCH_RATIO and dir_away >= TEAM_MATCH_RATIO) else 0.0
         swap_conf = ((swap_home + swap_away) / 2.0) * 0.80 + time_score * 0.20 if (swap_home >= TEAM_MATCH_RATIO and swap_away >= TEAM_MATCH_RATIO) else 0.0

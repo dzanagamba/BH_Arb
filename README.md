@@ -219,8 +219,11 @@ Four rules inside stage 1 matter more than the rest:
 
 * **The reviewed alias allowlist is the only auto-accepted fuzzy path.** A pair
   whose raw team names differ is refused unless the pair appears in
-  `config/team_alias_allowlist.json`. A canonical-name collision on its own is
-  never enough.
+  `config/team_alias_allowlist.json` (and scores at least 90 similarity) or in
+  `config/team_alias_reviewed.json`, the pairs a person reviewed from fixture
+  evidence, which carry no similarity floor ("Man.Utd" / "Manchester United").
+  Either way league, kickoff and category must still agree. A canonical-name
+  collision on its own is never enough.
 * **Links are a machine fact, not a human one.** `deep_link_verified` may only be
   set by an actual browser check (`scripts/verify_deeplinks.py`), never by a
   human approval.

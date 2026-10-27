@@ -45,11 +45,15 @@ and the shared procedures (S1–S5) that cards refer to by name.
 
 * Never make the certainty gate (`engine/certainty.py`) accept a pair it
   refuses today, **except** in task M1-5, and then only in exactly the way M1-5
-  describes.
+  describes. (One operator-approved exception, 2026-10-27: pairs in
+  `config/team_alias_reviewed.json` pass the team check without the 90
+  similarity floor; league, kickoff, category and link checks are unchanged.)
 * Never set `deep_link_verified=True` anywhere except through
   `scripts/verify_deeplinks.py` or `POST /api/verify-links`.
 * Never edit `config/team_alias_allowlist.json`, `config/league_mappings.json` or
-  `config/league_equivalences.json` by hand. Only `scripts/derive_mappings.py
+  `config/league_equivalences.json` by hand. `config/team_alias_reviewed.json` is
+  the record of a human review: add to it only pairs someone has actually reviewed,
+  each with its fixture evidence (and every rejection with its reason). Only `scripts/derive_mappings.py
   --apply` or the dashboard's Review approval may write them.
 * Never flip a `supports_event_id` value in `config/bookmaker_deeplinks.json`
   without a dated browser check written into that book's `note` (task H-3).
@@ -467,7 +471,7 @@ in `ArbitrageEngine._best_combination`.
      ≥ 2 books) before vs after.
 - **Verify:** §5 S1 (the config changes must not break any test).
 - **Done when:** the round's before/after numbers are in the Log and S1 is green.
-- **Log:** 2026-10-27 round (inputs: the 2026-10-20 scan and a 2026-10-27 00:05 UTC scan with MaxBet; Mozzartbet/Premier/WWIN returned nothing at that hour). The script now reads names through `canonicalize_fixture` and writes conflict components as `league_equivalences.json` pairs. Applied: 70 names onto 42 ids, 36 new ids, 5 equivalence pairs (UEFA Youth League, Liga MX women, Russian and Bulgarian 2nd tier, EFL Cup), 542 aliases. Every league proposal was checked for same country and tier; two odd-looking ones are fixture-backed (MaxBet files Carling Knockout games as "Nedbank Cup"; NSoft lists the Irish 1st-division play-off as "Irska 2"). Listings in verified groups: 4,292 -> 4,387 (2026-10-20 scan), 2,270 -> 2,393 (2026-10-27 scan). 588 pairs below the similarity floor and 28 ambiguous names are left for the Review tab.
+- **Log:** 2026-10-27 round (inputs: the 2026-10-20 scan and a 2026-10-27 00:05 UTC scan with MaxBet; Mozzartbet/Premier/WWIN returned nothing at that hour). The script now reads names through `canonicalize_fixture` and writes conflict components as `league_equivalences.json` pairs. Applied: 70 names onto 42 ids, 36 new ids, 5 equivalence pairs (UEFA Youth League, Liga MX women, Russian and Bulgarian 2nd tier, EFL Cup), 542 aliases. Every league proposal was checked for same country and tier; two odd-looking ones are fixture-backed (MaxBet files Carling Knockout games as "Nedbank Cup"; NSoft lists the Irish 1st-division play-off as "Irska 2"). Listings in verified groups: 4,292 -> 4,387 (2026-10-20 scan), 2,270 -> 2,393 (2026-10-27 scan). 588 pairs below the similarity floor and 28 ambiguous names are left for the Review tab. Second pass the same day: stage suffixes (cup groups, championship/relegation groups, East/West) no longer count as ambiguity - 19 names onto 7 ids, 3 new ids, 7 more equivalence pairs; 4,387 -> 4,413 and 2,393 -> 2,411. The 587 below-floor team pairs were reviewed at the operator's request (565 approve, 22 reject) into `config/team_alias_reviewed.json`; the operator then had the gate honour that file without the 90 floor, and the matcher's scorer count a reviewed pair as a full match. Listings in verified groups: 4,413 -> 4,600 (2026-10-20 scan) and 2,411 -> 2,530 (2026-10-27 scan).
 
 #### M1-2 · Mozzartbet prematch coverage
 

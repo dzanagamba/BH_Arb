@@ -55,10 +55,16 @@ class CertaintyGate:
         kickoff_window_minutes: int = VERIFIED_KICKOFF_WINDOW_MINUTES,
         alias_allowlist: set[str] | None = None,
         league_equivalences: set[tuple[str, str]] | None = None,
+        reviewed_aliases: set[str] | None = None,
     ) -> None:
         self.normalizer = TeamNormalizer()
         self.kickoff_window_minutes = kickoff_window_minutes
         self.alias_allowlist = alias_allowlist or set()
+        # Pairs a person reviewed from fixture evidence (config/team_alias_reviewed.json).
+        # Accepted without the allowlist's similarity floor: "Man.Utd" and
+        # "Manchester United" score 60 and are still one club. Everything else
+        # an alias needs - league, kickoff, category, link - still applies.
+        self.reviewed_aliases = reviewed_aliases or set()
         self.league_equivalences = league_equivalences or set()
         self._canonical_leagues = set(self.normalizer.league_reverse_map.values())
 
@@ -186,6 +192,8 @@ class CertaintyGate:
 
         # A canonical collision alone is never enough. If the raw forms differ,
         # the pair is an alias candidate and must be explicitly reviewed.
+        if self._is_reviewed(left_raw, right_raw):
+            return True, True
         allowlisted = self._is_allowlisted(left_raw, right_raw) or self._is_allowlisted(
             left_normalized, right_normalized
         )
@@ -263,6 +271,22 @@ class CertaintyGate:
             return False
         pair = frozenset((self._raw_team_key(left), self._raw_team_key(right)))
         return pair in self._allowlist_index()
+
+    def _is_reviewed(self, left: str, right: str) -> bool:
+        """Return whether the unordered raw pair is in the reviewed-alias file."""
+        if not self.reviewed_aliases:
+            return False
+        snapshot = (id(self.reviewed_aliases), len(self.reviewed_aliases))
+        cached = getattr(self, "_reviewed_cache", None)
+        if cached is None or cached[0] != snapshot:
+            index = frozenset(
+                frozenset(self._raw_team_key(part) for part in entry.split("|"))
+                for entry in self.reviewed_aliases
+                if entry.count("|") == 1
+            )
+            cached = (snapshot, index)
+            self._reviewed_cache = cached
+        return frozenset((self._raw_team_key(left), self._raw_team_key(right))) in cached[1]
 
     def _allowlist_index(self) -> frozenset[frozenset[str]]:
         """The allowlist as a set of normalized pairs, rebuilt when it changes.
