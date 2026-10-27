@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 from engine.arbitrage import ArbitrageEngine
 from models.schemas import Market, MarketType, Match, MatchGroup, OddsValue
-from scrapers.common import parse_nsoft_live_bets
+from scrapers.common import parse_nsoft_bets, parse_nsoft_live_bets
 from scrapers.mbet import _resolve_mbet_live_market
 from scrapers.sportplus import SportPlusScraper
 
@@ -79,6 +79,43 @@ def test_nsoft_live_unmapped_ids_rejected():
     ]
     for bets in rejected:
         assert parse_nsoft_live_bets([bets]) == []
+
+
+def test_nsoft_suspended_lines_and_outcomes_are_not_read():
+    """NSoft keeps a suspended line in the feed with its last price.
+
+    The 2026-10-27 live feed marked 8 of 42 match totals ``isPlayable: false``.
+    A suspended line, or a suspended side of an open one, cannot be bet, so it
+    must never become a surebet leg; prematch is parsed by the same code.
+    """
+    open_bet = _live_bet(22, [("Manje", 1.9), ("Vise", 1.9)], sbv="2.5")
+    assert len(parse_nsoft_live_bets([open_bet])) == 1
+
+    for flag in ("isPlayable", "isInOffer"):
+        suspended = {**open_bet, flag: False}
+        assert parse_nsoft_live_bets([suspended]) == [], flag
+
+        one_side = {**open_bet, "betOutcomes": [
+            {"name": "Manje", "odd": 1.9},
+            {"name": "Vise", "odd": 1.9, flag: False},
+        ]}
+        assert parse_nsoft_live_bets([one_side]) == [], flag
+
+    prematch = {**_live_bet(135, [("1", 2.1), ("X", 3.2), ("2", 3.5)]), "isPlayable": False}
+    assert parse_nsoft_bets([prematch], bookmaker="mdshop", mode="prematch") == []
+
+
+def test_nsoft_suspended_event_is_skipped():
+    from scrapers.mdshop import MDShopScraper
+
+    event = {
+        "id": 1, "name": "Home FC - Away FC", "competitionName": "Liga",
+        "dateTime": "2026-10-27T00:00:00",
+        "bets": [_live_bet(22, [("Manje", 1.9), ("Vise", 1.9)], sbv="2.5")],
+    }
+    scraper = MDShopScraper()
+    assert scraper._parse_event(dict(event), "fudbal", set(), live=True) is not None
+    assert scraper._parse_event({**event, "isPlayable": False}, "fudbal", set(), live=True) is None
 
 
 def test_nsoft_live_prematch_ids_not_used():
@@ -168,6 +205,32 @@ def test_sportplus_live_skips_suspended_and_other_markets():
         ]},
     ])
     assert markets == []
+
+
+def test_sportplus_live_team_totals_are_not_the_match_total():
+    """"Zbroj golova domaćin/gost X.5" count one team's goals.
+
+    Captured 2026-10-27 (Bolivar - Univ.Vinto, 0-1): the match 1.5 line was
+    suspended and the home team's 1.5 total (2.4 / 1.5) was read as match O/U 1.5,
+    0.17 away from every other book. Half totals are not the match total either.
+    """
+    scraper = SportPlusScraper()
+    markets = scraper._parse_live_markets([
+        {"id": 15, "name": "Zbroj golova domaćin 1.5", "odds": [
+            {"alias": "1(M)", "value": 2.4}, {"alias": "2(V)", "value": 1.5},
+        ]},
+        {"id": 16, "name": "Zbroj golova gost 2.5", "odds": [
+            {"alias": "1(M)", "value": 1.07}, {"alias": "2(V)", "value": 6.0},
+        ]},
+        {"id": 34, "name": "2.poluvrijeme zbroj golova 1.5", "odds": [
+            {"alias": "1(M)", "value": 1.3}, {"alias": "2(V)", "value": 3.15},
+        ]},
+        {"id": 2, "name": "Zbroj golova 3.5", "odds": [
+            {"alias": "1(M)", "value": 1.7}, {"alias": "2(V)", "value": 2.05},
+        ]},
+    ])
+    assert [m.market_type for m in markets] == [MarketType.OVER_UNDER_3_5]
+    assert {o.label: o.value for o in markets[0].odds} == {"Over 3.5": 2.05, "Under 3.5": 1.7}
 
 
 # ─── Arbitrage: past-kickoff handling ─────────────────────────────────────────

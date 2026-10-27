@@ -238,7 +238,7 @@ class SportPlusScraper:
                         OddsValue(label=label, value=by_label[label])
                         for label in ("1", "X", "2") if label in by_label
                     ])
-            elif "Dvostruka Prilika" in name:
+            elif name.startswith("Dvostruka Prilika"):
                 spec = _registered_spec("live", "DVOSTRUKA_PRILIKA", MarketType.DOUBLE_CHANCE)
                 if spec is None:
                     continue
@@ -270,8 +270,12 @@ class SportPlusScraper:
                 if len(actual) >= spec.min_legs and actual.issubset(spec.labels):
                     append_market(MarketType.BTTS, btts_odds)
             elif name.startswith("Zbroj golova "):
+                # Only the match total. "Zbroj golova domaćin 2.5" and
+                # "Zbroj golova gost 2.5" are one team's goals; on 2026-10-27
+                # the home total was read as match O/U 1.5 while the real
+                # 1.5 line was suspended.
                 import re as _re
-                match_line = _re.search(r"(\d+[.,]\d+)", name)
+                match_line = _re.fullmatch(r"Zbroj golova (\d+[.,]\d+)", name)
                 if not match_line:
                     continue
                 line = match_line.group(1).replace(",", ".")

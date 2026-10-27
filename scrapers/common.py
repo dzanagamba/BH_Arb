@@ -364,6 +364,18 @@ def _score_key(raw) -> str:
     return "".join(str(raw or "").split()).replace(":", "-")
 
 
+def nsoft_offered(obj: dict) -> bool:
+    """Whether an NSoft event, bet or outcome can be bet on right now.
+
+    NSoft keeps a suspended line in the feed with its last price and marks it
+    ``isPlayable: false`` (on the event, the bet or the single outcome). On
+    2026-10-27 8 of 42 live match totals were suspended that way, and a suspended
+    price cannot be a surebet leg. Only an explicit ``False`` counts, so a
+    payload that omits the flags is read as before.
+    """
+    return obj.get("isPlayable") is not False and obj.get("isInOffer") is not False
+
+
 def parse_nsoft_bets(
     bets: list,
     extra_bet_types: dict[int, MarketType] | None = None,
@@ -413,7 +425,7 @@ def parse_nsoft_bets(
         if not isinstance(bet, dict):
             continue
         btid = bet.get("betTypeId")
-        if btid is None:
+        if btid is None or not nsoft_offered(bet):
             continue
         raw_sbv = bet.get("sbv") or bet.get("sBV")
         sbv_val = None
@@ -465,7 +477,7 @@ def parse_nsoft_bets(
             continue
         odds_values: list[OddsValue] = []
         for outcome in outcomes:
-            if not isinstance(outcome, dict):
+            if not isinstance(outcome, dict) or not nsoft_offered(outcome):
                 continue
             lbl = str(outcome.get("name") or outcome.get("outcomeName") or "")
             odd_raw = outcome.get("odd") or outcome.get("odds") or outcome.get("value")
