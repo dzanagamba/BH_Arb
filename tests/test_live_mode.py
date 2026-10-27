@@ -207,6 +207,32 @@ def test_sportplus_live_skips_suspended_and_other_markets():
     assert markets == []
 
 
+def test_sportplus_live_team_totals_are_not_the_match_total():
+    """"Zbroj golova domaćin/gost X.5" count one team's goals.
+
+    Captured 2026-10-27 (Bolivar - Univ.Vinto, 0-1): the match 1.5 line was
+    suspended and the home team's 1.5 total (2.4 / 1.5) was read as match O/U 1.5,
+    0.17 away from every other book. Half totals are not the match total either.
+    """
+    scraper = SportPlusScraper()
+    markets = scraper._parse_live_markets([
+        {"id": 15, "name": "Zbroj golova domaćin 1.5", "odds": [
+            {"alias": "1(M)", "value": 2.4}, {"alias": "2(V)", "value": 1.5},
+        ]},
+        {"id": 16, "name": "Zbroj golova gost 2.5", "odds": [
+            {"alias": "1(M)", "value": 1.07}, {"alias": "2(V)", "value": 6.0},
+        ]},
+        {"id": 34, "name": "2.poluvrijeme zbroj golova 1.5", "odds": [
+            {"alias": "1(M)", "value": 1.3}, {"alias": "2(V)", "value": 3.15},
+        ]},
+        {"id": 2, "name": "Zbroj golova 3.5", "odds": [
+            {"alias": "1(M)", "value": 1.7}, {"alias": "2(V)", "value": 2.05},
+        ]},
+    ])
+    assert [m.market_type for m in markets] == [MarketType.OVER_UNDER_3_5]
+    assert {o.label: o.value for o in markets[0].odds} == {"Over 3.5": 2.05, "Under 3.5": 1.7}
+
+
 # ─── Arbitrage: past-kickoff handling ─────────────────────────────────────────
 
 def _past_kickoff() -> datetime:
