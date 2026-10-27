@@ -18,6 +18,7 @@ import hashlib
 import json
 import logging
 import os
+import signal
 import tempfile
 import threading
 import time
@@ -1757,6 +1758,26 @@ async def health():
         },
         "odds_ttl_sec": ODDS_TTL_SECONDS,
     }
+
+
+_LOOPBACK_HOSTS = {"127.0.0.1", "::1", "localhost"}
+
+
+@router.post("/shutdown")
+async def shutdown_server(request: Request, _auth: None = Depends(_require_api_key)):
+    """Stop the server process (the dashboard's "Stop server" button).
+
+    Only a client on this machine may call it: HOST defaults to 0.0.0.0, so
+    without the loopback check anyone on the LAN could kill the scanner.
+    The SIGINT is raised after a short delay so this response reaches the
+    browser first; uvicorn's own handler then runs a clean lifespan shutdown.
+    """
+    client = request.client.host if request.client else ""
+    if client not in _LOOPBACK_HOSTS:
+        raise HTTPException(status_code=403, detail="Shutdown is only allowed from this computer")
+    logger.info("Shutdown requested from the dashboard")
+    asyncio.get_running_loop().call_later(0.5, signal.raise_signal, signal.SIGINT)
+    return {"status": "stopping"}
 
 
 @router.get("/status")

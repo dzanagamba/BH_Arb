@@ -12,7 +12,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/css/style.css?v=5">
+    <link rel="stylesheet" href="/css/style.css?v=6">
 </head>
 <body>
 
@@ -253,10 +253,23 @@
             <a href="/docs" target="_blank" rel="noopener">API docs</a>
         </p>
     </section>
+
+    <section class="drawer-section">
+        <h3>Server</h3>
+        <p class="hint">Stops the scanner on this computer. Start it again with <span class="mono">Start Surebet.bat</span>.</p>
+        <button class="btn btn-danger" id="shutdown-btn" onclick="shutdownServer()">Stop server</button>
+    </section>
 </aside>
+
+<div class="stopped-screen" id="stopped-screen" hidden>
+    <div class="stopped-card">
+        <h2>Server stopped</h2>
+        <p>The scanner is off. Double-click <span class="mono">Start Surebet.bat</span> in the project folder to start it again.</p>
+    </div>
+</div>
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="/js/app.js?v=5"></script>
+<script src="/js/app.js?v=6"></script>
 </body>
 </html>

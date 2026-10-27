@@ -951,3 +951,12 @@ kbd {
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* Stop server */
+.btn-danger { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, transparent); background: transparent; margin-top: 10px; }
+.btn-danger:hover:not(:disabled) { background: color-mix(in srgb, var(--bad) 12%, transparent); border-color: var(--bad); }
+.stopped-screen { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 16px; background: var(--bg); }
+.stopped-screen[hidden] { display: none; }
+.stopped-card { max-width: 420px; padding: 28px; text-align: center; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-lg); }
+.stopped-card h2 { margin: 0 0 8px; font-size: 20px; }
+.stopped-card p { margin: 0; color: var(--muted); line-height: 1.5; }

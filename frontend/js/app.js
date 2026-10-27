@@ -118,7 +118,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.addEventListener('keydown', handleGlobalKeydown);
     // Health and review-queue refresh share one 30-second cadence.
     refreshDiagnostics();
-    setInterval(refreshDiagnostics, 30000);
+    diagnosticsTimer = setInterval(refreshDiagnostics, 30000);
     // Ages on screen ("re-checked 12s ago") tick once a second.
     setInterval(tickAges, 1000);
 });
@@ -375,6 +375,8 @@ async function scanNow() {
         showError('Could not start the scan: ' + e.message);
     }
 }
+
+let diagnosticsTimer = null;
 
 function startPolling() {
     if (pollingInterval) return;
@@ -1647,6 +1649,29 @@ function showError(msg) {
 
 function hideError() {
     document.getElementById('error-banner').style.display = 'none';
+}
+
+async function shutdownServer() {
+    if (!window.confirm('Stop the server? Scans stop and this page goes offline.')) return;
+    const btn = document.getElementById('shutdown-btn');
+    btn.disabled = true;
+    try {
+        const res = await fetch('/api/shutdown', { method: 'POST', headers: candidateActionHeaders() });
+        if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            throw new Error(data.detail || `HTTP ${res.status}`);
+        }
+    } catch (e) {
+        btn.disabled = false;
+        showError(`Could not stop the server: ${e.message}`);
+        return;
+    }
+    // Stop polling so the dead server does not fill the console with errors.
+    stopPolling();
+    setAutoRescan(0);
+    clearInterval(diagnosticsTimer);
+    toggleSettings(false);
+    document.getElementById('stopped-screen').hidden = false;
 }
 
 let toastTimer = null;
