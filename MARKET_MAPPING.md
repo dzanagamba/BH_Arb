@@ -235,7 +235,7 @@ scraper fetches three groups (`95,6`, `3`, `11`) and merges by event id.
 
 ## Premier Kladionica
 
-Platform: `PrSync` JSON-RPC (`svc-test.premier-kladionica.com/PrSync/PrSync.ashx`,
+Platform: `PrSync` JSON-RPC (`svc-web.premier-kladionica.com/PrSync/PrSync.ashx`,
 method 7). Positional response sections are indexed by:
 `execRes, tipIgre, sport, grupaDog, setDog, dog, grupaTip, setTip, setTipVar,
 setTipTip, not used, dogVar, dogTipK, pravila, dogLiveScore`.

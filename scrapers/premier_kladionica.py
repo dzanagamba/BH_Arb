@@ -1,11 +1,12 @@
 """
 Premier Kladionica Scraper — premier-kladionica.com
 
-Direct JSON-RPC via httpx (no browser). Protocol fully reverse-engineered and
+Direct JSON-RPC via httpx (no browser). Host moved from svc-test to svc-web
+on 2026-10-27 (svc-test now answers 503). Protocol reverse-engineered and
 verified against the live feed (2026-08-15):
 
 Full sync:
-  POST https://svc-test.premier-kladionica.com/PrSync/PrSync.ashx
+  POST https://svc-web.premier-kladionica.com/PrSync/PrSync.ashx
   Body: [[[4,1,0],7,{"dogadjajIDs":"","clientVer":0}]]
   Response: positional sections indexed by:
     ["execRes","tipIgre","sport","grupaDog","setDog","dog","grupaTip",
@@ -46,7 +47,7 @@ logger = logging.getLogger(__name__)
 
 BOOKMAKER_ID = "premier_kladionica"
 BASE_URL = "https://www.premier-kladionica.com"
-SYNC_URL = "https://svc-test.premier-kladionica.com/PrSync/PrSync.ashx"
+SYNC_URL = "https://svc-web.premier-kladionica.com/PrSync/PrSync.ashx"
 
 API_HEADERS = {
     "User-Agent": (

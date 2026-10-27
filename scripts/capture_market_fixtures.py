@@ -478,7 +478,7 @@ async def capture_wwin(_client: httpx.AsyncClient, _bookmaker: str, mode: str) -
 # Premier Kladionica
 # --------------------------------------------------------------------------
 
-PREMIER_SYNC = "https://svc-test.premier-kladionica.com/PrSync/PrSync.ashx"
+PREMIER_SYNC = "https://svc-web.premier-kladionica.com/PrSync/PrSync.ashx"
 # Premier names the plain both-teams-to-score market differently per mode. The
 # prematch spelling is what scrapers/premier_kladionica.py matches (NAME_BTTS);
 # the live spelling is NOT, which is the defect the fixture keeps as evidence.

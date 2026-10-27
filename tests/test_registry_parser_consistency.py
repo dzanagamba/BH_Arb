@@ -466,7 +466,7 @@ NARRATIVE_ANCHORS = [
     "betting/matches",                   # Mozzartbet live feed
     "15 minutes",                        # prematch expiry window
     "sport-livecontent",                 # WWIN platform
-    "svc-test.premier-kladionica.com/PrSync/PrSync.ashx",  # PrSync endpoint
+    "svc-web.premier-kladionica.com/PrSync/PrSync.ashx",  # PrSync endpoint
     "execRes, tipIgre, sport",           # PrSync positional section order
     "grupaTipID=2",                      # PK football tip group
     "o-da",                              # PK BTTS outcome spelling

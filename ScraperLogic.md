@@ -276,7 +276,7 @@ GET /content/sport-livecontent/api/LiveEvents/headerBets?bets={ids}
 
 **Endpoint:**
 ```
-POST https://svc-test.premier-kladionica.com/PrSync/PrSync.ashx
+POST https://svc-web.premier-kladionica.com/PrSync/PrSync.ashx
 Body: [[[4,1,0],7,{"dogadjajIDs":"","clientVer":0}]]   (full sync)
       [[[4,1,0],7,{"dogadjajIDs":"<event ids>","clientVer":<ver>}]]  (odds delta)
 ```
