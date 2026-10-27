@@ -66,7 +66,11 @@ def test_league_mappings_have_no_cleaned_name_collisions():
         if canonical_id.startswith("_"):
             continue
         for variation in variations:
-            cleaned = normalizer._full_clean(variation)
+            # The cleaner the league reverse map is built with. The team
+            # cleaner strips club prefixes, so it would read "AFC liga
+            # šampiona" as UEFA's "liga sampiona" - a collision the runtime
+            # never sees.
+            cleaned = normalizer._league_clean(variation)
             owners_by_cleaned.setdefault(cleaned, set()).add(canonical_id)
 
     duplicates = {

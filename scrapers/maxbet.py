@@ -1,0 +1,251 @@
+"""
+MaxBet Scraper — maxbet.ba (Singular sportsbook, Direct HTTP API)
+
+The www.maxbet.ba site embeds its sportsbook from sportsbook.maxbet.ba, an
+Angular app backed by a public REST API. One request per mode returns every
+football match with the odd types asked for in ``ot`` — no browser needed.
+
+Endpoint: GET https://sportsbook.maxbet.ba/sportsbook/rest/v2/matches
+Parameters: sportId=1, ot=<odd type id> (repeatable), ln=cnr,
+            status=Live (live only; prematch omits it)
+
+Odd types (measured 2026-10-27 against /rest/v2/odd_types and the matches feed):
+  1  = "Konačan ishod" (1X2, regular time)   outcomeId 1001/1002/1003
+  10 = "Dupla šansa"                          outcomeId 10001/10002/10003
+  27 = "GG - NG"                              outcomeId 27001/27002
+  17 = "Ukupno golova" (match total, line in specifiers.total)
+                                              outcomeId 17001 over / 17002 under
+Only these four are requested, so no other market can reach the parser.
+
+An outcome with ``status`` other than 0 is suspended (a 1.02 "over 0.5" in a
+game already scored in carries status 1), and is dropped like any inactive odd.
+"""
+
+import logging
+from datetime import UTC, datetime
+from urllib.parse import urlencode
+
+import httpx
+
+from config.settings import VERIFY_SSL
+from engine.market_registry import MARKET_REGISTRY, MarketSpec, record_unmapped
+from models.schemas import Market, Match, OddsValue
+from scrapers.base import fetch_with_retry
+from scrapers.common import betradar_id, build_event_url, parse_dt, qualify_league
+
+logger = logging.getLogger(__name__)
+
+BOOKMAKER_ID = "maxbet"
+
+BASE_URL = "https://sportsbook.maxbet.ba"
+MATCHES_API = f"{BASE_URL}/sportsbook/rest/v2/matches"
+FOOTBALL_SPORT_ID = 1
+ODD_TYPE_IDS = (1, 10, 27, 17)
+
+API_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Safari/537.36"
+    ),
+    "Accept": "application/json, text/plain, */*",
+    "Referer": f"{BASE_URL}/",
+}
+
+# outcomeId -> canonical label. The id is language independent; the label text
+# ("Više {total}") is only cross-checked against it.
+OUTCOME_LABELS: dict[str, str] = {
+    "1001": "1", "1002": "X", "1003": "2",
+    "10001": "1X", "10002": "12", "10003": "X2",
+    "27001": "GG", "27002": "NG",
+    "17001": "Over", "17002": "Under",
+}
+_LABEL_TEXT: dict[str, tuple[str, ...]] = {
+    "Over": ("više", "vise", "over", "+"),
+    "Under": ("manje", "under", "-"),
+}
+
+# Event status values seen on the feed: 1 = not started, 3 = in play.
+PREMATCH_STATUS = 1
+LIVE_STATUS = 3
+
+
+def _spec_for(mode: str, odd_type_id: int, line: float | None) -> MarketSpec | None:
+    """The registry entry for an odd type (and, for totals, its exact line)."""
+    specs = MARKET_REGISTRY.specs_for(BOOKMAKER_ID, mode, odd_type_id)
+    if not specs:
+        if not MARKET_REGISTRY.has_source_id(BOOKMAKER_ID, mode, odd_type_id):
+            record_unmapped(BOOKMAKER_ID, odd_type_id)
+        return None
+    for spec in specs:
+        if spec.line is None and line is None:
+            return spec
+        if spec.line is not None and line is not None and abs(spec.line - line) < 1e-9:
+            return spec
+    # A total at a line we do not price (0.5, 4.5, ...): known id, not a market.
+    return None
+
+
+def _label_for(outcome: dict) -> str | None:
+    label = OUTCOME_LABELS.get(str(outcome.get("outcomeId") or ""))
+    if label in _LABEL_TEXT:
+        text = str(outcome.get("outcome") or "").strip().lower()
+        if not text.startswith(_LABEL_TEXT[label]):
+            return None
+    elif label is not None:
+        text = str(outcome.get("outcome") or "").strip().upper()
+        if text and text != label:
+            return None
+    return label
+
+
+def parse_maxbet_odds(odds: list, mode: str = "prematch") -> list[Market]:
+    """Parse a match's ``odds[]`` array into registry-validated markets."""
+    markets: list[Market] = []
+    for market in odds or []:
+        if not isinstance(market, dict):
+            continue
+        odd_type_id = market.get("id")
+        if odd_type_id is None:
+            continue
+        line: float | None = None
+        total = (market.get("specifiers") or {}).get("total")
+        if total is not None:
+            try:
+                line = float(total)
+            except (TypeError, ValueError):
+                continue
+        spec = _spec_for(mode, odd_type_id, line)
+        if spec is None:
+            continue
+
+        values: dict[str, float] = {}
+        for outcome in market.get("outcomes") or []:
+            if not isinstance(outcome, dict):
+                continue
+            if outcome.get("status") != 0 or outcome.get("marketAvailableForBetting") is False:
+                continue
+            label = _label_for(outcome)
+            if label is None:
+                continue
+            if label in ("Over", "Under"):
+                label = f"{label} {spec.line:g}"
+            try:
+                value = float(outcome.get("oddValue") or 0.0)
+            except (TypeError, ValueError):
+                continue
+            if value < 1.01 or label not in spec.labels or label in values:
+                continue
+            values[label] = value
+
+        if len(values) >= spec.min_legs and set(values) <= spec.labels:
+            markets.append(Market(
+                market_type=spec.market_type,
+                odds=[OddsValue(label=label, value=value) for label, value in values.items()],
+            ))
+    return markets
+
+
+def _teams(event: dict) -> tuple[str, str]:
+    """Home/away as the event name spells them, else the competitor list.
+
+    The event name ("Boston River v Torque") uses the full club names the
+    other books use; the competitor records are often abbreviated
+    ("Montevideo C.").
+    """
+    name = str(event.get("name") or "")
+    if name.count(" v ") == 1:
+        home, away = (part.strip() for part in name.split(" v "))
+        if home and away:
+            return home, away
+    competitors = event.get("competitors") or []
+    if len(competitors) == 2:
+        return (
+            str(competitors[0].get("name") or "").strip(),
+            str(competitors[1].get("name") or "").strip(),
+        )
+    return "", ""
+
+
+class MaxBetScraper:
+    """MaxBet scraper using the sportsbook's public REST API."""
+
+    def __init__(self) -> None:
+        self.headers = dict(API_HEADERS)
+
+    async def fetch_and_parse(
+        self, live: bool = False, scan_time: datetime | None = None
+    ) -> list[Match]:
+        params: list[tuple[str, str | int]] = [("sportId", FOOTBALL_SPORT_ID)]
+        params += [("ot", odd_type) for odd_type in ODD_TYPE_IDS]
+        if live:
+            params.append(("status", "Live"))
+        params.append(("ln", "cnr"))
+
+        async with httpx.AsyncClient(timeout=60.0, verify=VERIFY_SSL) as client:
+            # A list of pairs keeps the repeated `ot` keys.
+            response = await fetch_with_retry(
+                client, f"{MATCHES_API}?{urlencode(params)}", headers=self.headers
+            )
+        if response is None or response.status_code != 200:
+            raise RuntimeError(
+                f"MaxBet matches feed returned "
+                f"{response.status_code if response is not None else 'no response'}"
+            )
+        events = response.json()
+        if not isinstance(events, list):
+            raise RuntimeError("MaxBet matches feed did not return a list")
+
+        matches = self.parse_events(events, live=live)
+        logger.info(f"[MaxBet] {'live' if live else 'prematch'}: {len(matches)} matches")
+        return matches
+
+    def parse_events(self, events: list, live: bool = False) -> list[Match]:
+        mode = "live" if live else "prematch"
+        wanted_status = LIVE_STATUS if live else PREMATCH_STATUS
+        fetched_at = datetime.now(UTC).replace(tzinfo=None)
+        seen: set[str] = set()
+        matches: list[Match] = []
+        for event in events:
+            if not isinstance(event, dict):
+                continue
+            if event.get("eventType") != "Match" or event.get("antepost"):
+                continue
+            if event.get("sportId") != FOOTBALL_SPORT_ID or event.get("status") != wanted_status:
+                continue
+            event_id = str(event.get("id") or "")
+            if not event_id or event_id in seen:
+                continue
+            home, away = _teams(event)
+            if not home or not away:
+                continue
+            markets = parse_maxbet_odds(event.get("odds") or [], mode=mode)
+            if not markets:
+                continue
+            seen.add(event_id)
+            external = event.get("externalIds") or {}
+            matches.append(Match(
+                bookmaker=BOOKMAKER_ID,
+                home_team=home,
+                away_team=away,
+                # League names carry the country in English ("Germany DFB
+                # Pokal"); `country` stays empty on purpose, because the
+                # matcher compares it as text and the other books name
+                # countries in Bosnian.
+                league=qualify_league(
+                    str(event.get("leagueName") or ""), str(event.get("categoryName") or "")
+                ),
+                kickoff=parse_dt(event.get("startDate")),
+                markets=markets,
+                url=build_event_url(BOOKMAKER_ID, event_id, BASE_URL, live=live),
+                match_code=str(external.get("shortCode") or ""),
+                event_id=event_id,
+                betradar_id=betradar_id(external.get("betradarUnified")),
+                deep_link_verified=False,
+                is_live=live,
+                fetched_at=fetched_at,
+            ))
+        return matches
+
+    async def scrape(self, live: bool = False, scan_time: datetime | None = None) -> list[Match]:
+        return await self.fetch_and_parse(live=live, scan_time=scan_time)

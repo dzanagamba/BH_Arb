@@ -1,6 +1,6 @@
 # Football Market Mapping
 
-This is the canonical market audit for the nine configured bookmakers in
+This is the canonical market audit for the ten configured bookmakers in
 `config/settings.BOOKMAKERS`. The registry-backed scanner maps six of the nine
 `MarketType` values in `models/schemas.py`; the remaining three
 (`first_half_1x2`, `first_half_ou`, `asian_handicap`) are experimental and are
@@ -9,7 +9,7 @@ offer with a similar-looking outcome label is ignored unless its settlement
 meaning and complete outcome set are known.
 
 Audit date: 2026-08-14; prematch and live captures re-taken 2026-10-20 (EVLBet has no
-feed to capture). Live sources were checked where the bookmaker API was
+feed to capture); MaxBet captured 2026-10-27. Live sources were checked where the bookmaker API was
 reachable. Decimal odds are for the regular match settlement, not extra time,
 penalties, or a different period.
 
@@ -33,7 +33,7 @@ Verify without writing: `python scripts/generate_market_mapping_doc.py --check`
 Source of truth: `config/bookmaker_markets.json`, loaded by
 `engine/market_registry.py`. Values below are resolved through the loader,
 so registry defaults (outcome labels, min legs, settlement) are included.
-Covers 9 bookmakers and 85 book/mode/market rows.
+Covers 10 bookmakers and 97 book/mode/market rows.
 
 Scope: these are the IDs the **registry declares**. It is the authority on
 the declared mapping, not on parser dispatch — a book's parser may read a
@@ -131,6 +131,18 @@ bottom of this file say so.
 | `mozzartbet` | live | Over/Under 1.5 (`over_under_1_5`) | `3` | Over 1.5, Under 1.5 | 2 | 1.5 | full_time |
 | `mozzartbet` | live | Over/Under 2.5 (`over_under_2_5`) | `3` | Over 2.5, Under 2.5 | 2 | 2.5 | full_time |
 | `mozzartbet` | live | Over/Under 3.5 (`over_under_3_5`) | `3` | Over 3.5, Under 3.5 | 2 | 3.5 | full_time |
+| `maxbet` | prematch | Full-time 1X2 (`1x2`) | `1` | 1, 2, X | 3 | — | full_time |
+| `maxbet` | prematch | Double Chance (`double_chance`) | `10` | 12, 1X, X2 | 2 | — | full_time |
+| `maxbet` | prematch | BTTS (`btts`) | `27` | GG, NG | 2 | — | full_time |
+| `maxbet` | prematch | Over/Under 1.5 (`over_under_1_5`) | `17` | Over 1.5, Under 1.5 | 2 | 1.5 | full_time |
+| `maxbet` | prematch | Over/Under 2.5 (`over_under_2_5`) | `17` | Over 2.5, Under 2.5 | 2 | 2.5 | full_time |
+| `maxbet` | prematch | Over/Under 3.5 (`over_under_3_5`) | `17` | Over 3.5, Under 3.5 | 2 | 3.5 | full_time |
+| `maxbet` | live | Full-time 1X2 (`1x2`) | `1` | 1, 2, X | 3 | — | full_time |
+| `maxbet` | live | Double Chance (`double_chance`) | `10` | 12, 1X, X2 | 2 | — | full_time |
+| `maxbet` | live | BTTS (`btts`) | `27` | GG, NG | 2 | — | full_time |
+| `maxbet` | live | Over/Under 1.5 (`over_under_1_5`) | `17` | Over 1.5, Under 1.5 | 2 | 1.5 | full_time |
+| `maxbet` | live | Over/Under 2.5 (`over_under_2_5`) | `17` | Over 2.5, Under 2.5 | 2 | 2.5 | full_time |
+| `maxbet` | live | Over/Under 3.5 (`over_under_3_5`) | `17` | Over 3.5, Under 3.5 | 2 | 3.5 | full_time |
 
 ### Deliberately unmapped source IDs
 

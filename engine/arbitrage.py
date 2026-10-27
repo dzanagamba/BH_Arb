@@ -72,8 +72,8 @@ def _collect_listings(group: MatchGroup) -> dict[str, dict[str, str]]:
     listings: dict[str, dict[str, str]] = {}
     for match in group.matches:
         listings[match.bookmaker] = {
-            "home": match.home_team,
-            "away": match.away_team,
+            "home": match.home_team_source or match.home_team,
+            "away": match.away_team_source or match.away_team,
             "league": match.league,
             "kickoff": match.kickoff.isoformat() if match.kickoff else "",
         }

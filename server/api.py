@@ -62,6 +62,7 @@ from scrapers.admiralbet import AdmiralbetScraper
 from scrapers.betole import BetoleScraper
 from scrapers.common import declares_no_event_id, effective_deeplink_declarations
 from scrapers.evlbet import EvlbetScraper
+from scrapers.maxbet import MaxBetScraper
 from scrapers.mbet import MBetScraper
 from scrapers.mdshop import MDShopScraper
 from scrapers.mozzartbet import MozzartbetScraper
@@ -710,6 +711,7 @@ SCRAPERS: dict[str, Any] = {
     "evlbet": EvlbetScraper,
     "premier_kladionica": PremierKladionicaScraper,
     "wwin": WWINScraper,
+    "maxbet": MaxBetScraper,
 }
 
 

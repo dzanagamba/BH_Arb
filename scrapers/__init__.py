@@ -1,6 +1,7 @@
 from .admiralbet import AdmiralbetScraper
 from .betole import BetoleScraper
 from .evlbet import EvlbetScraper
+from .maxbet import MaxBetScraper
 from .mbet import MBetScraper
 from .mdshop import MDShopScraper
 from .mozzartbet import MozzartbetScraper
@@ -14,4 +15,5 @@ __all__ = [
     "MBetScraper",
     "SportPlusScraper",
     "EvlbetScraper",
+    "MaxBetScraper",
 ]

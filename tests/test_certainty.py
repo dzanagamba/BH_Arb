@@ -797,7 +797,7 @@ def test_every_declared_route_book_blocks_and_every_other_book_is_accepted():
     """
     raw = _deeplink_config()
     declared = {book for book, cfg in raw.items() if cfg.get("supports_event_id") is True}
-    assert declared == {"mozzartbet"}, (
+    assert declared == {"mozzartbet", "maxbet"}, (
         "the declared-route set changed; the spec's inert-route claim and the "
         "README headline both name these books, so revisit them before trusting "
         "this test"

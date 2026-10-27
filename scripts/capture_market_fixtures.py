@@ -1083,6 +1083,97 @@ async def capture_evlbet(client: httpx.AsyncClient, _bookmaker: str, _mode: str)
 
 
 # --------------------------------------------------------------------------
+# MaxBet
+# --------------------------------------------------------------------------
+
+MAXBET_API = "https://sportsbook.maxbet.ba/sportsbook/rest/v2/matches"
+MAXBET_MARKET_FIELDS = ("id", "name", "specifiers")
+MAXBET_OUTCOME_FIELDS = ("outcome", "outcomeId", "status", "oddValue", "marketAvailableForBetting")
+MAXBET_PLAIN = {1: "1x2", 10: "double_chance", 27: "btts"}
+MAXBET_TOTALS = {"1.5": "over_under_1_5", "2.5": "over_under_2_5", "3.5": "over_under_3_5"}
+# A total at a line the registry does not price: kept as a control that must emit nothing.
+MAXBET_CONTROL_TOTAL = "4.5"
+
+
+def _trim_maxbet_market(market: dict[str, Any]) -> dict[str, Any]:
+    trimmed = {f: market[f] for f in MAXBET_MARKET_FIELDS if f in market}
+    trimmed["outcomes"] = [
+        {f: o.get(f) for f in MAXBET_OUTCOME_FIELDS} for o in market.get("outcomes") or []
+    ]
+    return trimmed
+
+
+def _maxbet_open(market: dict[str, Any]) -> bool:
+    outcomes = market.get("outcomes") or []
+    return bool(outcomes) and all(
+        o.get("status") == 0 and o.get("marketAvailableForBetting") is not False
+        and _active(o.get("oddValue"))
+        for o in outcomes
+    )
+
+
+async def capture_maxbet(client: httpx.AsyncClient, _bookmaker: str, mode: str) -> None:
+    url = f"{MAXBET_API}?sportId=1&ot=1&ot=10&ot=27&ot=17&ln=cnr"
+    if mode == "live":
+        url += "&status=Live"
+    response = await client.get(
+        url, headers={"User-Agent": UA, "Accept": "application/json, text/plain, */*"}
+    )
+    response.raise_for_status()
+    events = response.json()
+    wanted_status = 3 if mode == "live" else 1
+
+    best: tuple[int, dict[str, Any], list[dict[str, Any]], list[str]] | None = None
+    for event in events if isinstance(events, list) else []:
+        if event.get("eventType") != "Match" or event.get("status") != wanted_status:
+            continue
+        keep: list[dict[str, Any]] = []
+        exercised: list[str] = []
+        control = None
+        for market in event.get("odds") or []:
+            total = str((market.get("specifiers") or {}).get("total") or "")
+            if market.get("id") in MAXBET_PLAIN and _maxbet_open(market):
+                keep.append(_trim_maxbet_market(market))
+                exercised.append(MAXBET_PLAIN[market["id"]])
+            elif market.get("id") == 17 and total in MAXBET_TOTALS and _maxbet_open(market):
+                keep.append(_trim_maxbet_market(market))
+                exercised.append(MAXBET_TOTALS[total])
+            elif market.get("id") == 17 and total == MAXBET_CONTROL_TOTAL:
+                control = _trim_maxbet_market(market)
+        if control is not None:
+            keep.append(control)
+        if best is None or len(exercised) > best[0]:
+            best = (len(exercised), event, keep, exercised)
+        if len(exercised) == len(MAXBET_PLAIN) + len(MAXBET_TOTALS):
+            break
+    if best is None or not best[3]:
+        _skip("maxbet", mode, "no football event carried an open registered market")
+        return
+    _, event, keep, exercised = best
+    _finish(
+        {
+            "bookmaker": "maxbet",
+            "mode": mode,
+            "captured_at": CAPTURE_DATE,
+            "endpoint": url,
+            "source": "live_api_response",
+            "payload_kind": "maxbet_match_odds",
+            "provenance": (
+                f"odds[] of one football match (id {event.get('id')!r}, {event.get('name')!r})"
+                " from the live MaxBet sportsbook /rest/v2/matches response, trimmed to the"
+                " open markets the registry maps plus the unpriced 4.5 total as a control."
+            ),
+            "dropped_bet_fields": ["isPlayerMarket", "description"],
+            "dropped_odd_fields": ["id", "description", "updateDate", "providerTimestamp",
+                                   "externalIds"],
+            "excluded_ids_present": [],
+            "bets": keep,
+        },
+        exercised,
+    )
+
+
+# --------------------------------------------------------------------------
 # driver
 # --------------------------------------------------------------------------
 
@@ -1095,10 +1186,11 @@ CAPTORS = {
     "sportplus": capture_sportplus,
     "mozzartbet": capture_mozzartbet,
     "evlbet": capture_evlbet,
+    "maxbet": capture_maxbet,
 }
 BOTH_MODES = {
     "mdshop", "admiralbet", "wwin", "premier_kladionica",
-    "mbet", "sportplus", "mozzartbet",
+    "mbet", "sportplus", "mozzartbet", "maxbet",
 }
 
 
