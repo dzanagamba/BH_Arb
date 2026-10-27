@@ -23,6 +23,34 @@
     [
       "auto_bugarska_2_liga",
       "bugarian_second_league"
+    ],
+    [
+      "auto_engleska_national_league_cup_grupa_a",
+      "auto_engleska_national_league_cup_grupa_c"
+    ],
+    [
+      "auto_ekvador_1_liga_za_prvaka",
+      "auto_ekvadorska_1_liga_za_ostanak"
+    ],
+    [
+      "auto_ekvador_1_liga_za_prvaka",
+      "ecuador_serie_a"
+    ],
+    [
+      "auto_ekvadorska_1_liga_za_ostanak",
+      "ecuador_serie_a"
+    ],
+    [
+      "auto_rusija_kup_grupa_1",
+      "auto_rusija_kup_grupa_4"
+    ],
+    [
+      "auto_rusija_kup_grupa_1",
+      "auto_russia_cup_group_stage"
+    ],
+    [
+      "auto_rusija_kup_grupa_4",
+      "auto_russia_cup_group_stage"
     ]
   ]
 }

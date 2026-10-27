@@ -73,6 +73,13 @@ _MARKERS = {
 }
 
 
+# Stage suffixes a book appends to one competition's name (cleaned form).
+_STAGE_SUFFIX = re.compile(
+    r"\s*-\s*(?:grupa\s+\w+|za (?:ostanak|plasman|prvaka)|playoff|play off.*"
+    r"|istok|zapad|championship group|relegation group)\s*$"
+)
+
+
 def side_markers(name: str) -> frozenset[str]:
     return frozenset(kind for kind, pattern in _MARKERS.items() if pattern.search(name.strip()))
 
@@ -215,6 +222,12 @@ def derive_leagues(
                 if reverse[name] in over_merged}
 
     def identity(name: str) -> str:
+        # A stage of a competition ("rusija - kup - grupa 3", "ekvador - 1.liga
+        # - za ostanak") is that competition: a book that lists every stage
+        # under one name pairs with each of them, which is not ambiguity.
+        stage_free = _STAGE_SUFFIX.sub("", name)
+        if stage_free != name:
+            return stage_free
         return reverse.get(name, name)
 
     ambiguous = {
@@ -284,6 +297,10 @@ def derive_leagues(
             equivalences.extend(
                 [x, y] for i, x in enumerate(ids) for y in ids[i + 1:]
             )
+            # The ids are now one competition, so its unmapped names can join
+            # any of them.
+            if unmapped:
+                add[ids[0]].extend(spelling[m] for m in unmapped)
             continue
         if not unmapped:
             continue

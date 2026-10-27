@@ -671,8 +671,10 @@ def test_no_new_cross_league_equivalences_were_introduced(matcher: MatchMatcher)
     Besides the pre-existing Europa/Conference pair, every pair was written by
     ``scripts/derive_mappings.py --apply`` on 2026-10-27 for a conflict: one
     competition that had two ids, joined by shared fixtures (UEFA Youth League,
-    Liga MX women, Russian and Bulgarian second tiers, EFL Cup). A new pair has
-    to be added here deliberately.
+    Liga MX women, Russian and Bulgarian second tiers, EFL Cup), and in the
+    stage-aware second pass the stages a book lists separately (National League
+    Cup groups, Ecuador LigaPro phases, Russian cup groups). A new pair has to be
+    added here deliberately.
     """
     assert matcher._equivalences == {
         ("europa_league", "conference_league"),
@@ -681,6 +683,13 @@ def test_no_new_cross_league_equivalences_were_introduced(matcher: MatchMatcher)
         ("auto_rusija_1_liga", "russian_first_league"),
         ("auto_engleska_liga_kup_1_8_finala", "efl_cup"),
         ("auto_bugarska_2_liga", "bugarian_second_league"),
+        ("auto_engleska_national_league_cup_grupa_a", "auto_engleska_national_league_cup_grupa_c"),
+        ("auto_ekvador_1_liga_za_prvaka", "auto_ekvadorska_1_liga_za_ostanak"),
+        ("auto_ekvador_1_liga_za_prvaka", "ecuador_serie_a"),
+        ("auto_ekvadorska_1_liga_za_ostanak", "ecuador_serie_a"),
+        ("auto_rusija_kup_grupa_1", "auto_rusija_kup_grupa_4"),
+        ("auto_rusija_kup_grupa_1", "auto_russia_cup_group_stage"),
+        ("auto_rusija_kup_grupa_4", "auto_russia_cup_group_stage"),
     }
 
 

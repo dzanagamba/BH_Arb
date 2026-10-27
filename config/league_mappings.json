@@ -1664,7 +1664,10 @@
     "auto_ekvador_1_liga_za_prvaka": [
         "EKVADOR - 1.LIGA - ZA PRVAKA",
         "Ekvador - LigaPro Primera A",
-        "EKVADORSKA 1.LIGA - PLAYOFF"
+        "EKVADORSKA 1.LIGA - PLAYOFF",
+        "EKVADOR - 1.LIGA - ZA PLASMAN",
+        "EKVADORSKA 1.LIGA - ZA PLASMAN",
+        "Ekvador - Liga Pro"
     ],
     "auto_ekvadorska_1_liga_za_ostanak": [
         "EKVADOR - 1.LIGA - ZA OSTANAK",
@@ -1723,7 +1726,9 @@
     "auto_engleska_liga_kup_1_8_finala": [
         "Engleska - EFL Cup",
         "ENGLESKA - LIGA KUP - 1/8 FINALA",
-        "ENGLESKI LIGA KUP"
+        "ENGLESKI LIGA KUP",
+        "England League Cup",
+        "Engleska - EFL Kup"
     ],
     "auto_engleska_national_league_cup_grupa_c": [
         "ENGLAND National League Cup",
@@ -1768,7 +1773,12 @@
     ],
     "auto_iceland_1_championship_group": [
         "ICELAND 1 - Championship Group",
-        "ISLAND - 1.LIGA - ZA PRVAKA"
+        "ISLAND - 1.LIGA - ZA PRVAKA",
+        "ICELAND 1 - Relegation Group",
+        "ISLAND - 1.LIGA - ZA OSTANAK",
+        "Island - Besta deild",
+        "Island - Urvalsdeild",
+        "Island 1"
     ],
     "auto_indonezija_1_liga": [
         "INDONESIA 1",
@@ -1881,7 +1891,8 @@
     "auto_meksiko_liga_mx_z_apertura": [
         "MEKSIČKA 1.LIGA (Ž)",
         "MEKSIKO - 1.LIGA (Ž)",
-        "Meksiko - Liga MX (Ž), Apertura"
+        "Meksiko - Liga MX (Ž), Apertura",
+        "Meksiko - Liga MX (Ž)"
     ],
     "auto_njemacka_3_liga": [
         "GERMANY 3",
@@ -1942,7 +1953,8 @@
     ],
     "auto_rusija_1_liga": [
         "Rusija - 1. Liga",
-        "RUSIJA - 2.LIGA"
+        "RUSIJA - 2.LIGA",
+        "RUSKA 2.LIGA"
     ],
     "auto_sad_us_open_cup_finale": [
         "SAD - US OPEN CUP - FINALE",
@@ -2095,7 +2107,11 @@
     ],
     "auto_engleska_national_league_cup_grupa_a": [
         "ENGLESKA  -  NACIONALNI  LIGA  KUP",
-        "ENGLESKA - NATIONAL LEAGUE CUP - GRUPA A"
+        "ENGLESKA - NATIONAL LEAGUE CUP - GRUPA A",
+        "ENGLESKA - NATIONAL LEAGUE CUP GRUPA C",
+        "Engleska - National League Cup",
+        "Engleska Amateri - Nacionalna Liga Kup",
+        "Nacionalna liga kup"
     ],
     "auto_estonija_meistriliiga": [
         "ESTONIA 1",
@@ -2178,7 +2194,10 @@
     ],
     "auto_rusija_kup_grupa_1": [
         "RUSIJA - KUP - GRUPA 1",
-        "RUSKI KUP - GRUPA A"
+        "RUSKI KUP - GRUPA A",
+        "RUSIJA - KUP - GRUPA 2",
+        "Rusija - Kup",
+        "Rusija kup"
     ],
     "auto_rusija_kup_grupa_4": [
         "RUSIJA - KUP - GRUPA 4",
@@ -2224,5 +2243,30 @@
     "auto_venezuela_1_liga_grupa_b": [
         "VENEZUELA - 1.LIGA - GRUPA B",
         "VENEZUELA 1"
+    ],
+    "auto_international_clubs_asia_afc_champions_league": [
+        "AFC liga šampiona",
+        "International Clubs - Asia AFC Champions League",
+        "LIGA PRVAKA AZIJA - ISTOK",
+        "LIGA PRVAKA AZIJA - ZAPAD",
+        "Međunarodne Klubovi - AFC Liga Šampiona"
+    ],
+    "auto_medjunarodne_klubovi_afc_celendz_liga": [
+        "AFC  ČELENDŽ  LIGA",
+        "AFC CHALLENGE CUP - GRUPA A",
+        "AFC CHALLENGE CUP - GRUPA B",
+        "AFC CHALLENGE CUP - GRUPA C",
+        "AFC CHALLENGE LEAGUE - GRUPA E",
+        "Međunarodne - AFC Challenge League",
+        "Međunarodne Klubovi - AFC Čelendž Liga"
+    ],
+    "auto_rumunjska_kup_grupa_1": [
+        "ROMANIA Cup",
+        "Rumunija - Kup",
+        "Rumunija kup",
+        "RUMUNJSKA - KUP - GRUPA 1",
+        "RUMUNJSKA - KUP - GRUPA 2",
+        "RUMUNJSKA - KUP - GRUPA 3",
+        "RUMUNJSKA - KUP - GRUPA 4"
     ]
 }
