@@ -171,8 +171,18 @@ def isolate_scan_state(monkeypatch, tmp_path):
 
 @pytest.fixture
 def stub_scan_inputs(monkeypatch):
-    """Two books, one plausible-but-unverifiable same-event pair."""
+    """Two books, one plausible-but-unverifiable same-event pair.
+
+    The fake matcher carries the real league equivalences: the pair's leagues
+    ("Liga Evrope" / "Liga Konferencija") are equivalent in the shipped config,
+    and an approval is only allowed when the gate says the aliases would clear
+    the pair. A fake without them would model a different config.
+    """
+    equivalences = api.MatchMatcher()._equivalences
+
     class FakeMatcher:
+        _equivalences = equivalences
+
         def group_matches(self, matches):
             return []
 

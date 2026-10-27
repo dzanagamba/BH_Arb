@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import os
 import threading
 from datetime import datetime
 
@@ -314,17 +315,29 @@ def test_approve_candidate_writes_reviewed_alias_and_resolves_it():
 def test_bulk_approve_grants_each_candidate_and_reports_the_rest():
     first = _candidate("c-1")
     second = _candidate("c-2", "Slavia Prague", "Fenerbahce", "Slavia P.", "Fenerbahce")
+    unclosable = _candidate("c-3").model_copy(
+        update={
+            "alias_actionable": False,
+            "rule_rejections": ["league_mismatch", "team_unresolved"],
+        }
+    )
     api.pending_candidates[first.id] = first
     api.pending_candidates[second.id] = second
+    api.pending_candidates[unclosable.id] = unclosable
 
-    r = client.post("/api/candidates/approve-bulk", json={"ids": ["c-1", "c-2", "gone"]})
+    r = client.post(
+        "/api/candidates/approve-bulk", json={"ids": ["c-1", "c-2", "gone", "c-3"]}
+    )
 
     assert r.status_code == 200
-    assert r.json() == {"approved": ["c-1", "c-2"], "skipped": ["gone"]}
+    assert r.json() == {"approved": ["c-1", "c-2"], "skipped": ["gone", "c-3"]}
     with open(api.ALLOWLIST_FILE, encoding="utf-8") as file:
         saved = set(json.load(file)["aliases"])
     assert {"FC Thun|Thun", "Lech P.|Lech Poznan", "Slavia P.|Slavia Prague"} <= saved
-    assert not api.pending_candidates
+    assert unclosable.id in api.pending_candidates, (
+        "a pair an approval cannot clear must stay in the queue, not be suppressed as if "
+        "the decision had changed its verdict"
+    )
 
 
 def test_candidates_carry_a_name_score_for_ranking():
@@ -502,6 +515,71 @@ def test_candidate_queue_is_paginated_over_http():
     assert [c["id"] for c in first["candidates"]] == ["0000000000000000", "0000000000000001"]
     assert rest["offset"] == 2
     assert [c["id"] for c in rest["candidates"]] == ["0000000000000002"]
+
+
+def test_candidate_queue_can_be_filtered_to_pairs_an_approval_clears():
+    """The Review tab asks for this filter, and the counts must describe it.
+
+    A full scan queues thousands of pairs and most are refused for a reason no
+    human decision moves (a league gap, a kickoff no approval can shift, a name
+    pair below the reviewed-alias floor). Showing those cards with an Approve
+    button promises a fix that does not exist: approving writes an alias the gate
+    will not honour and suppresses the pair forever. The filter is what makes the
+    tab's sentence true, so the endpoint has to serve it and say how much of the
+    queue it is not showing.
+    """
+    actionable = _candidate("actionable")
+    unclosable = _candidate("unclosable").model_copy(
+        update={
+            "alias_actionable": False,
+            "rule_rejections": ["league_mismatch", "kickoff_delta", "team_unresolved"],
+        }
+    )
+    api.pending_candidates[actionable.id] = actionable
+    api.pending_candidates[unclosable.id] = unclosable
+
+    full = client.get("/api/candidates").json()
+    filtered = client.get("/api/candidates?actionable_only=true").json()
+
+    assert full["total"] == 2
+    assert full["actionable_total"] == 1
+    assert {c["id"] for c in full["candidates"]} == {"actionable", "unclosable"}
+
+    assert filtered["total"] == 2, "the queue size is the same fact either way"
+    assert filtered["actionable_total"] == 1
+    assert [c["id"] for c in filtered["candidates"]] == ["actionable"]
+    assert filtered["actionable_only"] is True
+
+
+def test_approve_refuses_a_pair_an_approval_cannot_clear():
+    """An approval that cannot change the verdict must not pretend it did.
+
+    `alias_actionable` is answered by the gate itself with only the candidate's
+    aliases granted. When it is false, the written allowlist entry cannot carry
+    the pair (the gate needs 90 similarity, or the refusal is a league/kickoff/
+    category fact no team alias can move). The endpoint used to write the entry
+    and resolve the candidate anyway, so the pair left the queue forever while
+    the next scan still refused it — the spelling was never taught.
+    """
+    candidate = _candidate().model_copy(
+        update={
+            "id": "cannot-clear",
+            "alias_actionable": False,
+            "rule_rejections": ["league_mismatch", "kickoff_delta", "team_unresolved"],
+        }
+    )
+    api.pending_candidates[candidate.id] = candidate
+
+    r = client.post(f"/api/candidates/{candidate.id}/approve")
+
+    assert r.status_code == 409
+    detail = r.json()["detail"]
+    assert "league_mismatch" in detail and "kickoff_delta" in detail
+    assert candidate.id in api.pending_candidates, "the reviewer must still see the pair"
+    assert candidate.status == "pending"
+    assert candidate.resolved_at is None
+    assert candidate.id not in api._suppressed_candidates
+    assert not os.path.exists(api.ALLOWLIST_FILE), "no ineffective alias is written"
 
 
 def test_candidate_payload_carries_both_sides_and_the_link_state():

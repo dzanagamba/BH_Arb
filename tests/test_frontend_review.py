@@ -123,8 +123,13 @@ def test_candidate_queue_is_read_as_a_bounded_page():
     assert "CANDIDATE_PAGE_SIZE" in JS
     assert "limit=${CANDIDATE_PAGE_SIZE}" in JS
     assert "offset=0" in JS
+    assert "actionable_only=true" in JS, (
+        "the tab must ask for the pairs an approval can clear, not the whole "
+        "refused population: the rest carry an Approve button that cannot work"
+    )
     assert "data.total" in JS
-    assert "most actionable of" in JS
+    assert "actionable_total" in JS
+    assert "pairings an approval can clear" in JS
 
 
 def test_candidate_queue_read_requires_the_api_key_when_configured():
@@ -146,6 +151,32 @@ def test_candidate_card_disables_approval_when_there_is_no_alias_to_write():
     assert "writesAlias" in JS
     assert "Nothing to alias" in JS
     assert "position.team_a !== position.team_b" in JS
+
+
+def test_candidate_card_disables_approval_when_it_would_not_clear_the_pair():
+    """A card past the actionable head must not offer a fix that does not exist."""
+    assert "candidate.alias_actionable" in JS
+    assert "Approving cannot clear this pairing" in JS
+
+
+def test_candidate_card_links_to_a_web_check_before_approval():
+    """The reviewer has to be able to confirm both spellings are one fixture."""
+    assert "fixtureSearchUrl" in JS
+    assert "https://www.google.com/search?q=" in JS
+    assert "Check on the web" in JS
+    assert "target=\"_blank\"" in JS
+    assert "rel=\"noopener noreferrer\"" in JS
+
+
+def test_review_intro_names_the_web_check_and_the_filter():
+    assert "Check the fixture on the web" in HTML
+    assert "Only pairings an approval can clear" in HTML
+
+
+def test_empty_review_explains_a_queue_no_decision_can_clear():
+    """An empty filtered page must not claim the queue itself is empty."""
+    assert "Nothing an approval can clear." in JS
+    assert "no human decision changes their verdict" in JS
 
 
 def test_negative_ai_verdict_sorts_last_regardless_of_confidence():

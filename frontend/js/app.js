@@ -1318,6 +1318,16 @@ function candidateConfidence(value) {
     return Math.min(1, Math.max(0, normalized));
 }
 
+// The card is a name judgement, so give the reviewer the evidence: one search
+// for both spellings, the competition and the date. This is a link, not a
+// server-side verdict — a human still decides, and the gate still proves.
+function fixtureSearchUrl(candidate) {
+    const teams = [candidate.home_team, candidate.away_team].filter(Boolean).join(' vs ');
+    const date = candidate.kickoff ? String(candidate.kickoff).slice(0, 10) : '';
+    const query = [teams, candidate.league || '', date].filter(Boolean).join(' ');
+    return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+}
+
 function renderCandidatesMessage(message) {
     const list = document.getElementById('candidates-list');
     if (!list) return;
@@ -1348,12 +1358,21 @@ async function candidateListFetch(url) {
 
 async function loadCandidates() {
     try {
-        const response = await candidateListFetch(`/api/candidates?limit=${CANDIDATE_PAGE_SIZE}&offset=0&mode=${currentMode}`);
+        // Only the pairs an approval can clear. A full scan queues thousands,
+        // and most are refused for a league gap, a kickoff no decision moves or
+        // a name pair below the reviewed-alias floor: a card with an Approve
+        // button there promises a fix that does not exist. The server still
+        // reports the full `total` and the closable `actionable_total` so the
+        // tab can say exactly what it is not showing.
+        const response = await candidateListFetch(
+            `/api/candidates?actionable_only=true&limit=${CANDIDATE_PAGE_SIZE}&offset=0&mode=${currentMode}`
+        );
         if (response.ok === false) throw new Error(`Candidate request failed (${response.status})`);
         const data = await response.json();
         renderCandidates(
             Array.isArray(data.candidates) ? data.candidates : [],
             Number(data.total) || 0,
+            Number(data.actionable_total) || 0,
         );
     } catch (error) {
         console.error('Candidates load failed:', error);
@@ -1361,22 +1380,27 @@ async function loadCandidates() {
     }
 }
 
-function renderCandidates(candidates, total) {
+function renderCandidates(candidates, total, actionableTotal) {
     const list = document.getElementById('candidates-list');
     const count = document.getElementById('review-count');
     const queue = Array.isArray(candidates) ? candidates : [];
     if (!list) return;
-    if (count) count.textContent = total || 0;
+    if (count) count.textContent = actionableTotal;
     currentCandidates = queue;
     // Keep only selections that are still on the page.
     [...selectedCandidates].forEach(id => { if (!queue.some(c => c.id === id)) selectedCandidates.delete(id); });
     updateBulkButton();
 
     if (!queue.length) {
+        // Two different nothings: an empty filtered page can still sit on top
+        // of a large queue no human decision can move.
+        const nothingQueued = total === 0;
         list.innerHTML = `
             <div class="empty-state">
-                <h2 class="empty-state-title">Nothing to review yet.</h2>
-                <p class="empty-state-desc">No pairing candidates are queued for human review.</p>
+                <h2 class="empty-state-title">${nothingQueued ? 'Nothing to review yet.' : 'Nothing an approval can clear.'}</h2>
+                <p class="empty-state-desc">${nothingQueued
+                    ? 'No pairing candidates are queued for human review.'
+                    : `${total} pairing${total === 1 ? '' : 's'} are queued, but no human decision changes their verdict.`}</p>
             </div>
         `;
         return;
@@ -1395,7 +1419,7 @@ function renderCandidates(candidates, total) {
     });
 
     const pageNote = total > queue.length
-        ? `<p class="candidates-page-note">Showing the ${queue.length} most actionable of ${total} queued. Start a scan to refresh the queue.</p>`
+        ? `<p class="candidates-page-note">Showing ${queue.length} of ${actionableTotal} pairings an approval can clear, of ${total} queued in total. The rest cannot be closed by a human decision.</p>`
         : '';
 
     list.innerHTML = pageNote + orderedCandidates.map((candidate) => {
@@ -1429,14 +1453,20 @@ function renderCandidates(candidates, total) {
         const approvalNote = candidate.link_blocked
             ? 'Approving writes the reviewed team alias for each name the two books spell differently. The deep-link check is a separate system verification, so this pair stays unverified until that check runs.'
             : 'Approving writes the reviewed team alias for each name the two books spell differently.';
-        // Nothing to alias means nothing to approve: the endpoint refuses rather
-        // than write a self-alias, so the button says so instead of failing.
+        // Nothing to alias means nothing to approve, and a pair no approval can
+        // clear means the same thing: the endpoint refuses both rather than
+        // write an ineffective alias and suppress the pair. The button says so
+        // instead of failing.
         const writesAlias = positions.some(position => position.team_a !== position.team_b);
-        const approveButton = writesAlias
+        const canApprove = writesAlias && candidate.alias_actionable;
+        const approveButton = canApprove
             ? `<button type="button" class="btn btn-primary btn-small" aria-label="Approve pairing ${homeTeam} versus ${awayTeam}"
                             onclick="approveCandidate(this.closest('.candidate-card').dataset.id)">Same match</button>`
             : `<button type="button" class="btn btn-primary btn-small" disabled
-                            title="Both books already spell these teams identically, so there is no alias to write — reject this pairing instead">Nothing to alias</button>`;
+                            title="${writesAlias
+                                ? 'Approving cannot clear this pairing’s remaining blockers, so no alias would change its verdict'
+                                : 'Both books already spell these teams identically, so there is no alias to write — reject this pairing instead'}">${writesAlias ? 'Cannot clear' : 'Nothing to alias'}</button>`;
+        const searchUrl = fixtureSearchUrl(candidate);
         const actionability = candidate.alias_actionable
             ? '<span class="candidate-actionable">Approving clears every blocker.</span>'
             : '<span class="candidate-blocked">Approving alone will not clear every blocker.</span>';
@@ -1468,6 +1498,8 @@ function renderCandidates(candidates, total) {
                     <p class="candidate-approval-note">${escapeHtml(approvalNote)} ${actionability}</p>
                 </div>
                 <div class="candidate-actions">
+                    <a class="btn btn-secondary btn-small" href="${escapeHtml(searchUrl)}" target="_blank" rel="noopener noreferrer"
+                       title="Search the web for this fixture before approving">Check on the web ↗</a>
                     ${approveButton}
                     <button type="button" class="btn btn-secondary btn-small" aria-label="Reject pairing ${homeTeam} versus ${awayTeam}"
                             onclick="rejectCandidate(this.closest('.candidate-card').dataset.id)">Different</button>

@@ -1917,6 +1917,7 @@ async def get_candidates(
     limit: int = CANDIDATE_PAGE_SIZE,
     offset: int = 0,
     mode: ScanMode = "prematch",
+    actionable_only: bool = False,
     _auth: None = Depends(_require_api_key),
 ):
     """List match candidates awaiting human review, one bounded page at a time.
@@ -1924,14 +1925,27 @@ async def get_candidates(
     The queue is ordered by actionability, so the first page is the part a
     reviewer can actually work through. `total` is the full queue size so a UI
     can say "showing N of M" instead of pretending the page is the queue.
+
+    ``actionable_only`` draws the page from the pairs an approval can actually
+    close (``alias_actionable``), which is what the Review tab asks for: the rest
+    are refused for a reason no human decision moves, so a card with an Approve
+    button would promise a fix that does not exist. ``actionable_total`` is the
+    closable part of the queue whether or not the filter is requested, so the tab
+    can state what it is not showing.
     """
     page = max(1, min(limit, CANDIDATE_PAGE_MAX))
     start = max(0, offset)
-    queue = _candidates_for(mode)
-    window = list(queue.values())[start:start + page]
+    queue = list(_candidates_for(mode).values())
+    total = len(queue)
+    actionable_total = sum(1 for candidate in queue if candidate.alias_actionable)
+    if actionable_only:
+        queue = [candidate for candidate in queue if candidate.alias_actionable]
+    window = queue[start:start + page]
     return {
         "mode": mode,
-        "total": len(queue),
+        "total": total,
+        "actionable_total": actionable_total,
+        "actionable_only": actionable_only,
         "count": len(window),
         "limit": page,
         "offset": start,
@@ -1980,6 +1994,18 @@ def _resolve_candidate(
     )
 
 
+def _approval_blockers(candidate: CandidateReview) -> list[str]:
+    """The reasons an approval cannot move, in the order the gate emitted them.
+
+    Link reasons are excluded: `alias_actionable` is asked with both links marked
+    verified, so a candidate reaching this branch is blocked on an identity fact
+    (a league gap, a kickoff no approval can shift, a category mismatch, or a
+    name pair below the reviewed-alias floor), never on a link a human cannot
+    prove.
+    """
+    return [reason for reason in candidate.rule_rejections if reason not in LINK_REJECTION_REASONS]
+
+
 def _approve(candidate: CandidateReview) -> list[str]:
     """Grant the aliases a candidate implies and resolve it. Empty when it has none."""
     entries = _alias_entries(candidate.team_positions)
@@ -2002,20 +2028,23 @@ async def approve_candidate(
 
     What an approval grants, precisely: one allowlist entry per team slot whose
     two spellings differ, so the certainty gate will trust that those two names
-    are the same club. It grants nothing about the event link. A candidate is
-    queued precisely because `deep_link_verified` is False on at least one side,
-    and that flag is a per-book system check (deep-link verification), so the
-    pair stays unverified until that check runs. Approving the *pair* here would
-    forge a machine result from a name judgement.
+    are the same club. It grants nothing about the event link. When the pair's
+    link is also unproven, the response says so and the link half stays closed
+    until the per-book system check runs: approving the *pair* here would forge a
+    machine result from a name judgement.
+
+    An approval is refused when the candidate is not ``alias_actionable``.
+    Nothing a team alias grants can clear those blockers, so writing the entries
+    and resolving the pair would take a claim out of the queue that the next scan
+    still refuses — the spelling would never be taught and nobody would see it
+    again.
     """
     queue = _find_pending_candidate(candidate_id)
     candidate = queue.get(candidate_id) if queue is not None else None
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
 
-    link_pending = candidate.link_blocked
-    entries = _approve(candidate)
-    if not entries:
+    if not _alias_entries(candidate.team_positions):
         raise HTTPException(
             status_code=400,
             detail=(
@@ -2023,6 +2052,18 @@ async def approve_candidate(
                 "re-run a scan to regenerate it"
             ),
         )
+    if not candidate.alias_actionable:
+        blockers = ", ".join(_approval_blockers(candidate)) or "team_unresolved"
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Approving cannot clear this pairing's remaining blockers: "
+                f"{blockers}. The pair is still shown for information, but no team "
+                "alias changes its verdict."
+            ),
+        )
+    link_pending = candidate.link_blocked
+    entries = _approve(candidate)
     return {
         "status": "approved",
         "allowlist_entries": entries,
@@ -2048,15 +2089,20 @@ async def approve_candidates_bulk(
 ):
     """Approve several reviewed candidates at once (the reviewer chose each id).
 
-    Same grant as the single approve, per candidate. Ids that are gone or carry
-    no alias are reported back rather than failing the whole batch.
+    Same grant as the single approve, per candidate. Ids that are gone, carry no
+    alias, or name a pair an approval cannot clear are reported back as skipped
+    rather than failing the whole batch. A skipped pair stays in the queue.
     """
     approved: list[str] = []
     skipped: list[str] = []
     for candidate_id in dict.fromkeys(body.ids[:CANDIDATE_PAGE_MAX]):
         queue = _find_pending_candidate(candidate_id)
         candidate = queue.get(candidate_id) if queue is not None else None
-        if candidate is not None and _approve(candidate):
+        if (
+            candidate is not None
+            and candidate.alias_actionable
+            and _approve(candidate)
+        ):
             approved.append(candidate_id)
         else:
             skipped.append(candidate_id)
