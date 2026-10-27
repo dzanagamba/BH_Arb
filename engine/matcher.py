@@ -463,13 +463,20 @@ class MatchMatcher:
             # One has time, other doesn't — mild penalty
             time_score = 0.65
 
-        # A reviewed pair is one club however differently it is spelled
-        # ("Chiba" / "JEF Utd" scores 0), so it scores as a full match here and
-        # reaches the gate, which still decides on league, kickoff and category.
+        # A reviewed or allowlisted pair is one club however differently it is
+        # spelled ("Chiba" / "JEF Utd" scores 0), so it scores as a full match
+        # here and reaches the gate, which still decides on league, kickoff,
+        # category, orientation and links. Holding allowlisted pairs to the
+        # surface floor in the scorer pruned them before the gate could verify
+        # them, which is why an approved alias could leave a candidate listed.
         anchor = group.matches[0] if group.matches else None
 
         def similarity(raw: str, normalized: str, group_normalized: str, group_raw: str) -> float:
-            if group_raw and self.gate._is_reviewed(raw, group_raw):
+            if group_raw and (
+                self.gate._is_reviewed(raw, group_raw)
+                or self.gate._is_allowlisted(raw, group_raw)
+                or self.gate._is_allowlisted(normalized, group_normalized)
+            ):
                 return 1.0
             return fuzz.token_set_ratio(normalized, group_normalized) / 100.0
 
