@@ -183,9 +183,12 @@ def _headline_problems(text: str) -> list[str]:
             f"must name exactly the two declared books with inert routes, and the "
             f"books declaring a route are {sorted(declaring)}"
         )
-    # Every declared book must be accounted for: if a fourth book ever declares a
-    # route, this fails until the headline says something about it.
-    unaccounted = declaring - named - {"mozzartbet"}
+    # Every declared book must be accounted for: if another book ever declares a
+    # route, this fails until the headline says something about it. A book with a
+    # working (or not yet proven) route is named in the headline, not in the
+    # sentence about inert routes.
+    mentioned = {book for book in declaring if book.lower() in headline.lower()}
+    unaccounted = declaring - named - mentioned - {"mozzartbet"}
     if unaccounted:
         problems.append(
             f"the headline says nothing about declared-route book(s) {sorted(unaccounted)}"
@@ -201,9 +204,9 @@ def test_headline_names_exactly_the_declared_but_inert_books():
     The inertness itself is a dated browser measurement this file cannot derive,
     which is why the README says so and points at the script.
     """
-    assert _declaring_books() == {"mozzartbet"}, (
-        "the declared-route set changed, so the README headline naming Mozzartbet as "
-        "the one route-declaring book "
+    assert _declaring_books() == {"mozzartbet", "maxbet"}, (
+        "the declared-route set changed, so the README headline naming Mozzartbet and "
+        "MaxBet as the route-declaring books "
         "must be revisited before this test can be trusted"
     )
     problems = _headline_problems(README)
@@ -1206,12 +1209,13 @@ def test_plan_header_check_fails_when_the_header_regresses_to_the_old_claim():
         "`verified` needs a proven deep link, and MDShop's and Admiralbet's "
         "`?event=<id>` routes are inert. See §3 *Phase 4*."
     )
+    # The newest status line is the one that states today's counts.
     current = [
         line
         for line in PLAN.splitlines()
-        if line.startswith("> **Status (2026-10-20):**")
+        if line.startswith("> **Status (2026-10-27):**")
     ]
-    assert len(current) == 1, f"expected one 2026-10-20 status line, found {len(current)}"
+    assert len(current) == 1, f"expected one 2026-10-27 status line, found {len(current)}"
 
     regressed = PLAN.replace(current[0], retired, 1)
     assert regressed != PLAN, "the first mutation did not apply; untested"
@@ -1219,7 +1223,7 @@ def test_plan_header_check_fails_when_the_header_regresses_to_the_old_claim():
     assert problems, "the retired 2026-09-25 header passed the check"
     assert any("needs a proven deep link" in problem for problem in problems)
     assert any("on purpose" in problem for problem in problems)
-    assert any("8 of the 9 books" in problem for problem in problems)
+    assert any("8 of the 10 books" in problem for problem in problems)
     assert any("bookmaker_deeplinks.json" in problem for problem in problems)
 
     # The drift this item was raised for, isolated: §3 untouched, header stale.

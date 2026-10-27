@@ -13,7 +13,7 @@ A web-based arbitrage betting detection tool for the Bosnian market.
 > `config/bookmaker_deeplinks.json`:
 >
 > * **The book declares that it has no per-event route**
->   (`supports_event_id: false`) — eight of the nine books. There is no
+>   (`supports_event_id: false`) — eight of the ten books. There is no
 >   per-event URL to prove, so the declaration is itself the proof: the group
 >   records a `no_event_link` evidence note and is verified on identity alone —
 >   league, kickoff, category, teams, orientation. A book with no declaration at
@@ -21,7 +21,10 @@ A web-based arbitrage betting detection tool for the Bosnian market.
 >   unproven.
 > * **The book declares a per-event route** (`supports_event_id: true`) — then
 >   the route has to be opened and proven by a real browser check. Only
->   Mozzartbet declares one, and only Mozzartbet's link verifies. MDShop's and Admiralbet's declared `?event=<id>` routes are **inert** — the served page
+>   Mozzartbet and MaxBet declare one. Mozzartbet's links are proven; MaxBet was
+>   added on 2026-10-27 and its `/match/<id>` links are not proven yet, so a
+>   group holding a MaxBet listing stays unverified until
+>   `scripts/verify_deeplinks.py maxbet` proves its link. MDShop's and Admiralbet's declared `?event=<id>` routes are **inert** — the served page
 >   is byte-identical to the plain football page and the id appears nowhere in
 >   it — so on 2026-10-20 both were re-declared `supports_event_id: false` with
 >   a dated note, and they now verify on identity like the other route-less
@@ -33,7 +36,7 @@ A web-based arbitrage betting detection tool for the Bosnian market.
 > concluding anything about yield from a scan.
 >
 > **Re-check this claim yourself.** The part the repo can reproduce is *which
-> books declare a per-event route at all* — exactly one, `mozzartbet`, in
+> books declare a per-event route at all* — two, `mozzartbet` and `maxbet`, in
 > `config/bookmaker_deeplinks.json`:
 >
 > ```bash

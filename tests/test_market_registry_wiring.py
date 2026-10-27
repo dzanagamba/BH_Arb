@@ -69,6 +69,7 @@ PARSER_MODULES = {
     "evlbet": "scrapers.evlbet",
     "betole": "scrapers.betole",
     "mozzartbet": "scrapers.mozzartbet",
+    "maxbet": "scrapers.maxbet",
 }
 
 _1X2_LABELS = ["1", "X", "2"]
@@ -178,6 +179,23 @@ def _admiralbet():
     return parse
 
 
+def _maxbet():
+    # maxbet.py OUTCOME_LABELS: odd type 1 carries outcomeIds 1001/1002/1003.
+    def parse() -> list[Market]:
+        from scrapers.maxbet import parse_maxbet_odds
+
+        return parse_maxbet_odds([{
+            "id": 1,
+            "outcomes": [
+                {"outcome": label, "outcomeId": str(1001 + i), "status": 0,
+                 "oddValue": 2.0 + i * 0.1}
+                for i, label in enumerate(_1X2_LABELS)
+            ],
+        }], mode="prematch")
+
+    return parse
+
+
 DISPATCH_CASES = [
     pytest.param("mdshop", 135, _nsoft("mdshop", 135), id="mdshop"),
     pytest.param("admiralbet", 1639, _admiralbet(), id="admiralbet"),
@@ -187,11 +205,13 @@ DISPATCH_CASES = [
     pytest.param("betole", 1, _betole(), id="betole"),
     pytest.param("evlbet", "12005", _evlbet(), id="evlbet"),
     pytest.param("wwin", 95, _wwin(), id="wwin"),
+    pytest.param("maxbet", 1, _maxbet(), id="maxbet"),
 ]
 
 # Books with a payload-driven dispatch case above.
 COVERED_BOOKS = frozenset(
-    {"mdshop", "admiralbet", "mbet", "sportplus", "mozzartbet", "betole", "evlbet", "wwin"}
+    {"mdshop", "admiralbet", "mbet", "sportplus", "mozzartbet", "betole", "evlbet", "wwin",
+     "maxbet"}
 )
 
 

@@ -72,6 +72,15 @@ BOOKMAKERS = {
         "enabled": True,
         "color": "#EF4444",
     },
+    "maxbet": {
+        "name": "MaxBet",
+        "base_url": "https://www.maxbet.ba",
+        "soccer_url": "https://sportsbook.maxbet.ba/sport/1",
+        # Added 2026-10-27. It declares a per-event route, so its groups stay
+        # unverified until scripts/verify_deeplinks.py proves its links.
+        "enabled": True,
+        "color": "#0F766E",
+    },
 }
 
 # --- Market Configuration ---
@@ -165,4 +174,5 @@ MATCH_URL_TEMPLATES: dict[str, str] = {
     "evlbet": "https://evlbet.com/",
     "premier_kladionica": "https://www.premier-kladionica.com/ponuda/",
     "wwin": "https://wwin.ba/kladjenje/",
+    "maxbet": "https://sportsbook.maxbet.ba/sport/1",
 }

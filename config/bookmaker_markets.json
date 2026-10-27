@@ -196,5 +196,23 @@
       "over_under_2_5": { "ids": [3], "line": 2.5, "min_legs": 2 },
       "over_under_3_5": { "ids": [3], "line": 3.5, "min_legs": 2 }
     }
+  },
+  "maxbet": {
+    "prematch": {
+      "1x2": { "ids": [1], "labels": ["1", "X", "2"], "min_legs": 3, "settlement": "full_time" },
+      "double_chance": { "ids": [10], "labels": ["1X", "12", "X2"], "min_legs": 2, "settlement": "full_time" },
+      "btts": { "ids": [27], "labels": ["GG", "NG"], "min_legs": 2, "settlement": "full_time" },
+      "over_under_1_5": { "ids": [17], "line": 1.5, "min_legs": 2 },
+      "over_under_2_5": { "ids": [17], "line": 2.5, "min_legs": 2 },
+      "over_under_3_5": { "ids": [17], "line": 3.5, "min_legs": 2 }
+    },
+    "live": {
+      "1x2": { "ids": [1], "labels": ["1", "X", "2"], "min_legs": 3 },
+      "double_chance": { "ids": [10], "labels": ["1X", "12", "X2"], "min_legs": 2 },
+      "btts": { "ids": [27], "labels": ["GG", "NG"], "min_legs": 2 },
+      "over_under_1_5": { "ids": [17], "line": 1.5, "min_legs": 2 },
+      "over_under_2_5": { "ids": [17], "line": 2.5, "min_legs": 2 },
+      "over_under_3_5": { "ids": [17], "line": 3.5, "min_legs": 2 }
+    }
   }
 }

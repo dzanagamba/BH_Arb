@@ -261,6 +261,11 @@ def _run_parser(data: dict[str, Any]) -> list[Market]:
         match = EvlbetScraper()._parse_event(bets[0])
         return match.markets if match is not None else []
 
+    if book == "maxbet":
+        from scrapers.maxbet import parse_maxbet_odds
+
+        return parse_maxbet_odds(bets, mode=mode)
+
     raise AssertionError(f"no parser adapter for bookmaker {book!r}")
 
 
@@ -373,6 +378,8 @@ def _source_ids_in(data: dict[str, Any]) -> set[str]:
         return {str(o["game"]["id"]) for o in bets}
     if book == "premier_kladionica":
         return {str(row[1]) for row in data["lookup"]["set_tip"]}
+    if book == "maxbet":
+        return {str(b["id"]) for b in bets}
     if book == "evlbet":
         offer = bets[0].get("BasicOffer") or {}
         return {str(offer.get("BetTypeKey") or offer.get("GameId") or "12005")}
