@@ -29,6 +29,7 @@ matches from 2+ distinct bookmakers.
 import json
 import logging
 import os
+import re
 from datetime import UTC
 
 from rapidfuzz import fuzz
@@ -40,7 +41,7 @@ from config.settings import (
     TEAM_MATCH_MIN_PERCENT,
 )
 from engine.certainty import CertaintyGate, GateResult
-from engine.normalizer import TeamNormalizer
+from engine.normalizer import TeamNormalizer, canonical_team_name, canonicalize_fixture
 from models.schemas import Market, MarketType, Match, MatchEvidence, MatchGroup, OddsValue
 from scrapers.common import flip_ah_label
 
@@ -67,6 +68,9 @@ GENERIC_LEAGUES = {
     "premier liga", "premijer liga", "premier league",
     "bundesliga", "prva liga", "vtora liga",
 }
+
+# The category markers `canonicalize_fixture` appends to a club's name.
+_SIDE_SUFFIX = re.compile(r"(?: (?:U\d{2}|Youth))?(?: II)?(?: \(W\))?$")
 
 # Derived thresholds (from config.settings)
 TEAM_MATCH_RATIO = TEAM_MATCH_MIN_PERCENT / 100.0      # per-team similarity gate
@@ -111,6 +115,9 @@ class MatchMatcher:
 
         # Only explicitly reviewed aliases may authorize fuzzy identity.
         self._alias_allowlist: set[str] = set()
+        # Reviewed club spellings by raw key, to extend an alias to the club's
+        # youth, reserve and women's sides (see `_extend_aliases_to_sides`).
+        self._alias_partners: dict[str, set[str]] = {}
         try:
             with open(_TEAM_ALIAS_FILE, encoding="utf-8") as f:
                 alias_data = json.load(f)
@@ -124,6 +131,16 @@ class MatchMatcher:
                 left, right = (part.strip() for part in alias.split("|", 1))
                 if left and right:
                     self._alias_allowlist.add(f"{left}|{right}")
+                    # Listings are compared in their canonical spelling, so an
+                    # entry reviewed on a book's raw spelling ("Rapid Vienna (Am)")
+                    # is also held in that form ("Rapid Vienna II").
+                    canonical = (canonical_team_name(left), canonical_team_name(right))
+                    if all(canonical) and canonical != (left, right):
+                        self._alias_allowlist.add(f"{canonical[0]}|{canonical[1]}")
+                    if canonical == (left, right):
+                        key = CertaintyGate._raw_team_key
+                        self._alias_partners.setdefault(key(left), set()).add(right)
+                        self._alias_partners.setdefault(key(right), set()).add(left)
         except (OSError, TypeError, ValueError):
             logger.warning(
                 "team_alias_allowlist.json not found or invalid — no fuzzy aliases"
@@ -138,8 +155,19 @@ class MatchMatcher:
         """
         Enrich all matches with normalized fields.
         Must be called before group_matches.
+
+        Each listing is first rewritten into the canonical team spelling (see
+        `canonicalize_fixture`), always from the book's own spelling, so running
+        this twice gives the same result. Category tags come from that same
+        parse, so two books that mark a U21 side differently agree on it.
         """
         for m in matches:
+            source_home = m.home_team_source or m.home_team
+            source_away = m.away_team_source or m.away_team
+            fixture = canonicalize_fixture(source_home, source_away, m.league)
+            m.home_team, m.away_team = fixture.home, fixture.away
+            m.home_team_source = source_home if fixture.home != source_home else ""
+            m.away_team_source = source_away if fixture.away != source_away else ""
             m.league_normalized = self.normalizer.normalize_league(m.league)
             m.country_normalized = self.normalizer.normalize_country(m.country)
             m.home_team_normalized = self.normalizer.normalize_team(
@@ -148,10 +176,30 @@ class MatchMatcher:
             m.away_team_normalized = self.normalizer.normalize_team(
                 m.away_team, league_scope=m.league_normalized
             )
-            m.category_tags = self.normalizer.detect_special_category(
-                f"{m.home_team} {m.away_team} {m.league}"
-            )
+            m.category_tags = list(fixture.tags)
+        self._extend_aliases_to_sides(matches)
         return matches
+
+    def _extend_aliases_to_sides(self, matches: list[Match]) -> None:
+        """Hold a reviewed club alias for the same side of both clubs.
+
+        Two spellings of one club are also two spellings of its youth, reserve
+        and women's sides: "AEK|AEK Atena" holds for "AEK U19|AEK Atena U19".
+        Only the sides this scan lists are added, since the gate copies the
+        whole allowlist into the evidence of every alias it accepts. The gate
+        still requires league, kickoff and category to agree.
+        """
+        if not self._alias_partners:
+            return
+        key = CertaintyGate._raw_team_key
+        for m in matches:
+            for name in (m.home_team, m.away_team):
+                hit = _SIDE_SUFFIX.search(name)
+                if not hit or not hit.group(0) or hit.start() == 0:
+                    continue
+                base, suffix = name[: hit.start()], hit.group(0)
+                for partner in self._alias_partners.get(key(base), ()):
+                    self._alias_allowlist.add(f"{base}{suffix}|{partner}{suffix}")
 
     def group_matches(self, all_matches: list[Match]) -> list[MatchGroup]:
         """
@@ -491,6 +539,7 @@ def swap_match_teams_and_odds(match: Match) -> Match:
     """
     m = match.model_copy(deep=True)
     m.home_team, m.away_team = m.away_team, m.home_team
+    m.home_team_source, m.away_team_source = m.away_team_source, m.home_team_source
     m.home_team_normalized, m.away_team_normalized = m.away_team_normalized, m.home_team_normalized
     m.is_swapped = True
 

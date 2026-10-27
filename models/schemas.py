@@ -36,6 +36,11 @@ class Match(BaseModel):
     away_team: str
     home_team_normalized: str = ""
     away_team_normalized: str = ""
+    # The book's own spelling, kept when canonicalization rewrote home_team /
+    # away_team ("U21/Millwall" -> "Millwall U21"); the bet slip shows it,
+    # since it is what the book's search finds. Empty when nothing changed.
+    home_team_source: str = ""
+    away_team_source: str = ""
     league: str = ""
     league_normalized: str = ""
     country: str = ""

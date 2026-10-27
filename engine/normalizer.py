@@ -16,6 +16,7 @@ import logging
 import os
 import re
 import unicodedata
+from dataclasses import dataclass
 
 from rapidfuzz import fuzz, process
 
@@ -113,6 +114,219 @@ ESPORTS_PATTERN = re.compile(
     r'\b(SRL|Simulated Reality|Esoccer|Cyber|E-?sports?|Virtual)\b',
     re.IGNORECASE,
 )
+
+
+# ---------------------------------------------------------------------------
+# Fixture canonicalization
+#
+# Every book marks youth, reserve and women's sides in its own way, and some
+# append notes that are not part of a club's name at all (measured on the
+# 2026-10-20 prematch scan):
+#
+#   Mozzartbet   "Porto Y" / "PSV J" (youth league), "Millwall M21"
+#   NSoft        "Porto U19", "Sturm Graz 2", "Porto B"
+#   MBet         "FC Porto U19", "Sturm Graz (Am)", "Al Ahli (UAE)"
+#   SportPlus    "ML/Porto", "U21/Millwall", "R/Sarmiento", "NŽ/Vaxjo",
+#                "Macclesfield (1:1)"
+#   Premier      "ML/FC Porto", "21/Wigan", "RE/Guarani", "Benfica [B]" (= "Benfica B"),
+#                "Fluminense [1.ut.2:1]"
+#   WWIN         "Porto/19", "Torque/Rez.", "Brisbane Roar/Ž", "Sturm Graz (A)",
+#                "Al Arabi (KW)"
+#
+# The certainty gate compares raw names, so each of these was a pair a human had
+# to approve by hand (the allowlist holds dozens: "Benfica B|Benfica [B]",
+# "Rapid 2|Rapid Vienna (Am)", "Middlesbrough U21|Middlesbrough/21"), and the
+# category tags disagreed between books ("M21" was not an age marker, "Legia W."
+# was tagged Women), which is a hard reject. Canonicalization rewrites a listing
+# to `<base name> [U<age>|Youth] [II] [(W)]` and derives its tags from the same
+# parse, so every book spells a category the same way.
+# ---------------------------------------------------------------------------
+
+_AGE_TAG = re.compile(r"^U\d{2}$")
+# Notes that are never part of a club's name: a first-leg or aggregate score.
+_SCORE_NOTE = re.compile(
+    r"\s*\(\s*\d+\s*[:\-]\s*\d+\s*\)|\s*\[[^\]]*?\d+\s*:\s*\d+[^\]]*\]"
+)
+# A marker written in front of the name: "ML/Porto", "U21/Millwall", "21/Wigan".
+_PREFIX_MARKER = re.compile(r"^(?P<tag>ML|NŽ|NZ|RE|R|U?\d{2})/(?P<name>\S.*)$", re.IGNORECASE)
+# Markers written after the name, tried in order until none applies.
+_SUFFIX_MARKERS: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"/(?P<age>\d{2})$"), "age"),
+    (re.compile(r"/(?:Ž|Z)$", re.IGNORECASE), "women"),
+    (re.compile(r"/Rez\.?$", re.IGNORECASE), "reserve"),
+    (re.compile(r"\s*\((?:W|Ž|Women|Žene)\)$", re.IGNORECASE), "women"),
+    (re.compile(r"\s*\((?:Am\.?|A|Res\.?|Rez\.?)\)$", re.IGNORECASE), "reserve"),
+    (re.compile(r"\s*\[B\]$"), "b_team"),
+    (re.compile(r"\s*\((?:U|M|Sub)-?(?P<age>\d{2})\)$", re.IGNORECASE), "age"),
+    (re.compile(r"(?:\s+|(?<=\.))(?:U|M|Sub)-?(?P<age>\d{2})$", re.IGNORECASE), "age"),
+    (re.compile(r"\s+Youth$", re.IGNORECASE), "youth"),
+    (re.compile(r"\s+(?:Women|Žene)$", re.IGNORECASE), "women"),
+    # A bare trailing "B" is not here: "Jagiellonia B", "Slovan B" and
+    # "Polonia B" are Bialystok, Bratislava and Bytom, senior clubs.
+    (re.compile(r"\s+(?:II|2)$"), "reserve"),
+]
+# A bracketed country or venue note ("(KSA)", "(Arg)", "(N)"), checked after the
+# markers above so "(Am)" and "(W)" are never read as countries.
+_QUALIFIER_NOTE = re.compile(r"\s*\((?:[A-Za-z]{1,4}\.?)\)$")
+# Single letters that mean a youth side only inside a youth competition
+# (Mozzartbet's "Porto Y" / "PSV J"); elsewhere "Gimnasia Y" is Jujuy.
+_YOUTH_LETTER = re.compile(r"\s+[JY]$")
+
+_LEAGUE_WOMEN = re.compile(
+    r"\b(?:Women|Womens|Žene|Ženska|Ženski|Feminin\w*|Femenin\w*|NWSL|WSL)\b"
+    r"|\((?:Ž|W)\)|(?<!\w)Ž(?!\w)|(?<![\w.&'])W(?![\w.'])",
+    re.IGNORECASE,
+)
+_LEAGUE_RESERVE = re.compile(r"\b(?:Rezerv\w*|Reserv\w*)\b", re.IGNORECASE)
+_LEAGUE_AGE = re.compile(
+    r"\b(?:U|M|Sub)-?(?P<a>\d{2})\b|\bdo\s+(?P<b>\d{2})\b|\bunder\s*(?P<c>\d{2})\b",
+    re.IGNORECASE,
+)
+_LEAGUE_YOUTH_19 = re.compile(r"\b(?:mladi|mladih|youth|omladin\w*|junior\w*)\b", re.IGNORECASE)
+_LEAGUE_YOUTH_21 = re.compile(r"\b(?:development|razvojn\w*)\b", re.IGNORECASE)
+_LEAGUE_YOUTH_23 = re.compile(r"\brevelac\w*\b", re.IGNORECASE)
+
+
+@dataclass(frozen=True)
+class CanonicalFixture:
+    """A listing's teams in the canonical spelling, and the categories they carry."""
+
+    home: str
+    away: str
+    tags: tuple[str, ...]
+
+
+@dataclass
+class _TeamParse:
+    base: str
+    age: str = ""        # "U21", or "Youth" when the age is not stated
+    reserve: bool = False
+    women: bool = False
+
+
+def _parse_team(name: str, women_league: bool) -> _TeamParse:
+    """Split a raw team name into its base name and category markers."""
+    text = " ".join(str(name or "").split())
+    text = _SCORE_NOTE.sub("", text).strip()
+    parse = _TeamParse(base=text)
+
+    prefix = _PREFIX_MARKER.match(text)
+    if prefix:
+        tag = prefix.group("tag").upper()
+        text = prefix.group("name").strip()
+        if tag == "ML":
+            parse.age = "Youth"
+        elif tag in ("NŽ", "NZ"):
+            parse.women = True
+        elif tag in ("R", "RE"):
+            parse.reserve = True
+        else:
+            parse.age = f"U{tag[-2:]}"
+
+    changed = True
+    while changed and text:
+        changed = False
+        for pattern, kind in _SUFFIX_MARKERS:
+            hit = pattern.search(text)
+            if not hit or hit.start() == 0:
+                continue
+            if kind == "age":
+                parse.age = parse.age if _AGE_TAG.match(parse.age) else f"U{hit.group('age')}"
+            elif kind == "youth":
+                parse.age = parse.age or "Youth"
+            elif kind == "women":
+                parse.women = True
+            elif kind == "b_team":
+                # Premier's "Benfica [B]" is everyone else's "Benfica B".
+                text = text[: hit.start()].rstrip(" /") + " B"
+                changed = True
+                break
+            else:
+                parse.reserve = True
+            text = text[: hit.start()].rstrip(" /")
+            changed = True
+            break
+        if not changed:
+            qualifier = _QUALIFIER_NOTE.search(text)
+            if qualifier and qualifier.start() > 0:
+                text = text[: qualifier.start()].rstrip()
+                changed = True
+        if not changed and women_league and re.search(r"\s+W$", text):
+            # A bare trailing "W" is a women's marker only inside a women's
+            # competition; elsewhere it abbreviates Warsaw, Wroclaw, Wanderers.
+            text = text[:-1].rstrip()
+            parse.women = True
+            changed = True
+    parse.base = text or parse.base
+    return parse
+
+
+def _league_age(league: str) -> str:
+    hit = _LEAGUE_AGE.search(league)
+    if hit:
+        return f"U{hit.group('a') or hit.group('b') or hit.group('c')}"
+    if _LEAGUE_YOUTH_19.search(league):
+        return "U19"
+    if _LEAGUE_YOUTH_21.search(league):
+        return "U21"
+    if _LEAGUE_YOUTH_23.search(league):
+        return "U23"
+    return ""
+
+
+def canonicalize_fixture(home: str, away: str, league: str = "") -> CanonicalFixture:
+    """Rewrite one listing into the canonical team spelling, with its categories.
+
+    Team markers apply to their own team; a category the competition states
+    ("Liga šampiona mladi", "Argentina Reserve League", "Danska 1 Ž") applies
+    to both. The result is idempotent: canonicalizing a canonical listing
+    returns it unchanged.
+    """
+    league = league or ""
+    women_league = bool(_LEAGUE_WOMEN.search(league))
+    league_reserve = bool(_LEAGUE_RESERVE.search(league))
+    league_age = _league_age(league)
+
+    teams = [_parse_team(home, women_league), _parse_team(away, women_league)]
+    if league_age and all(_YOUTH_LETTER.search(t.base) for t in teams):
+        for team in teams:
+            team.base = _YOUTH_LETTER.sub("", team.base)
+            team.age = team.age or "Youth"
+
+    tags: set[str] = set()
+    names: list[str] = []
+    for team in teams:
+        if league_age and not _AGE_TAG.match(team.age):
+            team.age = league_age
+        team.reserve = team.reserve or league_reserve
+        team.women = team.women or women_league
+        parts = [team.base]
+        if team.age:
+            parts.append(team.age)
+            tags.add(team.age)
+        if team.reserve:
+            parts.append("II")
+            tags.add("Reserve")
+        if team.women:
+            parts.append("(W)")
+            tags.add("Women")
+        names.append(" ".join(parts))
+    if ESPORTS_PATTERN.search(f"{home} {away} {league}"):
+        tags.add("Esports")
+    return CanonicalFixture(home=names[0], away=names[1], tags=tuple(sorted(tags)))
+
+
+def canonical_team_name(name: str) -> str:
+    """One team's canonical spelling when no competition is known (allowlist entries)."""
+    team = _parse_team(name, women_league=False)
+    parts = [team.base]
+    if team.age:
+        parts.append(team.age)
+    if team.reserve:
+        parts.append("II")
+    if team.women:
+        parts.append("(W)")
+    return " ".join(parts)
 
 
 class TeamNormalizer:

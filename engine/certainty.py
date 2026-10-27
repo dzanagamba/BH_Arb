@@ -269,8 +269,13 @@ class CertaintyGate:
 
         Grouping asks this for every candidate pair; re-parsing a thousand-entry
         allowlist on each call made a scan's grouping several times slower.
+        The change check is the set's identity and size, not a copy of it:
+        copying the allowlist (thousands of entries once the matcher adds the
+        canonical forms) on every call cost more than the lookup it guards.
+        Callers replace the set (``gate.alias_allowlist = set(...)``) or add to
+        it; either one changes the key.
         """
-        snapshot = frozenset(self.alias_allowlist)
+        snapshot = (id(self.alias_allowlist), len(self.alias_allowlist))
         cached = getattr(self, "_allowlist_cache", None)
         if cached is None or cached[0] != snapshot:
             index = frozenset(frozenset(entry) for entry in self.alias_allowlist_entries)
