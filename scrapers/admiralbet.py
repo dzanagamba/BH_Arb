@@ -11,7 +11,7 @@ import logging
 from datetime import UTC, datetime
 
 from models.schemas import Market, Match
-from scrapers.base import launch_browser
+from scrapers.base import launch_browser, settle
 from scrapers.common import (
     betradar_id,
     build_event_url,
@@ -86,14 +86,14 @@ class AdmiralbetScraper:
 
             # 1. Get Cloudflare session
             await page.goto(BASE_URL, wait_until="domcontentloaded", timeout=60000)
-            await page.wait_for_timeout(3000)
+            await settle(page, 3000)
 
             # 2. Navigate to football prematch page (loads API)
             await page.goto(
                 f"{BASE_URL}/sport-prematch?sport=Fudbal",
                 wait_until="domcontentloaded", timeout=60000,
             )
-            await page.wait_for_timeout(5000)
+            await settle(page, 5000)
 
             # 3. Fetch all football events via getwebevents endpoint. Live
             #    looks back 12h: NSoft filters by kickoff, so a window starting

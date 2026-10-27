@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 
 from engine.market_registry import MARKET_REGISTRY, record_unmapped
 from models.schemas import Market, MarketType, Match, OddsValue
-from scrapers.base import launch_browser
+from scrapers.base import fetch_pages, launch_browser, settle
 from scrapers.common import parse_dt
 
 logger = logging.getLogger(__name__)
@@ -377,7 +377,7 @@ class MozzartbetScraper:
 
             # 1. Load the page (triggers initial API calls)
             await page.goto(f"{BASE_URL}/sr/kladjenje", wait_until="domcontentloaded", timeout=60000)
-            await page.wait_for_timeout(3000)
+            await settle(page, 3000)
 
             # 2. Paginate via page.request (with correct headers from the page)
             # Site uses currentPage 0-based and pageSize 15. The API returns
@@ -392,15 +392,13 @@ class MozzartbetScraper:
                 "competitionIds": [], "search": "", "matchTypeId": 0,
             }
             referer = f"{BASE_URL}/sr/kladjenje/sport/1?date=all_days"
-            page_num = 0
             max_pages = 100  # safety cap; real break is short page
 
-            while page_num < max_pages:
-                api_body["currentPage"] = page_num
+            async def fetch_page(page_num: int) -> list | None:
                 try:
                     resp = await page.request.post(
                         f"{BASE_URL}/betting/matches",
-                        data=api_body,
+                        data={**api_body, "currentPage": page_num},
                         headers={
                             "Content-Type": "application/json",
                             "Accept": "application/json, text/plain, */*",
@@ -411,26 +409,26 @@ class MozzartbetScraper:
                     )
                     if resp.status != 200:
                         logger.debug(f"[Mozzartbet] Page {page_num} status {resp.status}")
-                        break
+                        return None
                     data = await resp.json()
-                    items = data.get("items", [])
-                    if not items:
-                        break
-                    all_raw_items.extend(items)
-
+                    nonlocal max_pages
                     # Only totalPages is reliable for total; matchCount is per-page
                     total_pages = data.get("totalPages")
                     if isinstance(total_pages, int) and total_pages > 0:
                         max_pages = min(total_pages, 100)
-
-                    logger.debug(f"[Mozzartbet] Page {page_num}/{max_pages}: {len(items)} items")
-                    if len(items) < page_size:
-                        break
-                    page_num += 1
-
+                    return data.get("items", [])
                 except Exception as e:
                     logger.debug(f"[Mozzartbet] Pagination page {page_num} error: {e}")
-                    break
+                    return None
+
+            # Page 0 first: its totalPages bounds the concurrent fetch of the rest.
+            first = await fetch_page(0)
+            if first:
+                all_raw_items.extend(first)
+                if len(first) >= page_size and max_pages > 1:
+                    all_raw_items.extend(
+                        await fetch_pages(fetch_page, page_size, max_pages - 1, first_page=1)
+                    )
         finally:
             await browser.close()
             await p.stop()

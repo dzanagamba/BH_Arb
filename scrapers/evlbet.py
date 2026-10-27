@@ -13,7 +13,7 @@ import httpx
 from config.settings import VERIFY_SSL
 from engine.market_registry import MARKET_REGISTRY, record_unmapped
 from models.schemas import Market, MarketType, Match, OddsValue
-from scrapers.base import fetch_with_retry
+from scrapers.base import fetch_pages, fetch_with_retry
 from scrapers.common import parse_dt
 
 logger = logging.getLogger(__name__)
@@ -76,39 +76,36 @@ class EvlbetScraper:
         seen: set[str] = set()
 
         async with httpx.AsyncClient(headers=HEADERS, timeout=20.0, verify=VERIFY_SSL) as client:
-            for offset in range(0, 2000, 100):
+
+            async def fetch_page(index: int) -> list | None:
+                offset = index * 100
                 url = f"{API_URL}?SportIds=388&Limit=100&Offset={offset}"
                 try:
                     r = await fetch_with_retry(client, url)
                     if not r or r.status_code != 200:
-                        break
+                        return None
                     data = r.json()
                     # API sometimes returns dict with Response key, sometimes bare list (2026-08-20)
                     if isinstance(data, list):
-                        events = data
-                    elif isinstance(data, dict):
-                        events = data.get("Response", [])
-                    else:
-                        events = []
-                    if not events:
-                        break
-
-                    for ev in events:
-                        mid = str(ev.get("Id", ""))
-                        if not mid or mid in seen:
-                            continue
-                        seen.add(mid)
-
-                        match = self._parse_event(ev)
-                        if match:
-                            all_matches.append(match)
-
-                    if len(events) < 100:
-                        break
-
+                        return data
+                    if isinstance(data, dict):
+                        return data.get("Response", [])
+                    return []
                 except Exception as e:
                     logger.error(f"[EVLBet] Error fetching offset {offset}: {e}")
-                    break
+                    return None
+
+            events = await fetch_pages(fetch_page, page_size=100, max_pages=20)
+
+        for ev in events:
+            mid = str(ev.get("Id", ""))
+            if not mid or mid in seen:
+                continue
+            seen.add(mid)
+
+            match = self._parse_event(ev)
+            if match:
+                all_matches.append(match)
 
         logger.info(f"[EVLBet] Total: {len(all_matches)} matches parsed")
         return all_matches

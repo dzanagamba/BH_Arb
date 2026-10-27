@@ -16,7 +16,7 @@ import httpx
 from config.settings import VERIFY_SSL
 from engine.market_registry import MARKET_REGISTRY, record_unmapped
 from models.schemas import Market, MarketType, Match, OddsValue
-from scrapers.base import fetch_with_retry
+from scrapers.base import fetch_pages, fetch_with_retry
 from scrapers.common import ah_label, parse_dt
 
 logger = logging.getLogger(__name__)
@@ -415,8 +415,9 @@ class MBetScraper:
         seen_codes: set[tuple] = set()
 
         async with httpx.AsyncClient(timeout=30.0, verify=VERIFY_SSL) as client:
-            offset = 0
-            while True:
+
+            async def fetch_page(index: int) -> list | None:
+                offset = index * 100
                 url = (
                     f"{self.base_url}?live={'true' if live else 'false'}&offer_plan=true&fields=all"
                     f"&lang=ba&limit=100&offset={offset}"
@@ -427,29 +428,22 @@ class MBetScraper:
                     resp = await fetch_with_retry(client, url, headers=self.headers)
                     if not resp or resp.status_code != 200:
                         logger.error(f"[MBet] HTTP {resp.status_code if resp else 'No response'} at offset {offset}")
-                        break
-
-                    data = resp.json()
-                    raw_events = data.get("events", [])
-                    if not raw_events:
-                        break
-
-                    for e in raw_events:
-                        try:
-                            match = self._parse_event(e, seen_codes, live=live)
-                            if match:
-                                all_matches.append(match)
-                        except Exception as ex:
-                            logger.debug(f"[MBet] Parse error: {ex}")
-                            continue
-
-                    if len(raw_events) < 100:
-                        break
-                    offset += 100
-
+                        return None
+                    return resp.json().get("events", [])
                 except Exception as e:
                     logger.error(f"[MBet] Error at offset {offset}: {e}")
-                    break
+                    return None
+
+            raw_events = await fetch_pages(fetch_page, page_size=100, max_pages=200)
+
+        for e in raw_events:
+            try:
+                match = self._parse_event(e, seen_codes, live=live)
+                if match:
+                    all_matches.append(match)
+            except Exception as ex:
+                logger.debug(f"[MBet] Parse error: {ex}")
+                continue
 
         logger.info(f"[MBet] Total {'live' if live else 'prematch'}: {len(all_matches)} matches")
         return all_matches

@@ -5,6 +5,7 @@ retries.
 
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 
 import httpx
 from playwright.async_api import Browser, BrowserContext, Playwright, async_playwright
@@ -49,7 +50,60 @@ async def launch_browser() -> tuple[Playwright, Browser, BrowserContext]:
         Object.defineProperty(navigator, 'languages', {get: () => ['bs-BA', 'hr', 'en-US']});
         window.chrome = {runtime: {}, loadTimes: function(){}, csi: function(){}, app: {}};
     """)
+    # Odds come from JSON endpoints; images, fonts and media only slow the
+    # page load that establishes the session.
+    await context.route(
+        "**/*",
+        lambda route: route.abort()
+        if route.request.resource_type in _BLOCKED_RESOURCES
+        else route.continue_(),
+    )
     return playwright, browser, context
+
+
+_BLOCKED_RESOURCES = frozenset({"image", "media", "font"})
+
+
+async def settle(page, max_ms: int) -> None:
+    """
+    Wait for the page's network to go idle, but never longer than `max_ms`.
+    Replaces fixed `wait_for_timeout` sleeps: returns as soon as the session
+    cookies / initial requests have finished, with the old sleep as the cap.
+    """
+    try:
+        await page.wait_for_load_state("networkidle", timeout=max_ms)
+    except Exception:
+        pass
+
+
+async def fetch_pages(
+    fetch_page: Callable[[int], Awaitable[list | None]],
+    page_size: int,
+    max_pages: int,
+    batch: int = 4,
+    first_page: int = 0,
+) -> list:
+    """
+    Fetch offset-paginated pages `batch` at a time instead of one by one.
+
+    `fetch_page(i)` returns that page's items, or None on failure. Results are
+    concatenated in page order and collection stops at the first failed, empty
+    or short page, so the output equals a sequential walk (a batch may request
+    a few pages past the end; those come back empty and are dropped).
+    """
+    items: list = []
+    page = first_page
+    while page < first_page + max_pages:
+        end = min(page + batch, first_page + max_pages)
+        results = await asyncio.gather(*(fetch_page(i) for i in range(page, end)))
+        for chunk in results:
+            if not chunk:
+                return items
+            items.extend(chunk)
+            if len(chunk) < page_size:
+                return items
+        page = end
+    return items
 
 
 async def fetch_with_retry(

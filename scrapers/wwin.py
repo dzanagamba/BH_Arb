@@ -31,7 +31,7 @@ from datetime import UTC, datetime, timedelta
 
 from engine.market_registry import MARKET_REGISTRY, record_unmapped
 from models.schemas import Market, MarketType, Match, OddsValue
-from scrapers.base import launch_browser
+from scrapers.base import launch_browser, settle
 from scrapers.common import betradar_id, qualify_league
 
 logger = logging.getLogger(__name__)
@@ -248,7 +248,7 @@ class WWINScraper:
         try:
             page = await context.new_page()
             await page.goto(f"{BASE_URL}/kladjenje/", wait_until="domcontentloaded", timeout=60000)
-            await page.wait_for_timeout(5000)
+            await settle(page, 5000)
 
             # The events endpoint accepts at most two bet ids per call, so fetch
             # the markets in groups and merge by event id. P2: parallel fetch with retry.
@@ -361,7 +361,7 @@ class WWINScraper:
         try:
             page = await context.new_page()
             await page.goto(f"{BASE_URL}/kladjenje-uzivo/", wait_until="domcontentloaded", timeout=60000)
-            await page.wait_for_timeout(5000)
+            await settle(page, 5000)
 
             resp = await page.request.get(
                 f"{API_ROOT}/LiveEvents/events",
