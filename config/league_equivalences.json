@@ -1,5 +1,28 @@
 {
   "pairs": [
-    ["europa_league", "conference_league"]
+    [
+      "europa_league",
+      "conference_league"
+    ],
+    [
+      "auto_medjunarodne_mladi_uefa_liga_mladi",
+      "auto_medunarodne_mladi_uefa_omladinska_liga"
+    ],
+    [
+      "auto_meksiko_liga_mx_z_apertura",
+      "mexico_women_liga_mx_f"
+    ],
+    [
+      "auto_rusija_1_liga",
+      "russian_first_league"
+    ],
+    [
+      "auto_engleska_liga_kup_1_8_finala",
+      "efl_cup"
+    ],
+    [
+      "auto_bugarska_2_liga",
+      "bugarian_second_league"
+    ]
   ]
 }

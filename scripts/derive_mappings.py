@@ -16,7 +16,8 @@ report lists them.
   names are joined into components: a component whose already-mapped members
   agree on one canonical id gives that id to its unmapped members, one with no
   mapped member gets a new ``auto_`` id, and one whose members disagree is
-  reported as a conflict and left alone.
+  reported as a conflict: its names stay where they are, and its ids are
+  proposed as equivalent pairs for ``config/league_equivalences.json``.
 * Teams. With leagues resolved, a fixture in the same league and kickoff whose
   one slot matches exactly and whose other slot does not yields an alias pair
   for ``config/team_alias_allowlist.json``. The gate still requires a 90
@@ -31,8 +32,9 @@ Usage:
     python scripts/derive_mappings.py scan.json --apply
 
 Inputs are scan caches (``{"matches": [...]}``) or ``{bookmaker: [...]}``
-dumps. ``--apply`` writes the proposals into ``config/league_mappings.json``
-and ``config/team_alias_allowlist.json``; without it nothing is written.
+dumps. ``--apply`` writes the proposals into ``config/league_mappings.json``,
+``config/league_equivalences.json`` and ``config/team_alias_allowlist.json``;
+without it nothing is written.
 """
 
 from __future__ import annotations
@@ -52,10 +54,11 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 from engine.certainty import CertaintyGate  # noqa: E402
-from engine.normalizer import TeamNormalizer  # noqa: E402
+from engine.normalizer import TeamNormalizer, canonicalize_fixture  # noqa: E402
 
 LEAGUE_FILE = REPO_ROOT / "config" / "league_mappings.json"
 ALLOWLIST_FILE = REPO_ROOT / "config" / "team_alias_allowlist.json"
+EQUIVALENCE_FILE = REPO_ROOT / "config" / "league_equivalences.json"
 KICKOFF_WINDOW_MIN = 15
 ALIAS_MIN_SIMILARITY = 90  # the gate's own floor for an allowlisted pair
 
@@ -84,14 +87,20 @@ class Listing:
     def __init__(self, raw: dict, normalizer: TeamNormalizer) -> None:
         self.book = str(raw.get("bookmaker", ""))
         self.event = str(raw.get("event_id", ""))
-        self.home = str(raw.get("home_team", "")).strip()
-        self.away = str(raw.get("away_team", "")).strip()
         self.league = str(raw.get("league", "")).strip()
+        # Teams and tags in the canonical form the matcher compares, read from
+        # the book's own spelling (a cache written since 2026-10-27 stores the
+        # canonical name and keeps the book's in *_source).
+        fixture = canonicalize_fixture(
+            str(raw.get("home_team_source") or raw.get("home_team", "")).strip(),
+            str(raw.get("away_team_source") or raw.get("away_team", "")).strip(),
+            self.league,
+        )
+        self.home = fixture.home.strip()
+        self.away = fixture.away.strip()
         kickoff = raw.get("kickoff")
         self.kickoff = datetime.fromisoformat(kickoff) if kickoff else None
-        self.tags = frozenset(
-            normalizer.detect_special_category(f"{self.home} {self.away} {self.league}")
-        )
+        self.tags = frozenset(fixture.tags)
         self.lkey = normalizer._league_clean(self.league)
         self.br = str(raw.get("betradar_id") or "")
 
@@ -237,6 +246,7 @@ def derive_leagues(
     new: dict[str, list[str]] = {}
     remove: dict[str, list[str]] = collections.defaultdict(list)
     conflicts = []
+    equivalences: list[list[str]] = []
     taken = set(normalizer.league_mappings)
 
     def support_of(members: list[str]) -> int:
@@ -263,10 +273,17 @@ def derive_leagues(
         unmapped = sorted(m for m in members if m not in reverse)
         support = sum(c for (x, y), c in edges.items() if x in members and y in members)
         if len(anchors) > 1:
+            # Two ids for one competition: shared fixtures join them, and no
+            # member is ambiguous (those never reach a component). The names
+            # stay where they are; the ids are declared equivalent instead.
             conflicts.append({
                 "members": {m: reverse.get(m) for m in sorted(members)},
                 "fixtures": support,
             })
+            ids = sorted(anchors)
+            equivalences.extend(
+                [x, y] for i, x in enumerate(ids) for y in ids[i + 1:]
+            )
             continue
         if not unmapped:
             continue
@@ -287,6 +304,7 @@ def derive_leagues(
         "new_leagues": dict(sorted(new.items())),
         "ambiguous": {spelling.get(k, k): v for k, v in sorted(ambiguous.items())},
         "conflicts": conflicts,
+        "equivalences": equivalences,
     }
 
 
@@ -364,8 +382,15 @@ def derive_aliases_from_ids(
     found: dict[frozenset[str], dict[str, Any]],
     low: dict[frozenset[str], dict[str, Any]],
 ) -> None:
-    """Both team slots of a Betradar-matched pair name the same two clubs."""
+    """Both team slots of a Betradar-matched pair name the same two clubs.
+
+    Not when the two books put the fixture in different categories (MDShop's
+    "Gent U23" is WWIN's "Gent/21"): the gate refuses such a pair whatever the
+    allowlist says, so an alias would only record a disagreement as a fact.
+    """
     for a, b in pairs:
+        if a.tags != b.tags:
+            continue
         swapped = (
             raw_key(a.home) in (raw_key(b.away),) or raw_key(a.away) in (raw_key(b.home),)
         ) and not (raw_key(a.home) == raw_key(b.home) or raw_key(a.away) == raw_key(b.away))
@@ -414,6 +439,18 @@ def apply(leagues: dict[str, Any], aliases: dict[str, Any]) -> None:
         data[canonical] = names
     LEAGUE_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=4) + "\n", encoding="utf-8")
 
+    equivalences = json.loads(EQUIVALENCE_FILE.read_text(encoding="utf-8"))
+    pairs = [list(p) for p in equivalences.get("pairs", [])]
+    known = {frozenset(p) for p in pairs}
+    for pair in leagues.get("equivalences", []):
+        if frozenset(pair) not in known:
+            pairs.append(list(pair))
+            known.add(frozenset(pair))
+    equivalences["pairs"] = pairs
+    EQUIVALENCE_FILE.write_text(
+        json.dumps(equivalences, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+
     allow = json.loads(ALLOWLIST_FILE.read_text(encoding="utf-8"))
     entries = set(allow.get("aliases", []))
     entries.update(entry["alias"] for entry in aliases["aliases"])
@@ -447,7 +484,8 @@ def main() -> None:
           f"{len(id_pairs)} Betradar-id pairs")
     print(f"leagues: {sum(len(v) for v in leagues['add_to_existing'].values())} names onto "
           f"{len(leagues['add_to_existing'])} existing ids, {len(leagues['new_leagues'])} new ids, "
-          f"{len(leagues['ambiguous'])} ambiguous names, {len(leagues['conflicts'])} conflicts")
+          f"{len(leagues['ambiguous'])} ambiguous names, {len(leagues['conflicts'])} conflicts "
+          f"({len(leagues['equivalences'])} equivalence pairs)")
     print(f"teams: {len(aliases['aliases'])} aliases, "
           f"{len(aliases['below_gate_similarity'])} pairs below the gate's similarity floor")
     if args.report:

@@ -467,7 +467,7 @@ in `ArbitrageEngine._best_combination`.
      ≥ 2 books) before vs after.
 - **Verify:** §5 S1 (the config changes must not break any test).
 - **Done when:** the round's before/after numbers are in the Log and S1 is green.
-- **Log:** —
+- **Log:** 2026-10-27 round (inputs: the 2026-10-20 scan and a 2026-10-27 00:05 UTC scan with MaxBet; Mozzartbet/Premier/WWIN returned nothing at that hour). The script now reads names through `canonicalize_fixture` and writes conflict components as `league_equivalences.json` pairs. Applied: 70 names onto 42 ids, 36 new ids, 5 equivalence pairs (UEFA Youth League, Liga MX women, Russian and Bulgarian 2nd tier, EFL Cup), 542 aliases. Every league proposal was checked for same country and tier; two odd-looking ones are fixture-backed (MaxBet files Carling Knockout games as "Nedbank Cup"; NSoft lists the Irish 1st-division play-off as "Irska 2"). Listings in verified groups: 4,292 -> 4,387 (2026-10-20 scan), 2,270 -> 2,393 (2026-10-27 scan). 588 pairs below the similarity floor and 28 ambiguous names are left for the Review tab.
 
 #### M1-2 · Mozzartbet prematch coverage
 

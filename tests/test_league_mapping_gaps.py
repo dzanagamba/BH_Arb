@@ -666,8 +666,22 @@ def test_a_wrong_cross_league_claim_is_still_rejected(matcher: MatchMatcher) -> 
 
 
 def test_no_new_cross_league_equivalences_were_introduced(matcher: MatchMatcher) -> None:
-    """Only the pre-existing Europa/Conference pair may merge two ids."""
-    assert matcher._equivalences == {("europa_league", "conference_league")}
+    """Only reviewed pairs may merge two ids.
+
+    Besides the pre-existing Europa/Conference pair, every pair was written by
+    ``scripts/derive_mappings.py --apply`` on 2026-10-27 for a conflict: one
+    competition that had two ids, joined by shared fixtures (UEFA Youth League,
+    Liga MX women, Russian and Bulgarian second tiers, EFL Cup). A new pair has
+    to be added here deliberately.
+    """
+    assert matcher._equivalences == {
+        ("europa_league", "conference_league"),
+        ("auto_medjunarodne_mladi_uefa_liga_mladi", "auto_medunarodne_mladi_uefa_omladinska_liga"),
+        ("auto_meksiko_liga_mx_z_apertura", "mexico_women_liga_mx_f"),
+        ("auto_rusija_1_liga", "russian_first_league"),
+        ("auto_engleska_liga_kup_1_8_finala", "efl_cup"),
+        ("auto_bugarska_2_liga", "bugarian_second_league"),
+    }
 
 
 def test_mapping_a_localised_label_cannot_leak_into_a_generic_bucket(
