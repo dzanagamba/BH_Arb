@@ -1126,6 +1126,33 @@ def test_a_subframe_response_proves_the_link():
     assert f"betting/match/{EVENT_ID}" in outcome.evidence
 
 
+def test_an_error_reply_that_echoes_the_id_proves_nothing():
+    """MaxBet's reply for a dead id, verbatim (2026-10-27): HTTP 404 that names it."""
+    dead = "999999999"
+    url = f"https://sportsbook.maxbet.ba/match/{dead}"
+    shell = FakeFrame(url)
+    body = (
+        '{"status":404,"error":"Not Found","code":404,"name":"MatchNotFound",'
+        f'"message":"Match with id {dead} is not active!","type":"RestException",'
+        f'"parameters":{{"id":{dead}}},'
+        f'"location":"/sportsbook/rest/v2/matches/{dead}"}}'
+    )
+    response = FakeResponse(
+        f"https://sportsbook.maxbet.ba/sportsbook/rest/v2/matches/{dead}?ln=cnr", body, shell
+    )
+    response.status = 404
+    page = FakePage(shell, [response])
+
+    outcome = _check(page, event_id=dead, url=url, base="https://www.maxbet.ba")
+
+    assert outcome.verified is False, outcome.evidence
+
+    # The same body with a 200 is what a resolved event looks like to the walk,
+    # so the status is the only thing that tells them apart.
+    response.status = 200
+    assert _check(page, event_id=dead, url=url, base="https://www.maxbet.ba").verified is True
+
+
 def test_a_main_frame_response_still_proves_the_link():
     shell = FakeFrame(EVENT_URL)
     body = f'{{"match":{{"id":{EVENT_ID}}}}}'

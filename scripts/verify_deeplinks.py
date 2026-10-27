@@ -423,6 +423,12 @@ async def check_target(page, target: LinkTarget, base_url: str) -> LinkOutcome:
         content_type = response.headers.get("content-type", "")
         if "json" not in content_type.lower() or not book_owned_host(url, base_url):
             return
+        # Only a successful answer resolved the event. An error payload can echo
+        # the id it was asked for: MaxBet answers a dead id with HTTP 404 and
+        # {"name": "MatchNotFound", "parameters": {"id": <id>}} (2026-10-27).
+        status = getattr(response, "status", 200)
+        if not isinstance(status, int) or not 200 <= status < 300:
+            return
 
         async def read() -> None:
             try:
