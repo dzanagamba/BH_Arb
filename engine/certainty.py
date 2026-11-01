@@ -12,6 +12,7 @@ says it has no per-event route, so there is no URL to open. A book that has
 declared neither is not accepted — see :meth:`CertaintyGate._link_evidence`.
 """
 
+import functools
 import re
 import unicodedata
 from dataclasses import dataclass, field
@@ -156,12 +157,18 @@ class CertaintyGate:
         ) / 60.0
 
     @staticmethod
+    @functools.lru_cache(maxsize=65536)
     def _raw_team_key(name: str) -> str:
         """Make only lossless superficial raw-name comparisons.
 
         This deliberately does not call the normalizer's fuzzy fallback. Team
         identity decisions that see different raw forms must go through the
         explicit alias allowlist.
+
+        The matcher asks for the same names thousands of times per scan (every
+        team similarity check re-normalizes both sides), so the pure result is
+        memoized. The cache is per process and never cleared by a caller: the
+        function's output depends only on ``name``.
         """
         decomposed = unicodedata.normalize("NFKD", name.casefold().translate(_LETTER_FOLDS))
         plain = "".join(char for char in decomposed if not unicodedata.combining(char))
@@ -276,6 +283,11 @@ class CertaintyGate:
         """Return whether the unordered raw pair is in the reviewed-alias file."""
         if not self.reviewed_aliases:
             return False
+        pair = frozenset((self._raw_team_key(left), self._raw_team_key(right)))
+        return pair in self._reviewed_index()
+
+    def _reviewed_index(self) -> frozenset[frozenset[str]]:
+        """The reviewed aliases as a set of normalized pairs, rebuilt when they change."""
         snapshot = (id(self.reviewed_aliases), len(self.reviewed_aliases))
         cached = getattr(self, "_reviewed_cache", None)
         if cached is None or cached[0] != snapshot:
@@ -286,7 +298,7 @@ class CertaintyGate:
             )
             cached = (snapshot, index)
             self._reviewed_cache = cached
-        return frozenset((self._raw_team_key(left), self._raw_team_key(right))) in cached[1]
+        return cached[1]
 
     def _allowlist_index(self) -> frozenset[frozenset[str]]:
         """The allowlist as a set of normalized pairs, rebuilt when it changes.

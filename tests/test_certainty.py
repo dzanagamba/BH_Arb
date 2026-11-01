@@ -463,6 +463,42 @@ def test_allowlisted_alias_does_not_bypass_hard_gates():
     )
 
 
+def test_allowlist_lookup_is_invalidated_when_the_set_changes():
+    """The index must follow in-place additions, as the matcher does them."""
+    allowlist = {"unrelated one|unrelated two"}
+    gate = CertaintyGate(alias_allowlist=allowlist)
+    assert gate.alias_allowlist is allowlist
+    assert gate._is_allowlisted("Alpha United", "Alpha") is False
+
+    allowlist.add("alpha united|alpha")
+
+    assert gate._is_allowlisted("Alpha United", "Alpha") is True
+
+
+def test_reviewed_lookup_is_invalidated_when_the_set_changes():
+    reviewed = {"unrelated one|unrelated two"}
+    gate = CertaintyGate(reviewed_aliases=reviewed)
+    assert gate.reviewed_aliases is reviewed
+    assert gate._is_reviewed("Alpha United", "Alpha") is False
+
+    reviewed.add("alpha united|alpha")
+
+    assert gate._is_reviewed("Alpha United", "Alpha") is True
+
+
+def test_alias_pairs_are_recognised_in_both_directions():
+    gate = CertaintyGate(
+        alias_allowlist={"alpha united|alpha"},
+        reviewed_aliases={"bravo united|bravo"},
+    )
+    assert gate._is_allowlisted("Alpha United", "Alpha") is True
+    assert gate._is_allowlisted("Alpha", "Alpha United") is True
+    assert gate._is_allowlisted("Alpha", "Bravo") is False
+    assert gate._is_reviewed("Bravo United", "Bravo") is True
+    assert gate._is_reviewed("Bravo", "Bravo United") is True
+    assert gate._is_reviewed("Bravo", "Alpha") is False
+
+
 def test_evaluate_against_group_uses_group_as_canonical():
     gate = CertaintyGate()
     a = _m("mdshop", "Sarajevo", "Zeljeznicar", "BiH - Premier Liga", event_id="1")
