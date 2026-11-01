@@ -26,6 +26,9 @@ if __name__ == "__main__":
       API Docs:  http://localhost:{PORT}/docs
     ==========================================
     """)
-    uvicorn.run(
-        "server.app:app", host=HOST, port=PORT, reload=False, log_level=LOG_LEVEL.lower()
-    )
+    try:
+        uvicorn.run(
+            "server.app:app", host=HOST, port=PORT, reload=False, log_level=LOG_LEVEL.lower()
+        )
+    except KeyboardInterrupt:
+        logging.info("KeyboardInterrupt received, shutting down gracefully.")
