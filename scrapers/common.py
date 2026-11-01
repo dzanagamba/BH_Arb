@@ -9,6 +9,7 @@ outcome normalization and datetime parsing consistent across bookmakers.
 from __future__ import annotations
 
 import json
+import logging
 import os
 from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
@@ -17,6 +18,8 @@ from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
 from models.schemas import Market, MarketType, OddsValue
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from engine.market_registry import MarketRegistry, MarketSpec
@@ -60,9 +63,9 @@ def parse_dt(raw) -> datetime | None:
     Strings carrying an explicit offset (e.g. '+02:00' or 'Z') are converted to
     UTC first instead of having the offset silently truncated.
     """
-    if not raw:
-        return None
     try:
+        if not raw:
+            return None
         if isinstance(raw, int | float):
             ts = raw / 1000 if raw > 1e10 else raw
             return datetime.fromtimestamp(ts, tz=UTC).replace(tzinfo=None)
@@ -76,22 +79,25 @@ def parse_dt(raw) -> datetime | None:
                 if dt.tzinfo is not None:
                     dt = dt.astimezone(UTC).replace(tzinfo=None)
                 return dt
-            except ValueError:
-                pass
+            except ValueError as e:
+                logger.debug("Failed to parse '%s' with fromisoformat: %s", raw, e)
             for fmt in DT_FORMATS:
                 try:
                     return datetime.strptime(s, fmt)
-                except ValueError:
+                except ValueError as e:
+                    logger.debug("Failed to parse '%s' with format '%s': %s", raw, fmt, e)
                     continue
             # Fallback: truncate millis/timezone suffixes (e.g. "2026-08-20T18:00:00.000")
             for fmt in DT_FORMATS:
                 try:
-                    return datetime.strptime(s[:19], fmt[:19])
-                except ValueError:
+                    truncated = s[:19]
+                    return datetime.strptime(truncated, fmt[:19])
+                except ValueError as e:
+                    logger.debug("Failed to parse '%s' (truncated '%s') with format '%s': %s", raw, s[:19], fmt[:19], e)
                     continue
-    except Exception:
-        pass
-    return None
+    except Exception as e:
+        logger.error(f"Failed to parse datetime '{raw}': {type(e).__name__}: {e}")
+        return None
 
 
 def betradar_id(*values: object) -> str:

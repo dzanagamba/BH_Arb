@@ -1,5 +1,6 @@
 """Tests for shared scraper helpers."""
 
+import logging
 from datetime import datetime
 
 from models.schemas import MarketType
@@ -30,6 +31,14 @@ def test_parse_dt_epoch_ms():
 def test_parse_dt_invalid():
     assert parse_dt("not-a-date") is None
     assert parse_dt(None) is None
+
+
+def test_parse_dt_debug_logging(caplog):
+    """Verify debug logs are emitted when parse_dt fails on bad inputs."""
+    with caplog.at_level(logging.DEBUG):
+        assert parse_dt("garbage") is None
+        assert parse_dt("") is None
+        assert "Failed to parse" in caplog.text
 
 
 def test_parse_teams_from_name():
