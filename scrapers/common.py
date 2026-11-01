@@ -97,7 +97,7 @@ def parse_dt(raw) -> datetime | None:
                     continue
     except Exception as e:
         logger.error(f"Failed to parse datetime '{raw}': {type(e).__name__}: {e}")
-        return None
+    return None
 
 
 def betradar_id(*values: object) -> str:
