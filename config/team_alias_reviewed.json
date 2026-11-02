@@ -1,6 +1,6 @@
 {
- "_about": "Team spellings reviewed by a person (or at an operator's request) from shared-fixture evidence, for pairs below the 90 similarity floor that config/team_alias_allowlist.json is held to. The certainty gate (engine/certainty.py) accepts an 'approved' pair without that floor; league, kickoff, category and link checks still apply. 'rejected' entries are kept with their reason so a later round does not re-review them. First round: 2026-10-27, inputs the 2026-10-20 prematch scan and a 2026-10-27 scan with MaxBet (scripts/derive_mappings.py below_gate_similarity), reviewed by Claude at the operator's request.",
- "reviewed_at": "2026-10-27",
+ "_about": "Team spellings reviewed by a person (or at an operator's request) from shared-fixture evidence, for pairs below the 90 similarity floor that config/team_alias_allowlist.json is held to. The certainty gate (engine/certainty.py) accepts an 'approved' pair without that floor; league, kickoff, category and link checks still apply. 'rejected' entries are kept with their reason so a later round does not re-review them. First round: 2026-10-27, inputs the 2026-10-20 prematch scan and a 2026-10-27 scan with MaxBet (scripts/derive_mappings.py below_gate_similarity), reviewed by Claude at the operator's request. Second round: 2026-11-02, inputs the 2026-11-01 prematch and live scans (scripts/derive_mappings.py below_gate_similarity); batches shown with shared-fixture evidence, approved by the operator.",
+ "reviewed_at": "2026-11-02",
  "approved": [
   {
    "alias": "A. Famagusta|Anorthosis",
@@ -2826,6 +2826,841 @@
    "alias": "Z.Waregem|Zulte-Waregem",
    "similarity": 88,
    "evidence": "mozzartbet: RAAL La Louviere - Zulte-Waregem (BELGIJA  1) | wwin: Raal La Louviere - Z.Waregem (Belgija - Pro Liga) @ 2026-10-24 18:45"
+  },
+  {
+   "alias": "Hapoel T.A.|Hapoel Tel Aviv",
+   "similarity": 89,
+   "evidence": "mozzartbet: Hapoel T.A. - Maccabi Haifa (IZRAEL  1) | mdshop: Hapoel Tel Aviv - Maccabi Haifa (Izrael 1) @ 2026-11-02 18:30"
+  },
+  {
+   "alias": "A.Italiano|Audax Italiano",
+   "similarity": 89,
+   "evidence": "mozzartbet: Limache - Audax Italiano (ČILE  1) | mdshop: Limache - A.Italiano (Čile 1) @ 2026-11-02 21:00"
+  },
+  {
+   "alias": "Aud. Italiano|Audax Italiano",
+   "similarity": 89,
+   "evidence": "mozzartbet: Limache - Audax Italiano (ČILE  1) | sportplus: Limache - Aud. Italiano (ČILE - 1.LIGA) @ 2026-11-02 21:00"
+  },
+  {
+   "alias": "Tru Juice|Tru-Juice FC",
+   "similarity": 89,
+   "evidence": "mdshop: Tru Juice - Chapelton (Jamajka 1) | maxbet: Tru-Juice FC - Chapelton (Jamaica 1) @ 2026-11-01 20:00"
+  },
+  {
+   "alias": "Fuerte S.Francisco Morazan|Fuerte San Francisco",
+   "similarity": 89,
+   "evidence": "admiralbet: Fuerte San Francisco - Aguila (El Salvador - Primera Divizija) | wwin: Fuerte S.Francisco Morazan - Aguila (El Salvador - Primera Division, Apertura) @ 2026-11-01 21:00"
+  },
+  {
+   "alias": "Kryvbas 2000|Kryvbas KR",
+   "similarity": 89,
+   "evidence": "betradar 72409774: mdshop: Kryvbas 2000 - Dynamo Kiev | wwin: Kryvbas KR - Dynamo K."
+  },
+  {
+   "alias": "Ind Medellin|Indep. Medellin",
+   "similarity": 89,
+   "evidence": "betradar 72335248: sportplus: Indep. Medellin - Alianza | maxbet: Ind Medellin - Alianza FC Valledupar"
+  },
+  {
+   "alias": "AL Zulfi|Al-Zulfi FC",
+   "similarity": 88,
+   "evidence": "sportplus: AL Zulfi - AL Jandal (S.ARABIJA - 2.LIGA) | wwin: Al-Zulfi FC - AL Jandal (Saudijska Arabija - Division 1) @ 2026-11-02 14:55"
+  },
+  {
+   "alias": "CA Estudiantes|Estudiantes de Caseros",
+   "similarity": 88,
+   "evidence": "mdshop: All Boys - CA Estudiantes (Argentina 2) | maxbet: All Boys - Estudiantes de Caseros (Argentina 2) @ 2026-11-02 16:00"
+  },
+  {
+   "alias": "SumQayit|Sumgayit",
+   "similarity": 88,
+   "evidence": "mdshop: SumQayit - Safa (Azerbejdžan 1) | mbet: Sumgayit - Safa (AZERBAIJAN 1) @ 2026-11-02 15:00"
+  },
+  {
+   "alias": "Miami United|Miami Utd",
+   "similarity": 88,
+   "evidence": "mdshop: Davie United SC - Miami United (United Premier Soccer League) | wwin: Davie United SC - Miami Utd (SAD - UPSL) @ 2026-11-01 21:00"
+  },
+  {
+   "alias": "V.Jihlava|Vysocina Jihlava",
+   "similarity": 88,
+   "evidence": "betradar 72300862: wwin: Ostrava B - V.Jihlava | maxbet: Banik Ostrava B - Vysocina Jihlava"
+  },
+  {
+   "alias": "FK Sumqayit|Sumgayit",
+   "similarity": 88,
+   "evidence": "betradar 73409316: sportplus: Sumgayit - Safa | maxbet: FK Sumqayit - Shafa Baku FC"
+  },
+  {
+   "alias": "Talleres (R.E)|Talleres Remedios",
+   "similarity": 88,
+   "evidence": "betradar 67119896: sportplus: Comun. Bsas - Talleres (R.E) | wwin: Comunicaciones - Talleres Remedios"
+  },
+  {
+   "alias": "AL Zulfi|Al-Zulfi SC",
+   "similarity": 88,
+   "evidence": "betradar 73206564: sportplus: AL Zulfi - AL Jandal | maxbet: Al-Zulfi SC - Al-Jndal"
+  },
+  {
+   "alias": "Hap. Ramat Gan|Hapoel Ramat Gan",
+   "similarity": 87,
+   "evidence": "mdshop: Hapoel Ramat Gan - Maccabi Tel Aviv (Izrael 1) | mbet: Hap. Ramat Gan - Maccabi Tel Aviv (ISRAEL 1) @ 2026-11-02 18:00"
+  },
+  {
+   "alias": "Hap. Kfar Saba|Hapoel Kfar Saba",
+   "similarity": 87,
+   "evidence": "mbet: Maccabi Jaffa - Hapoel Kfar Saba (ISRAEL 2) | sportplus: Maccabi Jaffa - Hap. Kfar Saba (IZRAEL - 2.LIGA) @ 2026-11-02 17:00"
+  },
+  {
+   "alias": "MSF Hap.Kiryat Yam|SC Kiryat Yam",
+   "similarity": 87,
+   "evidence": "betradar 75660756: wwin: Hap.Raanana - MSF Hap.Kiryat Yam | maxbet: Hapoel Raanana - SC Kiryat Yam"
+  },
+  {
+   "alias": "DVTK|Diosgyori VTK",
+   "similarity": 86,
+   "evidence": "mdshop: DVTK - Kecskemeti TE (Mađarska 2) | wwin: Diosgyori VTK - Kecskemeti TE (Mađarska - NB II) @ 2026-11-02 18:30"
+  },
+  {
+   "alias": "Ind Medellin|Independiente Medellín",
+   "similarity": 86,
+   "evidence": "betradar 72335248: mdshop: Independiente Medellín - Alianza Valledupar | maxbet: Ind Medellin - Alianza FC Valledupar"
+  },
+  {
+   "alias": "Union De Santa Fe|Union SF",
+   "similarity": 86,
+   "evidence": "betradar 73265474: mdshop: Newells Old Boys - Union De Santa Fe | wwin: Newells OB - Union SF"
+  },
+  {
+   "alias": "Hap. Raanana|Hapoel Raanana",
+   "similarity": 85,
+   "evidence": "mozzartbet: Hapoel Raanana - Kiryat Yam (IZRAEL  2) | sportplus: Hap. Raanana - Kiryat Yam (IZRAEL - 2.LIGA) @ 2026-11-02 17:00"
+  },
+  {
+   "alias": "Ind Medellin|Indep.Medellin",
+   "similarity": 85,
+   "evidence": "betradar 72335248: wwin: Indep.Medellin - Alianza Valledupar | maxbet: Ind Medellin - Alianza FC Valledupar"
+  },
+  {
+   "alias": "Ath. Bilbao (W)|Athletic Bilbao (W)",
+   "similarity": 85,
+   "evidence": "betradar 72491410: sportplus: Tenerife (W) - Ath. Bilbao (W) | maxbet: UDG Tenerife Sur (W) - Athletic Bilbao (W)"
+  },
+  {
+   "alias": "CSB Atenas|Sportivo y Biblioteca Atenas",
+   "similarity": 84,
+   "evidence": "betradar 75804528: sportplus: CSB Atenas - Sarmiento de la Banda | maxbet: Sportivo y Biblioteca Atenas - Atletico Sarmiento de la Banda"
+  },
+  {
+   "alias": "FK Kudrivka|Kudrivka Irpin",
+   "similarity": 84,
+   "evidence": "betradar 72409764: mdshop: Karpaty Lviv - Kudrivka Irpin | wwin: FC Karpaty Lviv - FK Kudrivka"
+  },
+  {
+   "alias": "Din. Tirana|Dinamo Tirana",
+   "similarity": 83,
+   "evidence": "mbet: Vora - Dinamo Tirana (ALBANIA 1) | sportplus: Vora - Din. Tirana (ALBANIJA - 1. LIGA) @ 2026-11-02 12:30"
+  },
+  {
+   "alias": "Macc. Haifa|Maccabi Haifa",
+   "similarity": 83,
+   "evidence": "mozzartbet: Hapoel T.A. - Maccabi Haifa (IZRAEL  1) | sportplus: Hapoel T.A. - Macc. Haifa (IZRAEL - 1.LIGA) @ 2026-11-02 18:30"
+  },
+  {
+   "alias": "Macc.Tel Aviv|Maccabi Tel Aviv",
+   "similarity": 83,
+   "evidence": "mbet: Hap. Ramat Gan - Maccabi Tel Aviv (ISRAEL 1) | wwin: Hap.Ramat Gan - Macc.Tel Aviv (Izrael - Premier Liga) @ 2026-11-02 18:00"
+  },
+  {
+   "alias": "AF Sporting SM|Sporting San Miguelito",
+   "similarity": 83,
+   "evidence": "mozzartbet: Sporting San Miguelito - Umecit (Panama 1 Apertura) | wwin: AF Sporting SM - Umecit (Panama - Liga Panamena de Futbol, Apertura) @ 2026-11-01 21:00"
+  },
+  {
+   "alias": "Hap.Ramat Gan|Hapoel Ramat Gan",
+   "similarity": 83,
+   "evidence": "betradar 72225402: mdshop: Hapoel Ramat Gan - Maccabi Tel Aviv | wwin: Hap.Ramat Gan - Macc.Tel Aviv"
+  },
+  {
+   "alias": "Dep. La Guaira|Deportivo La Guaira",
+   "similarity": 83,
+   "evidence": "betradar 75833934: mdshop: Deportivo La Guaira - Portuguesa | wwin: Dep. La Guaira - Portuguesa FC"
+  },
+  {
+   "alias": "Ath.Bilbao (W)|Athletic Bilbao (W)",
+   "similarity": 83,
+   "evidence": "betradar 72491410: wwin: UDG Tenerife (W) - Ath.Bilbao (W) | maxbet: UDG Tenerife Sur (W) - Athletic Bilbao (W)"
+  },
+  {
+   "alias": "Dep. Laferrere|Deportivo Laferrere",
+   "similarity": 83,
+   "evidence": "betradar 67119898: sportplus: Def. Unidos - Dep. Laferrere | maxbet: Defensores Unidos - Deportivo Laferrere"
+  },
+  {
+   "alias": "Hap.Kfar Saba|Hapoel Kfar Saba",
+   "similarity": 83,
+   "evidence": "betradar 75660754: wwin: Macc.K. Jaffa - Hap.Kfar Saba | maxbet: Maccabi Kabilio Jaffa - Hapoel Kfar Saba"
+  },
+  {
+   "alias": "Španija|Španjolska",
+   "similarity": 83,
+   "evidence": "betradar 68931754: sportplus: Češka - Španjolska | wwin: Češka - Španija"
+  },
+  {
+   "alias": "Hap. Kfar Shalem|Hapoel Kfar Shelem",
+   "similarity": 82,
+   "evidence": "sportplus: Hap. Kfar Shalem - Ironi Modiin (IZRAEL - 2.LIGA) | maxbet: Hapoel Kfar Shelem - Ironi Modiin (Israel 2) @ 2026-11-02 17:00"
+  },
+  {
+   "alias": "CSB Atenas|Sportivo Atenas",
+   "similarity": 82,
+   "evidence": "mdshop: Sportivo Atenas - Sarmiento de la Banda (Argentina 3 A) | sportplus: CSB Atenas - Sarmiento de la Banda (ARGENTINA - TORNEO FEDERAL A - PLAY OFF - 1/8 FINALA) @ 2026-11-01 22:15"
+  },
+  {
+   "alias": "Gim. Mendoza|Gimnasia Mendoza",
+   "similarity": 82,
+   "evidence": "betradar 73265480: mdshop: Lanus - Gimnasia Mendoza | sportplus: Lanus - Gim. Mendoza"
+  },
+  {
+   "alias": "AL Jandal|Al-Jndal",
+   "similarity": 82,
+   "evidence": "betradar 73206564: sportplus: AL Zulfi - AL Jandal | maxbet: Al-Zulfi SC - Al-Jndal"
+  },
+  {
+   "alias": "Am. De Cali|America de Cali S.A",
+   "similarity": 82,
+   "evidence": "betradar 75837454: sportplus: Millonarios - Am. De Cali | maxbet: Millonarios - America de Cali S.A"
+  },
+  {
+   "alias": "Dep.San Pedro|Deportivo San Pedro",
+   "similarity": 82,
+   "evidence": "betradar 72475062: mdshop: Deportivo San Pedro - Municipal | wwin: Dep.San Pedro - Municipal"
+  },
+  {
+   "alias": "Hap.Tel Aviv|Hapoel Tel Aviv",
+   "similarity": 81,
+   "evidence": "betradar 72225366: mdshop: Hapoel Tel Aviv - Maccabi Haifa | wwin: Hap.Tel Aviv - Macc.Haifa"
+  },
+  {
+   "alias": "Univ.de Deportes|Universitario de Deportes",
+   "similarity": 81,
+   "evidence": "betradar 71936220: wwin: Atl.Grau - Univ.de Deportes | maxbet: Atletico Grau - Universitario de Deportes"
+  },
+  {
+   "alias": "Univ. de Vinto|Universitario de Vinto",
+   "similarity": 80,
+   "evidence": "mdshop: Universitario de Vinto - Always Ready (Bolivija 1) | sportplus: Univ. de Vinto - Always Ready (BOLIVIJA - 1.LIGA) @ 2026-11-01 23:30"
+  },
+  {
+   "alias": "Hap.Raanana|Hapoel Raanana",
+   "similarity": 80,
+   "evidence": "mozzartbet: Hapoel Raanana - Kiryat Yam (IZRAEL  2) | premier_kladionica: Hap.Raanana - Kiryat Yam (IZRAELSKA 2.LIGA) @ 2026-11-02 17:00"
+  },
+  {
+   "alias": "Kryvbas 2000|Kryvbas Krivyi Rih",
+   "similarity": 80,
+   "evidence": "mdshop: Kryvbas 2000 - Dynamo Kiev (Ukrajina 1) | maxbet: Kryvbas Krivyi Rih - Dynamo Kiev (Ukraine 1) @ 2026-11-02 11:00"
+  },
+  {
+   "alias": "U. De Concepcion|Univ.Concepcion",
+   "similarity": 80,
+   "evidence": "sportplus: U. De Concepcion - O´Higgins (ČILE - 1.LIGA) | wwin: Univ.Concepcion - O´Higgins (Čile - Primera Division) @ 2026-11-05 23:00"
+  },
+  {
+   "alias": "Def.Justicia|Defensa y Justicia",
+   "similarity": 80,
+   "evidence": "betradar 73265468: mdshop: Defensa y Justicia - Independiente | wwin: Def.Justicia - CA Independiente"
+  },
+  {
+   "alias": "Bokelj Kotor|FK Bokelj",
+   "similarity": 80,
+   "evidence": "betradar 72304348: mdshop: Bokelj Kotor - Buducnost | maxbet: FK Bokelj - Fk Buducnost Podgorica"
+  },
+  {
+   "alias": "Def. Unidos|Defensores Unidos",
+   "similarity": 80,
+   "evidence": "betradar 67119898: sportplus: Def. Unidos - Dep. Laferrere | wwin: Defensores Unidos - Laferrere"
+  },
+  {
+   "alias": "Univ de Concepcion|Univ.Concepcion",
+   "similarity": 80,
+   "evidence": "betradar 67682104: wwin: Univ.Concepcion - O´Higgins | maxbet: Univ de Concepcion - OHiggins"
+  },
+  {
+   "alias": "Hap.Kfar Shalem|Hapoel Kfar Shelem",
+   "similarity": 79,
+   "evidence": "wwin: Hap.Kfar Shalem - Ironi Modiin (Izrael - National Liga) | maxbet: Hapoel Kfar Shelem - Ironi Modiin (Israel 2) @ 2026-11-02 17:00"
+  },
+  {
+   "alias": "Indep.Medellin|Independiente Medellín",
+   "similarity": 79,
+   "evidence": "mdshop: Independiente Medellín - Alianza Valledupar (Kolumbija 1) | wwin: Indep.Medellin - Alianza Valledupar (Kolumbija - Primera A, Apertura) @ 2026-11-01 23:10"
+  },
+  {
+   "alias": "Dep.Pereira|Deportivo Pereira",
+   "similarity": 78,
+   "evidence": "betradar 75837450: wwin: Dep.Pereira - Tolima | maxbet: Deportivo Pereira - Tolima"
+  },
+  {
+   "alias": "Macc.K. Jaffa|Maccabi Jaffa",
+   "similarity": 77,
+   "evidence": "sportplus: Maccabi Jaffa - Hap. Kfar Saba (IZRAEL - 2.LIGA) | wwin: Macc.K. Jaffa - Hap.Kfar Saba (Izrael - National Liga) @ 2026-11-02 17:00"
+  },
+  {
+   "alias": "Univ.de Vinto|Universitario de Vinto",
+   "similarity": 76,
+   "evidence": "mdshop: Universitario de Vinto - Always Ready (Bolivija 1) | wwin: Univ.de Vinto - Always Ready (Bolivija - Division Profesional) @ 2026-11-01 23:30"
+  },
+  {
+   "alias": "Torp.Kutaisi|Torpedo Kutaisi",
+   "similarity": 76,
+   "evidence": "mbet: Torpedo Kutaisi - Dila Gori (GEORGIA 1) | wwin: Torp.Kutaisi - Dila Gori (Gruzija - Erovnuli Liga) @ 2026-11-02 15:00"
+  },
+  {
+   "alias": "Dep. Mixco|Deportivo Mixco",
+   "similarity": 75,
+   "evidence": "mozzartbet: Comunicaciones - Deportivo Mixco (GVATEMALA  1  -  APERTURA) | sportplus: Comunicaciones - Dep. Mixco (GVATEMALA - 1.LIGA) @ 2026-11-02 02:00"
+  },
+  {
+   "alias": "Safa|Shafa Baku FC",
+   "similarity": 75,
+   "evidence": "betradar 73409316: mdshop: SumQayit - Safa | maxbet: FK Sumqayit - Shafa Baku FC"
+  },
+  {
+   "alias": "Hap.Tel Aviv|Hapoel T.A.",
+   "similarity": 74,
+   "evidence": "sportplus: Hapoel T.A. - Macc. Haifa (IZRAEL - 1.LIGA) | wwin: Hap.Tel Aviv - Macc.Haifa (Izrael - Premier Liga) @ 2026-11-02 18:30"
+  },
+  {
+   "alias": "Club Olimpia|Olimpia Asuncion",
+   "similarity": 74,
+   "evidence": "mdshop: Cerro Porteno - Olimpia Asuncion (Paragvaj 1) | wwin: Cerro Porteno - Club Olimpia (Paragvaj - Division de Honor, Apertura) @ 2026-11-01 20:00"
+  },
+  {
+   "alias": "Volna N. Novgorod|Volna Nizhegorodskaya",
+   "similarity": 73,
+   "evidence": "betradar 75696972: sportplus: Spartak Kostroma - Volna N. Novgorod | maxbet: S. Kostroma - Volna Nizhegorodskaya"
+  },
+  {
+   "alias": "Din. Tirana|Din.City",
+   "similarity": 71,
+   "evidence": "sportplus: Vora - Din. Tirana (ALBANIJA - 1. LIGA) | wwin: Vora - Din.City (Albanija - Kategoria Superiore) @ 2026-11-02 12:30"
+  },
+  {
+   "alias": "Dep.Mixco|Deportivo Mixco",
+   "similarity": 71,
+   "evidence": "mozzartbet: Comunicaciones - Deportivo Mixco (GVATEMALA  1  -  APERTURA) | premier_kladionica: Comunicaciones - Dep.Mixco (GVATEMALA 1.LIGA) @ 2026-11-02 02:00"
+  },
+  {
+   "alias": "Am. De Cali|America Cali",
+   "similarity": 71,
+   "evidence": "sportplus: Millonarios - Am. De Cali (KOLUMBIJA - 1.LIGA) | wwin: Millonarios - America Cali (Kolumbija - Primera A, Apertura) @ 2026-11-05 01:30"
+  },
+  {
+   "alias": "Macc.Haifa|Maccabi Haifa",
+   "similarity": 71,
+   "evidence": "betradar 72225366: mdshop: Hapoel Tel Aviv - Maccabi Haifa | wwin: Hap.Tel Aviv - Macc.Haifa"
+  },
+  {
+   "alias": "Dep. Cali|Deportivo Cali",
+   "similarity": 71,
+   "evidence": "betradar 72335250: mdshop: Dep. Cali - Chico | maxbet: Deportivo Cali - Boyaca Chico"
+  },
+  {
+   "alias": "BG Pathumthani United|Pathum Utd.",
+   "similarity": 70,
+   "evidence": "sportplus: Chonburi - Pathum Utd. (TAJLAND - 1.LIGA) | maxbet: Chonburi - BG Pathumthani United (Thailand 1) @ 2026-11-02 12:00"
+  },
+  {
+   "alias": "Ath.Club SJDR MG|Athletic Club",
+   "similarity": 67,
+   "evidence": "mdshop: Athletic Club - Ceara (Brazil 2) | wwin: Ath.Club SJDR MG - Ceara (Brazil - Brasileiro, Serie B) @ 2026-11-02 21:00 | round-1 provisional rejection superseded 2026-11-02 with concrete evidence (betradar event id / documented club rename)."
+  },
+  {
+   "alias": "Patr.Parana|Patronato",
+   "similarity": 67,
+   "evidence": "mbet: Atl. Rafaela - Patronato (ARGENTINA 2) | wwin: Atl.Rafaela - Patr.Parana (Argentina - Primera Nacional) @ 2026-11-02 18:00"
+  },
+  {
+   "alias": "Atl.Nacional|Atletico Nacional Medellin",
+   "similarity": 67,
+   "evidence": "betradar 72335258: sportplus: Atl.Bucaramanga - Atl.Nacional | maxbet: Atletico Bucaramanga - Atletico Nacional Medellin"
+  },
+  {
+   "alias": "Union de Salamanca|Unionistas",
+   "similarity": 67,
+   "evidence": "betradar 72559194: mdshop: CD Extremadura - Unionistas | maxbet: Extremadura UD - Union de Salamanca"
+  },
+  {
+   "alias": "Comun. Bsas|Comunicaciones",
+   "similarity": 63,
+   "evidence": "betradar 67119896: sportplus: Comun. Bsas - Talleres (R.E) | wwin: Comunicaciones - Talleres Remedios"
+  },
+  {
+   "alias": "Comun. Bsas|Comunicaciones B Aires",
+   "similarity": 63,
+   "evidence": "betradar 67119896: sportplus: Comun. Bsas - Talleres (R.E) | maxbet: Comunicaciones B Aires - Talleres"
+  },
+  {
+   "alias": "Macc.K. Jaffa|Maccabi Kabilio Jaffa",
+   "similarity": 63,
+   "evidence": "betradar 75660754: wwin: Macc.K. Jaffa - Hap.Kfar Saba | maxbet: Maccabi Kabilio Jaffa - Hapoel Kfar Saba"
+  },
+  {
+   "alias": "Macc.Tel Aviv|Maccabi T.A.",
+   "similarity": 62,
+   "evidence": "sportplus: Hap. Ramat Gan - Maccabi T.A. (IZRAEL - 1.LIGA) | wwin: Hap.Ramat Gan - Macc.Tel Aviv (Izrael - Premier Liga) @ 2026-11-02 18:00"
+  },
+  {
+   "alias": "Din.City|Dinamo Tirana",
+   "similarity": 55,
+   "evidence": "mbet: Vora - Dinamo Tirana (ALBANIA 1) | wwin: Vora - Din.City (Albanija - Kategoria Superiore) @ 2026-11-02 12:30"
+  },
+  {
+   "alias": "Atletico Independiente|Indep. Chorrera",
+   "similarity": 43,
+   "evidence": "betradar 76123254: sportplus: Indep. Chorrera - San Francisco | maxbet: Atletico Independiente - San Francisco FC"
+  },
+  {
+   "alias": "Atletico Independiente|Indep.La Chorrera",
+   "similarity": 41,
+   "evidence": "betradar 76123254: wwin: Indep.La Chorrera - San Francisco | maxbet: Atletico Independiente - San Francisco FC"
+  },
+  {
+   "alias": "DVTK|Diosgyori",
+   "similarity": 40,
+   "evidence": "betradar 75896328: mdshop: DVTK - Kecskemeti TE | maxbet: Diosgyori - Kecskemeti"
+  },
+  {
+   "alias": "Aguilas Doradas|Rionegro",
+   "similarity": 38,
+   "evidence": "betradar 75145660: wwin: Rionegro - Fortaleza | maxbet: Aguilas Doradas - Fortaleza FC"
+  },
+  {
+   "alias": "Holandija|Nizozemska",
+   "similarity": 36,
+   "evidence": "betradar 68931584: sportplus: Nizozemska - Grčka | wwin: Holandija - Grčka"
+  },
+  {
+   "alias": "Polissya|Zhytomyr",
+   "similarity": 33,
+   "evidence": "sportplus: Zhytomyr - Veres Rivne (UKRAJINA - 1.LIGA) | wwin: Polissya - Veres Rivne (Ukrajina - Premier Liga) @ 2026-11-06 13:30"
+  },
+  {
+   "alias": "Aguilas|Rionegro",
+   "similarity": 22,
+   "evidence": "mozzartbet: Aguilas - Fortaleza (KOLUMBIJA  1  -  KLAUSURA) | wwin: Rionegro - Fortaleza (Kolumbija - Primera A, Apertura) @ 2026-11-02 21:05"
+  },
+  {
+   "alias": "Kitayosce FC|Tabora United FC",
+   "similarity": 63,
+   "evidence": "sportplus: Kitayosce FC - Fountain Gate (TANZANIJA - 1.LIGA) | maxbet: Tabora United FC - Fountain Gate (Tanzania 1) @ 2026-11-02 11:00"
+  },
+  {
+   "alias": "Quevilly|Rouen",
+   "similarity": 50,
+   "evidence": "sportplus: Villefranche - Rouen (FRANCUSKA - 3.LIGA) | premier_kladionica: Villefranche - Quevilly (FRANCUSKA 3.LIGA) @ 2026-11-07 13:45 | round-1 provisional rejection superseded 2026-11-02 with concrete evidence (betradar event id / documented club rename)."
+  },
+  {
+   "alias": "FC Kharkiv|Metalist 1925",
+   "similarity": 26,
+   "evidence": "betradar 72409780: sportplus: FC Kharkiv - Karpaty | wwin: Metalist 1925 - FC Karpaty Lviv | round-1 provisional rejection superseded 2026-11-02 with concrete evidence (betradar event id / documented club rename)."
+  },
+  {
+   "alias": "AF Sporting SM|Miguelito",
+   "similarity": 27,
+   "evidence": "mbet: Miguelito - UMECIT (PANAMA 1) | wwin: AF Sporting SM - Umecit (Panama - Liga Panamena de Futbol, Apertura) @ 2026-11-01 21:00"
+  },
+  {
+   "alias": "Niepolomice|Puszcza",
+   "similarity": 29,
+   "evidence": "mozzartbet: Stal Rzeszow - Niepolomice (POLJSKA  2) | mdshop: Stal Rzeszow - Puszcza (Poljska 2) @ 2026-11-02 19:30"
+  },
+  {
+   "alias": "Kielce|Korona",
+   "similarity": 29,
+   "evidence": "sportplus: Zaglebie L. - Korona (POLJSKA - 1.LIGA) | premier_kladionica: Zaglebie L - Kielce (POLJSKA 1.LIGA) @ 2026-11-02 17:00"
+  },
+  {
+   "alias": "K.S.Samara|Kryliya Sovetov",
+   "similarity": 35,
+   "evidence": "premier_kladionica: K.S.Samara - Zenit (RUSKA 1.LIGA) | wwin: Kryliya Sovetov - Zenit (Rusija - Premier Liga) @ 2026-11-02 15:00"
+  },
+  {
+   "alias": "Kitayosce FC|TRA United",
+   "similarity": 36,
+   "evidence": "sportplus: Kitayosce FC - Fountain Gate (TANZANIJA - 1.LIGA) | premier_kladionica: TRA United - Fountain Gate (TANZANIJSKA 1.LIGA) @ 2026-11-02 11:00"
+  },
+  {
+   "alias": "Royale Union SG|U.S.Gilloise",
+   "similarity": 40,
+   "evidence": "mbet: Royale Union SG - Genk (BELGIUM 1) | premier_kladionica: U.S.Gilloise - Genk (BELGIJSKA 1.LIGA) @ 2026-11-08 17:30"
+  },
+  {
+   "alias": "Ind.Valle del Cauca|Independiente Yumbo",
+   "similarity": 46,
+   "evidence": "premier_kladionica: Ind.Valle del Cauca - Boca Juniors de Cali (KOLUMBIJSKA 2.LIGA) | maxbet: Independiente Yumbo - Boca Juniors de Cali (Colombia 2) @ 2026-11-02 19:00"
+  },
+  {
+   "alias": "CA Independiente|Indep.La Chorrera",
+   "similarity": 48,
+   "evidence": "mozzartbet: CA Independiente - San Francisco (PANAMA  1  -  APERTURA) | wwin: Indep.La Chorrera - San Francisco (Panama - Liga Panamena de Futbol, Apertura) @ 2026-11-01 23:15"
+  },
+  {
+   "alias": "Univ.de Deportes|Universitario",
+   "similarity": 50,
+   "evidence": "premier_kladionica: Atl.Grau - Universitario (PERUANSKA 1.LIGA) | wwin: Atl.Grau - Univ.de Deportes (Peru - Primera Division) @ 2026-11-01 20:30"
+  },
+  {
+   "alias": "CA Independiente|Indep. Chorrera",
+   "similarity": 52,
+   "evidence": "mozzartbet: CA Independiente - San Francisco (PANAMA  1  -  APERTURA) | sportplus: Indep. Chorrera - San Francisco (PANAMA - 1.LIGA) @ 2026-11-01 23:15"
+  },
+  {
+   "alias": "Niepolomice|Puszcza Niep.",
+   "similarity": 53,
+   "evidence": "mozzartbet: Stal Rzeszow - Niepolomice (POLJSKA  2) | wwin: Stal Rzeszow - Puszcza Niep. (Poljska - I Liga) @ 2026-11-02 19:30"
+  },
+  {
+   "alias": "Danska|Denmark",
+   "similarity": 55,
+   "evidence": "mozzartbet: Portugal - Denmark (LIGA  NACIJA  A) | premier_kladionica: Portugal - Danska (LIGA NACIJA LIGA A - Grupa 4) @ 2026-11-14 19:45"
+  },
+  {
+   "alias": "Hap.K.Shalem|Hapoel Kfar Shelem",
+   "similarity": 60,
+   "evidence": "premier_kladionica: Hap.K.Shalem - Ironi Modiin (IZRAELSKA 2.LIGA) | maxbet: Hapoel Kfar Shelem - Ironi Modiin (Israel 2) @ 2026-11-02 17:00"
+  },
+  {
+   "alias": "Gim. Mendoza|Gimnasia M.",
+   "similarity": 62,
+   "evidence": "mozzartbet: Lanus - Gimnasia M. (ARGENTINA  1  -  KLAUSURA) | sportplus: Lanus - Gim. Mendoza (ARGENTINA - 1.LIGA) @ 2026-11-01 23:45"
+  },
+  {
+   "alias": "Gimn.Mendoza|Gimnasia M.",
+   "similarity": 62,
+   "evidence": "mozzartbet: Lanus - Gimnasia M. (ARGENTINA  1  -  KLAUSURA) | wwin: Lanus - Gimn.Mendoza (Argentina - Liga Profesional) @ 2026-11-01 23:45"
+  },
+  {
+   "alias": "Hap. Ramat Gan|Hapoel R.G.",
+   "similarity": 62,
+   "evidence": "mozzartbet: Hapoel R.G. - Maccabi T.A. (IZRAEL  1) | sportplus: Hap. Ramat Gan - Maccabi T.A. (IZRAEL - 1.LIGA) @ 2026-11-02 18:00"
+  },
+  {
+   "alias": "Royale Union SG|Union St Gilloise",
+   "similarity": 64,
+   "evidence": "mbet: Celta Vigo - Royale Union SG (UEFA Europa League) | maxbet: Celta Vigo - Union St Gilloise (International Clubs - UEFA Europa League) @ 2026-11-05 20:00"
+  },
+  {
+   "alias": "Norveška|Norway",
+   "similarity": 67,
+   "evidence": "mozzartbet: Norway - Wales (LIGA  NACIJA  A) | premier_kladionica: Norveška - Wales (LIGA NACIJA LIGA A - Grupa 4) @ 2026-11-14 17:00"
+  },
+  {
+   "alias": "Hap.K.Shalem|Hapoel Kfar Shalem",
+   "similarity": 67,
+   "evidence": "mozzartbet: Hapoel Kfar Shalem - Ironi Modiin (IZRAEL  2) | premier_kladionica: Hap.K.Shalem - Ironi Modiin (IZRAELSKA 2.LIGA) @ 2026-11-02 17:00"
+  },
+  {
+   "alias": "F.Constanta|Farul Const.",
+   "similarity": 67,
+   "evidence": "premier_kladionica: Voluntari - F.Constanta (RUMUNJSKA 1.LIGA) | wwin: Voluntari - Farul Const. (Rumunija - Superliga) @ 2026-11-02 15:30"
+  },
+  {
+   "alias": "Biblioteca Atenas|Sportivo Atenas",
+   "similarity": 67,
+   "evidence": "mdshop: Sportivo Atenas - Sarmiento de la Banda (Argentina 3 A) | mbet: Biblioteca Atenas - Sarmiento de la Banda (ARGENTINA Torneo Federal) @ 2026-11-01 22:15"
+  },
+  {
+   "alias": "Univ. de Vinto|Universit.Vinto",
+   "similarity": 69,
+   "evidence": "mozzartbet: Universit.Vinto - Always Ready (BOLIVIJA  1) | sportplus: Univ. de Vinto - Always Ready (BOLIVIJA - 1.LIGA) @ 2026-11-01 23:30"
+  },
+  {
+   "alias": "Central Cordoba|Cordoba Santiago",
+   "similarity": 71,
+   "evidence": "mozzartbet: Platense - Cordoba Santiago (ARGENTINA  1  -  KLAUSURA) | sportplus: Platense - Central Cordoba (ARGENTINA - 1.LIGA) @ 2026-11-02 22:00"
+  },
+  {
+   "alias": "Univ.de Vinto|Universit.Vinto",
+   "similarity": 71,
+   "evidence": "mozzartbet: Universit.Vinto - Always Ready (BOLIVIJA  1) | wwin: Univ.de Vinto - Always Ready (Bolivija - Division Profesional) @ 2026-11-01 23:30"
+  },
+  {
+   "alias": "A. Lustenau|Austria Lust.",
+   "similarity": 71,
+   "evidence": "sportplus: A. Lustenau - GAK (AUSTRIJA - 1.LIGA) | premier_kladionica: Austria Lust. - GAK (AUSTRIJSKA 1.LIGA) @ 2026-11-07 16:00"
+  },
+  {
+   "alias": "Zhejiang Greentown|Zhejiang Professional",
+   "similarity": 73,
+   "evidence": "mbet: Zhejiang Professional - Henan Songshan Longmen (CHINA 1) | maxbet: Zhejiang Greentown - Henan Songshan Longmen (China 1) @ 2026-11-08 07:30"
+  },
+  {
+   "alias": "Safa|Shafa Baku",
+   "similarity": 75,
+   "evidence": "mozzartbet: Sumqayit - Shafa Baku (AZERBEJDŽAN  1) | mdshop: SumQayit - Safa (Azerbejdžan 1) @ 2026-11-02 15:00"
+  },
+  {
+   "alias": "Am.de Cali|America Cali",
+   "similarity": 75,
+   "evidence": "premier_kladionica: Millonarios - Am.de Cali (KOLUMBIJSKA 1.LIGA) | wwin: Millonarios - America Cali (Kolumbija - Primera A, Apertura) @ 2026-11-05 01:30"
+  },
+  {
+   "alias": "BG Pathumthani United|Pathum United",
+   "similarity": 76,
+   "evidence": "mozzartbet: Chonburi - Pathum United (TAJLAND  1) | maxbet: Chonburi - BG Pathumthani United (Thailand 1) @ 2026-11-02 12:00"
+  },
+  {
+   "alias": "Din.City|Din.Tirana",
+   "similarity": 77,
+   "evidence": "mozzartbet: Vora - Din.Tirana (ALBANIJA  1) | wwin: Vora - Din.City (Albanija - Kategoria Superiore) @ 2026-11-02 12:30"
+  },
+  {
+   "alias": "AC Boise|Boise Cutthroats FC",
+   "similarity": 77,
+   "evidence": "wwin: AC Boise - One Knoxville SC (SAD - USL League One) | maxbet: Boise Cutthroats FC - One Knoxville SC (USA USL League One) @ 2026-11-02 01:00"
+  },
+  {
+   "alias": "Din.Tirana|Dinamo Tirana",
+   "similarity": 78,
+   "evidence": "mozzartbet: Vora - Din.Tirana (ALBANIJA  1) | mbet: Vora - Dinamo Tirana (ALBANIA 1) @ 2026-11-02 12:30"
+  },
+  {
+   "alias": "Epitsentr|FC Epicentr Dunaivtsi",
+   "similarity": 78,
+   "evidence": "premier_kladionica: Zorya - Epitsentr (UKRAJINSKA 1.LIGA) | maxbet: Zorya - FC Epicentr Dunaivtsi (Ukraine 1) @ 2026-11-02 11:00"
+  },
+  {
+   "alias": "Dep.Limache|Deportes Limache",
+   "similarity": 78,
+   "evidence": "premier_kladionica: Dep.Limache - A.Italiano (ČILEANSKA 1.LIGA) | wwin: Deportes Limache - A.Italiano (Čile - Primera Division) @ 2026-11-02 21:00"
+  },
+  {
+   "alias": "Universit.Vinto|Universitario de Vinto",
+   "similarity": 79,
+   "evidence": "mozzartbet: Universit.Vinto - Always Ready (BOLIVIJA  1) | mdshop: Universitario de Vinto - Always Ready (Bolivija 1) @ 2026-11-01 23:30"
+  },
+  {
+   "alias": "Hap. Kfar Shalem|Hap.K.Shalem",
+   "similarity": 79,
+   "evidence": "sportplus: Hap. Kfar Shalem - Ironi Modiin (IZRAEL - 2.LIGA) | premier_kladionica: Hap.K.Shalem - Ironi Modiin (IZRAELSKA 2.LIGA) @ 2026-11-02 17:00"
+  },
+  {
+   "alias": "Al Nasar|Al-Nasr Kuwait",
+   "similarity": 80,
+   "evidence": "mbet: Al-Nasr Kuwait - Al Shabab (KUWAIT 1) | maxbet: Al Nasar - Al-Shabab (Kuwait 1) @ 2026-11-02 15:45"
+  },
+  {
+   "alias": "Argentino de Quilmes|Argentinos Quil.",
+   "similarity": 80,
+   "evidence": "premier_kladionica: Argentinos Quil. - Brown de Adrogue (ARGENTINSKA PRIMERA B METROPOLITANA) | maxbet: Argentino de Quilmes - Brown de Adrogue (Argentina Primera B) @ 2026-11-02 18:00"
+  },
+  {
+   "alias": "Hap.K.Shalem|Hap.Kfar Shalem",
+   "similarity": 81,
+   "evidence": "premier_kladionica: Hap.K.Shalem - Ironi Modiin (IZRAELSKA 2.LIGA) | wwin: Hap.Kfar Shalem - Ironi Modiin (Izrael - National Liga) @ 2026-11-02 17:00"
+  },
+  {
+   "alias": "Mon.Yamagata|Montedio Yamagata",
+   "similarity": 82,
+   "evidence": "mozzartbet: Montedio Yamagata - Tokushima (JAPAN  2) | premier_kladionica: Mon.Yamagata - Tokushima (JAPANSKA 2.LIGA) @ 2026-11-03 05:00"
+  },
+  {
+   "alias": "Epicentr Dunaivtsi|Epitsentr",
+   "similarity": 82,
+   "evidence": "mozzartbet: Zorya - Epicentr Dunaivtsi (UKRAJINA  1) | premier_kladionica: Zorya - Epitsentr (UKRAJINSKA 1.LIGA) @ 2026-11-02 11:00"
+  },
+  {
+   "alias": "Queen South|Queen of S.",
+   "similarity": 82,
+   "evidence": "mozzartbet: Arbroath - Queen of S. (ŠKOTSKA  -  ČELENDŽ  KUP) | sportplus: Arbroath - Queen South (ŠKOTSKA - CHALLENGE CUP - 1/16 FINALA) @ 2026-11-03 19:45"
+  },
+  {
+   "alias": "CSD San Martin|San Martin Burzaco",
+   "similarity": 83,
+   "evidence": "mozzartbet: San Martin Burzaco - Urquiza (ARGENTINA  3) | sportplus: CSD San Martin - Urquiza (ARGENTINA - 3.LIGA) @ 2026-11-02 18:00"
+  },
+  {
+   "alias": "Valerenga IF (W)|Volerenga (W)",
+   "similarity": 83,
+   "evidence": "mozzartbet: Volerenga (W) - Lyn (W) (NORVEŠKA  1  W) | wwin: Valerenga IF (W) - Lyn (W) (Norveška - Toppserien (Ž)) @ 2026-11-02 17:00"
+  },
+  {
+   "alias": "A.Lima|Alianza Lima",
+   "similarity": 83,
+   "evidence": "mozzartbet: Alianza Lima - Cienciano (PERU  1  -  KLAUSURA) | premier_kladionica: A.Lima - Cienciano (PERUANSKA 1.LIGA) @ 2026-11-04 01:00"
+  },
+  {
+   "alias": "A.Viseu|Academico Viseu",
+   "similarity": 83,
+   "evidence": "mbet: Nacional - Academico Viseu (PORTUGAL 1) | premier_kladionica: Nacional - A.Viseu (PORTUGALSKA 1.LIGA) @ 2026-11-07 15:30"
+  },
+  {
+   "alias": "BW Linz|FC Blau Weiss Linz",
+   "similarity": 83,
+   "evidence": "mbet: BW Linz - Floridsdorfer AC (AUSTRIA 2) | maxbet: FC Blau Weiss Linz - Floridsdorfer AC (Austria 2) @ 2026-11-07 16:30"
+  },
+  {
+   "alias": "Chernom.Odessa|Chernomorets",
+   "similarity": 83,
+   "evidence": "premier_kladionica: FK Kudrivka - Chernomorets (UKRAJINSKA 1.LIGA) | wwin: FK Kudrivka - Chernom.Odessa (Ukrajina - Premier Liga) @ 2026-11-07 11:00"
+  },
+  {
+   "alias": "Sint Truiden|St.Truiden",
+   "similarity": 84,
+   "evidence": "mozzartbet: St.Truiden - Brann (LIGA  KONFERENCIJE) | maxbet: Sint Truiden - Brann (International Clubs - UEFA Europa Conference League) @ 2026-11-05 20:00"
+  },
+  {
+   "alias": "Csd Liniers|Deportivo Liniers",
+   "similarity": 84,
+   "evidence": "mozzartbet: Csd Liniers - Ituzaingo (ARGENTINA  3) | mbet: Deportivo Liniers - Ituzaingo (ARGENTINA 3 Primera B) @ 2026-11-02 18:00"
+  },
+  {
+   "alias": "CSD Liniers|Deportivo Liniers",
+   "similarity": 84,
+   "evidence": "mbet: Deportivo Liniers - Ituzaingo (ARGENTINA 3 Primera B) | sportplus: CSD Liniers - Ituzaingo (ARGENTINA - 3.LIGA) @ 2026-11-02 18:00"
+  },
+  {
+   "alias": "Biblioteca Atenas|CSB Atenas",
+   "similarity": 84,
+   "evidence": "mbet: Biblioteca Atenas - Sarmiento de la Banda (ARGENTINA Torneo Federal) | sportplus: CSB Atenas - Sarmiento de la Banda (ARGENTINA - TORNEO FEDERAL A - PLAY OFF - 1/8 FINALA) @ 2026-11-01 22:15"
+  },
+  {
+   "alias": "Club Sportivo Ameliano|Sp.Ameliano",
+   "similarity": 84,
+   "evidence": "premier_kladionica: Sp.Ameliano - Guarani (PARAGVAJSKA 1.LIGA) | maxbet: Club Sportivo Ameliano - Guarani (Paraguay 1) @ 2026-11-04 22:00"
+  },
+  {
+   "alias": "Dep. Laferrere|Dep.Lafferera",
+   "similarity": 85,
+   "evidence": "mozzartbet: Def.Unidos - Dep.Lafferera (ARGENTINA  3) | sportplus: Def. Unidos - Dep. Laferrere (ARGENTINA - 3.LIGA) @ 2026-11-02 18:00"
+  },
+  {
+   "alias": "Hap.Kfar Shalem|Hapoel Kfar Shalem",
+   "similarity": 85,
+   "evidence": "mozzartbet: Hapoel Kfar Shalem - Ironi Modiin (IZRAEL  2) | wwin: Hap.Kfar Shalem - Ironi Modiin (Izrael - National Liga) @ 2026-11-02 17:00"
+  },
+  {
+   "alias": "Central Esp. II|Central Espanol II",
+   "similarity": 85,
+   "evidence": "sportplus: La Luz II - Central Espanol II (URUGVAJ - 1.LIGA - REZERVE) | premier_kladionica: La Luz II - Central Esp. II (URUGVAJ - REZERVE) @ 2026-11-02 19:00"
+  },
+  {
+   "alias": "K.S.Samara|Samara K. S.",
+   "similarity": 86,
+   "evidence": "sportplus: Samara K. S. - Zenit (RUSIJA - 1.LIGA) | premier_kladionica: K.S.Samara - Zenit (RUSKA 1.LIGA) @ 2026-11-02 15:00"
+  },
+  {
+   "alias": "A.Lima|Al. Lima",
+   "similarity": 86,
+   "evidence": "sportplus: Al. Lima - Cienciano (PERU - 1.LIGA) | premier_kladionica: A.Lima - Cienciano (PERUANSKA 1.LIGA) @ 2026-11-04 01:00"
+  },
+  {
+   "alias": "DVTK|Diosgyor VTK",
+   "similarity": 86,
+   "evidence": "mdshop: DVTK - Kecskemeti TE (Mađarska 2) | mbet: Diosgyor VTK - Kecskemeti TE (HUNGARY 2) @ 2026-11-02 18:30"
+  },
+  {
+   "alias": "Al Nasr|Al-Nasr Kuwait",
+   "similarity": 86,
+   "evidence": "mbet: Al-Nasr Kuwait - Al Shabab (KUWAIT 1) | sportplus: Al Nasr - Al Shabab (KUVAJT - 1.LIGA) @ 2026-11-02 15:45"
+  },
+  {
+   "alias": "Al Gharrafa|Al-Gharafa",
+   "similarity": 86,
+   "evidence": "mbet: Al-Gharafa - Al Qadsiah (AFC Champions League) | sportplus: Al Gharrafa - Al Qadsiah (LIGA PRVAKA AZIJA - ZAPAD) @ 2026-11-02 18:15"
+  },
+  {
+   "alias": "S.Irska|Sj. Irska",
+   "similarity": 86,
+   "evidence": "sportplus: Sj. Irska - Ukrajina (LIGA NACIJA - LIGA B - GRUPA 2) | premier_kladionica: S.Irska - Ukrajina (LIGA NACIJA LIGA B - Grupa 2) @ 2026-11-14 19:45"
+  },
+  {
+   "alias": "O.Galati|Otelul Galati",
+   "similarity": 86,
+   "evidence": "premier_kladionica: Botosani - O.Galati (RUMUNJSKA 1.LIGA) | wwin: Botosani - Otelul Galati (Rumunija - Superliga) @ 2026-11-09 18:00"
+  },
+  {
+   "alias": "U. De Concepcion|Un.Concepcion",
+   "similarity": 87,
+   "evidence": "sportplus: U. De Concepcion - O´Higgins (ČILE - 1.LIGA) | premier_kladionica: Un.Concepcion - O'Higgins (ČILEANSKA 1.LIGA) @ 2026-11-05 23:00"
+  },
+  {
+   "alias": "Dep.Laferrere|Dep.Lafferera",
+   "similarity": 88,
+   "evidence": "mozzartbet: Def.Unidos - Dep.Lafferera (ARGENTINA  3) | premier_kladionica: Def.Unidos - Dep.Laferrere (ARGENTINSKA PRIMERA B METROPOLITANA) @ 2026-11-02 18:00"
+  },
+  {
+   "alias": "Hap. Kfar Shalem|Hapoel Kfar Shalem",
+   "similarity": 88,
+   "evidence": "mozzartbet: Hapoel Kfar Shalem - Ironi Modiin (IZRAEL  2) | sportplus: Hap. Kfar Shalem - Ironi Modiin (IZRAEL - 2.LIGA) @ 2026-11-02 17:00"
+  },
+  {
+   "alias": "Al Anwar|Al-Anwar Club",
+   "similarity": 88,
+   "evidence": "mozzartbet: Al Orubah - Al Anwar (SAUDIJSKA  ARABIJA  2) | maxbet: Al Orubah - Al-Anwar Club (Saudi Arabia 2) @ 2026-11-02 12:30"
+  },
+  {
+   "alias": "AL Anwar|Al-Anwar Club",
+   "similarity": 88,
+   "evidence": "sportplus: Al Orubah - AL Anwar (S.ARABIJA - 2.LIGA) | maxbet: Al Orubah - Al-Anwar Club (Saudi Arabia 2) @ 2026-11-02 12:30"
+  },
+  {
+   "alias": "Al Zulfi|Al-Zulfi FC",
+   "similarity": 88,
+   "evidence": "mozzartbet: Al Zulfi - Al Jandal (SAUDIJSKA  ARABIJA  2) | wwin: Al-Zulfi FC - AL Jandal (Saudijska Arabija - Division 1) @ 2026-11-02 14:55"
+  },
+  {
+   "alias": "Sumgayit|Sumqayit",
+   "similarity": 88,
+   "evidence": "mbet: Sumgayit - Safa (AZERBAIJAN 1) | premier_kladionica: Sumqayit - Safa (AZERBAJDŽANSKA 1.LIGA) @ 2026-11-02 15:00"
+  },
+  {
+   "alias": "G'birligi|Genclerbirligi",
+   "similarity": 88,
+   "evidence": "sportplus: Bešiktaš - Genclerbirligi (TURSKA - 1.LIGA) | premier_kladionica: Besiktas - G'birligi (TURSKA 1.LIGA) @ 2026-11-08 18:00"
+  },
+  {
+   "alias": "Iwaki FC|Iwaki SC",
+   "similarity": 88,
+   "evidence": "premier_kladionica: Omiya - Iwaki FC (JAPANSKA 2.LIGA) | maxbet: Omiya - Iwaki SC (Japan 2) @ 2026-11-03 05:00"
+  },
+  {
+   "alias": "Pamba FC|Pamba SC",
+   "similarity": 88,
+   "evidence": "sportplus: Mashujaa FC - Pamba SC (TANZANIJA - 1.LIGA) | maxbet: Mashujaa FC - Pamba FC (Tanzania 1) @ 2026-11-02 13:15"
+  },
+  {
+   "alias": "FC Machida|Machida Z",
+   "similarity": 88,
+   "evidence": "premier_kladionica: Machida Z - Hiroshima (JAPANSKA 1.LIGA) | maxbet: FC Machida - Hiroshima (Japan 1) @ 2026-11-08 05:00"
+  },
+  {
+   "alias": "Hapoel B.S.|Hapoel Be'er Sheva",
+   "similarity": 89,
+   "evidence": "mozzartbet: Hapoel B.S. - OFI (LIGA  EVROPE) | maxbet: Hapoel Be'er Sheva - OFI (International Clubs - UEFA Europa League) @ 2026-11-05 20:00"
+  },
+  {
+   "alias": "FK Kauno Zalgiris|Žalgiris K",
+   "similarity": 89,
+   "evidence": "premier_kladionica: Lugano - Žalgiris K (KONFERENCIJSKA LIGA) | maxbet: Lugano - FK Kauno Zalgiris (International Clubs - UEFA Europa Conference League) @ 2026-11-05 20:00"
+  },
+  {
+   "alias": "Pathum United|Pathum Utd.",
+   "similarity": 89,
+   "evidence": "mozzartbet: Chonburi - Pathum United (TAJLAND  1) | sportplus: Chonburi - Pathum Utd. (TAJLAND - 1.LIGA) @ 2026-11-02 12:00"
+  },
+  {
+   "alias": "M.Boleslav|Mlada Boleslav",
+   "similarity": 89,
+   "evidence": "mbet: Jablonec - Mlada Boleslav (CZECH REP. 1) | premier_kladionica: Jablonec - M.Boleslav (ČEŠKA 1.LIGA) @ 2026-11-08 14:00"
+  },
+  {
+   "alias": "FK Kauno Zalgiris|Kaunas Zalgiris",
+   "similarity": 90,
+   "evidence": "mozzartbet: Lugano - Kaunas Zalgiris (LIGA  KONFERENCIJE) | maxbet: Lugano - FK Kauno Zalgiris (International Clubs - UEFA Europa Conference League) @ 2026-11-05 20:00"
   }
  ],
  "rejected": [
@@ -2860,12 +3695,6 @@
    "reason": "generic name: 'Al-Wahda'"
   },
   {
-   "alias": "Ath.Club SJDR MG|Athletic Club",
-   "similarity": 67,
-   "evidence": "betradar 68823412: mdshop: Operario - Athletic Club | wwin: Operario Ferr. - Ath.Club SJDR MG",
-   "reason": "generic name: 'Athletic Club' (also Bilbao)"
-  },
-  {
    "alias": "Bastia|Concarneau",
    "similarity": 33,
    "evidence": "premier_kladionica: Rouen - Concarneau (FRANCUSKA 3.LIGA) | sportplus: Bastia - Rouen (FRANCUSKA - 3.LIGA) @ 2026-10-31 13:45",
@@ -2888,12 +3717,6 @@
    "similarity": 29,
    "evidence": "premier_kladionica: La Coruna - Osasuna (ŠPANJOLSKA 1.LIGA) | maxbet: Deportivo - Osasuna (Spain 1) @ 2026-11-02 20:00",
    "reason": "generic name: 'Deportivo' is many clubs"
-  },
-  {
-   "alias": "FC Kharkiv|Metalist 1925",
-   "similarity": 26,
-   "evidence": "sportplus: Epitsentr - Metalist 1925 (UKRAJINA - 1.LIGA) | premier_kladionica: Epitsentr - FC Kharkiv (UKRAJINSKA 1.LIGA) @ 2026-10-24 12:30",
-   "reason": "ambiguous: FC Kharkiv was a separate (defunct) club; one book's label, not proven the same"
   },
   {
    "alias": "Ind. Petrolero|Independiente",
@@ -2956,10 +3779,28 @@
    "reason": "data clash: books list different opponents at one kickoff"
   },
   {
-   "alias": "Quevilly|Rouen",
-   "similarity": 50,
-   "evidence": "premier_kladionica: Bastia - Quevilly (FRANCUSKA 3.LIGA) | sportplus: Bastia - Rouen (FRANCUSKA - 3.LIGA) @ 2026-10-31 13:45",
-   "reason": "ambiguous: FC Rouen and Quevilly-Rouen both play in National"
+   "alias": "Bastia|Villefranche",
+   "similarity": 25,
+   "evidence": "sportplus: Villefranche - Rouen (FRANCUSKA - 3.LIGA) | premier_kladionica: Rouen - Bastia (FRANCUSKA 3.LIGA) @ 2026-11-07 13:45",
+   "reason": "runaway derivation pairing: sportplus labels the Quevilly-Rouen event (betradar 72524006, also wwin \"Villefranche - Quevilly\") as \"Villefranche - Rouen\"; the overlap on team \"Rouen\" couples it to the separately real \"Rouen - Bastia\" match (betradar 72524022). Bastia and Villefranche are two different clubs, both playing that matchday."
+  },
+  {
+   "alias": "Indep. Chorrera|Independiente",
+   "similarity": 56,
+   "evidence": "mdshop: Independiente - San Francisco (Panama 1) | sportplus: Indep. Chorrera - San Francisco (PANAMA - 1.LIGA) @ 2026-11-01 23:15",
+   "reason": "generic name: 'Independiente'"
+  },
+  {
+   "alias": "Indep.La Chorrera|Independiente",
+   "similarity": 56,
+   "evidence": "mdshop: Independiente - San Francisco (Panama 1) | wwin: Indep.La Chorrera - San Francisco (Panama - Liga Panamena de Futbol, Apertura) @ 2026-11-01 23:15",
+   "reason": "generic name: 'Independiente'"
+  },
+  {
+   "alias": "Ind.Valle del Cauca|Independiente",
+   "similarity": 48,
+   "evidence": "mbet: Independiente - Boca Juniors De Cali (COLOMBIA 2) | premier_kladionica: Ind.Valle del Cauca - Boca Juniors de Cali (KOLUMBIJSKA 2.LIGA) @ 2026-11-02 19:00",
+   "reason": "generic name: 'Independiente'"
   }
  ]
 }

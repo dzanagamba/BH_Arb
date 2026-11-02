@@ -673,8 +673,11 @@ def test_no_new_cross_league_equivalences_were_introduced(matcher: MatchMatcher)
     competition that had two ids, joined by shared fixtures (UEFA Youth League,
     Liga MX women, Russian and Bulgarian second tiers, EFL Cup), and in the
     stage-aware second pass the stages a book lists separately (National League
-    Cup groups, Ecuador LigaPro phases, Russian cup groups). A new pair has to be
-    added here deliberately.
+    Cup groups, Ecuador LigaPro phases, Russian cup groups). The Czech second
+    tier and the Brazilian cup pairs were written the same way on 2026-11-02
+    (mdshop ``Češka 2`` vs admiralbet ``Češka - 2. Divizija``; premier_kladionica
+    and wwin ``BRAZILSKI KUP`` / ``Brazil - Kup`` vs mbet ``BRAZIL Copa do
+    Brasil``). A new pair has to be added here deliberately.
     """
     assert matcher._equivalences == {
         ("europa_league", "conference_league"),
@@ -683,8 +686,9 @@ def test_no_new_cross_league_equivalences_were_introduced(matcher: MatchMatcher)
         ("auto_rusija_1_liga", "russian_first_league"),
         ("auto_engleska_liga_kup_1_8_finala", "efl_cup"),
         ("auto_bugarska_2_liga", "bugarian_second_league"),
-        ("auto_engleska_national_league_cup_grupa_a", "auto_engleska_national_league_cup_grupa_c"),
-        ("auto_ekvador_1_liga_za_prvaka", "auto_ekvadorska_1_liga_za_ostanak"),
+        ("auto_ceska_2_liga", "czech_2nd_div"),
+        ("auto_brazilski_kup", "copa_do_brasil"),
+        ("auto_engleska_national_league_cup_grupa_a", "auto_engleska_national_league_cup_grupa_c"),        ("auto_ekvador_1_liga_za_prvaka", "auto_ekvadorska_1_liga_za_ostanak"),
         ("auto_ekvador_1_liga_za_prvaka", "ecuador_serie_a"),
         ("auto_ekvadorska_1_liga_za_ostanak", "ecuador_serie_a"),
         ("auto_rusija_kup_grupa_1", "auto_rusija_kup_grupa_4"),
