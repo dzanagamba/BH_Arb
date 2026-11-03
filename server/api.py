@@ -22,7 +22,7 @@ import signal
 import tempfile
 import threading
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Literal, NamedTuple
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request
@@ -34,6 +34,8 @@ from config.settings import (
     AUTO_LEARN_MAPPINGS,
     AUTO_SCAN_LIVE_MINUTES,
     AUTO_SCAN_PREMATCH_MINUTES,
+    BOOK_BACKOFF_AFTER_FAILURES,
+    BOOK_BACKOFF_MAX_MINUTES,
     BOOKMAKERS,
     BROWSER_CONCURRENCY,
     CACHE_DIR,
@@ -218,6 +220,10 @@ def _find_pending_candidate(candidate_id: str) -> dict[str, CandidateReview] | N
     return None
 candidate_reviews: list[CandidateReview] = []
 last_learning_report: dict[str, Any] = {}
+# Scheduled-scan per-book backoff. Manual scans ignore it.
+_book_failures: dict[tuple[str, str], int] = {}
+_book_skip_until: dict[tuple[str, str], datetime] = {}
+_BOOK_BACKOFF_LOCK = threading.Lock()
 ALLOWLIST_FILE = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "config",
@@ -1283,6 +1289,33 @@ async def _collect_candidates(
 # Background scan task
 # ---------------------------------------------------------------------------
 
+def _book_backoff_interval(mode: str) -> int:
+    return AUTO_SCAN_LIVE_MINUTES if mode == "live" else AUTO_SCAN_PREMATCH_MINUTES or 5
+
+
+def _book_is_backed_off(mode: str, bookmaker: str) -> bool:
+    with _BOOK_BACKOFF_LOCK:
+        until = _book_skip_until.get((mode, bookmaker))
+    return until is not None and until > datetime.now(UTC).replace(tzinfo=None)
+
+
+def _record_book_result(mode: str, bookmaker: str, ok: bool) -> None:
+    """Update the scheduled-scan backoff state for one book."""
+    key = (mode, bookmaker)
+    with _BOOK_BACKOFF_LOCK:
+        if ok:
+            _book_failures.pop(key, None)
+            _book_skip_until.pop(key, None)
+            return
+        failures = _book_failures.get(key, 0) + 1
+        _book_failures[key] = failures
+        if failures < BOOK_BACKOFF_AFTER_FAILURES:
+            return
+        exponent = failures - BOOK_BACKOFF_AFTER_FAILURES
+        minutes = min(2**exponent * _book_backoff_interval(mode), BOOK_BACKOFF_MAX_MINUTES)
+        _book_skip_until[key] = datetime.now(UTC).replace(tzinfo=None) + timedelta(minutes=minutes)
+
+
 def learn_scan_mappings(
     matches: list[Match],
     scan: str,
@@ -1301,7 +1334,7 @@ def learn_scan_mappings(
     return report.to_dict()
 
 
-async def run_scan(mode: str = "prematch"):
+async def run_scan(mode: str = "prematch", scheduled: bool = False):
     """Execute a full scan of all enabled bookmakers concurrently.
 
     `mode` selects the feed: "prematch" (future matches) or "live" (in-play).
@@ -1331,6 +1364,15 @@ async def run_scan(mode: str = "prematch"):
         async def scrape_one(bookie_id: str, config: dict) -> list[Match]:
             if not _is_enabled(bookie_id):
                 status.bookmaker_progress[bookie_id] = "skipped"
+                return []
+            if scheduled and _book_is_backed_off(mode, bookie_id):
+                status.bookmaker_progress[bookie_id] = "skipped"
+                with _BOOK_BACKOFF_LOCK:
+                    until = _book_skip_until.get((mode, bookie_id))
+                status.errors.append(
+                    f"{config['name']}: backing off until "
+                    f"{until.isoformat(timespec='minutes') if until else '?'} UTC"
+                )
                 return []
 
             status.bookmaker_progress[bookie_id] = "scraping"
@@ -1363,6 +1405,7 @@ async def run_scan(mode: str = "prematch"):
                 status.bookmakers_done.append(config["name"])
                 status.total_matches += len(matches)
                 per_bookie[bookie_id] = len(matches)
+                _record_book_result(mode, bookie_id, bool(matches))
                 logger.info(f"✅ {config['name']}: {len(matches)} {'live' if is_live else 'prematch'} matches scraped")
                 return matches
 
@@ -1370,6 +1413,7 @@ async def run_scan(mode: str = "prematch"):
                 error_msg = f"{config['name']}: {str(e)[:200]}"
                 status.bookmaker_progress[bookie_id] = "error"
                 status.errors.append(error_msg)
+                _record_book_result(mode, bookie_id, False)
                 logger.error(f"❌ Scrape error — {error_msg}", exc_info=True)
                 return []
             finally:
@@ -1771,7 +1815,7 @@ async def trigger_scan(
             "message": f"A {mode} scan is already in progress. Please wait.",
         }
 
-    background_tasks.add_task(run_scan, mode)
+    background_tasks.add_task(run_scan, mode, False)
     return {
         "status": "started",
         "mode": mode,
@@ -1852,6 +1896,19 @@ async def health():
         "scheduler": {
             "prematch_minutes": AUTO_SCAN_PREMATCH_MINUTES,
             "live_minutes": AUTO_SCAN_LIVE_MINUTES,
+            "backoff": {
+                f"{mode}/{book}": {
+                    "failures": _book_failures.get((mode, book), 0),
+                    "skip_until": (
+                        _book_skip_until[(mode, book)].isoformat()
+                        if (mode, book) in _book_skip_until
+                        else None
+                    ),
+                }
+                for mode in ("prematch", "live")
+                for book in BOOKMAKERS
+                if (mode, book) in _book_failures or (mode, book) in _book_skip_until
+            },
         },
         "mapping_learning": last_learning_report,
         "ai_available": MatchAI().available,

@@ -174,6 +174,10 @@ PRICE_GUARD_ENABLED = os.getenv("PRICE_GUARD_ENABLED", "true").strip().lower() i
     "true",
     "yes",
 )
+# Scheduled scans skip a book after this many consecutive empty/error runs, with
+# exponential backoff capped at BOOK_BACKOFF_MAX_MINUTES. Manual scans ignore it.
+BOOK_BACKOFF_AFTER_FAILURES = int(os.getenv("BOOK_BACKOFF_AFTER_FAILURES", "3"))
+BOOK_BACKOFF_MAX_MINUTES = int(os.getenv("BOOK_BACKOFF_MAX_MINUTES", "60"))
 # Max on-demand deep-link checks per minute per client IP (0 disables the limit).
 # A check drives a real browser against a bookmaker's site for seconds per event,
 # and API_KEY is empty by default, so the endpoint throttles itself: a lock only

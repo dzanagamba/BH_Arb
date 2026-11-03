@@ -24,7 +24,7 @@ async def scan_loop(mode: str, minutes: int) -> None:
         await asyncio.sleep(minutes * 60)
         try:
             if await start_scan_if_idle(mode):
-                await run_scan(mode)
+                await run_scan(mode, True)
         except asyncio.CancelledError:
             raise
         except Exception:
