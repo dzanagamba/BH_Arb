@@ -2,13 +2,14 @@ import asyncio
 import os
 import sys
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from config.settings import AUTO_SCAN_LIVE_MINUTES, AUTO_SCAN_PREMATCH_MINUTES
 from server.api import (
     _deep_link_decisions,
     _deep_link_verifications,
@@ -24,6 +25,7 @@ from server.api import (
     _suppressed_premises,
     router,
 )
+from server.scheduler import scan_loop
 
 # Fix Windows ProactorEventLoop policy for Playwright when running via uvicorn/fastapi CLI
 if sys.platform == "win32":
@@ -32,9 +34,23 @@ if sys.platform == "win32":
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    """Restore last scan results, runtime toggles, and scan history on boot."""
+    """Restore state, start any scheduled feeds, and stop them on shutdown."""
     _restore_state()
-    yield
+    tasks: list[asyncio.Task] = []
+    for mode, minutes in (
+        ("prematch", AUTO_SCAN_PREMATCH_MINUTES),
+        ("live", AUTO_SCAN_LIVE_MINUTES),
+    ):
+        if minutes > 0:
+            tasks.append(asyncio.create_task(scan_loop(mode, minutes)))
+    try:
+        yield
+    finally:
+        for task in tasks:
+            task.cancel()
+        for task in tasks:
+            with suppress(asyncio.CancelledError):
+                await task
 
 
 app = FastAPI(

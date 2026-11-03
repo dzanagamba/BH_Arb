@@ -12,7 +12,7 @@ This is an evidence-based verdict, not a score:
 |---|---|---|
 | Event identity | Good and improving | Ledger, Betradar ids, shared-fixture learning, league fingerprints and shared-opponent blocking exist. No real-scan precision/recall measurement yet. |
 | Market identity | Partial | Label classifier + cross-book consensus + generated registry + raw-offer resolver exist. Only the NSoft parser publishes `source_id`; the other scrapers still use the hand-written registry. First-half and AH rows are not proven. |
-| Human input | Still present | `POST /api/candidates/{id}/approve`, `approve-bulk` and `reject` still write the allowlist; the Review UI still offers the actions. The ledger is the new runtime trust source, but the old path is not deleted. |
+| Human input | Disabled by default | The three write routes return 403 unless `HUMAN_MAPPING_ENABLED=true`; the Review UI hides its actions. The ledger is the only default trust source. Full route deletion remains A4-1. |
 | Freshness | Partial | The engine has odds TTL and the bet slip re-checks, but there is no per-book freshness budget, no last-known-value policy, and no push/streaming path. |
 | Execution | Partial | Stakes are rounded, legs are ordered, and the slip re-plans. Book limits, partial acceptance, balance, and the "price moved between legs" workflow are not complete. |
 | Operations | Missing | No scheduler/back-off, no alerting, no 24 h soak, no deployment, no health budget for mapping coverage. |
@@ -102,9 +102,10 @@ coverage lever.
 
 ## Production blockers, in priority order
 
-1. **Remove the human write path.** Delete the approve/reject routes and Review
-   actions; keep a read-only Diagnostics view. A route that can still write
-   `team_alias_allowlist.json` is a trust path, even if the ledger is preferred.
+1. **Remove the human write path.** The routes are disabled by default now;
+   delete them and the Review actions, and keep a read-only Diagnostics view.
+   A route that can still write `team_alias_allowlist.json` is a trust path,
+   even if the ledger is preferred.
 2. **Prove coverage on real data.** Run a headless prematch scan on a day with
    real fixtures, record per-book counts, verified groups, mapping coverage and
    `price_check.py` outliers, and add the scan to the replay corpus. The current

@@ -35,6 +35,12 @@ from models.schemas import (
 )
 from server import api
 
+
+@pytest.fixture(autouse=True)
+def _enable_human_mapping(monkeypatch):
+    """These tests exercise the legacy approval mechanics explicitly."""
+    monkeypatch.setattr(api, "HUMAN_MAPPING_ENABLED", True)
+
 KICKOFF = datetime(2026, 9, 25, 18, 0)
 
 

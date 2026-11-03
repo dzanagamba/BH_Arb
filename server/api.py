@@ -31,6 +31,8 @@ from rapidfuzz import fuzz
 
 from config.settings import (
     API_KEY,
+    AUTO_SCAN_LIVE_MINUTES,
+    AUTO_SCAN_PREMATCH_MINUTES,
     BOOKMAKERS,
     BROWSER_CONCURRENCY,
     CACHE_DIR,
@@ -75,6 +77,15 @@ from server.mapping_coverage import build_coverage
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# The evidence ledger is the only trust source. The old review endpoints remain
+# for migration/diagnostics but are disabled unless an operator explicitly
+# opts in; no default path can change a mapping.
+HUMAN_MAPPING_ENABLED = os.getenv("HUMAN_MAPPING_ENABLED", "false").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+)
 
 # The two independent feeds. A query parameter typed with this is validated by
 # FastAPI (422 on anything else) instead of silently falling back to prematch.
@@ -1638,6 +1649,24 @@ def _enforce_sliding_window(
 
 
 @router.post("/scan")
+async def start_scan_if_idle(mode: str) -> bool:
+    """Mark a feed as scanning if no scan or verify already holds it.
+
+    The caller starts `run_scan` only when this returns True. The status flag is
+    set under the per-mode lock, so a manual trigger and a scheduler tick cannot
+    both claim the same feed.
+    """
+    status, _, _, _, _ = _state_for(mode)
+    mode_lock = _lock_for(mode)
+    if mode_lock.locked() or status.is_scanning:
+        return False
+    async with mode_lock:
+        if status.is_scanning:
+            return False
+        status.is_scanning = True
+    return True
+
+
 async def trigger_scan(
     request: Request,
     background_tasks: BackgroundTasks,
@@ -1662,13 +1691,11 @@ async def trigger_scan(
     if SCAN_RATE_LIMIT > 0:
         _enforce_sliding_window(request, _scan_request_times, SCAN_RATE_LIMIT, "scans")
 
-    async with mode_lock:
-        if status.is_scanning:
-            return {
-                "status": "already_scanning",
-                "message": f"A {mode} scan is already in progress. Please wait.",
-            }
-        status.is_scanning = True
+    if not await start_scan_if_idle(mode):
+        return {
+            "status": "already_scanning",
+            "message": f"A {mode} scan is already in progress. Please wait.",
+        }
 
     background_tasks.add_task(run_scan, mode)
     return {
@@ -1747,6 +1774,10 @@ async def health():
         # book the gate is silently failing safe on, which is the other thing
         # this map has to be able to say.
         "deep_link_declarations": effective_deeplink_declarations(BOOKMAKERS),
+        "scheduler": {
+            "prematch_minutes": AUTO_SCAN_PREMATCH_MINUTES,
+            "live_minutes": AUTO_SCAN_LIVE_MINUTES,
+        },
         "ai_available": MatchAI().available,
         "prematch": {
             "last_scan_age_sec": age_sec(scan_status.last_scan_time),
@@ -1838,6 +1869,7 @@ async def get_config():
             }
             for k, v in BOOKMAKERS.items()
         },
+        "human_mapping_enabled": HUMAN_MAPPING_ENABLED,
         "experimental_markets": {m: _market_enabled.get(m, False) for m in EXPERIMENTAL_MARKETS},
         "min_profit_percent": MIN_PROFIT_PERCENT,
         "dust_profit_percent": DUST_PROFIT_PERCENT,
@@ -2055,6 +2087,14 @@ async def approve_candidate(
     still refuses — the spelling would never be taught and nobody would see it
     again.
     """
+    if not HUMAN_MAPPING_ENABLED:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Human mapping is disabled. The evidence ledger is the only trust "
+                "source; set HUMAN_MAPPING_ENABLED=true only for a migration."
+            ),
+        )
     queue = _find_pending_candidate(candidate_id)
     candidate = queue.get(candidate_id) if queue is not None else None
     if not candidate:
@@ -2109,6 +2149,14 @@ async def approve_candidates_bulk(
     alias, or name a pair an approval cannot clear are reported back as skipped
     rather than failing the whole batch. A skipped pair stays in the queue.
     """
+    if not HUMAN_MAPPING_ENABLED:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Human mapping is disabled. The evidence ledger is the only trust "
+                "source; set HUMAN_MAPPING_ENABLED=true only for a migration."
+            ),
+        )
     approved: list[str] = []
     skipped: list[str] = []
     for candidate_id in dict.fromkeys(body.ids[:CANDIDATE_PAGE_MAX]):
@@ -2131,6 +2179,14 @@ async def reject_candidate(
     _auth: None = Depends(_require_api_key),
 ):
     """Reject a pending match candidate without changing alias mappings."""
+    if not HUMAN_MAPPING_ENABLED:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Human mapping is disabled. The evidence ledger is the only trust "
+                "source; set HUMAN_MAPPING_ENABLED=true only for a migration."
+            ),
+        )
     queue = _find_pending_candidate(candidate_id)
     candidate = queue.get(candidate_id) if queue is not None else None
     if not candidate:

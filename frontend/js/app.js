@@ -25,6 +25,7 @@ let selectedSurebetId = null;       // the surebet open in the bet slip
 let pollingInterval = null;
 let activeBookmakers = new Set(['mozzartbet', 'mdshop', 'admiralbet', 'betole', 'mbet', 'sportplus', 'evlbet', 'premier_kladionica', 'wwin']);
 let bookmakersConfig = {};
+let humanMappingEnabled = false;
 let globalInvestment = 100;
 let stakeRounding = '1';            // 'exact' | '1' | '5' — whole KM by default
 let soundMuted = true;
@@ -157,6 +158,7 @@ async function loadConfig() {
         const res = await fetch('/api/config');
         const data = await res.json();
         bookmakersConfig = data.bookmakers || {};
+        humanMappingEnabled = !!data.human_mapping_enabled;
         const minInput = document.getElementById('filter-profit');
         if (data.min_profit_percent && minInput) minInput.value = data.min_profit_percent;
         const investInput = document.getElementById('filter-investment');
@@ -1459,7 +1461,7 @@ function renderCandidates(candidates, total, actionableTotal) {
         // write an ineffective alias and suppress the pair. The button says so
         // instead of failing.
         const writesAlias = positions.some(position => position.team_a !== position.team_b);
-        const canApprove = writesAlias && candidate.alias_actionable;
+        const canApprove = humanMappingEnabled && writesAlias && candidate.alias_actionable;
         const approveButton = canApprove
             ? `<button type="button" class="btn btn-primary btn-small" aria-label="Approve pairing ${homeTeam} versus ${awayTeam}"
                             onclick="approveCandidate(this.closest('.candidate-card').dataset.id)">Same match</button>`
@@ -1501,9 +1503,9 @@ function renderCandidates(candidates, total, actionableTotal) {
                 <div class="candidate-actions">
                     <a class="btn btn-secondary btn-small" href="${escapeHtml(searchUrl)}" target="_blank" rel="noopener noreferrer"
                        title="Search the web for this fixture before approving">Check on the web ↗</a>
-                    ${approveButton}
-                    <button type="button" class="btn btn-secondary btn-small" aria-label="Reject pairing ${homeTeam} versus ${awayTeam}"
-                            onclick="rejectCandidate(this.closest('.candidate-card').dataset.id)">Different</button>
+                    ${humanMappingEnabled ? approveButton : ''}
+                    ${humanMappingEnabled ? `<button type="button" class="btn btn-secondary btn-small" aria-label="Reject pairing ${homeTeam} versus ${awayTeam}"
+                            onclick="rejectCandidate(this.closest('.candidate-card').dataset.id)">Different</button>` : ''}
                 </div>
             </article>
         `;

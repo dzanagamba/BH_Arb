@@ -7,7 +7,7 @@
 > entry, manual gate exception or manual CAPTCHA step** anywhere between scrape
 > and a shown surebet.
 >
-> **Baseline (2026-11-03, this worktree).** `python -m pytest` → **1130 passed** in 47 s; `ruff check .` clean; `mypy .` clean on 103 source files;
+> **Baseline (2026-11-03, this worktree).** `python -m pytest` → **1135 passed** in 44 s; `ruff check .` clean; `mypy .` clean on 105 source files;
 > `scripts/generate_market_mapping_doc.py --check` in sync. Environment is
 > `.venv` on CPython 3.11.18, installed with `uv`. The 953-passed figure in the
 > superseded plan was a 2026-10-20 measurement and is stale.
@@ -24,7 +24,7 @@
 > (A3-1). The evidence ledger, learner, gate integration, contradiction resolver,
 > league fingerprints, legacy migration, read-only coverage endpoint, classifier,
 > consensus, registry merge, discovery CLI and raw-offer resolver are shipped.
-> 1130 tests pass. **Real scan evidence (2026-11-03):** a headless prematch
+> 1135 tests pass. **Real scan evidence (2026-11-03):** a headless prematch
 > scan returned 5,285 matches from all 8 enabled books, 811 verified groups,
 > 3,526 price comparisons and 0 outliers; a second scan with a learned ledger
 > (1,795 accepted claims) returned 797 groups, 3,645 grouped listings, 3,704
@@ -957,7 +957,7 @@ counts.
 
 #### A4-1 · Delete approval endpoints and Review actions
 
-- [ ] **Status:** TODO
+- [~] **Status:** PARTIAL 2026-11-03 (write routes return 403 unless HUMAN_MAPPING_ENABLED=true; Review actions hidden; full deletion remains)
 - **Needs:** offline.
 - **Depends on:** A1-6, A3-1.
 - **Files:** `server/api.py`, `frontend/js/app.js`, `frontend/index.html`,
@@ -977,7 +977,7 @@ counts.
 - **Verify:** `pytest tests/test_candidates_api.py tests/test_frontend_review.py
   -q`; `grep -rn "approve" server frontend` shows only read-only text; S1.
 - **Done when:** no endpoint or UI action changes trust.
-- **Log:** —
+- **Log:** Added `HUMAN_MAPPING_ENABLED` (default false). `approve`, `approve-bulk` and `reject` return 403 before any write; `/api/config` exposes the flag and the Review UI hides its actions. Existing review tests opt in explicitly, and one test proves the default closure. Full route deletion and the Diagnostics rename remain.
 
 #### A4-2 · Read-only Diagnostics tab
 
@@ -1187,7 +1187,7 @@ counts.
 
 #### A7-2 · Scheduler, back-off and notifications
 
-- [ ] **Status:** TODO
+- [~] **Status:** PARTIAL 2026-11-03 (scheduled loop + idle guard + health shipped; per-book back-off and Telegram remain)
 - **Needs:** offline; a 24 h run for the final check.
 - **Depends on:** A6-4.
 - **Files:** `config/settings.py`, `server/scheduler.py`, `server/notify.py`,
@@ -1200,7 +1200,7 @@ counts.
 - **Verify:** the old cards' tests; a 24 h run for M4-1; a token check for
   M4-2.
 - **Done when:** the old M4-1/M4-2 done conditions are met.
-- **Log:** —
+- **Log:** Added `AUTO_SCAN_PREMATCH_MINUTES`/`AUTO_SCAN_LIVE_MINUTES` (0 = off), `server/scheduler.py`, `start_scan_if_idle`, lifespan task start/stop, and `scheduler` in `/api/health`. The loop never overlaps a manual scan or a verify lock; exceptions are logged and the loop continues. 4 scheduler tests. Per-book back-off and notifications remain.
 
 #### A7-3 · Re-apply security hardening
 

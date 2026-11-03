@@ -32,6 +32,8 @@ def _route_books() -> set[str]:
 
 @pytest.fixture(autouse=True)
 def reset_candidate_state(monkeypatch, tmp_path):
+    # The old review path is a migration tool, not a default trust source.
+    monkeypatch.setattr(api, "HUMAN_MAPPING_ENABLED", True)
     original_pending = api.pending_candidates.copy()
     original_live_pending = api.pending_live_candidates.copy()
     original_reviews = api.candidate_reviews.copy()
@@ -617,3 +619,10 @@ def test_live_and_prematch_queues_are_separate():
         api.pending_live_candidates.pop(live.id, None)
         api._suppressed_candidates.pop(live.id, None)
         api._suppressed_premises.pop(live.id, None)
+
+
+def test_human_mapping_is_disabled_by_default(monkeypatch):
+    monkeypatch.setattr(api, "HUMAN_MAPPING_ENABLED", False)
+    assert client.post("/api/candidates/does-not-exist/approve").status_code == 403
+    assert client.post("/api/candidates/does-not-exist/reject").status_code == 403
+    assert client.post("/api/candidates/approve-bulk", json={"ids": []}).status_code == 403
