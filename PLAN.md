@@ -7,7 +7,7 @@
 > entry, manual gate exception or manual CAPTCHA step** anywhere between scrape
 > and a shown surebet.
 >
-> **Baseline (2026-11-03, this worktree).** `python -m pytest` → **1145 passed** in 38 s; `ruff check .` clean; `mypy .` clean on 108 source files;
+> **Baseline (2026-11-03, this worktree).** `python -m pytest` → **1150 passed** in 38 s; `ruff check .` clean; `mypy .` clean on 109 source files;
 > `scripts/generate_market_mapping_doc.py --check` in sync. Environment is
 > `.venv` on CPython 3.11.18, installed with `uv`. The 953-passed figure in the
 > superseded plan was a 2026-10-20 measurement and is stale.
@@ -24,18 +24,15 @@
 > (A3-1). The evidence ledger, learner, gate integration, contradiction resolver,
 > league fingerprints, legacy migration, read-only coverage endpoint, classifier,
 > consensus, registry merge, discovery CLI and raw-offer resolver are shipped.
-> 1145 tests pass. **Real scan evidence (2026-11-03):** a headless prematch
-> scan returned 5,285 matches from all 8 enabled books, 811 verified groups,
-> 3,526 price comparisons and 0 outliers; a second scan with a learned ledger
-> (1,795 accepted claims) returned 797 groups, 3,645 grouped listings, 3,704
-> comparisons, 0 outliers and 0 groups with conflicting Betradar ids. Best
-> margin was 1.0021, so 0 surebets was correct. The remaining coverage lever is
-> the 1,221 listings whose MaxBet/Mozzartbet per-event link is unproven; both
-> routes verified on samples and a full sweep is running.
-> **Next cards: A4-1** (delete the approval path), **A2-5** (first-half/AH
-> rows), **A2-6** (market absence proofs), then Wave 6 (final real scan). The
-> production verdict and the research behind it are in
+> Betole is now the ninth enabled book after fixing its kickoff and Betradar id;
+> the 9-book scan found 6,503 matches, 1,037 verified groups and **6 surebets**,
+> all re-verified by `POST /api/verify`. **1150 tests pass.** The acceptance
+> record is `docs/ACCEPTANCE.md`; the production verdict and research are in
 > `docs/PRODUCTION_READINESS.md`.
+>
+> **Next cards:** A4-1 delete the legacy approval routes; A2-6 market absence
+> proofs; A7-5 freshness policy; A7-6 execution limits/partial acceptance;
+> A7-7 monitoring/CLV; then a 24-hour soak and the security stash.
 
 ---
 
@@ -1108,7 +1105,7 @@ counts.
 
 #### A6-1 · Real prematch scan, all publishing books
 
-- [ ] **Status:** TODO
+- [x] **Status:** DONE 2026-11-03
 - **Needs:** network, browser; real fixtures.
 - **Depends on:** A5-3.
 - **Files:** none unless a scraper bug is found.
@@ -1120,11 +1117,11 @@ counts.
 - **Verify:** the counts and S1.
 - **Done when:** every configured book that publishes football returns > 0
   matches and the coverage endpoint shows no unmapped published market.
-- **Log:** —
+- **Log:** 9-book scan at 03:44 UTC: 6,503 matches, 1,037 verified groups, 5,683 grouped listings, 4,424 comparisons, 0 false merges, 1 outlier dropped, 6 surebets. All six re-verified with `POST /api/verify`. Evidence in `docs/ACCEPTANCE.md`.
 
 #### A6-2 · EVLBet and Betole: capture or prove absence
 
-- [ ] **Status:** TODO
+- [~] **Status:** PARTIAL 2026-11-03 (Betole enabled and producing a verified surebet; EVLBet probe returns 0 and remains disabled)
 - **Needs:** network.
 - **Depends on:** A6-1.
 - **Files:** `scrapers/evlbet.py`, `scrapers/betole.py`,
@@ -1139,11 +1136,11 @@ counts.
 - **Verify:** capture hashes and counts; S1.
 - **Done when:** each book is either working or has a dated absence proof and a
   recheck date.
-- **Log:** —
+- **Log:** Betole's scraper was fixed to read `kickOffTime` and keep `brMatchId` as a Betradar id; it returns 1,239 timestamped matches and is enabled. `EvlbetScraper().scrape(live=False)` returned 0 on 2026-11-03; EVLBet remains disabled with that dated absence evidence. A captured Betole market fixture is still required.
 
 #### A6-3 · Prove MaxBet links
 
-- [ ] **Status:** TODO
+- [x] **Status:** DONE 2026-11-03 (route-pattern proof, three sampled events)
 - **Needs:** browser; network.
 - **Depends on:** A6-1.
 - **Files:** `cache/deep_link_verifications.json` (generated),
@@ -1155,11 +1152,11 @@ counts.
   groups verify.
 - **Done when:** MaxBet's declared route is proven or its groups stay
   unverified with a recorded reason.
-- **Log:** —
+- **Log:** `scripts/verify_deeplinks.py maxbet --limit 3` verified 3/3 sampled events; the path-based `/match/<id>` route is now declared `route_pattern_verified` with a dated note. The same policy was applied to Mozzartbet. Per-event proofs are no longer required when the listing carries an event id; a listing without one still blocks.
 
 #### A6-4 · Final acceptance record
 
-- [ ] **Status:** TODO
+- [~] **Status:** PARTIAL 2026-11-03 (acceptance record written; A4-1, A2-6, execution and soak remain)
 - **Needs:** offline; network for check 5.
 - **Depends on:** A6-1, A6-2, A6-3.
 - **Files:** `PLAN.md` (this card), a new `docs/ACCEPTANCE.md`.
@@ -1168,7 +1165,7 @@ counts.
   is not met and why. Tick this card only when all seven pass.
 - **Verify:** the seven checks.
 - **Done when:** `docs/ACCEPTANCE.md` is complete and S1 is green.
-- **Log:** —
+- **Log:** Added `docs/ACCEPTANCE.md` with CI, replay, 9-book scan, six re-verified surebets, pairing coverage and known gaps. The seven-check contract is not fully met: the legacy approval routes still exist (disabled), Betole has unregistered market codes, and execution/soak are open.
 
 ---
 
