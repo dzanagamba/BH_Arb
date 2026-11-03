@@ -111,6 +111,37 @@ async def api_key_guard(request, call_next):
     return await call_next(request)
 
 
+@app.middleware("http")
+async def security_headers(request, call_next):
+    """Add the browser-side hardening headers the dashboard can live with.
+
+    Defined last so it wraps the guards too: a 401 or a refused cross-origin
+    write carries the same headers as a normal page. The dashboard still uses
+    inline handlers, so `script-src` has to admit inline code; that is a real
+    limitation, not a clean CSP. The other directives still block plugin
+    content, base-tag rewrites, framing and cross-origin form posts, and
+    `connect-src 'self'` keeps injected code from shipping data elsewhere.
+    """
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault(
+        "Content-Security-Policy",
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src https://fonts.gstatic.com; "
+        "img-src 'self' data:; "
+        "connect-src 'self'; "
+        "object-src 'none'; "
+        "base-uri 'self'; "
+        "frame-ancestors 'none'; "
+        "form-action 'self'",
+    )
+    return response
+
+
 # Include API routes
 app.include_router(router, prefix="/api")
 

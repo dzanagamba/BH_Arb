@@ -8,9 +8,9 @@ named next to it.
 
 | Check | Command | Result |
 |---|---|---|
-| Tests | `python -m pytest` | **1,156 passed** |
+| Tests | `python -m pytest` | **1,167 passed** |
 | Lint | `python -m ruff check .` | clean |
-| Types | `python -m mypy .` | clean on 111 source files |
+| Types | `python -m mypy .` | clean on 119 source files |
 | Market doc | `python scripts/generate_market_mapping_doc.py --check` | in sync |
 | Cold replay | `python scripts/replay_mappings.py tests/fixtures/replay/2026-11-03 --cold --check` | exit 0, fixed point |
 | Seeded replay | `python scripts/replay_mappings.py tests/fixtures/replay/2026-11-03 --seeded --check` | exit 0 |
@@ -19,68 +19,143 @@ The cold replay starts with an empty evidence ledger, learns from the frozen
 corpus, and reaches a pass that adds no claim and changes no verdict. It has 0
 false merges and 0 unresolved evidence-backed pairs.
 
-## Soak smoke (not the 24-hour gate)
+## Browser hardening
 
-`python scripts/soak.py --cycles 3 --interval 5 --pid <server-pid> --check`:
+`server/app.py` sets `Content-Security-Policy` (`default-src 'self'`,
+`object-src 'none'`, `base-uri 'self'`, `frame-ancestors 'none'`,
+`connect-src 'self'`), `X-Content-Type-Options: nosniff`,
+`X-Frame-Options: DENY` and `Referrer-Policy: no-referrer` on the dashboard and
+every API response. The dashboard still uses inline handlers, so `script-src`
+includes `'unsafe-inline'`; replacing those handlers with listeners and a nonce
+CSP remains open.
+
+## Soak
+
+`python scripts/soak.py --cycles 10 --interval 5 --pid <server-pid> --check`:
 
 | Sample | Matches | Groups | Surebets | RSS | Browsers | Errors |
 |---|---:|---:|---:|---:|---:|---:|
-| 1 | 6,501 | 1,046 | 7 | 715.6 MB | 0 | 1 |
-| 3 | 6,500 | 1,046 | 7 | 853.4 MB | 0 | 1 |
+| 1 | 6,497 | 1,046 | 5 | 726.4 MB | 0 | 1 |
+| 10 | 6,493 | 1,046 | 5 | 897.9 MB | 0 | 1 |
 
-Memory grew **19.3%** (limit 50%), no browser process survived a scan, and the
-run passed `--check`. This is a smoke test; the 24-hour run is still open.
+Memory grew **23.6%** (limit 50%), no browser process survived a scan, and the
+run passed `--check`.
 
-## Real prematch scan
+`python scripts/soak.py --cycles 3 --interval 5 --pid <server-pid> --check`
+on the final gate (including the pairing and CSP changes):
 
-`python main.py`, then `POST /api/scan?mode=prematch` at **2026-11-03 03:44 UTC**.
+| Sample | Matches | Groups | Surebets | RSS | Browsers | Errors |
+|---|---:|---:|---:|---:|---:|---:|
+| 1 | 6,501 | 1,044 | 12 | 779.9 MB | 0 | 1 |
+| 3 | 6,500 | 1,044 | 12 | 888.7 MB | 0 | 1 |
+
+Memory grew **13.95%**, no browser process survived, and the run passed
+`--check`. The 24-hour run is still open.
+
+## Real prematch scan (verified sample)
+
+`python main.py`, then `POST /api/scan?mode=prematch` at **2026-11-03 04:39 UTC**.
 
 | Metric | Value |
 |---|---|
 | Books returning matches | 9 / 9 enabled (Betole, MaxBet, MDShop, Admiralbet, MBet, SportPlus, Premier Kladionica, WWIN, Mozzartbet) |
-| Matches | 6,503 |
-| Verified groups | 1,039 |
-| Listings in groups | 5,754 |
-| Price comparisons | 4,481 |
+| Matches | 6,492 |
+| Verified groups | 1,043 |
+| Listings in groups | 5,805 |
+| Groups with all nine books | 126 |
 | False merges (different Betradar ids in one group) | 0 |
-| Price outliers | 3 (two dropped with their surebets) |
-| Surebets shown | 8 |
+| Price outliers | 3 (dropped with their surebets) |
+| Surebets shown | 9 |
 
-Two outlier surebets were dropped: `boston utd – leicester u21` (MaxBet X2) and
-`ael limassol – iraklis gerolakkou` (Betole GG, a 10.75% phantom). The eight shown
-were re-checked with `POST /api/verify`; every one returned `still_profitable:
-true` on a fresh scrape.
+The price guard dropped three outlier legs: Kitakyushu–Reilac Shiga (MaxBet X2,
+SportPlus 1) and Kanazawa–Parceiro N (SportPlus 1). The nine shown were
+re-checked with `POST /api/verify`:
 
-| Match | Market | Profit | Books |
-|---|---|---:|---|
-| kanazawa – parceiro n | 1X2 | 7.59% | mdshop / sportplus / mozzartbet |
-| kanazawa – parceiro n | 1X2 + DC | 5.96% | mdshop / mozzartbet |
-| nara – kusatsu | O/U 2.5 | 3.94% | mbet / mozzartbet |
-| anaitasuna ft – alaves | BTTS | 1.69% | betole / maxbet |
-| nara – kusatsu | BTTS | 0.54% | wwin / mozzartbet |
-| fulham – newcastle | 1X2 | 0.49% (dust) | sportplus / mozzartbet / maxbet |
-| atl madrid – bayern munich | draw / not-draw | 0.42% (dust) | mdshop / mozzartbet |
-| roma – sassuolo | home / not-home | 0.42% (dust) | mbet / mozzartbet |
+| Match | Market | Profit | Books | Re-check |
+|---|---|---:|---|---|
+| kanazawa – parceiro n | double chance | 8.28% | mdshop / mozzartbet | not found on fresh data |
+| anaitasuna ft – alaves | BTTS | 1.69% | betole / maxbet | still profitable |
+| boston united – leicester u21 | double chance | 1.52% | sportplus / wwin | not found on fresh data |
+| villarreal – psg | 1X2 | 1.20% | mdshop / mozzartbet / wwin | still profitable |
+| tochigi – fukushima | double chance | 0.51% | mdshop / mozzartbet | still profitable |
+| bodo/glimt – lille | double chance | 0.49% | betole / maxbet | still profitable |
+| atl madrid – bayern munich | double chance | 0.42% | mdshop / mozzartbet | still profitable |
+| roma – sassuolo | double chance | 0.42% | mbet / mozzartbet | still profitable |
+| tochigi – fukushima | 1X2 | 0.33% | mdshop / mozzartbet | still profitable |
+
+Seven of nine re-verified at a fresh price; two disappeared before the re-check
+and are reported as gone rather than as confirmed arbs.
+
+The final-gate soak scan at **04:54 UTC** (after the pairing and CSP changes)
+found **6,500 matches, 1,044 verified groups and 12 surebets**, including
+`mainz – bayern munich` 1X2 at 0.27%, a fixture that only paired after the
+anchor fix. Those 12 are scan-level counts and were not individually re-verified.
 
 ## Pairing coverage
 
-The scan is a direct measurement of the naming problem:
+`python scripts/pairing_audit.py --check` reads the same cache the dashboard
+serves and exits non-zero when a same-fixture offer is left unpaired or a group
+repeats a bookmaker.
 
-| Ground truth | Fixtures | Grouped | Missed | Miss rate |
-|---|---|---|---|---|
-| Same non-empty Betradar id on >1 book | 736 | 711 | 25 | 3.4% |
-| Identical raw teams + kickoff on >1 book | 1,032 | 986 | 46 | 4.5% |
+| Metric | Value |
+|---|---:|
+| Matches | 6,500 |
+| Verified multi-book groups | 1,044 |
+| Listings in groups | 5,815 |
+| Ungrouped listings | 685 |
+| Duplicate listings from a book already in the group | 333 |
+| Strict misses (same league, ±15 min, both teams ≥80% alike) | 40 |
+| Strict miss rate | **0.62%** |
+| Groups repeating a bookmaker | 0 |
 
-The missed Betradar cases are almost all MaxBet; the missed exact-fixture cases
-are MaxBet, Mozzartbet and the MDShop/Admiralbet pair, which is one NSoft price
-source and is correctly not treated as two books.
+Per-book grouping, including duplicate listings:
 
-## Betole
+| Book | Grouped / matches | Rate |
+|---|---:|---:|
+| MDShop | 536 / 538 | 99.6% |
+| Admiralbet | 536 / 538 | 99.6% |
+| MBet | 602 / 618 | 97.4% |
+| WWIN | 727 / 756 | 96.2% |
+| SportPlus | 729 / 762 | 95.7% |
+| MaxBet | 746 / 841 | 88.7% |
+| Premier Kladionica | 740 / 846 | 87.5% |
+| Betole | 931 / 1,239 | 75.1% |
+| Mozzartbet | 268 / 362 | 74.0% |
+
+The low Betole/Mozzartbet rates are mostly duplicate listings and leagues no
+other book carries, not same-fixture misses: only 40 offers in the whole scan
+have a strict counterpart in another book that the matcher failed to pair. The
+remaining examples are abbreviations and city-qualified spellings such as
+`Qingdao H` / `Qingdao Hainiu`, `Dynamo D` / `Dynamo Dresden`, and
+`Central Coast (W)` / `Central Coast Mariners (W)`.
+
+### Gate fixes that produced this measurement
+
+1. **The anchor is not the group.** A candidate was compared only with the
+   group's first member, so a valid listing was rejected when that member used
+   a different league spelling (`germany, bundesliga` beside seven
+   `bundesliga` listings). The gate now checks the group's canonical league and
+   every member's league, and clears an anchor-only mismatch when the group
+   proves it.
+2. **A group member can prove a team.** The same anchor-only problem hid a
+   team spelling another member could prove (`A. Salzburg` beside
+   `Austria Salzburg`). Orientation is now accepted from any member while a
+   member supports the canonical fields.
+3. **Club designators are not aliases.** `FC Liefering` / `Liefering` and
+   `SV Austria Salzburg` / `Austria Salzburg` are accepted without a learned
+   alias, but only when the canonical ids and the remaining spelling agree.
+   `Atletico Madrid` / `Madrid` is explicitly not such a pair.
+4. **Generic leagues get fingerprints.** `bundesliga` is too vague for a hard
+   league id but its team set is what resolves it against
+   `germany, bundesliga`. The learner now records generic fingerprints and the
+   resolver compares canonical team ids, so `Mainz – Bayern` pairs across all
+   nine books.
+
+## Betole and EVLBet
 
 `BetoleScraper().scrape(live=False)` returns **1,239** matches. The scraper was
 fixed to read `kickOffTime` and to keep `brMatchId` as a Betradar id. Betole is
-now enabled; its first verified surebet was `anaitasuna ft – alaves` BTTS at
-1.69%.
+enabled; its first verified surebet was `anaitasuna ft – alaves` BTTS at 1.69%.
 
 `python scripts/probe_feeds.py --books evlbet,betole` returns **0** matches for
 EVLBet and **1,239** for Betole; the dated report is `docs/FEED_STATUS.md`.
@@ -94,8 +169,8 @@ EVLBet remains disabled and is an evidence-backed absence, not a silent omission
   `/api/health.unmapped_markets` and are not used for pricing.
 * The legacy approve/reject HTTP routes are removed; the dashboard is read-only.
   The direct migration functions remain for legacy tests but are not reachable.
-* Execution limits, partial acceptance, bankroll, a 24-hour soak and the paused
-  security-hardening stash are not done.
+* Execution limits, bankroll and the 24-hour soak are not done.
+* The CSP admits inline handlers; a nonce-based strict CSP remains open.
 * In-play remains deferred.
 
 **Verdict:** the prematch scanner is working and finds real, re-verified

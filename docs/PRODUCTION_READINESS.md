@@ -3,23 +3,25 @@
 ## Verdict
 
 **The prematch pipeline now finds and re-verifies real surebets; the product is
-not yet safe for unattended betting.** On 2026-11-03 a real scan found five
-surebets after a price-outlier guard dropped a sixth, and all five re-verified as
-still profitable on a fresh scrape. The remaining gaps are execution, operations,
-market breadth and security, not the core match/price engine.
+not yet safe for unattended betting.** On 2026-11-03 the latest nine-book scan
+found nine surebets after the price guard dropped three outlier legs. Seven
+re-verified as still profitable on a fresh scrape; two disappeared before the
+re-check and are reported as gone rather than as confirmed arbs. The core
+match/price engine now has a measured pairing quality (0.6% strict miss rate);
+the remaining gaps are execution, operations, market breadth and security.
 
 This is an evidence-based verdict, not a score:
 
 | Area | State | Why it is not production-ready |
 |---|---|---|
-| Event identity | Good and improving | Ledger, Betradar ids, shared-fixture learning, league fingerprints and shared-opponent blocking exist. No real-scan precision/recall measurement yet. |
+| Event identity | Good and measured | Ledger, Betradar ids, shared-fixture learning, league fingerprints and shared-opponent blocking exist. `scripts/pairing_audit.py` measures a 0.62% strict miss rate (40 of 6,500 offers) and zero groups repeating a bookmaker. |
 | Market identity | Good | Label classifier + cross-book consensus + generated registry + raw-offer resolver exist. All nine markets are enabled; first-half 1X2 and AH were proven on a real scan with 0 outliers, and first-half O/U is enabled with no current offer and the price guard active. Only the NSoft parser publishes `source_id`; the other scrapers still use the hand-written registry. |
 | Human input | Removed | The three write routes are gone; the Diagnostics tab is read-only. The evidence ledger is the only trust source. |
 | Freshness | Partial | The engine has odds TTL and every shown surebet is re-verified; there is still no per-book freshness budget, no last-known-value policy, and no push/streaming path. |
 | Execution | Partial | Stakes are rounded, legs are ordered, the slip re-plans, and every shown surebet is re-checked before placement. Book limits, partial acceptance, balance, and the "price moved between legs" workflow are not complete. |
-| Operations | Missing | No scheduler/back-off, no alerting, no 24 h soak, no deployment, no health budget for mapping coverage. |
-| Security | Good | Loopback by default, same-origin CORS, an all-route API-key guard, a CSRF guard and URL-scheme checks are in place; the dashboard prompts once. A full XSS sweep remains from the paused stash. |
-| Evaluation | Partial | Deterministic replay, a cold-start fixed point and two real scans exist. No large multi-scan corpus, no labelled precision/recall, no CLV/backtest. |
+| Operations | Partial | Scheduler, per-book back-off and a 10-cycle soak exist; no alerting, no 24 h soak, no deployment, no health budget for mapping coverage. |
+| Security | Good | Loopback by default, same-origin CORS, an all-route API-key guard, a CSRF guard, URL-scheme checks and CSP/anti-framing headers are in place; the dashboard prompts once. Inline handlers still require `script-src 'unsafe-inline'`, so a nonce-based strict CSP remains. |
+| Evaluation | Partial | Deterministic replay, a cold-start fixed point, a repeatable pairing audit and real scans exist. No large multi-scan corpus, no labelled precision/recall, no CLV/backtest. |
 
 The honest summary: **the engine can prove a match and price it on real data
 without false merges or price outliers; the product cannot yet prove that it
@@ -35,6 +37,7 @@ Two headless prematch scans were run against the live books, not fixtures.
 | With learned ledger | 5,287 | 8/8 enabled | 797 | 3,645 | 3,704 | 0 | 0 | 0 |
 | With in-scan learning | 5,276 | 8/8 enabled | 796 | 3,644 | 3,698 | 0 | 0 | 0 |
 | With Betole enabled | 6,503 | 9/9 enabled | 1,039 | 5,754 | 4,481 | 3 | 0 | 8 |
+| Latest gate + pairing audit | 6,500 | 9/9 enabled | 1,044 | 5,815 | — | 3 | 0 | 12 |
 
 The learned ledger was produced by `scripts/learn_mappings.py` from the first
 scan: 1,795 accepted claims and 866 quarantined. The second scan grouped 109
@@ -53,41 +56,60 @@ coverage lever.
 
 ### Pairing coverage on that scan
 
-The scan is a direct measurement of the naming problem:
+`python scripts/pairing_audit.py --check` reads the same cache the dashboard
+serves. A strict miss is an ungrouped offer that has another book's listing of
+the same fixture: same league (or a country-qualified spelling of it), kickoff
+within 15 minutes, and both team names at least 80% alike.
 
-| Ground truth | Fixtures | Grouped | Missed | Miss rate |
+| Metric | Value |
+|---|---:|
+| Matches | 6,500 |
+| Verified multi-book groups | 1,044 |
+| Listings in groups | 5,815 |
+| Ungrouped listings | 685 |
+| Duplicate listings from a book already in the group | 333 |
+| Strict misses | 40 |
+| Strict miss rate | **0.62%** |
+| Groups repeating a bookmaker | 0 |
+
+The 348 duplicate listings are the main reason Betole (75.1%) and Mozzartbet
+(73.6%) have lower per-book grouping rates: both publish several listings for
+the same fixture, and only one can enter a group. The remaining strict misses
+are abbreviations and city-qualified spellings such as `Qingdao H` /
+`Qingdao Hainiu`, `Dynamo D` / `Dynamo Dresden`, and `Central Coast (W)` /
+`Central Coast Mariners (W)`.
+
+This is the strongest evidence so far that the ledger, shared-opponent blocking
+and league fingerprints are doing the job. The gate fixes that produced it are
+recorded in `docs/ACCEPTANCE.md`: the anchor is no longer treated as the whole
+group, any supporting member can prove a team, club designators are not
+aliases, and generic league names get team-set fingerprints.
+
+### Verified surebet sample (2026-11-03 04:39 UTC)
+
+| Match | Market | Profit | Books | Re-check |
 |---|---|---|---|---|
-| Same non-empty Betradar id on >1 book | 736 | 711 | 25 | 3.4% |
-| Identical raw teams + kickoff on >1 book | 1,032 | 986 | 46 | 4.5% |
+| kanazawa – parceiro n | double chance | 8.28% | mdshop / mozzartbet | not found on fresh data |
+| anaitasuna ft – alaves | BTTS | 1.69% | betole / maxbet | still profitable |
+| boston united – leicester u21 | double chance | 1.52% | sportplus / wwin | not found on fresh data |
+| villarreal – psg | 1X2 | 1.20% | mdshop / mozzartbet / wwin | still profitable |
+| tochigi – fukushima | double chance | 0.51% | mdshop / mozzartbet | still profitable |
+| bodo/glimt – lille | double chance | 0.49% | betole / maxbet | still profitable |
+| atl madrid – bayern munich | double chance | 0.42% | mdshop / mozzartbet | still profitable |
+| roma – sassuolo | double chance | 0.42% | mbet / mozzartbet | still profitable |
+| tochigi – fukushima | 1X2 | 0.33% | mdshop / mozzartbet | still profitable |
 
-The missed Betradar cases are almost all MaxBet, whose groups stay unverified
-until its per-event link is proven; the missed exact-fixture cases are MaxBet,
-Mozzartbet and the MDShop/Admiralbet pair, which is one NSoft price source and is
-correctly not treated as two books. This is the strongest evidence so far that
-the ledger, shared-opponent blocking and league fingerprints are doing the job.
+The 04:39 sample had 6,492 matches, 1,043 verified groups, 5,805 grouped
+listings, 0 false merges and 3 price-outlier legs. The price guard dropped the
+Kitakyushu–Reilac Shiga (MaxBet X2, SportPlus 1) and Kanazawa–Parceiro N
+(SportPlus 1) legs instead of showing those arbs. Seven of the nine shown
+re-verified with `still_profitable: true`; the two that disappeared before the
+re-check are reported as gone. The final-gate soak scan at 04:54 found 6,500
+matches, 1,044 groups and 12 surebets (scan-level counts, not individually
+re-verified).
 
-### First real surebets (2026-11-03 03:24 UTC)
-
-| Match | Market | Profit | Books | Re-verified |
-|---|---|---|---|---|
-| kanazawa – parceiro n | 1X2 | 7.59% | mdshop / sportplus / mozzartbet | yes, unchanged |
-| kanazawa – parceiro n | 1X2 + DC | 5.96% | mdshop / mozzartbet | yes, unchanged |
-| nara – kusatsu | O/U 2.5 | 3.94% | mbet / mozzartbet | yes, unchanged |
-| nara – kusatsu | BTTS | 1.69% | wwin / mozzartbet | yes, unchanged |
-| anaitasuna ft – alaves | BTTS | 1.69% | betole / maxbet | yes, unchanged |
-| fulham – newcastle | 1X2 | 0.49% (dust) | sportplus / mozzartbet / maxbet | yes, unchanged |
-| atl madrid – bayern munich | draw / not-draw | 0.42% (dust) | mdshop / mozzartbet | yes, unchanged |
-| roma – sassuolo | home / not-home | 0.42% (dust) | mbet / mozzartbet | yes, unchanged |
-
-The 9-book scan had 6,503 matches, 1,039 verified groups, 5,754 grouped
-listings, 4,481 price comparisons, 0 false merges and 3 price outliers. The outlier was the
-`boston utd – leicester u21` MaxBet X2 leg; the price guard dropped that surebet
-instead of showing it. The five above passed the guard and `POST /api/verify`
-returned `still_profitable: true` for every one, with unchanged odds.
-
-This is the first end-to-end evidence that the product can do the job it exists
-for. The route-pattern proof for MaxBet/Mozzartbet and enabling Betole were the
-coverage unlocks: grouped listings rose from 3,645 to 5,683. Betole also carries
+The route-pattern proof for MaxBet/Mozzartbet and enabling Betole were the
+coverage unlocks: grouped listings rose from 3,645 to 5,805. Betole also carries
 a Betradar match id, which its scraper now keeps; its kickoff field was never
 read before 2026-11-03.
 
@@ -154,10 +176,10 @@ read before 2026-11-03.
 
 1. **Human write path.** Removed: the routes are gone and the Diagnostics view
    is read-only. The direct migration functions remain only for legacy tests.
-2. **Prove coverage on real data.** Run a headless prematch scan on a day with
-   real fixtures, record per-book counts, verified groups, mapping coverage and
-   `price_check.py` outliers, and add the scan to the replay corpus. The current
-   corpus is three matches; it cannot prove production coverage.
+2. **Prove coverage over time.** One scan now has a measured 0.62% strict miss
+   rate and zero duplicate-book groups. Add several days of scans to the replay
+   corpus so the number is not one feed snapshot, and track the 40 remaining
+   abbreviation/city-qualified pairs until they are learned or explained.
 3. **Finish market coverage.** Publish `source_id` from every parser, run
    discovery on captured payloads, and generate the registry. Prove first-half
    and AH rows with captures and consensus; record absence for markets a book
@@ -172,9 +194,11 @@ read before 2026-11-03.
 6. **Harden it.** Loopback, same-origin CORS, the all-route API key guard, the
    CSRF guard and URL-scheme checks are in place; finish the XSS sweep from the
    stash.
-7. **Measure quality.** Precision/recall on a labelled corpus, false-merge rate,
-   mapping coverage, price-check outliers, CLV/backtest once real bets are
-   recorded. A low coverage number is a finding, not a threshold to lower.
+7. **Measure quality.** The pairing audit now reports strict miss rate,
+   false-merge rate and duplicate-book groups on every scan. Still missing:
+   precision/recall on a labelled multi-day corpus, mapping coverage trends and
+   CLV/backtest once real bets are recorded. A low coverage number is a finding,
+   not a threshold to lower.
 
 ## What would make it production-ready
 
@@ -182,6 +206,8 @@ A single recorded run that satisfies all of the following:
 
 * a real headless prematch scan returns matches for every configured book that
   publishes football;
+* `scripts/pairing_audit.py --check` stays under a 2% strict miss rate across
+  several days, with zero groups repeating a bookmaker;
 * every published market row is mapped or has a dated absence proof;
 * `price_check.py` reports 0 outliers over a meaningful comparison count;
 * the cold-start replay reaches a fixed point with 0 false merges and 0

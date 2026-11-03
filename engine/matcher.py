@@ -41,6 +41,7 @@ from config.settings import (
 )
 from engine import name_identity
 from engine.certainty import CertaintyGate, GateResult
+from engine.league_names import GENERIC_LEAGUES
 from engine.mapping_evidence import MappingLedger, league_equivalence_key, team_alias_key
 from engine.normalizer import TeamNormalizer, canonical_team_name, canonicalize_fixture
 from models.schemas import Market, MarketType, Match, MatchEvidence, MatchGroup, OddsValue
@@ -57,21 +58,6 @@ _TEAM_ALIAS_FILE = os.path.join(
 MAPPING_EVIDENCE_FILE = os.path.join(
     os.path.dirname(__file__), "..", "config", "generated", "mapping_evidence.json"
 )
-
-# Generic fallback leagues that are too vague to enforce a league gate on
-# Expanded in muse12 (P1-3): friendlies/cups/superliga are vague — keep permissive
-# NOTE: cleaned league names keep the dot, e.g. "2. Liga" -> "2. liga" (dot+space). Both forms are listed.
-GENERIC_LEAGUES = {
-    "football", "fudbal", "soccer", "unknown_league", "", "2.liga", "2. liga", "3.liga", "3. liga",
-    "kup", "klubovi", "1.liga", "1. liga", "superliga", "super liga",
-    "prijateljske", "prijateljske utakmice", "prijateljske klubske",
-    "world club friendly", "club friendly", "klubovi prijateljski",
-    "elitne prijateljske", "friendlies",
-    # Ambiguous short names without country — treat as generic to avoid false hard rejects
-    # (e.g. "Premier Liga" appears for both BIH and ENG; country gate + teams decide)
-    "premier liga", "premijer liga", "premier league",
-    "bundesliga", "prva liga", "vtora liga",
-}
 
 # The category markers `canonicalize_fixture` appends to a club's name.
 _SIDE_SUFFIX = re.compile(r"(?: (?:U\d{2}|Youth))?(?: II)?(?: \(W\))?$")

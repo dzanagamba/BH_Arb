@@ -100,6 +100,28 @@ def test_the_gate_accepts_a_fingerprint_league(tmp_path):
     assert league.reason == "league_fingerprint"
 
 
+def test_a_generic_name_is_resolved_by_its_fixture(tmp_path):
+    corpus = [
+        _m("mdshop", "Mainz", "Bayern Munich", "Bundesliga", "1"),
+        _m("betole", "Mainz", "Bayern Munich", "Germany, Bundesliga", "2"),
+        _m("mdshop", "Dortmund", "Leipzig", "Bundesliga", "3"),
+        _m("betole", "Dortmund", "Leipzig", "Germany, Bundesliga", "4"),
+        _m("mdshop", "Stuttgart", "Werder", "Bundesliga", "5"),
+        _m("betole", "Stuttgart", "Werder", "Germany, Bundesliga", "6"),
+    ]
+    ledger = MappingLedger(tmp_path / "generic.json")
+    learn(corpus, ledger, scan="s1")
+
+    assert ledger.get("league_fingerprint", "bundesliga") is not None
+    resolver = LeagueResolver(ledger)
+    assert resolver.same_competition(
+        "bundesliga", "germany, bundesliga", "Mainz", "Bayern Munich"
+    )
+    assert not resolver.same_competition(
+        "bundesliga", "germany, bundesliga", "Alpha", "Beta"
+    )
+
+
 def test_unrelated_sets_do_not_match(tmp_path):
     ledger = _ledger(tmp_path)
     resolver = LeagueResolver(ledger)

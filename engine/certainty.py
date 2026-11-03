@@ -28,7 +28,7 @@ from engine.mapping_evidence import (
     league_equivalence_key,
     team_alias_key,
 )
-from engine.normalizer import TeamNormalizer
+from engine.normalizer import CLUB_DESIGNATORS, TeamNormalizer
 from models.schemas import Match, MatchEventStatus, MatchEvidence, MatchGroup
 from scrapers.common import (
     declares_no_event_id,
@@ -44,6 +44,11 @@ _LETTER_FOLDS = str.maketrans({"đ": "dj", "ø": "o", "æ": "ae", "ß": "ss", "�
 
 # Evidence note (not a reason) on a league accepted by `_league_settled_by_teams`.
 LEAGUE_UNMAPPED_TEAMS_EXACT = "league_unmapped_teams_exact"
+
+# Club-type tokens that may be dropped without changing which club a name
+# denotes. Words such as "atletico" and "deportivo" are excluded: they are part
+# of a club's identity, not a designator.
+_DESIGNATOR_TOKENS = frozenset(CLUB_DESIGNATORS - {"atletico", "deportivo"})
 
 HARD_REJECT_REASONS = frozenset(
     {"league_mismatch", "category_mismatch", "betradar_mismatch", "orientation_unresolved"}
@@ -196,6 +201,16 @@ class CertaintyGate:
         plain = "".join(char for char in decomposed if not unicodedata.combining(char))
         return " ".join(_TEAM_PUNCTUATION.sub(" ", plain).split())
 
+    @classmethod
+    def _club_designator_key(cls, name: str) -> str:
+        """Drop leading/trailing club-type tokens, keeping the club name."""
+        words = cls._raw_team_key(name).split()
+        while len(words) > 1 and words[0] in _DESIGNATOR_TOKENS:
+            words = words[1:]
+        while len(words) > 1 and words[-1] in _DESIGNATOR_TOKENS:
+            words = words[:-1]
+        return " ".join(words)
+
     @staticmethod
     def _surface_team_key(name: str) -> str:
         """Normalize lossless spelling differences for an allowlisted score."""
@@ -236,16 +251,29 @@ class CertaintyGate:
         allowlisted = self._is_allowlisted(left_raw, right_raw) or self._is_allowlisted(
             left_normalized, right_normalized
         )
-        if not allowlisted:
-            return False, ""
+        if allowlisted:
+            left_surface = self._surface_team_key(left_raw)
+            right_surface = self._surface_team_key(right_raw)
+            fuzzy_score = max(
+                fuzz.token_set_ratio(left_surface, right_surface),
+                fuzz.partial_ratio(left_surface, right_surface),
+            )
+            if fuzzy_score >= 90:
+                return True, "allowlist"
 
-        left_surface = self._surface_team_key(left_raw)
-        right_surface = self._surface_team_key(right_raw)
-        fuzzy_score = max(
-            fuzz.token_set_ratio(left_surface, right_surface),
-            fuzz.partial_ratio(left_surface, right_surface),
-        )
-        return fuzzy_score >= 90, "allowlist" if fuzzy_score >= 90 else ""
+        # A club-type designator is not an identity difference: "FC Liefering"
+        # and "Liefering" name one club, and the normalizer already maps both to
+        # the same canonical id. Requiring an alias first deadlocks the pair —
+        # it can never group, so the learner can never see it. Only leading or
+        # trailing designators are dropped, and the remaining spelling and
+        # canonical id must be identical. This runs after the reviewed and
+        # allowlisted forms so an explicit alias keeps its own evidence.
+        if (
+            left_normalized == right_normalized
+            and self._club_designator_key(left_raw) == self._club_designator_key(right_raw)
+        ):
+            return True, "designator"
+        return False, ""
 
     def _teams_match_details(self, a: Match, b: Match) -> tuple[bool, bool, str]:
         """Return ``(ok, is_swapped, alias_source)`` for raw/canonical teams."""
@@ -555,6 +583,10 @@ class CertaintyGate:
             team_source = "ledger"
             team_confidence = 1.0
             team_evidence_reason = "swapped" if is_swapped else "ledger_alias"
+        elif alias_source == "designator":
+            team_source = "rule"
+            team_confidence = 1.0
+            team_evidence_reason = "swapped" if is_swapped else "club_designator"
         elif alias_source:
             team_source = "allowlist"
             team_confidence = 1.0
@@ -704,6 +736,52 @@ class CertaintyGate:
         )
         if swapped_home_ok and swapped_away_ok:
             return True, True
+
+        # The canonical reference is resolved through the anchor, so an anchor
+        # spelling the candidate cannot be proven against (Betole's "A.
+        # Salzburg" beside "Austria Salzburg") must not hide the same proof
+        # held by another member. Every accepted member is already in the
+        # group's orientation, so any member may prove it — but only while a
+        # member actually supports the canonical fields. A canonical value no
+        # member holds stays authoritative and keeps the candidate unresolved.
+        canonical_supported = any(
+            member.home_team_normalized == group.canonical_home
+            and member.away_team_normalized == group.canonical_away
+            for member in group.matches
+        )
+        if not canonical_supported:
+            return False, False
+        orientations: set[bool] = set()
+        for member in group.matches:
+            direct = self._team_pair_details(
+                match.home_team,
+                match.home_team_normalized,
+                member.home_team,
+                member.home_team_normalized,
+            )[0] and self._team_pair_details(
+                match.away_team,
+                match.away_team_normalized,
+                member.away_team,
+                member.away_team_normalized,
+            )[0]
+            if direct:
+                orientations.add(False)
+                continue
+            swapped = self._team_pair_details(
+                match.home_team,
+                match.home_team_normalized,
+                member.away_team,
+                member.away_team_normalized,
+            )[0] and self._team_pair_details(
+                match.away_team,
+                match.away_team_normalized,
+                member.home_team,
+                member.home_team_normalized,
+            )[0]
+            if swapped:
+                orientations.add(True)
+        if len(orientations) == 1:
+            return True, orientations.pop()
         return False, False
 
     def _group_kickoff_reason(self, match: Match, group: MatchGroup) -> str | None:
@@ -774,12 +852,73 @@ class CertaintyGate:
         if group_kickoff_reason and group_kickoff_reason not in result.reasons:
             result.reasons.append(group_kickoff_reason)
 
-        league_settled = team_proved_by_id or any(
+        # The anchor is one book's spelling, not the group's identity. A group
+        # can hold "germany, bundesliga" from one book and "bundesliga" from
+        # seven others; the canonical league is the group's answer. When the
+        # candidate agrees with that canonical league, an anchor-only mismatch
+        # must not survive as a hard reject: doing so dropped valid listings
+        # from groups that already carried the same competition.
+        match_league = match.league_normalized or ""
+        group_league = group.league or ""
+        # Compare with every member's league, not only the canonical one: a
+        # group can be anchored by a book whose league spelling never became
+        # canonical (Betole's "germany, bundesliga" beside seven "bundesliga"
+        # listings). Matching any member is the same evidence the group itself
+        # rests on.
+        group_leagues = {
+            member.league_normalized
+            for member in group.matches
+            if member.league_normalized
+        }
+        # The canonical field is authoritative only while a member actually
+        # supports it. A test or a corrupted group can set a canonical league
+        # no member holds; that must not become a licence to accept every
+        # member's league spelling.
+        canonical_league_supported = bool(
+            group_league
+            and (
+                group_league in group_leagues
+                or any(self._league_ok(group_league, league) for league in group_leagues)
+            )
+        )
+        league_references = (
+            group_leagues if canonical_league_supported else ({group_league} if group_league else set())
+        )
+        group_league_settles = bool(
+            match_league
+            and any(
+                match_league == league or self._league_ok(match_league, league)
+                for league in league_references
+            )
+        )
+        if group_league_settles:
+            for item in result.evidence:
+                if item.rule == "league_identity" and item.confidence < 1.0:
+                    item.confidence = 1.0
+                    item.reason = "group_canonical_league"
+                    item.league_pair = [match_league, group_league]
+                    break
+            if "league_mismatch" in result.reasons:
+                result.reasons.remove("league_mismatch")
+
+        # A team spelling can fail against the anchor for the same reason: the
+        # anchor says "RB Leipzig", the candidate says "Leipzig", and the pair
+        # check refuses because the anchor's league already failed. The group's
+        # canonical teams are the stronger reference, so an orientation proved
+        # against them clears that derived failure.
+        if group_teams is not None and group_teams[0] and "team_unresolved" in result.reasons:
+            result.reasons.remove("team_unresolved")
+            for item in result.evidence:
+                if item.rule == "team_identity" and item.confidence < 1.0:
+                    item.confidence = 1.0
+                    item.reason = "group_canonical_teams"
+                    break
+
+        league_settled = group_league_settles or team_proved_by_id or any(
             item.rule == "league_identity" and item.reason == LEAGUE_UNMAPPED_TEAMS_EXACT
             for item in result.evidence
         )
         if group.league and not league_settled:
-            match_league = match.league_normalized or ""
             if (
                 match_league
                 and match_league != group.league

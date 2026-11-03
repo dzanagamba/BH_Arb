@@ -28,13 +28,14 @@ from rapidfuzz import fuzz
 
 from engine import name_identity
 from engine.certainty import CertaintyGate
+from engine.league_names import GENERIC_LEAGUES
 from engine.mapping_evidence import (
     Evidence,
     MappingLedger,
     league_equivalence_key,
     team_alias_key,
 )
-from engine.matcher import GENERIC_LEAGUES, MatchMatcher
+from engine.matcher import MatchMatcher
 from engine.team_resolver import revoke_contradictions
 from models.schemas import Match
 
@@ -388,10 +389,16 @@ def learn(
     # Team-set fingerprints. A league name seen with at least three distinct
     # teams gets a fingerprint claim; the gate uses it to resolve an ambiguous
     # name per fixture. Two teams (one fixture) is too little to be a set.
+    #
+    # Generic names are fingerprinted too. They are useless as a global league
+    # id — "Bundesliga" is German or Austrian — but their team set is exactly
+    # what lets the resolver decide a fixture. Skipping them left a generic
+    # name permanently unprovable against a country-qualified spelling such as
+    # "germany, bundesliga", which split otherwise identical groups.
     league_teams: dict[str, set[str]] = defaultdict(set)
     for match in normalized:
         league = (match.league_normalized or "").strip()
-        if league and league not in GENERIC_LEAGUES:
+        if league:
             league_teams[league].update(
                 {
                     _raw(_source_name(match, "home")),

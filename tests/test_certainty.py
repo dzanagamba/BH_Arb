@@ -524,6 +524,100 @@ def test_evaluate_against_group_uses_group_as_canonical():
     assert "league_mismatch" in r3.reasons
 
 
+def test_evaluate_uses_group_canonical_league_not_the_anchor_spelling():
+    gate = CertaintyGate(alias_allowlist={"rb leipzig|leipzig"})
+    anchor = _m("betole", "RB Leipzig", "Augsburg", "Germany, Bundesliga", event_id="1")
+    peer = _m("mdshop", "RB Leipzig", "Augsburg", "Bundesliga", event_id="2")
+    candidate = _m("premier_kladionica", "Leipzig", "Augsburg", "Bundesliga", event_id="3")
+    gate.normalize([anchor, peer, candidate])
+    # Pin the spellings this test is about; the real mapping file may add more.
+    # Production canonical ids use underscores, as the matcher builds them.
+    anchor.home_team_normalized = "rb_leipzig"
+    peer.home_team_normalized = "rb_leipzig"
+    candidate.home_team_normalized = "rb_leipzig"
+    anchor.league_normalized = "germany, bundesliga"
+    peer.league_normalized = "bundesliga"
+    candidate.league_normalized = "bundesliga"
+    group = MatchGroup(
+        canonical_home="rb_leipzig",
+        canonical_away="augsburg",
+        league="bundesliga",
+        kickoff=K,
+        matches=[anchor, peer],
+    )
+
+    result = gate.evaluate(candidate, group)
+
+    assert result.status == "verified", result.reasons
+    assert "league_mismatch" not in result.reasons
+    assert "team_unresolved" not in result.reasons
+    assert any(item.reason == "group_canonical_league" for item in result.evidence)
+    assert any(item.reason == "group_canonical_teams" for item in result.evidence)
+
+
+def test_a_club_designator_alone_is_not_an_identity_difference():
+    gate = CertaintyGate()
+    assert gate._team_pair_details("FC Liefering", "liefering", "Liefering", "liefering") == (
+        True,
+        "designator",
+    )
+    assert gate._team_pair_details("SV Austria Salzburg", "austria salzburg", "Austria Salzburg", "austria salzburg") == (
+        True,
+        "designator",
+    )
+    # Words that belong to a club's name are not designators.
+    assert gate._team_pair_details("Atletico Madrid", "madrid", "Madrid", "madrid") == (False, "")
+
+
+def test_group_member_proves_a_team_the_anchor_cannot():
+    gate = CertaintyGate()
+    anchor = _m("betole", "Liefering", "A. Salzburg", "Austria, 2. Liga", event_id="1")
+    peer = _m("mdshop", "Liefering", "Austria Salzburg", "Austrian 2. Liga", event_id="2")
+    candidate = _m("maxbet", "FC Liefering", "SV Austria Salzburg", "Austrian 2. Liga", event_id="3")
+    gate.normalize([anchor, peer, candidate])
+    anchor.home_team_normalized = "liefering"
+    anchor.away_team_normalized = "a salzburg"
+    peer.home_team_normalized = "liefering"
+    peer.away_team_normalized = "austria salzburg"
+    candidate.home_team_normalized = "liefering"
+    candidate.away_team_normalized = "austria salzburg"
+    anchor.league_normalized = "austria, 2. liga"
+    peer.league_normalized = "austrian_2_liga"
+    candidate.league_normalized = "austrian_2_liga"
+    group = MatchGroup(
+        canonical_home="liefering",
+        canonical_away="austria salzburg",
+        league="austrian_2_liga",
+        kickoff=K,
+        matches=[anchor, peer],
+    )
+
+    result = gate.evaluate(candidate, group)
+
+    assert result.status == "verified", result.reasons
+
+
+def test_group_canonical_league_does_not_clear_a_real_league_conflict():
+    gate = CertaintyGate(alias_allowlist={"rb leipzig|leipzig"})
+    anchor = _m("betole", "RB Leipzig", "Augsburg", "Germany, Bundesliga", event_id="1")
+    candidate = _m("premier_kladionica", "Leipzig", "Augsburg", "Championship", event_id="2")
+    gate.normalize([anchor, candidate])
+    anchor.league_normalized = "germany, bundesliga"
+    candidate.league_normalized = "championship"
+    group = MatchGroup(
+        canonical_home="rb_leipzig",
+        canonical_away="augsburg",
+        league="bundesliga",
+        kickoff=K,
+        matches=[anchor],
+    )
+
+    result = gate.evaluate(candidate, group)
+
+    assert result.status == "rejected"
+    assert "league_mismatch" in result.reasons
+
+
 def test_evaluate_records_group_league_mismatch_with_soft_pair_failure():
     gate = CertaintyGate()
     a = _m("mdshop", "Sarajevo", "Zeljeznicar", "BiH - Premier Liga", event_id="1")
