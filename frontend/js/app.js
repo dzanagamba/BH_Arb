@@ -50,6 +50,7 @@ const REASON_LABELS = Object.freeze({
     link_unverified: 'Link not verified',
     team_unresolved: 'Teams do not match',
     category_mismatch: 'Different match category',
+    betradar_mismatch: 'Different Betradar match id',
     kickoff_missing: 'Kickoff time missing',
     orientation_unresolved: 'Home/away order unclear',
     no_event_link: 'No event link',

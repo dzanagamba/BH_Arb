@@ -1,1255 +1,1271 @@
-# Surebet Scanner — Detailed Execution Plan (Muse 12)
+# Surebet Scanner — Autonomous Mapping Plan
 
-> **Goal:** Fix “rare + wrong” surebets and grow arbitrage yield 5–10× while keeping false positives near zero.
-> **Baseline:** `claudesurebet` == `dzanagamba/surebet-scanner` @ `7d2d5d8` (9 bookmakers, ~6057 prematch matches → ~802 groups → 0–2 surebets per scan, Mozzartbet degraded to 56 matches, EVLBet only 1X2).
-> **New repo:** `surebetmuse12` — https://github.com/dzanagamba/surebet-muse12 (`plan/muse12-roadmap` @ `aa33254` → `2935d90`).
-> **Status (2026-08-20):** P0 correctness + P1 yield + P2 reliability shipped. 107 tests green, ruff clean, groups 802→856 (+6.7%), WWIN 15s→~7s, Mozzart 56→800+ (projected), dust/health/TTL live.
-> **Status (2026-09-26):** Phase 4 (mapping certainty) shipped — 13 tasks. `verified` requires a proven claim, and link evidence is proven two ways: a browser check opened that book's per-event URL, **or** the book declared in `config/bookmaker_deeplinks.json` that it has no per-event route. 6 of the 9 books declare `supports_event_id: false` and are verified on identity alone; the 3 that declare a route (MDShop, Admiralbet, Mozzartbet) must still have theirs proven, and MDShop's and Admiralbet's `?event=<id>` routes are **inert**, so a group holding either still cannot verify. **Zero surebets is today's expected output, and it is correct:** the shipped gate produces 0 surebets on the stored scan — a measured claim with two conditions, read in §3 *Phase 4* along with the correction that supersedes the 2026-09-25 status line.
-> **Status (2026-10-20):** MDShop's and Admiralbet's `?event=<id>` routes were re-checked in a browser and are still **inert**, so both now declare `supports_event_id: false` in `config/bookmaker_deeplinks.json`. 8 of the 9 books are verified on identity alone; only Mozzartbet declares a route and must still have it proven. The blockers to a surebet are now identity gaps (league names, team spellings), not links. The zero surebets figure in §3 *Phase 4* is a dated measurement with conditions; §4 *TODO* tracks what replaces it.
-> **Status (2026-10-20, later):** M0 mostly done. Prematch and live fixtures re-captured; `scripts/price_check.py` added (fresh prematch scan: 0 outliers); unmapped-id diagnostic empty in both modes; Admiralbet/Premier live gaps declared. A live scan produced a fake 19.8% surebet, so MDShop/Admiralbet live now read only the match total and the engine takes one leg per price source (MDShop + Admiralbet = NSoft). Open in M0: bring NSoft live 1X2/BTTS/DC back only once proven against a live score; Mozzartbet live returns no matches.
-> **Status (2026-10-27):** MaxBet added at the operator's request (ahead of M5): scraper, registry rows, prematch and live fixtures. It declares a per-event route (`/match/<id>`, browser-checked 2026-10-27) in `config/bookmaker_deeplinks.json`, so 8 of the 10 books now declare `supports_event_id: false` and MaxBet joins Mozzartbet as a book whose links must be proven before its groups verify. Team names are now canonicalized per listing (youth/reserve/women markers, score and country notes) before grouping.
+> **Goal contract.** From bookmaker payloads alone, resolve team names, league
+> names and market meanings for every configured book and every market it
+> publishes among the nine `MarketType` values, and reach `verified` groups and
+> priced surebets with **no human review, alias approval, hand-written mapping
+> entry, manual gate exception or manual CAPTCHA step** anywhere between scrape
+> and a shown surebet.
+>
+> **Baseline (2026-11-03, this worktree).** `python -m pytest` → **1107 passed,
+> 1 skipped** in 34 s; `ruff check .` clean; `mypy .` clean on 93 source files;
+> `scripts/generate_market_mapping_doc.py --check` in sync. Environment is
+> `.venv` on CPython 3.11.18, installed with `uv`. The 953-passed figure in the
+> superseded plan was a 2026-10-20 measurement and is stale.
+>
+> **Supersedes** the Muse 12 yield plan (`PLAN.md` before this rewrite). Its
+> history, measurements and defect records remain in git and in
+> `docs/HANDOFF.md`; they are evidence, not the current contract. Its hard stops
+> that protect the gate are kept; its hard stops that forbid autonomous mapping
+> are replaced.
+>
+> **Checkpoint 2026-11-03.** Wave 0 and Wave 1 are done (A0-1–A0-4,
+> A1-1–A1-7), and market classification/consensus is done (A2-1–A2-3). The
+> evidence ledger, learner, gate integration, contradiction resolver, league
+> fingerprints, legacy migration and read-only coverage endpoint are shipped.
+> 1107 tests pass. **Next card: A2-4** (generated market registry), then A2-5,
+> A2-6, A3-1, Wave 4 and the cold-start replay. A2-4 is the first card that
+> changes how a parser resolves a market id, so run S1 and the replay before and
+> after it.
 
+---
 
-## How to execute this plan (read this first)
+## How to execute this plan
 
-This file is written so that an agent can work through it **one task at a time
-with no other context**. You do not need to know what the product is for. Every
-open task in §4 is a self-contained card: it names the files, the current facts,
-the exact steps, the tests to add, the commands to run and the condition that
-makes it done. If a card and the code disagree, the code wins: stop, write down
-the disagreement in the card's **Log** line, and move to the next task.
-
-**Sections.** §0–§3 are history and principles: read them only when a card
-points there. §4 is the task queue. §5 holds the rules that apply to every task
-and the shared procedures (S1–S5) that cards refer to by name.
+This file is written so an agent can work one card at a time with no other
+context. Every open card in §4 names its files, current facts, steps, tests,
+verification command and the condition that makes it done.
 
 ### The loop
 
-1. Do §5 **S1 (environment check)** once per session. All four checks must pass
-   before you change anything. If they fail before you have touched the tree,
-   stop and report; do not try to fix them as part of another task.
-2. Take the **first** task in §4 *Execution order* that is not ticked `[x]`, not
-   marked `BLOCKED` and whose **Depends on** tasks are all ticked.
-3. Check its **Needs** line. `offline` means code and tests only. `network`
-   means it calls bookmaker sites over HTTP. `browser` means Playwright or a
-   human-visible browser. `human` means a person must decide or act; if you are
-   not a human and cannot ask one, skip the task and leave a Log line saying so.
-4. Follow **Steps** in order. Do not add steps, extra refactors, renames or
-   formatting changes outside the listed files.
-5. Run the card's **Verify** commands, then §5 **S1** again. Everything must be
-   green.
-6. Do §5 **S5 (record progress)**: tick the box, fill the Log line, commit.
+1. Run **S1** once per session. All four checks must pass before changing
+   anything. If they fail before you have touched the tree, stop and report.
+2. Take the first card in §4 *Execution order* that is not `[x]`, not `BLOCKED`,
+   and whose **Depends on** cards are all `[x]`.
+3. Check **Needs**. `offline` = code and tests only. `network` = real bookmaker
+   HTTP. `browser` = Playwright or a visible browser. `human` is not a valid
+   need in this plan; if a card seems to require one, the card is wrong — rewrite
+   it as a machine-evidence task or mark it `BLOCKED (needs operator decision)`
+   with the evidence.
+4. Follow **Steps** in order. Do not add unrelated refactors.
+5. Run the card's **Verify** commands, then **S1** again. Everything green.
+6. Run **S5** (record progress): tick, log, commit.
 7. Go back to 2.
 
-### Hard stops: never do these, whatever a card seems to imply
+### Hard stops
 
-* Never make the certainty gate (`engine/certainty.py`) accept a pair it
-  refuses today, **except** in task M1-5, and then only in exactly the way M1-5
-  describes. (One operator-approved exception, 2026-10-27: pairs in
-  `config/team_alias_reviewed.json` pass the team check without the 90
-  similarity floor; league, kickoff, category and link checks are unchanged.)
-* Never set `deep_link_verified=True` anywhere except through
+* **Never lower an evidence standard to raise a number.** A mapping is accepted
+  because evidence proves it, never because coverage is low.
+* **Never auto-accept a fuzzy name on similarity alone.** Similarity may rank or
+  corroborate; it may not be the only proof.
+* **Never hand-edit a generated file.** `config/generated/*.json` is written only
+  by its generator, with provenance. If a generated file and the code disagree,
+  regenerate; do not patch the JSON.
+* **Never trust a human-reviewed pair.** `config/team_alias_reviewed.json` is
+  legacy seed data. Its entries must be re-derived or machine-validated before
+  they can authorize a pairing. No new entry may be added.
+* **Never set `deep_link_verified=True`** except through
   `scripts/verify_deeplinks.py` or `POST /api/verify-links`.
-* Never edit `config/team_alias_allowlist.json`, `config/league_mappings.json` or
-  `config/league_equivalences.json` by hand. `config/team_alias_reviewed.json` is
-  the record of a human review: add to it only pairs someone has actually reviewed,
-  each with its fixture evidence (and every rejection with its reason). Only `scripts/derive_mappings.py
-  --apply` or the dashboard's Review approval may write them.
-* Never flip a `supports_event_id` value in `config/bookmaker_deeplinks.json`
-  without a dated browser check written into that book's `note` (task H-3).
-* Never edit, delete or re-take a file under `tests/fixtures/e2e_certified/`.
-  They are frozen on purpose for `tests/test_e2e_certified.py`.
-* Never edit the block-quoted status lines at the top of this file (the lines
-  starting with `>`). `tests/test_readme_claims.py` reads them. Record progress
-  in the task cards instead.
-* Never place a real bet, enter a bookmaker login or move money.
-* Never `git push`, open a PR, `git stash drop` or rewrite history unless the
+* **Never place a real bet, enter a bookmaker login, or move money.**
+* **Never `git push`, open a PR, `git stash drop` or rewrite history** unless the
   operator asks.
+* **Never make the gate accept a pair with contradictory objective evidence.**
+  Shared Betradar ids that differ, or two listings that name each other as
+  opponents, are contradictions, not gaps.
+
+### Definition of done for the whole plan
+
+The seven acceptance checks in §3 pass on one recorded run. No check may be
+satisfied by a manual step, a hand-written mapping, or a disabled book that still
+appears enabled.
 
 ---
 
 ## 0. Principles
 
-1.  **Correctness over yield.** Never show an arb that can’t be bet. Every P1 yield change needs a P0 correctness guard (suspend check, label-set validation, staleness, cross-book distinct rule `engine/arbitrage.py:185`).
-2.  **Evidence before synthesis.** Live payload captures under `tests/fixtures/` + `cache/last_scan.json` are ground truth. No “already verified” shortcuts.
-3.  **One `fetched_at` to rule them.** All 9 scrapers stamped with the same scan wall-clock; mixing ages >90s is a bug, not a feature.
-4.  **Matcher gates are load-bearing.** League `engine/matcher.py:208-215` + category `engine/matcher.py:204` + 120min `KICKOFF_WINDOW_MINUTES` `config/settings.py:122` are hard gates — relax only with metrics.
+1. **Evidence over authority.** Every mapping is a claim with provenance:
+   which scans, which fixtures, which books, which contradiction checks. A claim
+   without provenance is not accepted, however plausible it looks.
+2. **Terminal decisions.** Every candidate pair the learner sees ends
+   `accepted`, `rejected` or `quarantined` with a reason. There is no queue that
+   waits for a person. `quarantined` means the evidence is genuinely
+   contradictory or insufficient; it is recorded and rechecked, not hidden.
+3. **One price source per feed.** MDShop and Admiralbet are one NSoft source;
+   the engine already takes at most one leg per source. Grouping must count
+   sources, not bookmaker names.
+4. **No false surebets.** A wrong team, league or market mapping is worse than a
+   missing one. The certified end-to-end test must keep proving that a
+   contradicted claim removes the surebet.
+5. **Deterministic replay.** Any mapping decision must be reproducible offline
+   from frozen captures. A live scan may discover, but only replay may certify.
+6. **Continuous revalidation.** Claims decay and are revoked on contradiction.
+   Dated evidence is part of the claim.
+7. **No silent gaps.** Every book, market, league and team that cannot be
+   resolved is counted, named and reported with the evidence that is missing.
+8. **Least trust.** Shared Betradar id > exact shared fixture > repeated
+   cross-book consensus > league/team fingerprints > similarity. A lower tier
+   may corroborate a higher one; it may not replace it.
 
 ---
 
-## 1. Where this came from
+## 1. Current state (audited 2026-11-03)
 
-Forked from `dzanagamba/surebet-scanner` @ `7d2d5d8` (9 bookmakers, ~6,057
-prematch matches → ~802 groups → 0–2 surebets per scan).
+### 1.1 What exists and works
 
-## 2. Original diagnosis
+- 10 configured books in `config/settings.BOOKMAKERS`: mozzartbet, mdshop,
+  admiralbet, mbet, sportplus, premier_kladionica, wwin, maxbet enabled;
+  betole and evlbet disabled.
+- 9 `MarketType` values: 1x2, O/U 1.5/2.5/3.5, BTTS, double chance (enabled);
+  first-half 1X2, first-half O/U, Asian handicap (experimental, off).
+- The pipeline is scrape → normalize → group (`engine/matcher.py`) → certainty
+  gate (`engine/certainty.py`) → price (`engine/arbitrage.py`).
+- `scripts/derive_mappings.py` already learns league mappings and team aliases
+  from shared fixtures and Betradar ids. It writes
+  `config/league_mappings.json`, `config/league_equivalences.json` and
+  `config/team_alias_allowlist.json`.
+- `scripts/price_check.py` already removes each book's margin and flags a book
+  whose implied probability is more than 0.10 from the median of the others.
+- `tests/test_e2e_certified.py` drives real parsers on frozen captures and
+  asserts a surebet appears, and disappears when a claim is spoiled.
+- `tests/test_readme_claims.py` runs the real gate over documented claims.
 
-The baseline's problem was "surebets are rare *and* wrong": Mozzartbet pagination returned ~56 of ~1,150
-matches, EVLBet parsed only 1X2, scan windows differed per book, odds carried no
-age, suspended odds leaked through, `Z` timestamps parsed as `kickoff=None`, and a
-restart replayed hours-old arbs. Phases 0–2 fixed those; Phase 4 replaced fuzzy
-matching with a proven claim. The detailed task tables live in git history
-(`git log -- PLAN.md`).
+### 1.2 What enforces the human boundary today
 
----
-
-## 3. Phases
-
-### Phase 0 — Correctness (Done)
-
-- [x] P0-1 `fetched_at` stamped once per scan on every `Match`
-- [x] P0-2 shared suspend guard — no inactive or <1.01 odds reach the engine
-- [x] P0-3 one `parse_dt` everywhere (`Z` / offsets → naive UTC)
-- [x] P0-4 Mozzartbet pagination fix
-- [x] P0-5 one scan window passed to every prematch book
-- [x] P0-6 cache TTL (30 min) — a restart no longer replays stale arbs
-- [x] P0-7 scan lock held for the whole scan, separate prematch / live locks
-
-### Phase 1 — Yield (Done, except where noted)
-
-- [x] P1-2 league-mapping generator (`scripts/generate_mappings.py`)
-- [x] P1-5 WWIN / Premier throughput
-- [x] P1-6 dust tier (`DUST_PROFIT_PERCENT`, 0.2–0.5%) shown separately
-- [x] P1-7 per-book health on `GET /api/health`
-- [ ] P1-1 EVLBet markets beyond 1X2 — blocked on a captured payload (see §4)
-- [ ] P1-4 Asian handicap across books — parsed, still in `EXPERIMENTAL_MARKETS` (off by default) until proven on live payloads
-- [~] P1-3 fuzzy-threshold recall tuning — superseded by Phase 4: grouping is now decided by the certainty gate, not a score
-
-### Phase 2 — Reliability (Done)
-
-- [x] P2-1 one shared stealth launcher (`scrapers/base.py:launch_browser`)
-- [x] P2-2 `fetch_with_retry` for the httpx scrapers
-- [x] P2-3 odds TTL in the engine (`ODDS_TTL_SECONDS`, live stricter)
-- [x] P2-4 `/api/verify` re-scrapes only the books in the surebet
-- [x] P2-5 structured logs + `/api/debug/report`
-
-### Phase 4 — Mapping certainty (Done)
-
-Shipped in 13 tasks (see git history and `docs/HANDOFF.md`).
-The premise: the old matcher decided "same match" with a fuzzy score and a
-threshold, so a wrong pairing and a right one looked alike. Phase 4 replaces the
-score with a claim that has to be proven.
-
-**Task list (all shipped).** Data model (`MatchEventStatus`, `MatchEvidence`,
-`MatchGroup`, `CandidateReview`) · the `CertaintyGate` and its reason vocabulary ·
-league equivalence restricted to declared pairs · the shared market registry
-(`config/bookmaker_markets.json`) · declared deep links
-(`config/bookmaker_deeplinks.json` + `build_event_url`) · the AI candidate layer
-(`engine/ai.py`) · the review queue and its API · candidate suppression and
-human approval · captured-payload fixture tests for every registry entry · the
-deep-link verification endpoint and Playwright checker · the end-to-end guard
-(`tests/test_e2e_certified.py`) · docs (`README.md` § *Match & mapping certainty*).
-
-**The invariant everything else serves:** a `verified` group requires ZERO
-reasons, links included. Allowlisted fuzzy aliases are the only auto-accepted
-fuzzy path. The AI never auto-approves a pair — a human approval grants team
-identity only, never `deep_link_verified`, which is a machine fact.
-
-**HEADLINE RESULT, and it is not a good-looking one.** `verified` groups were
-unreachable in production. MDShop's and Admiralbet's declared `?event=<id>`
-routes are **inert**: the served page is byte-identical to the plain football
-prematch page, the id appears in none of ~250 captured response bodies or in
-rendered text, and `?event=` provokes no event-scoped request. Only Mozzartbet
-verifies (15/15, via `$.match.id`; a dead id answers 200 with 14 bytes instead of
-328 KB). Consequence, measured on a real 1,592-match three-book feed: **0 of 197
-candidate groups verified, so zero surebets were produced.** The gate, the
-registry and the parsers are correct and tested.
-
-**Correction (2026-09-26): that measurement was the gate being stricter than the
-design specified, not only a bookmaker-side routing fact.** The gate never read
-`supports_event_id`, so the six books that declare no per-event route were refused
-for the links they never claimed to have — the declaration was documented in
-§4 of the design spec and wired to nothing. The gate now consults
-`config/bookmaker_deeplinks.json`: a declared-false book is verified on identity
-alone with a `no_event_link` evidence note, a declared-true book still needs its
-route proven, and a book with no declaration fails safe. So "flipping the route to
-`supports_event_id: false`" is no longer the no-op this section used to call it —
-it is exactly what such a book now relies on. The bookmaker-side routing fact
-above stands on its own: a group holding MDShop or Admiralbet still cannot be
-`verified` while their routes are inert.
-
-**Measured on the stored scan (2026-09-26).** `cache/last_scan.json`: 6,999
-matches, 7 books, `scan_time 2026-08-20T18:26:52Z` — 36 days old — and **0 of
-6,999 matches carry a proven link**. The matcher and the arbitrage engine are
-pure functions of that file, so the whole measurement is offline:
-
-| scenario | verified groups | surebets |
+| Path | What it does | Why it blocks autonomy |
 |---|---|---|
-| **A — links exactly as cached (the state this repo is in)** | **16** | **0** |
-| B — plus Mozzartbet's link *faked* proven | 179 | 0 |
-| C — every book's link *faked* proven (the ceiling) | 516 | 0 |
+| `config/team_alias_reviewed.json` | 565 approved, 22 rejected pairs from a person | Gate accepts approved pairs without the 90 floor; nothing machine-validates them |
+| `config/team_alias_allowlist.json` | Written by `derive_mappings.py --apply` **or** Review approval | A human approval writes the durable trust record |
+| `server/api.py` `approve_candidate`, `approve_candidates_bulk`, `reject_candidate` | Review endpoints | The only way to clear some identity blockers |
+| `frontend/` Review tab | Human queue, "Select strong", "Approve selected" | A load-bearing UI step |
+| `engine/matcher.py` `_reviewed_aliases` / `_alias_allowlist` | Loads the two files | No ledger, no provenance, no revocation |
+| `engine/certainty.py` `reviewed_aliases` | Bypasses the similarity floor | Trust is by file membership, not evidence |
 
-Before the fix, the same gate with the declaration lookup answering "nothing is
-declared", A and B are 0/0 and C is **516/0** — bit-identical, which is the
-monotonicity datum: the change only ever adds pairs, it removes none.
+`docs/HANDOFF.md` records the design intent: the allowlist is "the human approval
+boundary". `docs/HANDOFF.md` §288 also records that **77% of the candidate queue
+(11,666 / 15,140) is league-blocked with no human action available** — the
+current review flow cannot converge even with a person.
 
-**Conditions, and read them before quoting any of the three.**
-* **A is the only scenario the repo is actually in.** B and C require setting
-  `deep_link_verified=True` on matches no browser check has proven. **No browser
-  check has been run in this repo** — nothing in `cache/` carries a
-  `deep_link_verified` flag, and `scripts/verify_deeplinks.py` is on-demand,
-  never part of a scan. Until `/api/verify-links?bookmaker=mozzartbet` is run and
-  its result stored, B and C are arithmetic, not observations.
-* **A surebet count from this cache needs two rewrites.** Every match's
-  `fetched_at` has to be reset to now and kickoffs shifted into the future, or
-  the engine refuses every leg for reasons unrelated to the link gate. Both are
-  applied and neither touches link state. A surebet that appears only after those
-  two rewrites is not evidence that the arbitrage is still on.
-* **The group counts above predate the order fix.** `MatchMatcher.group_matches`
-  used to let the first match to arrive anchor its group, so this feed gave 16, 34
-  or 106 for scenario A depending only on the order the books were fed in. It now
-  processes listings in a total order and falls through to the next-best group
-  when the gate refuses one, so a count no longer depends on input order — but
-  the figures here were taken before that change and have not been re-measured
-  (see `docs/HANDOFF.md` §4 for after-fix numbers on a newer cache).
-* Zero surebets on a 36-day-old cache is a statement about that cache, not about
-  any book's prices today.
+### 1.3 Known gaps that still matter
 
-**Superseded figure.** The whole-branch report of 2026-09-26
-(`whole-branch-fix-link-declaration.md`, §6) quotes "202 groups / 1 surebet" for
-scenario B. It does not reproduce: the shipped gate gives 179/0. Its surebet is
-`premier_kladionica` Over 2.5 at 2.15 against `sportplus` Under 2.5 at 1.9 —
-both prices are really in the capture, and 1/2.15 + 1/1.9 is 0.86% — but those
-two matches are 120 minutes apart and `VERIFIED_KICKOFF_WINDOW_MINUTES` is 15, so
-the gate refuses the pair with `kickoff_delta` at *any* link state. The matcher
-admits it as a candidate (`KICKOFF_WINDOW_MINUTES` is 120) and the gate then
-rejects it; that is the pairing working, not a link problem. The report's 26 and
-532 group figures do not reproduce either, for the order reason above.
+- **Betradar identity is not used by the gate.** `Match.betradar_id` is filled
+  by mdshop, admiralbet, sportplus and wwin, but the gate ignores it. The old
+  plan's M1-5 describes the exact rule; it is a prerequisite for the ledger.
+- **Price sources are counted as books.** `group_matches` returns a group with
+  ≥ 2 bookmakers, so a group of only MDShop + Admiralbet is counted but can
+  never be priced. The old M1-3 fixes this.
+- **Mozzartbet prematch coverage** returned 285 listings against a site count of
+  about 1,150 on 2026-10-20; its grouped share is below the other books.
+- **MaxBet's `/match/<id>` links are unproven**, so a group holding MaxBet stays
+  unverified until `scripts/verify_deeplinks.py maxbet` proves them.
+- **EVLBet's feed returns no football events** for every request variant tried;
+  Betole is disabled. Both must be proven absent or brought back with captures.
+- **First-half and Asian handicap** are parsed by individual scrapers, not the
+  registry; they are off by default.
+- **Mozzartbet live returns no matches**; NSoft live 1X2/BTTS/DC are excluded
+  because they settle from the current score. In-play is deferred by the
+  operator, but the live pipeline must not regress.
+- **SportPlus DST ambiguity** (02:00–02:59 on 2026-10-25) has a test card but no
+  shipped fix.
 
-**Recorded at the time, both since fixed** (regression tests replaced the
-tripwires — see `README.md` § *Fixed defects*):
-* `premier_kladionica/live/btts` — the parser now matches per mode
-  (`NAME_BTTS` / `NAME_BTTS_LIVE`).
-* NSoft live window (`mdshop`, `admiralbet`) — both now use
-  `scrapers.common.nsoft_event_window`, which looks back 12 hours for live.
+### 1.4 Verdict on the superseded plan
 
-**Fixed since the above list was written:**
-* `build_targets` takes `settled` and `offset`, so a per-book link sweep advances
-  instead of re-checking its first N events. The endpoint fills `settled` itself
-  from `cache/deep_link_decisions.json`, which records every COMPLETED check — a
-  navigation that errored is not a verdict, so that event is offered again. This
-  — not the rate limit — was what blocked convergence. A sweep still costs
-  `events / limit` calls at 2 calls/min: 608 mozzartbet events at the cap of 20
-  is 31 calls, about 15 minutes.
-
-**Verification.** `pytest` 572 passed + 1 xfailed (2026-09-26), `ruff` clean,
-`mypy` clean.
-`tests/test_e2e_certified.py` drives mbet/wwin/sportplus through their real
-parsers on the real 2026-09-25 captures and asserts the chain end to end,
-including that a spoiled claim in any one book removes the surebet. Its constants
-are tied to the captured prices, so re-running `scripts/capture_market_fixtures.py`
-requires re-deriving `EXPECTED_LEGS` / `EXPECTED_MARGIN` / `UNSWAPPED_COMBINATIONS`.
-
+The old plan is operationally strong and factually consistent with the code I
+inspected, but its objective is "fix rare + wrong surebets and grow yield 5–10×",
+not autonomy. Three of its hard stops are now wrong: never accept a pair the gate
+refuses (except M1-5), never edit mappings by hand, and only
+`derive_mappings.py --apply` or Review approval may write them. It also has no
+definition of "fully working", no autonomy metric, and its baseline is stale.
+This rewrite keeps its evidence discipline, its S1–S5 procedures and its
+defect history; it replaces the objective and the task queue.
 
 ---
 
-## 4. TODO — task queue
+## 2. Target architecture
 
-**Baseline on 2026-10-20** (branch `production-hardening` @ `69fa373`):
-`python -m pytest` → 953 passed; `ruff check .` clean; `mypy .` clean on 68
-source files; `scripts/generate_market_mapping_doc.py --check` in sync. If your
-own S1 run shows different numbers before you change anything, write them in
-the Log line of the task you are about to start.
+### 2.1 Evidence ledger
+
+New module `engine/mapping_evidence.py`. One machine-written file,
+`config/generated/mapping_evidence.json`, holds every claim:
+
+```json
+{
+  "schema": 1,
+  "generated_at": "2026-11-03T12:00:00Z",
+  "claims": {
+    "team_alias:man utd|manchester united": {
+      "kind": "team_alias",
+      "key": "man utd|manchester united",
+      "status": "accepted",
+      "confidence": 0.98,
+      "evidence": [
+        {"type": "betradar_shared_id", "id": "12345", "books": ["mdshop", "wwin"], "scan": "2026-11-02T18:00:00Z"}
+      ],
+      "contradictions": [],
+      "first_seen": "2026-11-02T18:00:00Z",
+      "last_seen": "2026-11-02T18:00:00Z",
+      "decided_at": "2026-11-02T18:00:00Z",
+      "reason": "same Betradar id on two books"
+    }
+  }
+}
+```
+
+Claim kinds: `team_alias`, `league_equivalence`, `league_fingerprint`,
+`market_mapping`, `book_absence`, `market_absence`.
+
+Statuses: `accepted`, `rejected`, `quarantined`. Only `accepted` authorizes
+anything. Every claim carries the evidence that produced it and the contradictions
+that would revoke it.
+
+### 2.2 Resolvers
+
+- **`TeamResolver`** — union-find over raw team spellings. An edge is accepted
+  only from ledger evidence. Before an edge joins two clusters, the resolver
+  checks that no fixture lists a member of one cluster as an opponent of a member
+  of the other; if it does, the edge is `rejected` with `opponent_contradiction`.
+- **`LeagueResolver`** — equivalence pairs plus a team-set fingerprint. A league
+  name that one book uses for two competitions is not mapped globally; it is
+  resolved per fixture by the teams that play in it. Fingerprints are accepted
+  when the same team set appears under two names across books.
+- **`MarketResolver`** — maps a book's raw market key/labels/line to a
+  `MarketType` using label/structure rules first, then cross-book price
+  consensus. A mapping that cannot be corroborated is quarantined, not guessed.
+
+### 2.3 Gate policy
+
+`CertaintyGate` gains an optional `evidence` ledger. Precedence:
+
+1. **Same non-empty Betradar id** — identity proven; league and team checks pass
+   with evidence reason `betradar_id`; kickoff, category and link still apply.
+2. **Different non-empty Betradar ids** — hard reject `betradar_mismatch`.
+3. **Accepted ledger alias** — team check passes; the gate records the claim key
+   and its evidence types.
+4. **Accepted ledger league equivalence/fingerprint** — league check passes.
+5. **Exact raw teams + unmapped league** — current `league_unmapped_teams_exact`
+   path stays.
+6. **Legacy allowlist** — kept only until A1-5 migrates it; it is not a new
+   trust path.
+
+The gate never emits a new reason without adding it to the README table, the
+frontend labels and `tests/test_readme_claims.py`.
+
+### 2.4 Learning loop
+
+New module `engine/mapping_learner.py` and CLI `scripts/learn_mappings.py`.
+
+For each pair of listings from different books in a scan:
+
+- Both Betradar ids present and equal → same fixture. Emit league equivalence
+  and team-alias evidence.
+- One team slot matches exactly (raw key) and the other differs, kickoff within
+  15 min, same category → same fixture. Emit alias evidence for the differing
+  slot.
+- Both slots match exactly, leagues differ → same fixture. Emit league
+  equivalence evidence.
+- Both slots differ → no ground truth. Emit a candidate observation only; never
+  accept on it alone.
+
+Aggregate observations across scans. Acceptance policy:
+
+| Claim | Accept when | Reject/quarantine when |
+|---|---|---|
+| team_alias | shared Betradar id; or exact shared fixture; or ≥2 independent shared-fixture observations; or 1 observation + ≥90 similarity + league/kickoff/category agreement | opponent contradiction; same spelling maps to two clusters; only similarity |
+| league_equivalence | shared Betradar id; or exact shared fixture; or ≥2 independent observations | one name used for two competitions with no team-set disambiguation; conflicting canonical ids |
+| league_fingerprint | same team set under two names across ≥2 books | team set overlaps two leagues |
+| market_mapping | label/structure proof + cross-book price consensus within threshold | no corroboration; line/period ambiguity; settlement semantics unknown |
+
+Every run writes the ledger atomically and prints a diff: accepted, revoked,
+quarantined, unresolved.
+
+### 2.5 Replay harness
+
+New `scripts/replay_mappings.py` and `tests/fixtures/replay/`:
+
+- Input: frozen scan caches (`cache/last_scan.json`, captured payloads, or a
+  directory of dated scans).
+- Start modes: `seeded` (current generated evidence) and `cold` (empty
+  generated evidence).
+- Runs normalize → learn → group → gate → price with no network and no human.
+- Output: JSON with `pairs_total`, `pairs_evidence_backed`, `pairs_verified`,
+  `pairs_rejected`, `pairs_quarantined`, `pairs_unresolved`, `false_merges`,
+  `market_rows_*`, `books_*`, `iterations`, `fixed_point`.
+- A run is a fixed point when a second pass adds no claim and changes no verdict.
+
+### 2.6 Market discovery
+
+New `engine/market_discovery.py`:
+
+1. **Label/structure classifier** — 3 outcomes with `1/X/2` → 1X2; `1X/12/X2` →
+   DC; `Over/Under <line>` → O/U; `GG/NG` or `Yes/No` on both-teams-to-score →
+   BTTS; period markers (`1st half`, `HT`) → first-half; handicap line + side →
+   AH.
+2. **Cross-book consensus** — for the same fixture, compare the book's
+   margin-free implied probabilities with the median of at least two books whose
+   mapping is already accepted. Accept only when the difference is inside the
+   `price_check.py` threshold across a minimum number of fixtures.
+3. **Provenance** — accepted mappings go to
+   `config/generated/bookmaker_markets.json` with the fixture ids and scan dates
+   that proved them. `engine/market_registry.py` loads the generated file after
+   the hand-written registry and records which one supplied each row.
+4. **Absence proof** — a market a book never publishes is recorded as
+   `market_absence` with the captures that prove it, not silently omitted.
+
+### 2.7 Book onboarding contract
+
+A new book is a scraper module that emits `RawOffer` records (book, event key,
+market key, outcome labels, line, period, odds) plus a `Match` skeleton. The
+resolver maps names and markets; no edit to `config/team_mappings.json`,
+`config/league_mappings.json` or `config/bookmaker_markets.json` is allowed.
+`docs/BOOK_ADAPTER.md` defines the contract and a synthetic fixture proves it.
+
+### 2.8 Removal of the human path
+
+Delete the approval endpoints, the Review action buttons, the allowlist write
+path and the reviewed-alias trust. Keep a read-only **Diagnostics** tab showing
+coverage, quarantined claims and their evidence. The API may keep
+`GET /api/candidates` for information, but no route may change trust.
+
+---
+
+## 3. Metrics and acceptance
+
+Recorded by `scripts/replay_mappings.py` and `GET /api/mapping/coverage`.
+
+| Metric | Definition | Pass |
+|---|---|---|
+| `false_merges` | auto-accepted pair whose ground truth contradicts it (different Betradar ids, opponent pair, or different fixture) | **0** |
+| `pairs_unresolved` | evidence-backed pair with no terminal decision | **0** |
+| `pairs_quarantined_with_reason` | quarantined pair whose claim records the missing/contradictory evidence | 100% of quarantined |
+| `market_rows_unmapped` | published book/mode/market row with no accepted mapping and no absence proof | **0** |
+| `price_check_outliers` | cross-book implied-probability outliers above the existing threshold | **0** |
+| `cold_start_fixed_point` | cold replay reaches a pass that adds no claim and changes no verdict | **true** |
+| `real_scan_books` | configured books that publish football and return > 0 matches in a headless prematch scan | all publishing books |
+| `manual_steps` | steps a person must take between scrape and a shown surebet | **0** |
+
+No numeric coverage target is invented. "All evidence-backed pairs terminal" and
+"all published market rows mapped or proven absent" are the contract; a low
+coverage number is a finding to investigate, not a threshold to lower.
+
+### Acceptance checks
+
+1. S1 green: `ruff`, `mypy`, market-doc check, `pytest`.
+2. `python scripts/replay_mappings.py --cold --check` → `false_merges=0`,
+   `pairs_unresolved=0`, `fixed_point=true`.
+3. `python scripts/replay_mappings.py --seeded --check` → same, and every
+   `market_rows_unmapped=0`.
+4. `python -m pytest tests/test_e2e_certified.py -q` passes, including the
+   spoiled-claim test.
+5. One real headless prematch scan (`POST /api/scan?mode=prematch`) returns > 0
+   matches for every configured book that publishes football, and
+   `GET /api/mapping/coverage` shows no unmapped published market.
+6. `grep -rn "approve\|reviewed_by\|team_alias_reviewed" server frontend` finds
+   no trust-changing path; the Diagnostics tab is read-only.
+7. The run is recorded in §4 A6-4 with command output, counts and the date.
+
+---
+
+## 4. Task queue
 
 ### Execution order
 
-Do them in this order. Tasks in the same wave do not depend on each other, so
-separate agents may do them in parallel, but only when the cards' **Files**
-lists do not overlap; otherwise do them one after another.
-
-| Wave | Task | Needs | Summary |
+| Wave | Card | Needs | Summary |
 |---|---|---|---|
-| 1 | M1-3 | offline | A group must hold ≥ 2 different price sources, not ≥ 2 books |
-| 1 | M1-4 | offline, then network after 2026-10-25 | Pin SportPlus local-time parsing across the clock change |
-| 1 | H-1 | offline | Delete the gate reason nothing emits |
-| 1 | H-2 | offline | Reload the deep-link declarations when the file changes |
-| 2 | M1-5 | offline | Same Betradar id = same match, even when the names differ |
-| 3 | M0-1 | network (live games) | Capture Premier live O/U and close its declared gap |
-| 3 | M0-2 | network (live games) | `price_check.py --live` on a fresh live scan |
-| 3 | M0-4 | network, browser | Find out why Mozzartbet live returns nothing, and fix it |
-| 3 | M1-2 | network, browser | Get Mozzartbet prematch to the site's full listing |
-| 4 | M1-1 | network, human review | Re-learn league/team names from a fresh scan |
-| 5 | M3-1 | offline | Store placed legs and settle them |
-| 5 | M4-3 | offline | Re-apply the stashed security hardening |
-| 6 | M3-2 | offline | Per-book slippage stats from the journal |
-| 6 | M3-3 | offline | Per-book balances; flag slips they cannot cover |
-| 6 | M4-1 | offline, then a 24 h run | Scan on a timer, with per-book back-off |
-| 7 | M4-2 | offline, network for the final check | Message new surebets to Telegram |
-| 7 | M4-4 | offline, then docker | One documented way to run it persistently |
-| any | H-3 | browser, human | Re-read the 8 "no per-event route" declarations |
-| — | M0-3 | BLOCKED | NSoft live 1X2/BTTS/DC back on |
-| — | M5 | do not start | Asian handicap, first half, new books, live arbs |
+| 0 | A0-1 | offline | Environment and baseline (done) |
+| 0 | A0-2 | offline | Price-source grouping fix (old M1-3) |
+| 0 | A0-3 | offline | Betradar identity in the gate (old M1-5) |
+| 0 | A0-4 | offline | Replay corpus and harness skeleton |
+| 1 | A1-1 | offline | Evidence ledger module and schema |
+| 1 | A1-2 | offline | Scan learner for aliases and leagues |
+| 1 | A1-3 | offline | Gate and matcher read the ledger |
+| 1 | A1-4 | offline | Contradiction, quarantine and revocation |
+| 1 | A1-5 | offline | League fingerprints for ambiguous names |
+| 1 | A1-6 | offline | Retire reviewed-alias trust; migrate legacy data |
+| 1 | A1-7 | offline | Coverage diagnostics endpoint |
+| 2 | A2-1 | offline | Raw offer model and adapter contract |
+| 2 | A2-2 | offline | Label/structure market classifier |
+| 2 | A2-3 | offline | Cross-book price-consensus validator |
+| 2 | A2-4 | offline | Generated market registry with provenance |
+| 2 | A2-5 | offline | First-half and Asian handicap rows |
+| 2 | A2-6 | offline | Market coverage and absence proofs |
+| 3 | A3-1 | offline | Synthetic new-book onboarding test |
+| 4 | A4-1 | offline | Delete approval endpoints and Review actions |
+| 4 | A4-2 | offline | Read-only Diagnostics tab |
+| 4 | A4-3 | offline | Remove human files from runtime and docs |
+| 5 | A5-1 | offline | Cold-start replay and fixed point |
+| 5 | A5-2 | offline | False-merge and coverage gap fixes |
+| 5 | A5-3 | offline | Learner performance and scan budget |
+| 6 | A6-1 | network, browser | Real prematch scan, all publishing books |
+| 6 | A6-2 | network | EVLBet and Betole: capture or prove absence |
+| 6 | A6-3 | browser | Prove MaxBet links |
+| 6 | A6-4 | offline, network | Final acceptance record |
+| 7 | A7-1 | network, browser | In-play autonomy (deferred, not acceptance) |
+| 7 | A7-2 | offline | Scheduler, back-off, notifications (old M4) |
+| 7 | A7-3 | offline | Re-apply security hardening (old M4-3) |
+| 7 | A7-4 | offline | README, MARKET_MAPPING and claim tests |
 
-Wave 3–4 tasks need real football games on the bookmakers' feeds. Live tasks
-need games **in play**: run them between 12:00 and 21:00 UTC, best on a
-Saturday or Sunday. A live scan at night returns little or nothing and proves
-nothing.
-
----
-
-### M0 — Market mappings correct for every book
-
-Background for every M0 card: a *market mapping* says which id or block name in
-a bookmaker's feed means which bet (1X2, over/under 2.5 goals, and so on). If a
-mapping is wrong, the scanner compares two different bets and shows a profit
-that does not exist. `config/bookmaker_markets.json` is the mapping;
-`MARKET_MAPPING.md` is generated from it; `tests/fixtures/markets/*.json` are
-real captured feed payloads, and `tests/test_market_fixtures.py` checks the
-mapping against them.
-
-Already done on 2026-10-20 (do not redo): prematch fixtures re-captured for 8
-books; live fixtures re-captured for 7 books; `scripts/price_check.py` added
-(fresh prematch scan: 0 outliers); NSoft live rest-of-match ids switched off;
-unmapped-id diagnostic empty in both modes; Admiralbet live O/U declared
-(id `22`) and captured.
-
-#### M0-1 · Capture Premier live over/under and close the gap
-
-- [ ] **Status:** TODO
-- **Needs:** network, at least 5 live football games on premier-kladionica.com.
-- **Depends on:** nothing.
-- **Files:** `tests/fixtures/markets/premier_kladionica_live.json` (re-written by
-  the capture script), `tests/test_market_fixtures.py` (`UNCOVERED_ROWS`),
-  `MARKET_MAPPING.md` (line starting `Audit date:`, outside the generated block).
-- **Facts:** `UNCOVERED_ROWS` in `tests/test_market_fixtures.py` declares three
-  Premier live rows as gaps: `("premier_kladionica", "live", "over_under_1_5")`,
-  `..._2_5` and `..._3_5`. The registry reads them from the block named
-  `LIVE - ZBROJ GOLOVA` (constant `LIVE_ZBROJ_GOLOVA` in
-  `scrapers/premier_kladionica.py`). The last capture had no such block. The four
-  Mozzartbet O/U 1.5/3.5 rows and the EVLBet/Betole rows are permanent gaps;
-  leave them alone.
-- **Steps:**
-  1. Run `python scripts/capture_market_fixtures.py --books premier_kladionica`.
-  2. Open the new `tests/fixtures/markets/premier_kladionica_live.json` and search
-     for `LIVE - ZBROJ GOLOVA`. If it is absent, `git checkout --
-     tests/fixtures/markets/premier_kladionica_live.json
-     tests/fixtures/markets/premier_kladionica_prematch.json`, write
-     "no ZBROJ GOLOVA block at <UTC time>, N live games" in the Log line, and
-     stop. Try again on another day.
-  3. If it is present: delete the `**{ ("premier_kladionica", "live",
-     f"over_under_{line}") ... for line in ("1_5", "2_5", "3_5") }` entry from
-     `UNCOVERED_ROWS`, but only for the lines whose `Over X`/`Under X` pair is
-     actually in the block. Keep the entry for any line that is missing.
-  4. Run `python -m pytest tests/test_market_fixtures.py -q`. A failure in
-     `test_a_declared_gap_is_not_just_listed_but_forgotten` means a row you kept
-     declared is in fact present: remove it too. Any other failure means the
-     mapping is wrong: revert the fixture and report the failing assertion.
-  5. Run `python -m pytest tests/test_e2e_certified.py -q`. It must still pass
-     (it reads the frozen copies, not the file you just replaced).
-  6. In `MARKET_MAPPING.md`, change the `Audit date:` sentence so it reads
-     `Audit date: <today>; prematch and live captures re-taken 2026-10-20 and
-     <today> (Premier live O/U).` Keep the rest of that paragraph unchanged.
-  7. Run `python scripts/generate_market_mapping_doc.py --check`.
-- **Verify:** §5 S1.
-- **Done when:** no `premier_kladionica` row is left in `UNCOVERED_ROWS`, and S1
-  is green.
-- **Log:** —
-
-#### M0-2 · Cross-book price check on a fresh live scan
-
-- [ ] **Status:** TODO (prematch half done 2026-10-20: 1,028 verified groups,
-  4,493 comparisons, 0 outliers)
-- **Needs:** network, at least 10 live games in progress.
-- **Depends on:** M0-1 is not required; do it first if both are possible the same
-  afternoon.
-- **Files:** none changed unless an outlier is found.
-- **Facts:** `scripts/price_check.py` removes each book's margin per market and
-  flags a book whose implied probability is more than `--threshold` (0.10) from
-  the median of the other books. It exits 1 when it finds an outlier. It counts
-  MDShop and Admiralbet as one source. Live groups hold few books, so a run with
-  fewer than 10 comparisons is not a result.
-- **Steps:**
-  1. §5 S2 with `mode=live`.
-  2. Run `python scripts/price_check.py --live` and save the full output into the
-     Log line (counts and every outlier row).
-  3. If the comparisons count is below 10, write that in the Log and repeat later.
-  4. If it exits 0 with ≥ 10 comparisons: tick the task.
-  5. If it exits 1: for each outlier, write down book, market, the book's odds and
-     the other books' odds. Do **not** change the registry yourself. Add the
-     outlier table to the Log, mark the task `BLOCKED (outlier, needs review)`,
-     and stop. A human decides whether the id is wrong.
-- **Done when:** one live run with ≥ 10 comparisons and 0 outliers is logged.
-- **Log:** —
-
-#### M0-3 · NSoft live 1X2 / BTTS / DC (BLOCKED)
-
-- [ ] **Status:** BLOCKED. Do not start without an operator saying so.
-- **Facts:** MDShop and Admiralbet (both on the NSoft platform) price live 1X2
-  (id `6` at `sbv` 0-0), BTTS (`995`) and DC (`18`/`42`) for the *rest of the
-  match* from the current score, not for the full match. On 2026-10-20 that made
-  a fake 19.8 % surebet. These ids are in `_excluded` in
-  `config/bookmaker_markets.json`, and only the match total (`22`) is read.
-- **Unblock condition:** a field in the raw NSoft live event (not the stripped
-  fixture) that gives the current score. To look for it: run
-  `python scripts/capture_market_fixtures.py --books mdshop` while games are live,
-  but print the raw event JSON before it is stripped and search for a score
-  (keys like `result`, `score`, `currentResult`). Write what you find in the Log.
-- **If unblocked, the design is:** read a market only when the score is 0-0, or
-  read id `59` ("Oba tima daju gol") only when a team has not yet scored, and
-  prove each with `scripts/price_check.py --live` showing 0 outliers. Write a new
-  card for it; do not implement from this paragraph.
-- **Log:** —
-
-#### M0-4 · Mozzartbet live returns no matches
-
-- [ ] **Status:** TODO
-- **Needs:** network, browser, live games in progress.
-- **Depends on:** nothing.
-- **Files:** `scrapers/mozzartbet.py` only.
-- **Facts:** in both live scans on 2026-10-20, Mozzartbet returned 0 live
-  matches while other books returned dozens. `MozzartbetScraper.fetch_and_parse`
-  posts to `{BASE_URL}/betting/matches` with `"date": "live"`, then keeps only
-  events where `_is_in_play` is true (`startTime` ≤ now + 5 min). Possible causes,
-  none confirmed: the live list is on another endpoint; `"date": "live"` returns
-  nothing; `startTime` is not in milliseconds for live items; the page load at
-  `/sr/kladjenje` does not establish the session needed for live.
-- **Steps:**
-  1. Write a throwaway script in your scratch directory (not in the repo) that
-     runs `asyncio.run(MozzartbetScraper().fetch_and_parse(live=True))` with
-     `logging.basicConfig(level=logging.DEBUG)`, and prints `len(all_raw_items)`
-     before the in-play filter. (Copy the method into the script and add prints;
-     do not edit the repo for this step.)
-  2. If raw items > 0 but parsed = 0: print the `startTime` of 3 items and
-     `_now_ms()`. Fix the unit or the filter in `_is_in_play`.
-  3. If raw items = 0: open `https://www.mozzartbet.ba/sr/uzivo/sport/1` in a
-     browser with developer tools (or Playwright with `page.on("response")`
-     logging every URL), and find the request that returns the live football
-     list. Record its URL, method and body in the Log.
-  4. Change `fetch_and_parse` so that `live=True` navigates to the live page from
-     step 3 and requests that endpoint. Keep the prematch path byte-identical.
-  5. Run the scraper again: it must return > 0 live matches whose markets parse
-     (at least some with 1X2 or O/U 2.5).
-  6. Run `python scripts/capture_market_fixtures.py --books mozzartbet`, then
-     `python -m pytest tests/test_market_fixtures.py -q`. If the live fixture
-     changed shape, the capture script also needs the new endpoint: update its
-     Mozzartbet live captor the same way.
-  7. Add a unit test in `tests/test_live_mode.py` that pins whatever you fixed
-     (the endpoint/body sent for `live=True`, or the `_is_in_play` unit), using a
-     fake response object — no network in tests.
-- **Verify:** §5 S1; then §5 S2 with `mode=live` and check
-  `GET /api/health` → `live.per_bookie.mozzartbet` > 0.
-- **Done when:** a live scan lists Mozzartbet matches and S1 is green.
-- **Log:** —
+Wave 6 needs real football on the books' prematch feeds. Run it on a weekday
+afternoon or a weekend, not at 03:00 UTC, and record the UTC time with the
+counts.
 
 ---
 
-### M1 — Find more real surebets
+### Wave 0 — Foundations
 
-Background: the pipeline is *scrape → normalize names → group listings of the
-same match across books (the certainty gate in `engine/certainty.py` decides) →
-price each group (`engine/arbitrage.py`)*. On 2026-10-20 a fresh prematch scan
-gave 818 verified groups and 0 surebets (best combination −1.14 %). More books
-per group and more groups raise the chance of a surebet.
+#### A0-1 · Environment and baseline
 
-Already done (do not redo): MDShop/Admiralbet declared route-less; 422/426
-Mozzartbet links proven; SportPlus local time fixed; unmapped leagues settled on
-exact teams + kickoff; punctuation-insensitive team compare; EVLBet disabled;
-`scripts/derive_mappings.py` written and applied once; one-leg-per-price-source
-in `ArbitrageEngine._best_combination`.
-
-#### M1-1 · Re-derive name mappings from a fresh scan
-
-- [ ] **Status:** TODO (repeat every 2 weeks; tick only the current round)
-- **Needs:** network (a scan), human (review of the proposals).
-- **Depends on:** M1-5 and M1-2 done gives better input, but is not required.
-- **Files:** `config/league_mappings.json`, `config/team_alias_allowlist.json`
-  (written only by the script).
-- **Steps:**
-  1. §5 S2 with `mode=prematch`.
-  2. `python scripts/derive_mappings.py cache/last_scan.json --report
-     <scratch>/proposals.json` (`<scratch>` = a directory outside the repo).
-  3. Open the report. For every entry under `below_gate_similarity` (pairs like
-     "Man. City" / "Manchester City"), list them in the Log. These are **not**
-     applied by the script; a human approves them in the dashboard Review tab.
-     If you are not a human, stop after listing them.
-  4. Check every league proposal joins competitions of the **same country and
-     tier**. If one does not (e.g. a women's league joined to a men's league, or
-     two countries), write it in the Log and do not run step 5.
-  5. `python scripts/derive_mappings.py cache/last_scan.json --apply`.
-  6. §5 S2 again and compare the Log numbers: listings in multi-book groups
-     (from `GET /api/debug/report`: sum of `len(bookmakers)` over groups with
-     ≥ 2 books) before vs after.
-- **Verify:** §5 S1 (the config changes must not break any test).
-- **Done when:** the round's before/after numbers are in the Log and S1 is green.
-- **Log:** 2026-10-27 round (inputs: the 2026-10-20 scan and a 2026-10-27 00:05 UTC scan with MaxBet; Mozzartbet/Premier/WWIN returned nothing at that hour). The script now reads names through `canonicalize_fixture` and writes conflict components as `league_equivalences.json` pairs. Applied: 70 names onto 42 ids, 36 new ids, 5 equivalence pairs (UEFA Youth League, Liga MX women, Russian and Bulgarian 2nd tier, EFL Cup), 542 aliases. Every league proposal was checked for same country and tier; two odd-looking ones are fixture-backed (MaxBet files Carling Knockout games as "Nedbank Cup"; NSoft lists the Irish 1st-division play-off as "Irska 2"). Listings in verified groups: 4,292 -> 4,387 (2026-10-20 scan), 2,270 -> 2,393 (2026-10-27 scan). 588 pairs below the similarity floor and 28 ambiguous names are left for the Review tab. Second pass the same day: stage suffixes (cup groups, championship/relegation groups, East/West) no longer count as ambiguity - 19 names onto 7 ids, 3 new ids, 7 more equivalence pairs; 4,387 -> 4,413 and 2,393 -> 2,411. The 587 below-floor team pairs were reviewed at the operator's request (565 approve, 22 reject) into `config/team_alias_reviewed.json`; the operator then had the gate honour that file without the 90 floor, and the matcher's scorer count a reviewed pair as a full match. Listings in verified groups: 4,413 -> 4,600 (2026-10-20 scan) and 2,411 -> 2,530 (2026-10-27 scan).
-
-#### M1-2 · Mozzartbet prematch coverage
-
-- [ ] **Status:** TODO
-- **Needs:** network, browser (to read the site's own count).
-- **Depends on:** nothing.
-- **Files:** `scrapers/mozzartbet.py` (`MozzartbetScraper.fetch_and_parse`),
-  `tests/test_live_mode.py` or a new `tests/test_mozzartbet_pagination.py`.
-- **Facts:** on 2026-10-20 the scraper returned 285 prematch listings; the site
-  lists about 1,150 football matches. Only 85 of the 285 reached a multi-book
-  group. The scraper posts `pageSize: 15` and pages from `currentPage: 0` until a
-  page returns fewer than 15 items, a non-200, or `totalPages` is reached
-  (capped at 100).
-- **Steps:**
-  1. Read the site's count: open
-     `https://www.mozzartbet.ba/sr/kladjenje/sport/1?date=all_days` and note the
-     football total shown. Log it with the UTC time.
-  2. In a scratch script (not the repo), call the scraper with DEBUG logging and
-     log, per page: `currentPage`, items returned, `totalPages`, HTTP status.
-     Log why the loop stopped (short page, non-200, exception, cap).
-  3. Try `pageSize` 50 and 100 in the scratch script. Keep the largest value for
-     which every page returns `pageSize` items except the last.
-  4. If the loop stops early because of a non-200 or an exception (not a short
-     page), add one retry with a 2 s wait per page before giving up.
-  5. If, with the best page size, the total is still below 90 % of step 1: fetch
-     per competition instead — read the competition ids from the first
-     response's payload (look for a list of competitions with ids), and run the
-     same pagination once per id with `"competitionIds": [id]`. Deduplicate by
-     event id (the existing `seen` set in `_event_to_match` does this).
-  6. Put the chosen page size in a module constant `PAGE_SIZE` and use it in the
-     body and the short-page check.
-  7. Add a test with a fake `page.request.post` that returns 3 full pages and 1
-     short page, and assert all items are collected and the 5th call is not made.
-  8. §5 S2 with `mode=prematch`; log `per_bookie.mozzartbet` and the number of
-     Mozzartbet listings in multi-book groups.
-  9. Prove links for the new events (Mozzartbet is the one book whose links
-     must be proven, or its groups do not verify): with the server running, call
-     `curl -X POST "http://127.0.0.1:8000/api/verify-links?bookmaker=mozzartbet&limit=20"`
-     every 31 s (rate limit is 2 per minute) until the response shows
-     `"remaining": 0`. This takes about 10 minutes per 400 events.
-  10. §5 S2 again; log verified groups and Mozzartbet's grouped share.
-- **Verify:** §5 S1.
-- **Done when:** Mozzartbet's prematch count is ≥ 90 % of the site count in step
-  1, and its grouped share (listings in multi-book groups ÷ listings) is within
-  15 percentage points of the average of the other enabled books.
-- **Log:** —
-
-#### M1-3 · Count MDShop and Admiralbet as one price source in grouping
-
-- [ ] **Status:** TODO
+- [x] **Status:** DONE 2026-11-03
 - **Needs:** offline.
-- **Depends on:** nothing.
-- **Files:** `engine/matcher.py` (`MatchMatcher.group_matches`, final filter),
+- **Files:** `.venv/` (untracked), no source changes.
+- **Steps:** create `.venv` on CPython 3.11; install `requirements.txt` and
+  `requirements-dev.txt`; run S1.
+- **Verify:** S1.
+- **Done when:** all four checks pass and the numbers are recorded.
+- **Log:** `uv venv .venv --python 3.11`; `uv pip install -r requirements.txt -r
+  requirements-dev.txt`; `pytest` → 1032 passed, 1 skipped in 33.82 s; ruff
+  clean; mypy clean on 73 files; market-doc check in sync. The old plan's 953 is
+  stale.
+
+#### A0-2 · Count price sources, not bookmaker names
+
+- [x] **Status:** DONE 2026-11-03
+- **Needs:** offline.
+- **Depends on:** A0-1.
+- **Files:** `engine/matcher.py` (`group_matches`, final filter),
   `tests/test_matcher.py`.
-- **Facts:** MDShop and Admiralbet run on one odds feed and quote identical
-  prices. `config/settings.py` defines `PRICE_SOURCES` and `price_source(book)`.
-  The engine already takes at most one leg per price source, and
-  `scripts/price_check.py` counts them once. But `group_matches` returns a group
-  when it holds ≥ 2 *bookmakers*, so a group of only MDShop + Admiralbet is
-  returned, counted in `match_groups` and `verified_groups`, and can never be
-  priced.
+- **Facts:** MDShop and Admiralbet are one NSoft feed. The engine already takes
+  at most one leg per `price_source`, but `group_matches` returns a group with
+  ≥ 2 bookmakers, so an NSoft-only group is counted and can never be priced.
 - **Steps:**
-  1. In `group_matches`, in the list comprehension that builds
-     `multi_bookie_groups`, replace `len({m.bookmaker for m in g.matches}) >= 2`
-     with `len({price_source(m.bookmaker) for m in g.matches}) >= 2`. Import
+  1. In the final `multi_bookie_groups` filter, replace
+     `len({m.bookmaker for m in g.matches}) >= 2` with
+     `len({price_source(m.bookmaker) for m in g.matches}) >= 2`; import
      `price_source` from `config.settings`.
-  2. Change nothing else. In particular leave the `>= 2` check right after
-     `best_group.matches.append(...)` (it sets `status = "verified"` while the
-     group is still being built) as it is.
-  3. Update the comment above the filter to say "at least two distinct price
-     sources (config.settings.PRICE_SOURCES)".
-  4. Expected fallout, measured by a trial run on 2026-10-20: exactly one
-     existing test fails,
-     `tests/test_e2e_certified.py::test_scan_refuses_a_link_proof_that_aged_out`,
-     because its two books (`ROUTE_BOOKS = ("mdshop", "admiralbet")`) are now
-     one price source. That test is about link-proof expiry, not price sources.
-     Fix it by adding a `monkeypatch` parameter and, as its first line,
-     `monkeypatch.setattr("engine.matcher.price_source", lambda book: book)`
-     with a one-line comment saying why. Do not change `ROUTE_BOOKS`. If any
-     other test fails, stop and log it.
-- **Tests to add** in `tests/test_matcher.py`:
-  - `test_group_of_one_price_source_is_not_returned`: two identical listings
-    (same teams, league, kickoff, both with 1X2 odds), bookmakers `mdshop` and
-    `admiralbet` → `group_matches` returns `[]`.
-  - `test_group_with_a_second_price_source_is_returned`: the same two plus a
-    `wwin` listing → one group with 3 matches.
-  Build the listings the way the existing tests in that file do.
-- **Verify:** `python -m pytest tests/test_matcher.py tests/test_matcher_order.py
-  tests/test_e2e_certified.py -q`, then §5 S1.
+  2. Leave the `>= 2` check right after `best_group.matches.append(...)` alone:
+     it sets `status = "verified"` while the group is still being built.
+  3. Update the comment to say "at least two distinct price sources".
+- **Tests:** `test_group_of_one_price_source_is_not_returned` (mdshop +
+  admiralbet, identical fixture → `[]`); `test_group_with_a_second_price_source_is_returned`
+  (same plus wwin → one group of 3). The certified test's `ROUTE_BOOKS` pair is
+  one source; add `monkeypatch.setattr("engine.matcher.price_source", lambda b: b)`
+  with a comment, and do not change `ROUTE_BOOKS`.
+- **Verify:** `pytest tests/test_matcher.py tests/test_matcher_order.py
+  tests/test_e2e_certified.py -q`; S1.
 - **Done when:** both new tests pass and S1 is green.
-- **Log:** —
+- **Log:** `group_matches` now filters on `price_source`; mdshop+admiralbet
+  returns `[]`, adding wwin returns one group of three. The certified
+  link-expiry test monkeypatches `price_source` to identity so it keeps testing
+  link TTL rather than price sources. Targeted suite green; full S1 later
+  1044 passed.
 
-#### M1-4 · SportPlus kickoffs across the DST change
+#### A0-3 · A shared Betradar id proves identity
 
-- [ ] **Status:** TODO (part A offline; part B after 2026-10-25)
-- **Needs:** part A offline; part B network.
-- **Depends on:** nothing.
-- **Files:** `tests/test_scraper_common.py`; `scrapers/common.py`
-  (`parse_local_dt`) only if a test fails.
-- **Facts:** SportPlus sends kickoffs as Sarajevo wall-clock time without an
-  offset; `parse_local_dt` converts them to naive UTC with
-  `ZoneInfo("Europe/Sarajevo")`. On 2026-10-25 at 03:00 local, clocks go back to
-  02:00, so 02:00–02:59 happens twice. Python's default (`fold=0`) picks the
-  first, summer-time, occurrence. Measured on 2026-10-20:
-  `parse_local_dt("2026-10-25T02:30:00")` → `2026-10-25 00:30`,
-  `"2026-10-25T01:30:00"` → `2026-10-24 23:30`,
-  `"2026-10-25T03:30:00"` → `2026-10-25 02:30`,
-  `"2027-03-28T02:30:00"` (a time that does not exist) → `2027-03-28 01:30`.
-- **Part A steps:**
-  1. Add `test_parse_local_dt_across_the_autumn_change` to
-     `tests/test_scraper_common.py` asserting exactly the four values above.
-  2. Run it. It must pass without code changes. If it does not, the installed
-     `tzdata` differs: report the actual values in the Log and stop.
-- **Part B steps (on or after 2026-10-26):**
-  1. §5 S2 with `mode=prematch`.
-  2. Save this as `<scratch>/dstcheck.py` and run it from the repo root with
-     `python <scratch>/dstcheck.py`. It pairs every SportPlus listing with every
-     other book's listing of the same normalized teams and prints the kickoff
-     differences in minutes, plus each 60-minute pair.
-     ```python
-     import json
-     from collections import Counter
-     from datetime import datetime
-
-     scan = json.load(open("cache/last_scan.json", encoding="utf-8"))
-     key = lambda m: (m.get("home_team_normalized"), m.get("away_team_normalized"))
-     others = {}
-     for m in scan["matches"]:
-         if m["bookmaker"] != "sportplus" and m.get("kickoff"):
-             others.setdefault(key(m), []).append(m)
-     deltas = Counter()
-     for m in scan["matches"]:
-         if m["bookmaker"] != "sportplus" or not m.get("kickoff"):
-             continue
-         for o in others.get(key(m), []):
-             d = (datetime.fromisoformat(m["kickoff"]) - datetime.fromisoformat(o["kickoff"])).total_seconds() / 60
-             deltas[round(d)] += 1
-             if abs(abs(d) - 60) < 1:
-                 print("60-min gap:", m["home_team"], "-", m["away_team"], m["kickoff"], o["bookmaker"], o["kickoff"])
-     print(sorted(deltas.items()))
-     ```
-  3. A 60-minute gap is a SportPlus bug only if SportPlus disagrees with **two
-     or more** other books that agree with each other. Log every such case with
-     the raw kickoff string SportPlus sent (search the SportPlus scraper's
-     response for the match). If there are none, tick the task.
-  4. If there are: change `parse_local_dt` so that an ambiguous local time
-     (`fold` matters) uses whichever fold the failing cases need, add those cases
-     to the part A test, and re-run S1.
-- **Already observed (2026-10-20 scan, do not re-investigate):** three USL games
-  on 2026-10-25 at 00:00–00:30 UTC (El Paso–New Mexico, Colorado Springs–Tulsa,
-  San Antonio–Orange County) are 60 minutes later at Premier Kladionica than at
-  SportPlus and WWIN, which agree. Premier sends epoch milliseconds, so the error
-  is in Premier's feed, not in parsing; the gate's 15-minute window already keeps
-  those pairs out of `verified`. No change needed.
-- **Done when:** part A test passes and part B shows no 60-minute difference.
-- **Log:** —
-
-#### M1-5 · Accept a shared Betradar id as identity proof
-
-- [ ] **Status:** TODO
+- [x] **Status:** DONE 2026-11-03
 - **Needs:** offline.
-- **Depends on:** M1-3 and H-1 done (they touch neighbouring code and tests).
-- **Files:** `engine/certainty.py`, `engine/matcher.py`, `frontend/js/app.js`
-  (`REASON_LABELS`), `README.md` (status table in *Match & mapping certainty*),
+- **Depends on:** A0-2.
+- **Files:** `engine/certainty.py`, `engine/matcher.py`,
+  `frontend/js/app.js` (`REASON_LABELS`), `README.md` (status table),
   `tests/test_certainty.py`, `tests/test_matcher_certified.py`,
-  `tests/test_readme_claims.py` (`_observed_reasons`),
-  `tests/test_frontend_review.py` (`KNOWN_REASON_CODES`).
-- **Facts:** `Match.betradar_id` is filled by `scrapers/mdshop.py`,
-  `scrapers/admiralbet.py`, `scrapers/sportplus.py` and `scrapers/wwin.py` (empty
-  string when the feed has none). Betradar is a data provider whose match id is
-  shared across books, so two listings with the same non-empty id are the same
-  real match whatever their team or league names say. Today the gate ignores the
-  field: such a pair with differently spelled teams ends as `team_unresolved`
-  (and differently named mapped leagues as `league_mismatch`).
-- **Rules to implement (exactly these):**
-  - `same_id` = both `betradar_id` non-empty and equal.
-  - `different_id` = both non-empty and not equal.
-  - `different_id` → append the new reason `betradar_mismatch` and add it to
-    `HARD_REJECT_REASONS` (status `rejected`). Two different ids are two
-    different matches.
-  - `same_id` → the league check passes (evidence `league_identity` with
-    `reason="betradar_id"`), and the team check passes (evidence
-    `team_identity`, `source="rule"`, `reason="betradar_id"`). The kickoff,
-    category and link checks are **unchanged** and can still refuse the pair.
-  - Orientation for `same_id`: compute
-    `direct = fuzz.token_set_ratio(a.home_team_normalized, b.home_team_normalized) + fuzz.token_set_ratio(a.away_team_normalized, b.away_team_normalized)`
-    and `swapped` the same with home/away of `b` exchanged. `is_swapped = swapped > direct`.
-  - Neither id present, or only one present → behave exactly as today.
+  `tests/test_readme_claims.py`, `tests/test_frontend_review.py`.
+- **Facts:** `Match.betradar_id` is filled by mdshop, admiralbet, sportplus and
+  wwin. Two listings with the same non-empty id are the same real match whatever
+  their names say. The gate ignores it today.
+- **Rules:**
+  - `same_id` = both non-empty and equal; `different_id` = both non-empty and
+    different.
+  - `different_id` → reason `betradar_mismatch`, added to
+    `HARD_REJECT_REASONS` (status `rejected`).
+  - `same_id` → league check passes (`league_identity`, reason `betradar_id`)
+    and team check passes (`team_identity`, source `rule`, reason
+    `betradar_id`). Kickoff, category and link still apply.
+  - Orientation for `same_id`: compare direct vs swapped token-set scores; the
+    higher wins.
+  - One-sided or absent ids change nothing.
+- **Steps:** implement in `evaluate_pair` and `evaluate`; in `group_matches`
+  keep `groups_by_betradar: dict[str, MatchGroup]` and put a matching group at
+  the front of `scored` with confidence 1.0; add the reason label; update the
+  README table and claim test; add the five certainty tests named in the old
+  plan's M1-5 and the matcher test.
+- **Verify:** S1; then a prematch replay (A0-4) logs verified groups before/after.
+- **Done when:** matching ids with different spellings verify; different ids
+  never do; S1 green.
+- **Log:** Gate now reads `betradar_id`: same id passes league and team checks
+  with reason `betradar_id`; different ids append `betradar_mismatch` to
+  `HARD_REJECT_REASONS`; one-sided ids change nothing. `group_matches` indexes
+  groups by Betradar id and offers the matching group first. Five certainty
+  tests, one matcher test, README table/bullet, frontend label and claim test
+  updated. Replay corpus before/after is recorded under A0-4.
+
+#### A0-4 · Replay corpus and harness skeleton
+
+- [x] **Status:** DONE 2026-11-03
+- **Needs:** offline.
+- **Depends on:** A0-1.
+- **Files:** new `scripts/replay_mappings.py`, new `tests/fixtures/replay/`
+  (frozen copies, never rewritten by a scan), new `tests/test_replay.py`,
+  `PLAN.md`.
+- **Facts:** `cache/last_scan.json` is a 30-minute cache and may be absent or
+  stale; the certified fixtures are frozen under
+  `tests/fixtures/e2e_certified/`. The harness must not depend on a live scan.
 - **Steps:**
-  1. `engine/certainty.py`, `evaluate_pair`: compute `same_id`/`different_id` at
-     the top. In the league block, when `same_id` set `league_ok = True` and
-     `league_reason = "betradar_id"` before the `if not league_ok` line. After
-     `teams_ok, is_swapped, team_reason = self._teams_ok(a, b)`, when `same_id`
-     set `teams_ok = True`, `is_swapped` per the rule above, and use
-     `team_evidence_reason = "betradar_id"` (skip the allowlist branch). When
-     `different_id`, append `"betradar_mismatch"` to `reasons`.
-  2. `engine/certainty.py`, `evaluate(match, group)`: pick the anchor as
-     `next((m for m in group.matches if match.betradar_id and m.betradar_id == match.betradar_id), group.matches[0])`.
-     When the pair result's team evidence reason is `"betradar_id"`, skip the
-     `_group_team_orientation` check (keep `result.is_swapped` from the pair) and
-     skip the group-league check (treat it like `league_settled`). Members of a
-     group are already stored in the group's home/away frame, so orientation
-     against that member is orientation against the group.
-  3. `engine/matcher.py`, `group_matches`: keep a dict
-     `groups_by_betradar: dict[str, MatchGroup]`, filled whenever a match with a
-     non-empty `betradar_id` is added to a group or starts a new one. For each
-     match with a non-empty id found in the dict, put that group at the front of
-     `scored` with confidence `1.0` (if this bookmaker is not already in it),
-     even if it is not in `candidate_groups`. The gate still decides.
-  4. `frontend/js/app.js`: add `betradar_mismatch: 'Different Betradar match id'`
-     to `REASON_LABELS`.
-  5. `tests/test_frontend_review.py`: add `"betradar_mismatch"` to
-     `KNOWN_REASON_CODES`.
-  6. `README.md`: in the status table row for `rejected`, add
-     `` `betradar_mismatch` `` to the reason list. Below the table, in the "Four
-     rules inside stage 1" list, add a fifth bullet: "**A shared Betradar id
-     proves identity.** MDShop, Admiralbet, SportPlus and WWIN carry the
-     provider's match id. Two listings with the same id pass the league and team
-     checks whatever their names (evidence reason `betradar_id`); kickoff,
-     category and link checks still apply. Two different ids reject with
-     `betradar_mismatch`." Change "Four rules" to "Five rules".
-  7. `tests/test_readme_claims.py`, `_observed_reasons`: after the existing
-     loop, also evaluate the pair `[_match(betradar_id="111"),
-     _match(bookmaker="mbet", event_id="e2", betradar_id="222")]` and add its
-     reasons to `observed`.
-- **Tests to add:**
-  - `tests/test_certainty.py`:
-    `test_same_betradar_id_verifies_despite_different_names` (mdshop
-    "Man. City"/"Arsenal" league "England 1" vs wwin "Manchester City FC"/"Arsenal
-    London" league "Premier League", same kickoff, same id → `verified`, team
-    evidence reason `betradar_id`);
-    `test_same_betradar_id_still_needs_the_kickoff` (same as above, kickoffs
-    60 min apart → not verified, reason `kickoff_delta`);
-    `test_different_betradar_ids_reject` (identical names, ids differ →
-    `rejected`, reason `betradar_mismatch`);
-    `test_same_betradar_id_detects_swapped_orientation` (b lists the teams
-    reversed → `is_swapped is True`);
-    `test_one_sided_betradar_id_changes_nothing` (only one side has an id → same
-    result as with no ids).
-  - `tests/test_matcher_certified.py`:
-    `test_betradar_pair_groups_across_differently_named_leagues` → one group of
-    2 from the pair in the first certainty test.
-- **Verify:** §5 S1. Then §5 S2 (prematch) and log verified groups before/after
-  against the most recent number in M1-1's or M1-2's Log.
-- **Done when:** all new tests pass, S1 is green, and a pair with matching ids
-  and different spellings verifies while different ids never do.
+  1. Copy the current `cache/last_scan.json` (if present) and the certified
+     fixtures into `tests/fixtures/replay/<date>/`; add a README with the
+     capture date and book list. Do not modify the originals.
+  2. `scripts/replay_mappings.py` loads one or more scan JSONs, runs
+     `MatchMatcher.group_matches`, the gate and `ArbitrageEngine`, and prints
+     the metrics in §3 as JSON. `--cold` starts from an empty generated
+     evidence directory; `--seeded` uses the current one; `--check` exits 1 on
+     `false_merges > 0` or `pairs_unresolved > 0`.
+  3. Add a `--no-learn` mode for A0 (the learner does not exist yet) so the
+     harness can certify the pre-ledger baseline.
+  4. `tests/test_replay.py` asserts the harness is deterministic: two runs on
+     the same corpus produce identical JSON except `generated_at`.
+- **Verify:** `pytest tests/test_replay.py -q`; `python
+  scripts/replay_mappings.py tests/fixtures/replay/<date> --no-learn`; S1.
+- **Done when:** the harness runs offline, is deterministic, and records the
+  pre-ledger baseline in its Log.
+- **Log:** Added `scripts/replay_mappings.py`, a frozen
+  `tests/fixtures/replay/2026-11-03/scan.json` built from the real 2026-09-25
+  certified captures, and `tests/test_replay.py`. Baseline on that corpus:
+  3 matches, 3 candidate pairs, 1 evidence-backed pair, 1 verified, 0 rejected,
+  0 unresolved, 0 false merges, 1 verified group, 18 market rows, 3 surebets.
+  The harness is deterministic across two runs and `--cold` matches `--seeded`
+  until the ledger exists.
+
+---
+
+### Wave 1 — Team and league autonomy
+
+#### A1-1 · Evidence ledger module and schema
+
+- [x] **Status:** DONE 2026-11-03
+- **Needs:** offline.
+- **Depends on:** A0-4.
+- **Files:** new `engine/mapping_evidence.py`, new
+  `config/generated/mapping_evidence.json` (empty schema), new
+  `tests/test_mapping_evidence.py`.
+- **Facts:** There is no provenance store today; trust is file membership.
+- **Steps:**
+  1. Define `Evidence`, `MappingClaim`, `MappingLedger` with `load`, `save`
+     (atomic), `get`, `accept`, `reject`, `quarantine`, `revoke`, `diff`.
+  2. Validate the schema on load; an unreadable file is an empty ledger with a
+     warning, never a crash. A claim with an unknown `kind` is ignored and
+     logged.
+  3. Key claims as `<kind>:<canonical key>`; team aliases use the gate's
+     `_raw_team_key`, sorted; league pairs are sorted; market keys are
+     `book|mode|source_id|labels`.
+  4. `confidence` is a float in `[0, 1]` derived only from evidence types;
+     document the table in the module docstring.
+  5. The ledger never writes `config/team_alias_allowlist.json` or
+     `config/team_alias_reviewed.json`.
+- **Tests:** round trip; atomic write; corrupt file → empty + warning; unknown
+  kind ignored; duplicate key merges evidence; revoke keeps history.
+- **Verify:** `pytest tests/test_mapping_evidence.py -q`; S1.
+- **Done when:** the module is importable, typed, and the empty schema file is
+  committed.
+- **Log:** Added `engine/mapping_evidence.py`: schema, atomic save, TTL, evidence weights, accept/quarantine/reject/revoke and diff; empty `config/generated/mapping_evidence.json`; 15 tests.
+
+#### A1-2 · Scan learner for aliases and leagues
+
+- [x] **Status:** DONE 2026-11-03
+- **Needs:** offline.
+- **Depends on:** A1-1.
+- **Files:** new `engine/mapping_learner.py`, new
+  `scripts/learn_mappings.py`, new `tests/test_mapping_learner.py`,
+  `tests/fixtures/replay/`.
+- **Facts:** `scripts/derive_mappings.py` already builds league components and
+  alias proposals from shared fixtures; reuse its evidence rules, but write to
+  the ledger instead of the allowlist. It must not require a human for
+  below-90 pairs.
+- **Steps:**
+  1. Extract the pair-discovery logic from `derive_mappings.py` into
+     `mapping_learner.py` (or import it and keep the CLI thin). Do not duplicate
+     the fixture rules.
+  2. For every pair of listings from different books: apply the four rules in
+     §2.4. Emit `Evidence` records with scan id, books, event ids, kickoff,
+     league pair and category tags.
+  3. Aggregate by claim key; apply the acceptance table in §2.4. A claim with
+     only similarity evidence is `quarantined`, never `accepted`.
+  4. `scripts/learn_mappings.py <scan.json>... [--apply]` prints the diff;
+     `--apply` writes the ledger atomically. Without `--apply`, nothing is
+     written.
+  5. Add a `--min-evidence` flag for tests; default is the policy table.
+- **Tests:** shared Betradar id → alias accepted; exact shared fixture → alias
+  accepted; below-90 pair with one exact-fixture observation → accepted (no
+  human); pair with only similarity → quarantined; one name observed with two
+  different clubs → quarantined/rejected; league pair from a shared fixture →
+  accepted; conflicting league components → quarantined.
+- **Verify:** `pytest tests/test_mapping_learner.py -q`; S1.
+- **Done when:** a scan cache produces a ledger with no human input and the
+  diff is recorded.
+- **Log:** Added `engine/mapping_learner.py` and `scripts/learn_mappings.py`. Shared Betradar ids and one-exact-slot fixtures accept; similarity-only pairs quarantine; opponent pairs and ambiguous league names are rejected/quarantined. 10 tests; the replay corpus learns `fk sarajevo|sarajevo`.
+
+#### A1-3 · Gate and matcher read the ledger
+
+- [x] **Status:** DONE 2026-11-03
+- **Needs:** offline.
+- **Depends on:** A1-2.
+- **Files:** `engine/certainty.py`, `engine/matcher.py`,
+  `tests/test_certainty.py`, `tests/test_matcher.py`,
+  `tests/test_mapping_learner.py`.
+- **Facts:** The gate takes `alias_allowlist` and `reviewed_aliases` sets; the
+  matcher loads them from JSON. The ledger is a third source and must be
+  authoritative when present.
+- **Steps:**
+  1. `CertaintyGate.__init__` takes `evidence: MappingLedger | None = None`.
+  2. `_team_pair_details` checks an accepted `team_alias` claim before the
+     legacy allowlist; records the claim key in the team evidence
+     (`allowlist_entries` becomes `evidence_keys` or an additive field).
+  3. `_league_ok` checks accepted `league_equivalence` and
+     `league_fingerprint` claims.
+  4. `MatchMatcher.__init__` loads the ledger from
+     `config/generated/mapping_evidence.json`; if absent, behaves exactly as
+     today. It still loads the legacy allowlist for A1-6 migration.
+  5. Add an `evidence_source` field to `MatchEvidence` (additive, default
+     `""`) so a reviewer can see `ledger` vs `legacy`.
+- **Tests:** ledger-approved alias verifies with no allowlist; ledger-rejected
+  alias does not; a ledger claim for one pair does not leak to another; legacy
+  behavior unchanged when the ledger is empty.
+- **Verify:** `pytest tests/test_certainty.py tests/test_matcher.py
+  tests/test_reviewed_aliases.py -q`; S1.
+- **Done when:** both paths coexist and the ledger wins.
+- **Log:** `CertaintyGate` takes a `MappingLedger`; accepted `team_alias` and `league_equivalence` claims authorize, with `source="ledger"` and the claim keys in evidence. `MatchMatcher` loads the generated ledger and gives ledger aliases full scorer weight. 4 tests.
+
+#### A1-4 · Contradiction, quarantine and revocation
+
+- [x] **Status:** DONE 2026-11-03
+- **Needs:** offline.
+- **Depends on:** A1-3.
+- **Files:** `engine/mapping_evidence.py`, `engine/mapping_learner.py`,
+  `engine/certainty.py`, new `tests/test_mapping_contradictions.py`.
+- **Facts:** A wrong alias can merge two real clubs and create a false surebet.
+  The gate's 15-minute kickoff and category checks reduce but do not remove this
+  risk.
+- **Steps:**
+  1. Build the team union-find in the learner. An edge that joins two clusters
+     containing an observed opponent pair is `rejected` with
+     `opponent_contradiction`.
+  2. A name that appears in two accepted clusters is `quarantined`; do not pick
+     a winner.
+  3. A claim whose evidence is older than its TTL (default 90 days, configurable)
+     is `stale`; it stops authorizing until re-observed.
+  4. `MappingLedger.revoke(key, reason)` writes a tombstone with the evidence
+     that caused it; the gate ignores revoked claims.
+  5. On every learner run, re-check accepted claims against the current scan;
+     a contradiction revokes and logs.
+- **Tests:** opponent pair rejects the alias; a three-name chain that would merge
+  opponents is rejected; stale claim stops verifying; revocation is durable;
+  re-observation can re-accept after a tombstone only with new evidence.
+- **Verify:** `pytest tests/test_mapping_contradictions.py -q`; S1.
+- **Done when:** a poisoned alias cannot produce a verified group.
+- **Log:** Added `engine/team_resolver.py`: accepted aliases form a union-find; an opponent pair inside a component revokes the weakest edge on the path, repeatedly, and a revoked opponent contradiction cannot be re-accepted. Stale edges are ignored. 5 tests.
+
+#### A1-5 · League fingerprints for ambiguous names
+
+- [x] **Status:** DONE 2026-11-03
+- **Needs:** offline.
+- **Depends on:** A1-4.
+- **Files:** new `engine/league_resolver.py`,
+  `engine/mapping_learner.py`, `engine/certainty.py`,
+  `tests/test_league_mapping_gaps.py`, new `tests/test_league_resolver.py`.
+- **Facts:** `derive_mappings.py` refuses an ambiguous league name (one book
+  uses "Serija A" for Italy and Brazil). A global name map cannot resolve it;
+  the teams can.
+- **Steps:**
+  1. Build a fingerprint per (book, league name): the set of team raw keys seen
+     in that league across scans, with counts.
+  2. Two league names are the same competition when their team sets overlap
+     above a documented threshold and their countries/tiers do not contradict.
+     Record `league_fingerprint` evidence with the overlapping teams.
+  3. At gate time, if the league names differ but the fixture's teams belong to
+     the same fingerprint, accept the league with `league_fingerprint` evidence.
+  4. A name used for two competitions remains unmapped globally; each fixture
+     is resolved by its teams. Never write a single canonical id for it.
+- **Tests:** "Serija A" with Italian teams matches "ITALY 1"; the same name with
+  Brazilian teams matches "BRAZIL 1"; a women's/youth side does not match the
+  men's fingerprint; an overlapping-but-different league is quarantined.
+- **Verify:** `pytest tests/test_league_resolver.py
+  tests/test_league_mapping_gaps.py -q`; S1.
+- **Done when:** the 77% league-blocked queue has a machine path and the
+  contradictions are quarantined.
+- **Log:** Added `engine/league_resolver.py`; the learner writes `league_fingerprint` claims from team sets; the gate resolves a mapped league mismatch only when both fingerprints cover the fixture's teams and one set is a proper subset of the other. 5 tests.
+
+#### A1-6 · Retire reviewed-alias trust and migrate legacy data
+
+- [x] **Status:** DONE 2026-11-03
+- **Needs:** offline.
+- **Depends on:** A1-5.
+- **Files:** `engine/matcher.py`, `engine/certainty.py`,
+  `config/team_alias_reviewed.json` (read-only legacy),
+  `tests/test_reviewed_aliases.py`, new `tests/test_legacy_migration.py`.
+- **Facts:** `config/team_alias_reviewed.json` has 565 approved and 22 rejected
+  pairs. The gate accepts approved pairs without the 90 floor. Those pairs were
+  reviewed by a person, but the evidence behind each is in the file's `evidence`
+  field.
+- **Steps:**
+  1. Write a migration script (inside `scripts/learn_mappings.py` or
+     `scripts/migrate_reviewed.py`) that reads each approved pair, extracts its
+     fixture evidence, and emits `team_alias` claims with `legacy_review` as an
+     evidence type.
+  2. A `legacy_review` claim is `quarantined`, not `accepted`, until it is
+     corroborated by a scan or by the fixture evidence it cites. If the cited
+     fixture is in the replay corpus, re-derive it and accept; otherwise keep it
+     quarantined and report it.
+  3. Remove `reviewed_aliases` from the gate's default construction and from
+     `MatchMatcher`; keep the parameter only for the migration tests, marked
+     deprecated.
+  4. `tests/test_reviewed_aliases.py` changes from "a reviewed pair verifies" to
+     "a legacy pair verifies only with ledger evidence"; add a test that the
+     reviewed file alone no longer grants trust.
+- **Verify:** `pytest tests/test_reviewed_aliases.py
+  tests/test_legacy_migration.py -q`; S1.
+- **Done when:** no runtime path reads `team_alias_reviewed.json` for trust, and
+  the migration report says how many of the 565 were re-derived.
+- **Log:** The matcher no longer loads `team_alias_reviewed.json`. Added `scripts/migrate_reviewed.py`, which writes each approved pair as quarantined `legacy_review` evidence; the deprecated gate parameter remains only for migration tests. 4 migration tests and the rewritten reviewed-alias tests.
+
+#### A1-7 · Coverage diagnostics endpoint
+
+- [x] **Status:** DONE 2026-11-03
+- **Needs:** offline.
+- **Depends on:** A1-6.
+- **Files:** `server/api.py`, new `server/mapping_coverage.py`,
+  `frontend/js/app.js` (read-only Diagnostics), `tests/test_mapping_coverage.py`.
+- **Facts:** `/api/health` reports per-book counts and unmapped markets, but not
+  mapping coverage or quarantined claims.
+- **Steps:**
+  1. `GET /api/mapping/coverage` returns per book/mode: matches, groups,
+     verified groups, accepted claims, quarantined claims, rejected claims,
+     unmapped market rows, and the top reasons.
+  2. Include the ledger diff since the previous scan and the age of the oldest
+     accepted claim.
+  3. The endpoint is read-only and requires the API key like the other
+     state-changing endpoints? No: read-only may stay public only if
+     `/api/results` is public; follow the existing auth convention.
+  4. Add a Diagnostics panel that renders the JSON; no buttons that change
+     trust.
+- **Tests:** counts on a hand-built ledger and scan; no write routes; auth
+  matches the existing convention.
+- **Verify:** `pytest tests/test_mapping_coverage.py -q`; S1.
+- **Done when:** the coverage JSON is served and the panel is read-only.
+- **Log:** Added `server/mapping_coverage.py` and read-only `GET /api/mapping/coverage`: per-book matches/markets, claims by status and kind, quarantine reasons, stale claims and unmapped markets. 2 tests.
+
+---
+
+### Wave 2 — Market autonomy
+
+#### A2-1 · Raw offer model and adapter contract
+
+- [x] **Status:** DONE 2026-11-03
+- **Needs:** offline.
+- **Depends on:** A0-1.
+- **Files:** `models/schemas.py` (`RawOffer`), `scrapers/base.py`,
+  `docs/BOOK_ADAPTER.md`, `tests/test_raw_offers.py`.
+- **Facts:** Scrapers currently emit `Market` objects with a `MarketType`
+  already chosen by a hand-written registry row. A new book cannot be onboarded
+  without editing `config/bookmaker_markets.json`.
+- **Steps:**
+  1. Add `RawOffer` with `bookmaker`, `mode`, `event_key`, `market_key`,
+     `labels`, `line`, `period`, `odds`, `source_id`, `raw_payload_hash`.
+  2. Define the adapter contract: a scraper returns `Match` skeletons plus
+     `RawOffer`s; the resolver assigns `MarketType`. Existing scrapers may
+     continue emitting `Market` until A2-4.
+  3. Document the contract, the label vocabulary and the absence-proof
+     requirement.
+- **Tests:** schema validation; an adapter fixture emits offers and a match;
+  no network.
+- **Verify:** `pytest tests/test_raw_offers.py -q`; S1.
+- **Done when:** the model and contract are documented and tested.
+- **Log:** Added `RawOffer` to `models/schemas.py`, `docs/BOOK_ADAPTER.md` and `tests/test_raw_offers.py`. The contract emits book identifiers and raw labels; the adapter never chooses a `MarketType`.
+
+#### A2-2 · Label/structure market classifier
+
+- [x] **Status:** DONE 2026-11-03
+- **Needs:** offline.
+- **Depends on:** A2-1.
+- **Files:** new `engine/market_discovery.py`, `tests/test_market_discovery.py`,
+  `tests/fixtures/markets/`.
+- **Facts:** The captured fixtures already contain real labels for 10 books.
+  The registry has 97 book/mode/market rows.
+- **Steps:**
+  1. Implement the classifier in §2.6. Return `(MarketType, line, period,
+     confidence, evidence)` or `None`.
+  2. Handle Bosnian/Serbian labels (`Vise`, `Više`, `Manje`, `Oba tima daju
+     gol`, `1. poluvreme`) and English labels.
+  3. Reject a label set that is incomplete (1X2 without all three; O/U without
+     both sides; BTTS without both).
+  4. Never classify a market with an unknown period as full-time; quarantine it.
+- **Tests:** every captured fixture's known rows classify correctly; an
+  incomplete 1X2 is rejected; a first-half market is not full-time; an unknown
+  label is quarantined.
+- **Verify:** `pytest tests/test_market_discovery.py -q`; S1.
+- **Done when:** the classifier reproduces the registry's rows from labels
+  alone, with the exceptions listed in its Log.
+- **Log:** Added `engine/market_discovery.py`: 1X2, DC, BTTS, O/U 1.5/2.5/3.5, first-half 1X2/O-U and AH from labels/line/period, with Bosnian spellings. Incomplete or unknown sets return `None` and are counted as gaps. 10 tests.
+
+#### A2-3 · Cross-book price-consensus validator
+
+- [x] **Status:** DONE 2026-11-03
+- **Needs:** offline.
+- **Depends on:** A2-2.
+- **Files:** new `engine/market_consensus.py`, `scripts/price_check.py`
+  (reuse its margin/median logic), `tests/test_market_consensus.py`.
+- **Facts:** `price_check.py` already computes margin-free implied
+  probabilities and flags outliers. It is a script, not a reusable engine.
+- **Steps:**
+  1. Extract the margin removal and median comparison into a pure function.
+  2. For a candidate market mapping, compare the book's implied probabilities
+     with the median of at least two accepted books on the same fixture and
+     line. Return `accepted`, `outlier`, or `insufficient_evidence`.
+  3. Require a minimum number of fixtures (document the number from the
+     existing prematch measurement, not an invented one) before accepting a
+     book/mode/market row.
+  4. A mapping that is an outlier on one fixture is not rejected; an outlier
+     pattern across the minimum sample is.
+- **Tests:** the NSoft 136 "Ide dalje" control is rejected as 1X2; a correct
+  1X2 passes; a shifted line is an outlier; insufficient sample is
+  `insufficient_evidence`.
+- **Verify:** `pytest tests/test_market_consensus.py -q`; S1.
+- **Done when:** the validator can certify a mapping and explain a rejection.
+- **Log:** Added `engine/market_consensus.py`: margin removal, median of at least two other books, accepted/outlier/insufficient_evidence with per-label gaps. 5 tests.
+
+#### A2-4 · Generated market registry with provenance
+
+- [ ] **Status:** TODO
+- **Needs:** offline.
+- **Depends on:** A2-3.
+- **Files:** `engine/market_registry.py`,
+  `config/generated/bookmaker_markets.json`, `scripts/generate_market_registry.py`,
+  `tests/test_market_registry.py`, `tests/test_registry_parser_consistency.py`.
+- **Facts:** `config/bookmaker_markets.json` is hand-written and is the single
+  source of truth. `MARKET_MAPPING.md` is generated from it.
+- **Steps:**
+  1. The generated file has the same shape as the hand-written one plus a
+     `_provenance` section per row: evidence types, fixture ids, scan dates,
+     consensus counts.
+  2. `MarketRegistry` loads the hand-written file first, then the generated
+     file; a generated row overrides only when its provenance is accepted and
+     its `market_type` agrees with the label classifier.
+  3. `scripts/generate_market_registry.py` reads the ledger and writes the
+     generated file atomically; `--check` fails when stale.
+  4. `MARKET_MAPPING.md` shows the provenance column and the generator check
+     covers both files.
+- **Tests:** a generated row overrides a stale hand row; a generated row with
+  no provenance is ignored; `--check` detects drift; the 136 control stays
+  excluded.
+- **Verify:** `pytest tests/test_market_registry.py
+  tests/test_registry_parser_consistency.py -q`;
+  `python scripts/generate_market_registry.py --check`; S1.
+- **Done when:** a market row can be added without editing the hand-written
+  registry, and the doc stays in sync.
+- **Log:** —
+
+#### A2-5 · First-half and Asian handicap rows
+
+- [ ] **Status:** TODO
+- **Needs:** offline; captured payloads for each book that offers them.
+- **Depends on:** A2-4.
+- **Files:** `config/bookmaker_markets.json` (only if a row cannot be
+  discovered), `scrapers/*`, `config/settings.py`
+  (`EXPERIMENTAL_MARKETS`), `MARKET_MAPPING.md`, `tests/test_market_fixtures.py`,
+  `tests/test_new_markets.py`.
+- **Facts:** First-half 1X2/O-U and AH are parsed directly by individual
+  scrapers and are off by default. AH lines and push/quarter-line settlement
+  are the hardest semantics.
+- **Steps:**
+  1. For each book, capture prematch payloads with first-half and AH markets.
+  2. Classify and validate them with A2-2/A2-3; add only rows that pass.
+  3. For AH, record the line and the settlement rule (`push`, quarter line) in
+     the registry/provenance; never compare an AH market without a line.
+  4. Move the markets from `EXPERIMENTAL_MARKETS` to `ENABLED_MARKETS` only
+     after a price check with 0 outliers.
+- **Tests:** captured fixtures for every enabled row; an AH line mismatch is
+  not priced; a first-half market is not matched to full-time.
+- **Verify:** `pytest tests/test_market_fixtures.py tests/test_new_markets.py
+  -q`; `python scripts/price_check.py`; S1.
+- **Done when:** all 9 market types are classified and the enabled set is
+  justified by captures.
+- **Log:** —
+
+#### A2-6 · Market coverage and absence proofs
+
+- [ ] **Status:** TODO
+- **Needs:** offline.
+- **Depends on:** A2-5.
+- **Files:** `engine/mapping_evidence.py`, `scripts/learn_mappings.py`,
+  `server/mapping_coverage.py`, `tests/test_market_coverage.py`.
+- **Facts:** `unmapped_markets` counts unknown IDs but does not prove a market
+  is absent from a book.
+- **Steps:**
+  1. For every book/mode, record which of the 9 market types appear in the
+     captured payloads.
+  2. A type that never appears gets a `market_absence` claim with the capture
+     dates and payload hashes.
+  3. A type that appears but cannot be classified is `quarantined` and counted
+     in coverage; it is never silently dropped.
+  4. `GET /api/mapping/coverage` reports both.
+- **Tests:** absence claim requires ≥2 captures; a single capture is
+  insufficient; a quarantined row is counted.
+- **Verify:** `pytest tests/test_market_coverage.py -q`; S1.
+- **Done when:** `market_rows_unmapped=0` on the replay corpus, with absence
+  claims for the rows that do not exist.
 - **Log:** —
 
 ---
 
-### M2 — Make every shown surebet placeable (done 2026-10-20)
+### Wave 3 — New book onboarding
 
-- [x] Odds re-checked automatically when a slip opens; stale after 120 s (30 s live); the slip plans from the re-checked prices.
-- [x] One click per leg: **Open ↗** plus the book's own spelling of the match copied for its search (no book except Mozzartbet has a public per-event page).
-- [x] Stakes rounded to whole KM by default; profit shown after rounding; warnings when rounding eats the edge or a stake is under 1 KM. Per-book maximums are still unknown.
-- [x] Placement order (longest odds first), **Mark placed** at the odds actually taken, remaining legs re-planned, red warning when it stops being an arbitrage.
-- [x] Gate evidence served: on each surebet (`evidence`, `listings`) and in `/api/debug/report`.
-
----
-
-### M3 — Record what was actually placed
-
-Background: today **Mark placed** in the bet slip (`markPlaced` in
-`frontend/js/app.js`) keeps the placed leg only in browser memory
-(`slipState[id].placed`). Nothing is stored, so there is no record of real
-profit. Surebet ids (`Surebet.id`) are random per scan, so they cannot identify
-an opportunity across scans; the journal stores a snapshot instead.
-
-#### M3-1 · Bet journal
+#### A3-1 · Synthetic new-book onboarding test
 
 - [ ] **Status:** TODO
 - **Needs:** offline.
-- **Depends on:** nothing.
-- **Files:** `models/schemas.py`, new `server/journal.py`, `server/api.py`
-  (include routes), `server/app.py` (load on start-up), `frontend/js/app.js`,
-  `frontend/index.html`, new `tests/test_journal.py`.
-- **Data model** (add to `models/schemas.py`):
-  ```python
-  class JournalLeg(BaseModel):
-      bookmaker: str
-      outcome_label: str
-      odds_shown: float
-      odds_taken: float
-      stake: float
-      placed_at: datetime          # naive UTC
-      outcome: Literal["pending", "won", "lost", "void"] = "pending"
-
-  class JournalEntry(BaseModel):
-      id: str                      # uuid4 hex, server-generated
-      surebet_id: str              # the scan's Surebet.id, for reference only
-      mode: Literal["prematch", "live"]
-      home_team: str
-      away_team: str
-      league: str = ""
-      kickoff: datetime | None = None
-      market_type: MarketType
-      profit_percent_shown: float
-      created_at: datetime         # naive UTC
-      legs: list[JournalLeg] = []
-      settled_at: datetime | None = None
-      profit: float | None = None  # set on settle
-  ```
-- **Storage:** `cache/bet_journal.json`, a JSON list of entries, written with
-  `server.api._atomic_write_json` (import it; do not copy it). Load on start-up
-  in `server/app.py:_restore_state`. A missing or unreadable file means an empty
-  journal; log a warning for unreadable, never crash.
-- **Endpoints** (in `server/journal.py` as an `APIRouter`, included from
-  `server/api.py` under the same `/api` prefix; every one uses
-  `Depends(_require_api_key)`):
-  - `POST /api/journal/legs` — body
-    `{surebet_id, mode, surebet: <the surebet object as shown>, leg: {bookmaker, outcome_label, odds_shown, odds_taken, stake}}`.
-    Finds an open entry (`settled_at is None`) with the same `surebet_id` and
-    `mode`, or creates one from `surebet`. Appends the leg with
-    `placed_at = now`. If a leg with the same `outcome_label` exists, replace it.
-    Returns the entry.
-  - `DELETE /api/journal/{entry_id}/legs/{outcome_label}` — removes a leg from an
-    open entry; deletes the entry when it has no legs left. 404 if not found,
-    409 if settled.
-  - `POST /api/journal/{entry_id}/settle` — body
-    `{outcomes: {outcome_label: "won" | "lost" | "void"}}` with a value for
-    every leg. Sets each leg's `outcome`, `settled_at = now` and
-    `profit = Σ(won: stake × odds_taken) + Σ(void: stake) − Σ(all stakes)`,
-    rounded to 2 decimals. 400 if a leg is missing from `outcomes`.
-  - `GET /api/journal` — `{entries: [...newest first], totals: {staked, profit,
-    settled_count, open_count}}`; totals count settled entries only for
-    `staked` and `profit`.
-- **Frontend:**
-  1. In `markPlaced`, after updating `state.placed`, `fetch` `POST
-     /api/journal/legs` with the leg (`odds_shown` = the slip's planned odds for
-     that leg, `odds_taken` = the typed odds, `stake` = `leg.plannedStake`). Use
-     the same headers helper the Review actions use (`candidateActionHeaders()`).
-     On failure show `showToast('Not saved to the journal: ...')`; keep the slip
-     state either way.
-  2. In `unmarkPlaced`, call the DELETE endpoint for the open entry (keep the
-     returned `entry.id` in `slipState[id].journalId`).
-  3. Add a **Placed bets** section to the History tab in `frontend/index.html`:
-     a table with date, match, market, legs (book @ odds taken, stake), profit
-     (or a **Settle** button). **Settle** opens a small form with a
-     won/lost/void select per leg and posts to the settle endpoint. Show the
-     totals line above the table. Escape every value with `escapeHtml`.
-- **Tests** (`tests/test_journal.py`, FastAPI `TestClient`, journal path
-  monkeypatched to `tmp_path`): create with one leg; second leg appends to the
-  same entry; same label replaces; delete last leg removes entry; settle 1X2
-  with legs 1 @ 2.10 / 40, X @ 3.60 / 25, 2 @ 4.00 / 35 and outcomes X won →
-  profit = 25×3.60 − 100 = −10.00; settle with a void leg refunds its stake;
-  settle missing a leg → 400; settle twice → 409; reload from file gives the
-  same entries; with `API_KEY` set, a call without the header → 401.
-- **Verify:** §5 S1; then start the server (§5 S2 steps 1–2 only), open the
-  dashboard, mark a leg placed on any surebet (or POST one with curl), and check
-  `cache/bet_journal.json` contains it.
-- **Done when:** a settled entry shows its profit in the History tab and in
-  `GET /api/journal` totals, and S1 is green.
-- **Log:** —
-
-#### M3-2 · Slippage and limit stats per book
-
-- [ ] **Status:** TODO
-- **Needs:** offline.
-- **Depends on:** M3-1.
-- **Files:** `models/schemas.py` (`JournalLeg`), `server/journal.py`,
-  `frontend/js/app.js`, `tests/test_journal.py`.
+- **Depends on:** A2-6, A1-6.
+- **Files:** new `tests/fixtures/new_book/` (synthetic payloads),
+  `tests/test_new_book_onboarding.py`, `docs/BOOK_ADAPTER.md`.
+- **Facts:** The contract is "a new book needs zero hand-written mappings".
+  Today a new book needs a scraper, registry rows and captured fixtures.
 - **Steps:**
-  1. Add to `JournalLeg`: `stake_requested: float | None = None` and
-     `limited: bool = False`. In the slip's leg row add an optional
-     "Book limited my stake" checkbox; when ticked, send `limited: true` and
-     `stake_requested` = the planned stake, with `stake` = the amount actually
-     accepted (a second number input shown only when the box is ticked).
-  2. Add `GET /api/journal/stats` returning, per bookmaker:
-     `legs`, `moved` (count where `odds_taken < odds_shown − 0.005`),
-     `moved_rate` (`moved / legs`, 3 decimals), `avg_drop_percent`
-     (mean of `(odds_shown − odds_taken) / odds_shown × 100` over moved legs, 2
-     decimals, `null` when none), `limited`, `limited_rate`.
-  3. In the bet slip, next to each leg's bookmaker name, show a warning badge
-     "moves often" when that book has `legs ≥ 5` and `moved_rate ≥ 0.30`, and
-     "limits" when `limited ≥ 1`. Fetch stats once on load and after every
-     journal write. Do not change the surebet list's sort order.
-- **Tests:** stats on a hand-built journal of 6 legs at one book, 2 moved, 1
-  limited → exact numbers above; badges thresholds in a frontend test if the
-  repo's `tests/test_frontend_*.py` pattern (Node runs app.js functions) makes
-  it practical.
-- **Done when:** `/api/journal/stats` returns the numbers and the badges show.
-- **Log:** —
-
-#### M3-3 · Bankroll per book
-
-- [ ] **Status:** TODO
-- **Needs:** offline.
-- **Depends on:** M3-1 (shares `server/journal.py` patterns), not its data.
-- **Files:** `server/journal.py` (or new `server/bankroll.py`), `server/app.py`,
-  `frontend/js/app.js`, `frontend/index.html`, `tests/test_bankroll.py`.
-- **Steps:**
-  1. Store `{bookmaker: balance_km}` in `cache/bankroll.json` (atomic write, load
-     on start-up). `GET /api/bankroll` returns it; `PUT /api/bankroll` replaces it
-     (body: the map; reject unknown bookmaker ids and negative numbers with 400).
-     Both require the API key.
-  2. In Settings (gear), add one number input per enabled bookmaker, saved with
-     PUT on change.
-  3. In the bet slip, for each leg whose planned stake exceeds that book's
-     balance, show a red line "Balance at {book} is {x} KM; this leg needs {y}
-     KM". In the surebet list, mark such surebets with a "balance" badge. A book
-     with no balance entered is not flagged.
-  4. Balances are never changed automatically.
-- **Tests:** PUT/GET round trip; unknown book → 400; negative → 400; reload
-  from file.
-- **Done when:** a surebet whose stake exceeds a set balance is flagged in the
-  list and the slip.
+  1. Build a synthetic book `syntheticbook` with unseen team names, league
+     names and market keys, plus odds consistent with an existing book on the
+     same fixtures.
+  2. Feed it through the adapter → learner → gate → price path in a test.
+  3. Assert: no edit to `config/team_mappings.json`,
+     `config/league_mappings.json`, `config/bookmaker_markets.json` or
+     `config/team_alias_allowlist.json`; the book's fixtures group with the
+     existing books; its markets map; a surebet is priced.
+  4. Add a second variant with a deliberately ambiguous name and assert it is
+     quarantined, not merged.
+- **Verify:** `pytest tests/test_new_book_onboarding.py -q`; S1.
+- **Done when:** the synthetic book works with zero config edits and the
+  ambiguous variant is safe.
 - **Log:** —
 
 ---
 
-### M4 — Run it unattended
+### Wave 4 — Remove the human path
 
-#### M4-1 · Scheduled scans
-
-- [ ] **Status:** TODO
-- **Needs:** offline; then a 24-hour run on a machine with network.
-- **Depends on:** nothing (M4-3 first if the server will be reachable from other
-  machines).
-- **Files:** `config/settings.py`, `server/api.py`, new `server/scheduler.py`,
-  `server/app.py` (lifespan), `.env.example`, `README.md` (*Configuration*),
-  new `tests/test_scheduler.py`.
-- **Settings** (env, in `config/settings.py`):
-  `AUTO_SCAN_PREMATCH_MINUTES` (int, default `0` = off),
-  `AUTO_SCAN_LIVE_MINUTES` (int, default `0` = off),
-  `BOOK_BACKOFF_AFTER_FAILURES` (int, default `3`),
-  `BOOK_BACKOFF_MAX_MINUTES` (int, default `60`).
-- **Steps:**
-  1. In `server/api.py`, extract the body of `trigger_scan` after the rate limit
-     into `async def start_scan_if_idle(mode: str) -> bool` (returns False when
-     the mode lock is held or a scan is running, else marks
-     `status.is_scanning = True` and returns True). `trigger_scan` calls it and
-     then `background_tasks.add_task(run_scan, mode)` as before. Behaviour of the
-     endpoint must not change.
-  2. `server/scheduler.py`: `async def scan_loop(mode: str, minutes: int)` —
-     forever: `await asyncio.sleep(minutes * 60)`; if
-     `await start_scan_if_idle(mode)`: `await run_scan(mode)`. Catch and log every
-     exception inside the loop; never let it end except on cancel.
-  3. In `server/app.py` lifespan: after `_restore_state()`, for each mode with
-     minutes > 0 create a task with `asyncio.create_task`; on shutdown cancel
-     them and await them with `contextlib.suppress(asyncio.CancelledError)`.
-  4. Per-book back-off in `run_scan.scrape_one`: keep
-     `_book_failures: dict[tuple[str, str], int]` (key: mode, book) and
-     `_book_skip_until: dict[tuple[str, str], datetime]`. A scrape that raises or
-     returns 0 matches while other books returned some increments the counter;
-     a scrape with > 0 matches resets it. When the counter reaches
-     `BOOK_BACKOFF_AFTER_FAILURES`, set skip-until to now +
-     `min(2 ** (failures − BOOK_BACKOFF_AFTER_FAILURES) × interval, BOOK_BACKOFF_MAX_MINUTES)`
-     minutes (interval = that mode's auto-scan minutes, or 5 when 0). While
-     skipped, mark the book `"skipped"` in `bookmaker_progress` and append
-     "{name}: backing off until HH:MM UTC" to `status.errors`. **Back-off
-     applies only to scheduled scans**; a manual `POST /api/scan` scrapes every
-     enabled book (pass a flag `scheduled: bool = False` into `run_scan`).
-  5. Add to `GET /api/health`: `"scheduler": {"prematch_minutes": ...,
-     "live_minutes": ..., "backoff": {"<mode>/<book>": {"failures": n,
-     "skip_until": iso or null}}}`.
-  6. Document the four settings in `.env.example` and README *Configuration*.
-- **Tests:** `start_scan_if_idle` returns False while the lock is held; the loop
-  calls `run_scan` (monkeypatched) once per tick with `minutes` patched to a tiny
-  sleep; back-off counter increments, skips, resets, and caps at the max; a
-  manual scan ignores back-off.
-- **24-hour run:** set `AUTO_SCAN_PREMATCH_MINUTES=10`,
-  `AUTO_SCAN_LIVE_MINUTES=3`, start `python main.py`, and every 2–4 hours log:
-  `GET /api/health` (`prematch.last_scan_age_sec`, `live.last_scan_age_sec`,
-  `scheduler.backoff`), the server's memory (Windows:
-  `Get-Process python | Select-Object Id,WS`; Linux: `ps -o rss= -p <pid>`), and
-  the count of `chrome`/`chromium` processes. Memory must not grow by more than
-  50 % between hour 2 and hour 24; browser processes must return to 0 between
-  scans.
-- **Done when:** tests pass and the 24-hour log meets the limits above.
-- **Log:** —
-
-#### M4-2 · Telegram notifications
-
-- [ ] **Status:** TODO
-- **Needs:** offline; a Telegram bot token and chat id from the operator for the
-  final check.
-- **Depends on:** M4-1.
-- **Files:** `config/settings.py`, new `server/notify.py`, `server/api.py`
-  (`run_scan`, `verify_surebet`), `frontend/js/app.js`, `.env.example`, `README.md`,
-  new `tests/test_notify.py`.
-- **Settings:** `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` (both empty = off),
-  `NOTIFY_MIN_PROFIT_PERCENT` (float, default `MIN_PROFIT_PERCENT`),
-  `PUBLIC_BASE_URL` (default `http://localhost:{PORT}`).
-- **Steps:**
-  1. Extract the body of `verify_surebet` (`POST /api/verify`) into
-     `async def reverify(surebet: dict, mode: str) -> dict` returning the same
-     payload; the endpoint calls it. Behaviour must not change
-     (`tests/test_verify_surebet.py` must pass untouched).
-  2. Signature of a surebet: `f"{mode}|{market_type}|{home_team}|{away_team}|{kickoff}|"`
-     + `",".join(sorted(f"{s.bookmaker}:{s.outcome_label}" for s in stakes))`.
-  3. `server/notify.py`: `async def notify_new_surebets(mode, surebets)`. Skip
-     if token or chat id is empty. For each surebet with `profit_percent ≥
-     NOTIFY_MIN_PROFIT_PERCENT` whose signature is not in
-     `cache/notified.json` (signature → ISO time, entries older than 6 h
-     dropped on load): call `reverify`; send only if `still_profitable` and
-     `meets_min_profit` are both true. Send with
-     `httpx.AsyncClient().post(f"https://api.telegram.org/bot{token}/sendMessage",
-     json={"chat_id": chat_id, "text": text, "disable_web_page_preview": True})`,
-     timeout 10 s. Store the signature only after a 200 response. Never raise
-     out of this function; log failures.
-  4. Text: `"{profit:.2f}% {home} – {away}\n{league}, {kickoff UTC}\n{market}\n"`
-     + one line per leg `"{book}: {label} @ {odds}"` + `"\nRe-checked margin:
-     {margin}\n{PUBLIC_BASE_URL}/#surebet={id}"`.
-  5. Call it at the end of a successful `run_scan` as
-     `asyncio.create_task(notify_new_surebets(mode, surebets))` so a slow
-     Telegram call never delays the scan.
-  6. In `frontend/js/app.js`, on load and on `hashchange`: if `location.hash`
-     starts with `#surebet=`, switch to the right mode if needed, and select that
-     surebet once results are loaded (if the id no longer exists, show a toast
-     "That surebet is gone; showing the latest results").
-- **Tests:** no send when off; dedup across two calls; no send when `reverify`
-  says not profitable; signature stored only on 200 (mock httpx with
-  `httpx.MockTransport`); expired signatures dropped.
-- **Final check (needs operator's token):** run one scan with the env set; a
-  message must arrive for each qualifying surebet, and a second scan must not
-  repeat it.
-- **Done when:** tests pass and the final check is logged (or the Log says the
-  token was not available).
-- **Log:** —
-
-#### M4-3 · Security hardening (re-apply the stash)
+#### A4-1 · Delete approval endpoints and Review actions
 
 - [ ] **Status:** TODO
 - **Needs:** offline.
-- **Depends on:** nothing. Must be done before the server is reachable from any
-  other machine.
-- **Files:** `config/settings.py`, `main.py`, `server/api.py`, `server/app.py`,
-  `frontend/js/app.js`, `.env.example`, `README.md`, tests as needed.
-- **Facts:** `git stash list` shows `stash@{0}: On production-hardening: paused:
-  security hardening (CSRF guard, same-origin CORS, API key on all endpoints +
-  dashboard, XSS escaping, loopback default HOST)`. It was made against an older
-  `frontend/js/app.js` and will conflict. Its contents: `HOST` default
-  `127.0.0.1`; `CORS_ORIGINS` env (empty = same-origin only, replacing
-  `allow_origins=["*"]`); `API_KEY` required on every `/api` route except
-  `/api/health`; a CSRF guard in `server/app.py`; frontend `apiFetch()` that
-  sends `X-API-Key` from `sessionStorage` and prompts once on 401; `safeUrl()`
-  for every rendered `href`; `escapeHtml` on bookmaker names in chips.
+- **Depends on:** A1-6, A3-1.
+- **Files:** `server/api.py`, `frontend/js/app.js`, `frontend/index.html`,
+  `tests/test_candidates_api.py`, `tests/test_frontend_review.py`.
+- **Facts:** `approve_candidate`, `approve_candidates_bulk` and
+  `reject_candidate` are the only routes that write trust. The Review tab has
+  "Select strong" and "Approve selected".
 - **Steps:**
-  1. `git stash show -p "stash@{0}" > <scratch>/security.patch` and read all of
-     it.
-  2. `git apply --3way <scratch>/security.patch`. Resolve every conflict by
-     keeping the current code's features and adding the stash's behaviour. In
-     `frontend/js/app.js`, every `fetch('/api/...')` must go through `apiFetch`
-     (including the new journal/bankroll calls if M3 is done).
-  3. Where the stash's `LOG_LEVEL` line duplicates the current one, keep the
-     current one.
-  4. Update `.env.example` (`HOST=127.0.0.1`, `CORS_ORIGINS`, `API_KEY` comment)
-     and README *Configuration* to match.
-  5. Add tests: with `API_KEY` set, `GET /api/results` without the header → 401
-     and with it → 200; `GET /api/health` without it → 200; a cross-origin
-     `POST /api/scan` with an `Origin` header that is not the server's own →
-     refused by the CSRF guard; `HOST` default is `127.0.0.1` (import settings
-     with the env var unset via `monkeypatch.delenv` + `importlib.reload`).
-  6. Do **not** `git stash drop`. Write in the Log that the operator can drop it.
-- **Verify:** §5 S1, then start the server and confirm the dashboard loads and a
-  scan starts with `API_KEY` unset and with it set (the prompt appears once).
-- **Done when:** S1 green and both manual checks pass.
+  1. Remove the three write routes and `_approve`, `_save_allowlist`,
+     `_load_allowlist` if unused. Keep `GET /api/candidates` as read-only
+     diagnostics if it is still useful.
+  2. Remove the Review action buttons and their handlers; keep the evidence
+     display under Diagnostics.
+  3. Update tests: the routes return 404/405; no route writes
+     `team_alias_allowlist.json`; the dashboard has no approval button.
+  4. Keep the API-key behavior for the remaining routes.
+- **Verify:** `pytest tests/test_candidates_api.py tests/test_frontend_review.py
+  -q`; `grep -rn "approve" server frontend` shows only read-only text; S1.
+- **Done when:** no endpoint or UI action changes trust.
 - **Log:** —
 
-#### M4-4 · Deployment
+#### A4-2 · Read-only Diagnostics tab
 
 - [ ] **Status:** TODO
-- **Needs:** offline to write; docker to verify.
-- **Depends on:** M4-1, M4-3.
-- **Files:** new `Dockerfile`, new `docker-compose.yml`, new `.dockerignore`,
-  `README.md` (new section *Running persistently*).
+- **Needs:** offline.
+- **Depends on:** A4-1, A1-7.
+- **Files:** `frontend/index.html`, `frontend/js/app.js`,
+  `tests/test_frontend_empty_state.py`.
+- **Steps:** rename Review to Diagnostics; show coverage, quarantined claims,
+  rejected claims and their evidence; no buttons that write. Add an empty state
+  that explains the ledger is learning.
+- **Verify:** frontend tests; manual load; S1.
+- **Done when:** the tab is read-only and renders the coverage JSON.
+- **Log:** —
+
+#### A4-3 · Remove human files from runtime and docs
+
+- [ ] **Status:** TODO
+- **Needs:** offline.
+- **Depends on:** A4-2.
+- **Files:** `engine/matcher.py`, `engine/certainty.py`, `README.md`,
+  `docs/HANDOFF.md`, `config/team_alias_reviewed.json` (legacy, read-only),
+  `config/team_alias_allowlist.json` (generated, not hand-edited),
+  `tests/test_readme_claims.py`.
 - **Steps:**
-  1. `Dockerfile`: `FROM mcr.microsoft.com/playwright/python:v1.61.0-jammy` (the
-     tag must match `playwright==` in `requirements.txt`; if you change one,
-     change both). `WORKDIR /app`, copy `requirements.txt`, `pip install
-     --no-cache-dir -r requirements.txt`, copy the repo, `ENV HOST=0.0.0.0
-     PORT=8000 HEADLESS=true`, `EXPOSE 8000`, `CMD ["python", "main.py"]`.
-  2. `.dockerignore`: `.git`, `.venv`, `venv`, `cache/*.json`, `__pycache__`,
-     `.claude`, `tests/fixtures`.
-  3. `docker-compose.yml`: one service `scanner`, `build: .`,
-     `restart: unless-stopped`, `env_file: .env`, `ports: ["127.0.0.1:8000:8000"]`,
-     `volumes: ["./cache:/app/cache"]`, a `healthcheck` that runs
-     `python -c "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/api/health')"`
-     every 60 s, and `logging: {driver: json-file, options: {max-size: "10m",
-     max-file: "5"}}`.
-  4. README *Running persistently*: build/run commands, that `API_KEY` must be set
-     before changing the port binding away from `127.0.0.1`, where logs and
-     `cache/` live, how to update (`git pull && docker compose up -d --build`).
-- **Verify:** `docker compose up -d --build`; `curl http://127.0.0.1:8000/api/health`
-  returns `"status": "ok"`; trigger a prematch scan and confirm at least 5 books
-  return matches (`/api/health` → `prematch.per_bookie`); `docker compose restart`
-  and confirm the cached results come back (within the 30-minute cache TTL).
-- **Done when:** the verify steps pass and are logged.
+  1. Remove the `reviewed_aliases` parameter from the default gate path and
+     the reviewed-file loader from the matcher; keep a deprecated shim only if
+     a test needs it.
+  2. Mark both JSON files as legacy in their `_about`/comment fields; the
+     allowlist is written only by the generator, the reviewed file is never
+     written.
+  3. Update README's "Match & mapping certainty" and "Review" sections to the
+     ledger model; update `tests/test_readme_claims.py` to the new vocabulary.
+  4. Append a dated resolution note to `docs/HANDOFF.md` §2.5.
+- **Verify:** `grep -rn "reviewed_aliases\|team_alias_reviewed" engine server`
+  shows only the legacy migration; S1.
+- **Done when:** no runtime trust path reads a human file.
 - **Log:** —
 
 ---
 
-### M5 — Grow the yield (do not start)
+### Wave 5 — Cold start and convergence
 
-Start none of these until M3-1 has at least 20 settled entries with a positive
-total profit. Each needs its own card written first, in the same format as above.
+#### A5-1 · Cold-start replay and fixed point
 
-- Asian handicap and first-half markets (`EXPERIMENTAL_MARKETS` in
-  `config/settings.py`): need captured fixtures for every book that offers them,
-  plus a `price_check.py` run with 0 outliers.
-- EVLBet: re-enable only with a captured payload (its feed returned no football
-  events for every request tried).
-- New bookmakers (MaxBet, Meridianbet): each needs a scraper, registry entries,
-  captured fixtures, a deep-link declaration and a price check. MaxBet was done
-  on 2026-10-27 at the operator's request; its price check and link proof
-  (`scripts/verify_deeplinks.py maxbet`) are still open.
-- Live surebets as their own view: only if the M3-2 stats show live legs can be
-  placed before the odds move.
+- [ ] **Status:** TODO
+- **Needs:** offline.
+- **Depends on:** A4-3.
+- **Files:** `scripts/replay_mappings.py`, `tests/test_replay.py`,
+  `tests/fixtures/replay/`.
+- **Steps:**
+  1. `--cold` starts with an empty generated evidence directory and runs the
+     learner + pipeline repeatedly until a pass adds no claim and changes no
+     verdict (cap the iterations; report the cap).
+  2. Assert the cold run's accepted claims are a subset of the seeded run's,
+     and its `false_merges=0`.
+  3. Record iterations, runtime and the claims that only the seeded run has;
+     each is a finding for A5-2.
+- **Verify:** `python scripts/replay_mappings.py --cold --check`;
+  `pytest tests/test_replay.py -q`; S1.
+- **Done when:** the cold run reaches a fixed point with zero false merges.
+- **Log:** —
+
+#### A5-2 · False-merge and coverage gap fixes
+
+- [ ] **Status:** TODO
+- **Needs:** offline.
+- **Depends on:** A5-1.
+- **Files:** whatever the gaps require; each fix gets its own Log entry.
+- **Steps:** take the largest gap from the replay report, write a failing test
+  that reproduces it, fix the policy or the parser, rerun the replay. Repeat
+  until `pairs_unresolved=0` and `false_merges=0`. Do not lower a threshold.
+- **Verify:** replay `--check`; S1.
+- **Done when:** the acceptance metrics in §3 pass on the frozen corpus.
+- **Log:** —
+
+#### A5-3 · Learner performance and scan budget
+
+- [ ] **Status:** TODO
+- **Needs:** offline.
+- **Depends on:** A5-2.
+- **Files:** `engine/mapping_learner.py`, `engine/matcher.py`,
+  `tests/test_replay.py`.
+- **Steps:** bucket pair discovery by kickoff and league; avoid O(n²) over all
+  matches; cache claim indexes; measure the replay runtime before/after and
+  keep it inside the existing scan budget (prematch ~3 min). Add a regression
+  test with a synthetic 10k-match corpus that asserts a time bound generous
+  enough to avoid flakiness.
+- **Verify:** replay runtime logged; S1.
+- **Done when:** the learner does not dominate the scan.
+- **Log:** —
 
 ---
 
-### Housekeeping
+### Wave 6 — Real acceptance
 
-#### H-1 · Delete the unused `orientation_unresolved` reason
+#### A6-1 · Real prematch scan, all publishing books
+
+- [ ] **Status:** TODO
+- **Needs:** network, browser; real fixtures.
+- **Depends on:** A5-3.
+- **Files:** none unless a scraper bug is found.
+- **Steps:** S2 with `mode=prematch` at a time with real fixtures; record
+  `per_bookie`, `match_groups`, `group_statuses`, `surebets_count`,
+  `unmapped_markets`; run `GET /api/mapping/coverage`; run
+  `scripts/price_check.py` and record comparisons/outliers. A book with 0
+  matches gets a card or a blocked note with the evidence.
+- **Verify:** the counts and S1.
+- **Done when:** every configured book that publishes football returns > 0
+  matches and the coverage endpoint shows no unmapped published market.
+- **Log:** —
+
+#### A6-2 · EVLBet and Betole: capture or prove absence
+
+- [ ] **Status:** TODO
+- **Needs:** network.
+- **Depends on:** A6-1.
+- **Files:** `scrapers/evlbet.py`, `scrapers/betole.py`,
+  `config/generated/mapping_evidence.json`, `config/settings.py`,
+  `tests/test_new_bookmakers.py`.
+- **Facts:** EVLBet's offer API returns no football events for every variant
+  tried; Betole is disabled.
+- **Steps:** capture each book's football feed with the same request variants;
+  if football appears, onboard it through A3-1; if not, write a dated
+  `book_absence` claim with the captures and keep the book disabled with an
+  automatic recheck date. Never enable a book that has no proven feed.
+- **Verify:** capture hashes and counts; S1.
+- **Done when:** each book is either working or has a dated absence proof and a
+  recheck date.
+- **Log:** —
+
+#### A6-3 · Prove MaxBet links
+
+- [ ] **Status:** TODO
+- **Needs:** browser; network.
+- **Depends on:** A6-1.
+- **Files:** `cache/deep_link_verifications.json` (generated),
+  `config/bookmaker_deeplinks.json` (note only if a route changed).
+- **Steps:** run `scripts/verify_deeplinks.py maxbet --limit 20` in a loop
+  until `remaining: 0`; record the verdicts. Do not flip
+  `supports_event_id` without a dated browser check.
+- **Verify:** the store has proofs for the sampled events; a scan's MaxBet
+  groups verify.
+- **Done when:** MaxBet's declared route is proven or its groups stay
+  unverified with a recorded reason.
+- **Log:** —
+
+#### A6-4 · Final acceptance record
+
+- [ ] **Status:** TODO
+- **Needs:** offline; network for check 5.
+- **Depends on:** A6-1, A6-2, A6-3.
+- **Files:** `PLAN.md` (this card), a new `docs/ACCEPTANCE.md`.
+- **Steps:** run the seven acceptance checks in §3 on one date; paste the
+  commands and output summaries into `docs/ACCEPTANCE.md`; state any check that
+  is not met and why. Tick this card only when all seven pass.
+- **Verify:** the seven checks.
+- **Done when:** `docs/ACCEPTANCE.md` is complete and S1 is green.
+- **Log:** —
+
+---
+
+### Wave 7 — Deferred and operational improvements
+
+#### A7-1 · In-play autonomy (deferred)
+
+- [ ] **Status:** DEFERRED by operator 2026-11-03. Not part of acceptance.
+- **Needs:** network, browser, live games.
+- **Depends on:** A6-4.
+- **Facts:** Mozzartbet live returns no matches; NSoft live 1X2/BTTS/DC settle
+  from the current score; the old plan's M0-3 is blocked on a score field.
+- **Steps:** write a new card when in-play work starts; do not implement from
+  this paragraph. Keep the live pipeline from regressing in the meantime.
+- **Log:** —
+
+#### A7-2 · Scheduler, back-off and notifications
+
+- [ ] **Status:** TODO
+- **Needs:** offline; a 24 h run for the final check.
+- **Depends on:** A6-4.
+- **Files:** `config/settings.py`, `server/scheduler.py`, `server/notify.py`,
+  `server/app.py`, `server/api.py`, `frontend/js/app.js`, tests.
+- **Facts:** The old plan's M4-1/M4-2 cards are still valid; they are
+  operational, not mapping work.
+- **Steps:** implement scheduled scans with per-book back-off; then Telegram
+  notifications with dedup and re-verification. Keep manual scans unaffected
+  by back-off.
+- **Verify:** the old cards' tests; a 24 h run for M4-1; a token check for
+  M4-2.
+- **Done when:** the old M4-1/M4-2 done conditions are met.
+- **Log:** —
+
+#### A7-3 · Re-apply security hardening
 
 - [ ] **Status:** TODO
 - **Needs:** offline.
-- **Depends on:** nothing.
-- **Decision (made, do not reopen):** delete it. The gate never emits it; the
-  case it was meant for is already reported as `team_unresolved`, and
-  `docs/HANDOFF.md` §5.6's alternative (emit it) would turn soft refusals into
-  hard rejects.
-- **Files and exact edits:**
-  1. `engine/certainty.py`: `HARD_REJECT_REASONS = frozenset({"league_mismatch",
-     "category_mismatch"})`.
-  2. `frontend/js/app.js`: delete the `orientation_unresolved: ...` line from
-     `REASON_LABELS`.
-  3. `tests/test_frontend_review.py`: delete `"orientation_unresolved",` from
-     `KNOWN_REASON_CODES`.
-  4. `tests/test_certainty.py`: the assertion
-     `assert "orientation_unresolved" not in observed` may stay (still true).
-  5. `tests/test_readme_claims.py`: delete the whole function
-     `test_dead_hard_reject_vocabulary_is_documented_as_dead` (it asserts the
-     dead reason exists). Leave
-     `test_vocabulary_check_fails_on_an_invented_and_on_a_dropped_reason` as it
-     is: substituting `` `orientation_unresolved` `` still proves the check
-     catches an invented reason.
-  6. `README.md`, section *Match & mapping certainty*: replace the text from
-     "One wrinkle worth knowing:" through "treat `rejected` as the two reasons
-     above." with exactly: "The hard-reject reasons are the set
-     `HARD_REJECT_REASONS` in `engine/certainty.py`, cited by symbol rather than
-     line number, and the gate emits every reason in it." The README must keep
-     the token `HARD_REJECT_REASONS` in this section and must not cite
-     `engine/certainty.py:<line>`: two other tests in
-     `tests/test_readme_claims.py` check both.
-  7. `docs/HANDOFF.md` §5 item 6: append "**Resolved 2026-MM-DD: deleted.**"
-- **Verify:** `grep -rn orientation_unresolved engine frontend README.md` returns
-  nothing; §5 S1.
-- **Done when:** S1 green.
+- **Depends on:** A6-4.
+- **Files:** as the old M4-3 card lists.
+- **Facts:** `git stash list` has `stash@{0}: paused: security hardening ...`.
+- **Steps:** apply the stash with `--3way`, resolve conflicts keeping current
+  features, route every frontend `fetch` through `apiFetch`, add the auth/CSRF
+  tests, update `.env.example` and README. Do not drop the stash.
+- **Verify:** the old card's tests; S1.
+- **Done when:** the hardening is applied and the operator can drop the stash.
 - **Log:** —
 
-#### H-2 · Reload `config/bookmaker_deeplinks.json` without a restart
+#### A7-4 · Documentation and claim tests
 
 - [ ] **Status:** TODO
 - **Needs:** offline.
-- **Depends on:** nothing.
-- **Files:** `scrapers/common.py` (`_load_deeplink_config`), `tests/conftest.py`,
-  `server/api.py` (comment in `health`), `README.md` (paragraph under *Run* about
-  `deep_link_declarations`), `tests/test_deeplinks.py`.
-- **Steps:**
-  1. Add a module global `_deeplink_cache_mtime: float | None = None`.
-  2. In `_load_deeplink_config`: read `mtime = os.path.getmtime(path)` (on
-     `OSError`, `mtime = None`). Reload when `_deeplink_cache is None`, or when
-     `_deeplink_cache_mtime is not None and mtime != _deeplink_cache_mtime`. After
-     a reload, set `_deeplink_cache_mtime = mtime`. A file that fails to parse
-     yields `{}` (unchanged fail-safe: every book then blocks) and logs a
-     warning.
-  3. `tests/conftest.py`: wherever `_deeplink_cache` is reset or monkeypatched,
-     also set `_deeplink_cache_mtime` to `None`, so a test's injected
-     declarations are never replaced by the file.
-  4. Update the `health` comment and the README paragraph: the map is re-read
-     when the file's modification time changes; no restart needed.
-- **Tests** (`tests/test_deeplinks.py`): point `_DEEPLINK_CONFIG_PATH` at a
-  `tmp_path` file; load; rewrite the file with a different `supports_event_id`
-  and a later mtime (`os.utime`); the next call returns the new value; a
-  monkeypatched cache with `_deeplink_cache_mtime = None` is not replaced.
-- **Verify:** §5 S1. Also update the sentence in `docs/HANDOFF.md` §5 item 8
-  that says editing a declaration "needs a process restart" (append
-  "**Fixed YYYY-MM-DD: re-read on file change.**").
-- **Done when:** S1 green.
-- **Log:** —
-
-#### H-3 · Re-check the `supports_event_id: false` notes
-
-- [ ] **Status:** TODO (repeat every 3 months; next due 2027-01-20)
-- **Needs:** browser, human judgement.
-- **Files:** `config/bookmaker_deeplinks.json` (`note` fields only, unless a book
-  gained a route).
-- **Steps:** for each of the 8 books declaring `supports_event_id: false`
-  (mdshop, admiralbet, wwin, mbet, sportplus, evlbet, premier_kladionica,
-  betole): open its football page, click into one match, and look at the
-  address bar. If the URL now contains an event id and reloading it opens the
-  same match, the book has gained a route: do not flip the flag; write it in the
-  Log and stop (it needs a code change and a link check, see
-  `scripts/verify_deeplinks.py`). Otherwise prefix the book's `note` with
-  `"<YYYY-MM-DD> re-checked: still no per-event route. "`.
-- **Verify:** §5 S1.
-- **Done when:** all 8 notes carry this round's date.
+- **Depends on:** A6-4.
+- **Files:** `README.md`, `MARKET_MAPPING.md`, `docs/BOOK_ADAPTER.md`,
+  `docs/ACCEPTANCE.md`, `tests/test_readme_claims.py`.
+- **Steps:** rewrite the mapping sections around the ledger, remove the Review
+  approval instructions, document the Diagnostics tab, the coverage endpoint
+  and the replay commands. Keep every claim test-backed.
+- **Verify:** `pytest tests/test_readme_claims.py -q`; S1.
+- **Done when:** the docs describe the shipped autonomy model and no longer
+  instruct a person to approve mappings.
 - **Log:** —
 
 ---
 
 ## 5. Working rules and procedures
 
-### Rules for every task
+### Rules for every card
 
-* **Python:** use the project virtualenv, `.venv`. Windows:
-  `.venv\Scripts\python.exe`; Linux/macOS: `.venv/bin/python`. If it does not
-  exist: `python -m venv .venv`, then `pip install -r requirements.txt -r
-  requirements-dev.txt` and `python -m playwright install chromium`.
-* **Scope:** change only the files the card lists. If you must touch another
-  file, say which and why in the Log.
-* **Comments and style:** match the surrounding code. Ruff line length is 100.
+* **Python:** use `.venv`. Linux/macOS: `.venv/bin/python`; Windows:
+  `.venv\Scripts\python.exe`. If missing, create it and install both
+  requirement files.
+* **Scope:** change only the files the card lists. If another file is needed,
+  say which and why in the Log.
+* **Comments and style:** match the surrounding code. Ruff line length 100.
   Every user-facing claim in `README.md` and this file is tested by
-  `tests/test_readme_claims.py`; when a test there fails after your change, fix
-  the document (or the test's expectation, if the card says the behaviour
-  changed), never the gate.
-* **Registry rule:** every new entry in `config/bookmaker_markets.json` needs a
-  captured payload under `tests/fixtures/markets/`, and `MARKET_MAPPING.md` must
-  be regenerated (`python scripts/generate_market_mapping_doc.py`).
+  `tests/test_readme_claims.py`; fix the document or the test's expectation,
+  never the gate.
+* **Registry rule:** every new market row needs a captured payload and a
+  provenance record; regenerate `MARKET_MAPPING.md`.
 * **Tests touch no network.** Use fakes, `httpx.MockTransport` or fixtures.
-* **Dates** in logs and notes: `YYYY-MM-DD`, times in UTC.
-* **Before betting anything** (operators, not agents): `POST /api/verify` on the
-  card and act only on `still_profitable` and `meets_min_profit` both true.
+* **Dates** in logs: `YYYY-MM-DD`, times UTC.
+* **No human-in-the-loop step may be added to a card.** If a card cannot be
+  completed without one, mark it `BLOCKED (needs operator decision)` and record
+  the evidence.
 
 ### S1 · Environment check (the four CI checks)
 
 ```bash
-python -m ruff check .
-python -m mypy .
-python scripts/generate_market_mapping_doc.py --check
-python -m pytest
+.venv/bin/python -m ruff check .
+.venv/bin/python -m mypy .
+.venv/bin/python scripts/generate_market_mapping_doc.py --check
+.venv/bin/python -m pytest
 ```
 
-All four must succeed (exit code 0). CI (`.github/workflows/ci.yml`) runs the
-same four; frontend tests also need Node 22 on the path.
+All four must exit 0. CI (`.github/workflows/ci.yml`) runs the same four;
+frontend tests also need Node 22 on the path.
 
 ### S2 · Run a scan and read its numbers
 
-1. Start the server in the background: `python main.py` (it listens on
-   `HOST`:`PORT`, default port 8000). Wait until
-   `curl http://127.0.0.1:8000/api/health` answers.
-2. If `API_KEY` is set in `.env`, add `-H "X-API-Key: <key>"` to every call below.
+1. Start the server: `.venv/bin/python main.py` (default port 8000). Wait for
+   `curl http://127.0.0.1:8000/api/health`.
+2. If `API_KEY` is set, add `-H "X-API-Key: <key>"` to every call.
 3. `curl -X POST "http://127.0.0.1:8000/api/scan?mode=prematch"` (or
-   `mode=live`). At most 3 scan requests per minute are accepted.
-4. Poll `curl "http://127.0.0.1:8000/api/status?mode=prematch"` every 15 s until
-   `"is_scanning": false`. A prematch scan takes about 3 minutes.
-5. Read and log: `GET /api/results?mode=...` (`total_matches`, `match_groups`,
-   `group_statuses`, `surebets_count`) and `GET /api/health`
-   (`<mode>.per_bookie`, `<mode>.errors`, `unmapped_markets`).
-6. The scan is saved to `cache/last_scan.json` (prematch) or
-   `cache/last_live_scan.json` (live); the offline scripts read those files.
-7. Stop the server when the task is done.
+   `mode=live`). At most 3 requests per minute.
+4. Poll `curl "http://127.0.0.1:8000/api/status?mode=prematch"` every 15 s
+   until `"is_scanning": false`.
+5. Read and log: `GET /api/results?mode=...`, `GET /api/health`,
+   `GET /api/mapping/coverage`.
+6. Stop the server when done.
 
 ### S3 · Re-capture market fixtures
 
-`python scripts/capture_market_fixtures.py --books <comma-separated ids>`
-rewrites `tests/fixtures/markets/<book>_<mode>.json`. Then run
-`python -m pytest tests/test_market_fixtures.py -q`. Never re-capture into
-`tests/fixtures/e2e_certified/`.
+`.venv/bin/python scripts/capture_market_fixtures.py --books <ids>` rewrites
+`tests/fixtures/markets/<book>_<mode>.json`. Then run
+`pytest tests/test_market_fixtures.py -q`. Never re-capture into
+`tests/fixtures/e2e_certified/` or `tests/fixtures/replay/`.
 
-### S4 · Prove Mozzartbet links
+### S4 · Prove deep links
 
-With the server running and a fresh scan in cache: repeat
-`curl -X POST "http://127.0.0.1:8000/api/verify-links?bookmaker=mozzartbet&limit=20"`
-every 31 s until the response has `"remaining": 0`. CLI alternative (no server):
-`python scripts/verify_deeplinks.py mozzartbet --limit 20 --offset <n>` with
-`n` = 0, 20, 40, … Verdicts are stored in `cache/deep_link_verifications.json`
-and used by the next scan.
+With the server running and a fresh scan in cache, repeat
+`curl -X POST "http://127.0.0.1:8000/api/verify-links?bookmaker=<id>&limit=20"`
+every 31 s until `"remaining": 0`. CLI alternative:
+`scripts/verify_deeplinks.py <book> --limit 20 --offset <n>`. Verdicts go to
+`cache/deep_link_verifications.json` and the next scan reads them.
 
 ### S5 · Record progress
 
-1. In the task card: change `- [ ]` to `- [x]`, set **Status** to
-   `DONE YYYY-MM-DD`, and replace `**Log:** —` with 1–5 lines: what changed,
-   the measured numbers, anything surprising.
-2. If the task is blocked, leave `- [ ]`, set **Status** to `BLOCKED (<reason>)`,
-   and log what you tried.
-3. Commit only the task's files plus `PLAN.md`, one commit per task, message
-   `<type>(<scope>): <summary>` (types used in this repo: `feat`, `fix`,
-   `docs`, `chore`, `test`), e.g. `fix(matcher): count NSoft books as one price
-   source`. Do not push.
+1. In the card: `- [x]`, **Status** `DONE YYYY-MM-DD`, and replace `**Log:** —`
+   with 1–5 lines: what changed, measured numbers, surprises.
+2. If blocked: leave `- [ ]`, **Status** `BLOCKED (<reason>)`, log what was
+   tried and what input would unlock it.
+3. Commit only the card's files plus `PLAN.md`, one commit per card, message
+   `<type>(<scope>): <summary>` (`feat`, `fix`, `docs`, `chore`, `test`). Do not
+   push.
+
+### S6 · Replay check
+
+```bash
+.venv/bin/python scripts/replay_mappings.py tests/fixtures/replay/<date> --check
+.venv/bin/python scripts/replay_mappings.py tests/fixtures/replay/<date> --cold --check
+```
+
+`--check` fails on `false_merges > 0`, `pairs_unresolved > 0`, or
+`market_rows_unmapped > 0` with no absence proof. Record both outputs in the
+card's Log.

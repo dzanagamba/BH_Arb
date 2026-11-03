@@ -12,6 +12,7 @@ KNOWN_REASON_CODES = frozenset(
         "kickoff_missing",
         "kickoff_delta",
         "category_mismatch",
+        "betradar_mismatch",
         "team_unresolved",
         "orientation_unresolved",
         "link_unverified",

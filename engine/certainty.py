@@ -22,6 +22,12 @@ from typing import Literal
 from rapidfuzz import fuzz
 
 from config.settings import VERIFIED_KICKOFF_WINDOW_MINUTES
+from engine.league_resolver import LeagueResolver
+from engine.mapping_evidence import (
+    MappingLedger,
+    league_equivalence_key,
+    team_alias_key,
+)
 from engine.normalizer import TeamNormalizer
 from models.schemas import Match, MatchEventStatus, MatchEvidence, MatchGroup
 from scrapers.common import declares_no_event_id, supports_event_id
@@ -35,7 +41,9 @@ _LETTER_FOLDS = str.maketrans({"đ": "dj", "ø": "o", "æ": "ae", "ß": "ss", "�
 # Evidence note (not a reason) on a league accepted by `_league_settled_by_teams`.
 LEAGUE_UNMAPPED_TEAMS_EXACT = "league_unmapped_teams_exact"
 
-HARD_REJECT_REASONS = frozenset({"league_mismatch", "category_mismatch", "orientation_unresolved"})
+HARD_REJECT_REASONS = frozenset(
+    {"league_mismatch", "category_mismatch", "betradar_mismatch", "orientation_unresolved"}
+)
 
 
 @dataclass
@@ -57,6 +65,7 @@ class CertaintyGate:
         alias_allowlist: set[str] | None = None,
         league_equivalences: set[tuple[str, str]] | None = None,
         reviewed_aliases: set[str] | None = None,
+        evidence: MappingLedger | None = None,
     ) -> None:
         self.normalizer = TeamNormalizer()
         self.kickoff_window_minutes = kickoff_window_minutes
@@ -65,8 +74,13 @@ class CertaintyGate:
         # Accepted without the allowlist's similarity floor: "Man.Utd" and
         # "Manchester United" score 60 and are still one club. Everything else
         # an alias needs - league, kickoff, category, link - still applies.
+        # Deprecated by A1-6: the ledger is the new trust source.
         self.reviewed_aliases = reviewed_aliases or set()
         self.league_equivalences = league_equivalences or set()
+        # Machine evidence. A claim authorizes only while it is accepted and
+        # inside its TTL; the ledger is checked before the legacy files.
+        self.evidence = evidence
+        self.league_resolver = LeagueResolver(evidence) if evidence is not None else None
         self._canonical_leagues = set(self.normalizer.league_reverse_map.values())
 
     def normalize(self, matches: list[Match]) -> list[Match]:
@@ -138,6 +152,10 @@ class CertaintyGate:
             return False
         if a_league == b_league:
             return True
+        if self.evidence is not None and self.evidence.is_accepted(
+            "league_equivalence", league_equivalence_key(a_league, b_league)
+        ):
+            return True
         return (
             (a_league, b_league) in self.league_equivalences
             or (b_league, a_league) in self.league_equivalences
@@ -187,25 +205,35 @@ class CertaintyGate:
         left_normalized: str,
         right_raw: str,
         right_normalized: str,
-    ) -> tuple[bool, bool]:
-        """Return ``(ok, allowlist_used)`` for one raw/canonical team pair."""
+    ) -> tuple[bool, str]:
+        """Return ``(ok, alias_source)`` for one raw/canonical team pair.
+
+        ``alias_source`` is ``""`` for an exact match, ``"ledger"`` for a
+        machine-proven claim, ``"reviewed"`` for the deprecated human file, and
+        ``"allowlist"`` for a legacy allowlisted fuzzy pair.
+        """
         if not (left_raw and left_normalized and right_raw and right_normalized):
-            return False, False
+            return False, ""
 
         left_key = self._raw_team_key(left_raw)
         right_key = self._raw_team_key(right_raw)
         if left_key and left_key == right_key:
-            return left_normalized == right_normalized, False
+            return left_normalized == right_normalized, ""
+
+        if self.evidence is not None and self.evidence.is_accepted(
+            "team_alias", team_alias_key(left_raw, right_raw)
+        ):
+            return True, "ledger"
 
         # A canonical collision alone is never enough. If the raw forms differ,
-        # the pair is an alias candidate and must be explicitly reviewed.
+        # the pair is an alias candidate and must be explicitly proven.
         if self._is_reviewed(left_raw, right_raw):
-            return True, True
+            return True, "reviewed"
         allowlisted = self._is_allowlisted(left_raw, right_raw) or self._is_allowlisted(
             left_normalized, right_normalized
         )
         if not allowlisted:
-            return False, False
+            return False, ""
 
         left_surface = self._surface_team_key(left_raw)
         right_surface = self._surface_team_key(right_raw)
@@ -213,14 +241,14 @@ class CertaintyGate:
             fuzz.token_set_ratio(left_surface, right_surface),
             fuzz.partial_ratio(left_surface, right_surface),
         )
-        return fuzzy_score >= 90, True
+        return fuzzy_score >= 90, "allowlist" if fuzzy_score >= 90 else ""
 
-    def _teams_match_details(self, a: Match, b: Match) -> tuple[bool, bool, bool]:
-        """Return ``(ok, is_swapped, allowlist_used)`` for raw/canonical teams."""
+    def _teams_match_details(self, a: Match, b: Match) -> tuple[bool, bool, str]:
+        """Return ``(ok, is_swapped, alias_source)`` for raw/canonical teams."""
         ah, aa = a.home_team_normalized, a.away_team_normalized
         bh, ba = b.home_team_normalized, b.away_team_normalized
         if not (ah and aa and bh and ba):
-            return False, False, False
+            return False, False, ""
 
         if (
             self._raw_team_key(a.home_team) == self._raw_team_key(b.home_team)
@@ -228,34 +256,34 @@ class CertaintyGate:
             and ah == bh
             and aa == ba
         ):
-            return True, False, False
+            return True, False, ""
         if (
             self._raw_team_key(a.home_team) == self._raw_team_key(b.away_team)
             and self._raw_team_key(a.away_team) == self._raw_team_key(b.home_team)
             and ah == ba
             and aa == bh
         ):
-            return True, True, False
+            return True, True, ""
 
-        direct_home_ok, direct_home_alias = self._team_pair_details(
+        direct_home_ok, direct_home_source = self._team_pair_details(
             a.home_team, ah, b.home_team, bh
         )
-        direct_away_ok, direct_away_alias = self._team_pair_details(
+        direct_away_ok, direct_away_source = self._team_pair_details(
             a.away_team, aa, b.away_team, ba
         )
         if direct_home_ok and direct_away_ok:
-            return True, False, direct_home_alias or direct_away_alias
+            return True, False, direct_home_source or direct_away_source
 
-        swapped_home_ok, swapped_home_alias = self._team_pair_details(
+        swapped_home_ok, swapped_home_source = self._team_pair_details(
             a.home_team, ah, b.away_team, ba
         )
-        swapped_away_ok, swapped_away_alias = self._team_pair_details(
+        swapped_away_ok, swapped_away_source = self._team_pair_details(
             a.away_team, aa, b.home_team, bh
         )
         if swapped_home_ok and swapped_away_ok:
-            return True, True, swapped_home_alias or swapped_away_alias
+            return True, True, swapped_home_source or swapped_away_source
 
-        return False, False, False
+        return False, False, ""
 
     def _teams_ok(self, a: Match, b: Match) -> tuple[bool, bool, str]:
         """Return ``(ok, is_swapped, reason)`` for normalized team identities.
@@ -267,10 +295,10 @@ class CertaintyGate:
         ok, is_swapped, _ = self._teams_match_details(a, b)
         return ok, is_swapped, "" if ok else "team_unresolved"
 
-    def _teams_use_allowlist(self, a: Match, b: Match) -> bool:
-        """Return whether a successful team result relies on a fuzzy alias."""
-        _, _, allowlist_used = self._teams_match_details(a, b)
-        return allowlist_used
+    def _teams_alias_source(self, a: Match, b: Match) -> str:
+        """Return the source that carried a non-exact team match, if any."""
+        _, _, alias_source = self._teams_match_details(a, b)
+        return alias_source
 
     def _is_allowlisted(self, left: str, right: str) -> bool:
         """Return whether the unordered raw/canonical pair is explicitly reviewed."""
@@ -405,13 +433,36 @@ class CertaintyGate:
         reasons: list[str] = []
         evidence: list[MatchEvidence] = []
 
+        # Betradar identity. A provider match id is shared across books, so two
+        # listings that carry the same non-empty id are the same real match
+        # whatever their team or league names say. Two different ids are two
+        # different matches and reject outright.
+        a_betradar, b_betradar = a.betradar_id or "", b.betradar_id or ""
+        same_id = bool(a_betradar and b_betradar and a_betradar == b_betradar)
+        different_id = bool(a_betradar and b_betradar and a_betradar != b_betradar)
+
         # League identity.
         a_league, b_league = a.league_normalized or "", b.league_normalized or ""
         league_ok = self._league_ok(a_league, b_league)
         league_reason = ""
-        if not league_ok and self._league_settled_by_teams(a, b):
+        if same_id:
+            league_ok = True
+            league_reason = "betradar_id"
+        elif not league_ok and self._league_settled_by_teams(a, b):
             league_ok = True
             league_reason = LEAGUE_UNMAPPED_TEAMS_EXACT
+        elif (
+            not league_ok
+            and self.league_resolver is not None
+            and self.league_resolver.same_competition(
+                a_league,
+                b_league,
+                a.home_team_source or a.home_team,
+                a.away_team_source or a.away_team,
+            )
+        ):
+            league_ok = True
+            league_reason = "league_fingerprint"
         if not league_ok:
             reasons.append("league_mismatch")
         evidence.append(
@@ -452,8 +503,22 @@ class CertaintyGate:
 
         # Team identity and orientation.
         teams_ok, is_swapped, team_reason = self._teams_ok(a, b)
-        allowlist_used = teams_ok and self._teams_use_allowlist(a, b)
-        if allowlist_used and not (league_ok and kickoff_ok and category_ok):
+        alias_source = self._teams_alias_source(a, b) if teams_ok else ""
+        if same_id:
+            # The provider id proves the clubs; the names only decide which way
+            # round the listing is. Direct and swapped are compared as whole
+            # fixtures, so one coincidental name hit cannot claim a swap.
+            direct = fuzz.token_set_ratio(
+                a.home_team_normalized, b.home_team_normalized
+            ) + fuzz.token_set_ratio(a.away_team_normalized, b.away_team_normalized)
+            swapped = fuzz.token_set_ratio(
+                a.home_team_normalized, b.away_team_normalized
+            ) + fuzz.token_set_ratio(a.away_team_normalized, b.home_team_normalized)
+            teams_ok = True
+            team_reason = "betradar_id"
+            is_swapped = swapped > direct
+            alias_source = ""
+        if alias_source and not (league_ok and kickoff_ok and category_ok):
             teams_ok = False
             team_reason = "team_unresolved"
 
@@ -462,10 +527,22 @@ class CertaintyGate:
             and a.away_team_normalized == b.away_team_normalized
         )
         if not teams_ok:
-            team_source: Literal["rule", "allowlist"] = "rule"
+            team_source: Literal["rule", "allowlist", "ledger"] = "rule"
             team_confidence = 0.0
             team_evidence_reason = team_reason or "team_unresolved"
-        elif allowlist_used:
+        elif same_id:
+            team_source = "rule"
+            team_confidence = 1.0
+            team_evidence_reason = "betradar_id"
+        elif alias_source == "ledger":
+            team_source = "ledger"
+            team_confidence = 1.0
+            team_evidence_reason = "swapped" if is_swapped else "ledger_alias"
+        elif alias_source:
+            team_source = "allowlist"
+            team_confidence = 1.0
+            team_evidence_reason = "swapped" if is_swapped else "allowlisted_alias"
+        elif exact_teams:
             team_source = "allowlist"
             team_confidence = 1.0
             team_evidence_reason = "swapped" if is_swapped else "allowlisted_alias"
@@ -489,6 +566,21 @@ class CertaintyGate:
                 allowlist_entries=(
                     sorted(self.alias_allowlist) if team_source == "allowlist" else []
                 ),
+                evidence_keys=(
+                    [
+                        team_alias_key(a.home_team, b.away_team),
+                        team_alias_key(a.away_team, b.home_team),
+                    ]
+                    if team_source == "ledger" and is_swapped
+                    else (
+                        [
+                            team_alias_key(a.home_team, b.home_team),
+                            team_alias_key(a.away_team, b.away_team),
+                        ]
+                        if team_source == "ledger"
+                        else []
+                    )
+                ),
             )
         )
 
@@ -508,6 +600,11 @@ class CertaintyGate:
             else:
                 link_reasons.add("no_event_link")
         reasons.extend(sorted(link_reasons))
+
+        # A pair of different provider ids is a contradiction, not a gap: no
+        # name, league or kickoff evidence can make two ids the same event.
+        if different_id:
+            reasons.append("betradar_mismatch")
 
         if reasons:
             hard = [reason for reason in reasons if reason in HARD_REJECT_REASONS]
@@ -610,10 +707,26 @@ class CertaintyGate:
         if not group.matches:
             return GateResult(status="rejected", reasons=["team_unresolved"])
 
-        anchor = group.matches[0]
+        anchor = next(
+            (
+                m
+                for m in group.matches
+                if match.betradar_id and m.betradar_id == match.betradar_id
+            ),
+            group.matches[0],
+        )
         result = self.evaluate_pair(match, anchor)
 
-        group_teams = self._group_team_orientation(match, group, anchor)
+        team_proved_by_id = any(
+            item.rule == "team_identity" and item.reason == "betradar_id"
+            for item in result.evidence
+        )
+
+        group_teams = (
+            None
+            if team_proved_by_id
+            else self._group_team_orientation(match, group, anchor)
+        )
         if group_teams is not None:
             group_teams_ok, group_is_swapped = group_teams
             # The group orientation is the single reference frame consumed by
@@ -626,7 +739,7 @@ class CertaintyGate:
         if group_kickoff_reason and group_kickoff_reason not in result.reasons:
             result.reasons.append(group_kickoff_reason)
 
-        league_settled = any(
+        league_settled = team_proved_by_id or any(
             item.rule == "league_identity" and item.reason == LEAGUE_UNMAPPED_TEAMS_EXACT
             for item in result.evidence
         )

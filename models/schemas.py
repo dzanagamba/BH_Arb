@@ -29,6 +29,26 @@ class Market(BaseModel):
     odds: list[OddsValue]
 
 
+class RawOffer(BaseModel):
+    """A bookmaker's market before its meaning is resolved.
+
+    New book adapters emit these instead of choosing a ``MarketType`` by hand.
+    The discovery layer classifies them from labels, structure and cross-book
+    price consensus, and records the provenance of the result.
+    """
+
+    bookmaker: str
+    mode: str = "prematch"
+    event_key: str = ""
+    market_key: str = ""
+    source_id: str = ""
+    labels: list[str] = []
+    line: float | None = None
+    period: str = "full_time"
+    odds: list[OddsValue] = []
+    raw_payload_hash: str = ""
+
+
 class Match(BaseModel):
     """A match scraped from a single bookmaker."""
     bookmaker: str
@@ -70,12 +90,13 @@ MatchEventStatus = Literal["verified", "suggested", "rejected"]
 class MatchEvidence(BaseModel):
     """One reason why a match group was grouped, or why a candidate was rejected."""
     rule: str
-    source: Literal["rule", "ai", "human", "allowlist"]
+    source: Literal["rule", "ai", "human", "allowlist", "ledger"]
     confidence: float = 0.0
     reason: str = ""
     league_pair: list[str] = []
     kickoff_delta_minutes: float | None = None
     allowlist_entries: list[str] = []
+    evidence_keys: list[str] = []
 
 
 class PairSide(BaseModel):

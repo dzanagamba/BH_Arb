@@ -48,6 +48,7 @@ from config.settings import (
 from engine.ai import MatchAI, PairProposal
 from engine.arbitrage import ArbitrageEngine
 from engine.certainty import CertaintyGate
+from engine.mapping_evidence import MappingLedger
 from engine.market_registry import unmapped_markets
 from engine.matcher import MatchMatcher, swap_match_teams_and_odds
 from models.schemas import (
@@ -70,6 +71,7 @@ from scrapers.mozzartbet import MozzartbetScraper
 from scrapers.premier_kladionica import PremierKladionicaScraper
 from scrapers.sportplus import SportPlusScraper
 from scrapers.wwin import WWINScraper
+from server.mapping_coverage import build_coverage
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -1808,6 +1810,20 @@ async def get_results(mode: str = "prematch"):
             else None
         ),
     }
+
+
+@router.get("/mapping/coverage")
+async def get_mapping_coverage(mode: str = "prematch"):
+    """Read-only mapping coverage and quarantined claims for Diagnostics."""
+    _, _, matches_cache, report_cache, _ = _state_for(mode)
+    ledger = MappingLedger().load()
+    return build_coverage(
+        ledger,
+        matches_cache,
+        report_cache,
+        mode=mode,
+        unmapped_markets=dict(unmapped_markets),
+    )
 
 
 @router.get("/config")

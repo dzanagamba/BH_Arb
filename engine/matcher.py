@@ -39,8 +39,10 @@ from config.settings import (
     FUZZY_MATCH_THRESHOLD,
     KICKOFF_WINDOW_MINUTES,
     TEAM_MATCH_MIN_PERCENT,
+    price_source,
 )
 from engine.certainty import CertaintyGate, GateResult
+from engine.mapping_evidence import MappingLedger, team_alias_key
 from engine.normalizer import TeamNormalizer, canonical_team_name, canonicalize_fixture
 from models.schemas import Market, MarketType, Match, MatchEvidence, MatchGroup, OddsValue
 from scrapers.common import flip_ah_label
@@ -50,11 +52,11 @@ logger = logging.getLogger(__name__)
 _LEAGUE_EQUIV_FILE = os.path.join(
     os.path.dirname(__file__), "..", "config", "league_equivalences.json"
 )
-_TEAM_ALIAS_REVIEWED_FILE = os.path.join(
-    os.path.dirname(__file__), "..", "config", "team_alias_reviewed.json"
-)
 _TEAM_ALIAS_FILE = os.path.join(
     os.path.dirname(__file__), "..", "config", "team_alias_allowlist.json"
+)
+MAPPING_EVIDENCE_FILE = os.path.join(
+    os.path.dirname(__file__), "..", "config", "generated", "mapping_evidence.json"
 )
 
 # Generic fallback leagues that are too vague to enforce a league gate on
@@ -96,7 +98,7 @@ class MatchMatcher:
     - Kickoff time adds a confidence bonus but hard-rejects > KICKOFF_WINDOW_MINUTES diff
     """
 
-    def __init__(self) -> None:
+    def __init__(self, evidence_path: str | os.PathLike[str] | None = None) -> None:
         self.normalizer = TeamNormalizer()
         self._equivalences: set[tuple[str, str]] = set()
         try:
@@ -149,30 +151,21 @@ class MatchMatcher:
                 "team_alias_allowlist.json not found or invalid — no fuzzy aliases"
             )
 
-        # Reviewed pairs below the allowlist's similarity floor; the gate accepts
-        # them without it (see CertaintyGate.reviewed_aliases).
+        # The human-reviewed file is no longer a trust source. It is migrated
+        # into the evidence ledger as quarantined ``legacy_review`` evidence by
+        # scripts/migrate_reviewed.py; only machine corroboration can accept it.
+        # The attributes stay for the side-extension helper and for tests that
+        # inject a pair explicitly.
         self._reviewed_aliases: set[str] = set()
         self._reviewed_partners: dict[str, set[str]] = {}
-        try:
-            with open(_TEAM_ALIAS_REVIEWED_FILE, encoding="utf-8") as f:
-                reviewed_data = json.load(f)
-            for entry in reviewed_data.get("approved", []):
-                alias = entry.get("alias") if isinstance(entry, dict) else None
-                if not isinstance(alias, str) or alias.count("|") != 1:
-                    continue
-                left, right = (part.strip() for part in alias.split("|", 1))
-                if left and right:
-                    self._reviewed_aliases.add(f"{left}|{right}")
-                    key = CertaintyGate._raw_team_key
-                    self._reviewed_partners.setdefault(key(left), set()).add(right)
-                    self._reviewed_partners.setdefault(key(right), set()).add(left)
-        except (OSError, TypeError, ValueError, AttributeError):
-            logger.warning("team_alias_reviewed.json not found or invalid — no reviewed aliases")
 
+        self._ledger = MappingLedger(
+            str(evidence_path) if evidence_path is not None else MAPPING_EVIDENCE_FILE
+        ).load()
         self.gate = CertaintyGate(
             alias_allowlist=self._alias_allowlist,
             league_equivalences=self._equivalences,
-            reviewed_aliases=self._reviewed_aliases,
+            evidence=self._ledger,
         )
 
     def normalize_matches(self, matches: list[Match]) -> list[Match]:
@@ -266,6 +259,11 @@ class MatchMatcher:
         # League index: normalized league → groups in it. Generic leagues keyed under "".
         # Cuts the candidate list per match from O(all groups) to O(same-league groups).
         groups_by_league: dict[str, list[MatchGroup]] = {}
+        # Betradar id → the group that already holds it. A shared provider id is
+        # proof of identity even when the books name the teams and league
+        # differently, so this group is offered to the match before the scored
+        # candidates; the gate still decides.
+        groups_by_betradar: dict[str, MatchGroup] = {}
 
         for match in sorted_matches:
             m_league = match.league_normalized or match.league or ""
@@ -304,6 +302,17 @@ class MatchMatcher:
             # orphaning the match in a new group.
             scored.sort(key=lambda item: (-item[0], item[1]))
 
+            # A shared Betradar id is proof of identity, so the group that
+            # already holds this id is offered first even when its names put it
+            # outside the league bucket. The gate still decides.
+            if match.betradar_id:
+                known_group = groups_by_betradar.get(match.betradar_id)
+                if known_group is not None and match.bookmaker not in {
+                    m.bookmaker for m in known_group.matches
+                }:
+                    if all(group is not known_group for _, _, group in scored):
+                        scored.insert(0, (1.0, group_index[id(known_group)], known_group))
+
             accepted = False
             for best_conf, _, best_group in scored:
                 gate_result: GateResult = self.gate.evaluate(match, best_group)
@@ -316,6 +325,8 @@ class MatchMatcher:
                     )
                     best_group.matches.append(match_to_add)
                     best_group.evidence.extend(gate_result.evidence)
+                    if match.betradar_id:
+                        groups_by_betradar.setdefault(match.betradar_id, best_group)
                     if len({m.bookmaker for m in best_group.matches}) >= 2:
                         best_group.status = "verified"
 
@@ -369,16 +380,21 @@ class MatchMatcher:
                 )
                 group_index[id(new_group)] = len(groups)
                 groups.append(new_group)
+                if match.betradar_id:
+                    groups_by_betradar.setdefault(match.betradar_id, new_group)
                 bucket_key = "" if is_open(match) else new_group.league
                 groups_by_league.setdefault(bucket_key, []).append(new_group)
 
         # Only return groups whose every accepted addition passed the gate and
-        # that contain at least two distinct bookmakers.
+        # that contain at least two distinct price sources. Two books on one
+        # feed (MDShop + Admiralbet are both NSoft) quote the same prices, so a
+        # group made only of them can never be priced and must not be counted
+        # as a multi-book group.
         multi_bookie_groups = [
             g
             for g in groups
             if g.status == "verified"
-            and len({m.bookmaker for m in g.matches}) >= 2
+            and len({price_source(m.bookmaker) for m in g.matches}) >= 2
         ]
 
         logger.info(
@@ -476,6 +492,7 @@ class MatchMatcher:
                 self.gate._is_reviewed(raw, group_raw)
                 or self.gate._is_allowlisted(raw, group_raw)
                 or self.gate._is_allowlisted(normalized, group_normalized)
+                or self._ledger.is_accepted("team_alias", team_alias_key(raw, group_raw))
             ):
                 return 1.0
             return fuzz.token_set_ratio(normalized, group_normalized) / 100.0

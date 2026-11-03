@@ -203,7 +203,7 @@ follows from the reasons left over:
 |---|---|---|
 | `verified` | **Zero** reasons. Every part of the claim is proven, links included. These are the only groups that reach arbitrage. | — |
 | `suggested` | At least one reason is outstanding — the identity is plausible but incomplete. Not priced; queued for review. | `kickoff_missing`, `kickoff_delta`, `team_unresolved`, `link_unverified`, `no_event_link` |
-| `rejected` | A hard gate contradicts the claim. | `league_mismatch`, `category_mismatch` |
+| `rejected` | A hard gate contradicts the claim. | `league_mismatch`, `category_mismatch`, `betradar_mismatch` |
 
 The reason strings above are the vocabulary the gate actually emits, and
 `tests/test_readme_claims.py` proves it by *running* the gate over one broken
@@ -213,9 +213,9 @@ claim per reason and reading the results back — so a reason added or removed i
 line number here is stale the moment the module's imports change — also lists
 `orientation_unresolved`, which the gate never emits; the unresolvable-orientation
 case is reported as `team_unresolved`. Until that entry is either produced or
-deleted, treat `rejected` as the two reasons above.
+deleted, treat `rejected` as the reasons above except `orientation_unresolved`.
 
-Four rules inside stage 1 matter more than the rest:
+Five rules inside stage 1 matter more than the rest:
 
 * **The reviewed alias allowlist is the only auto-accepted fuzzy path.** A pair
   whose raw team names differ is refused unless the pair appears in
@@ -241,6 +241,11 @@ Four rules inside stage 1 matter more than the rest:
   instead of a reason. A book with **no declaration at all** is refused: the gate
   fails safe, because an absent declaration is silence rather than proof of
   absence.
+* **A shared Betradar id proves identity.** MDShop, Admiralbet, SportPlus and
+  WWIN carry the provider's match id. Two listings with the same non-empty id
+  pass the league and team checks whatever their names (evidence reason
+  `betradar_id`); kickoff, category and link checks still apply. Two different
+  ids reject with `betradar_mismatch`.
 
 **Stage 2 — AI proposals (`engine/ai.py`, used by `server/api.py`).** The AI is
 consulted only about pairings the rules could not settle, and only to **rank**

@@ -945,7 +945,7 @@ def test_a_verified_group_records_the_declared_absence_as_evidence(
 
 
 def test_scan_refuses_a_link_proof_that_aged_out(
-    isolated_server_state, stubbed_route_scrapers
+    isolated_server_state, stubbed_route_scrapers, monkeypatch
 ):
     """A link proof past its TTL stops unblocking the gate, for a book that has a route.
 
@@ -969,6 +969,9 @@ def test_scan_refuses_a_link_proof_that_aged_out(
     ``tests/test_verify_links.py::test_an_expired_verification_is_ignored_and_dropped``.
     """
     route = _route_books()
+    # This case is about link-proof expiry, not price sources: ROUTE_BOOKS are
+    # both NSoft, so without this the pair is correctly refused as one source.
+    monkeypatch.setattr("engine.matcher.price_source", lambda book: book)
     _store_links(route)
     asyncio.run(api.run_scan("prematch"))
     assert [r["status"] for r in api.cached_match_groups_report] == ["verified"], (

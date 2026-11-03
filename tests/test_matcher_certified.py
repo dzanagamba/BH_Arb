@@ -8,7 +8,7 @@ from models.schemas import Market, MarketType, Match, OddsValue
 K = datetime(2026, 9, 25, 18, 0)
 
 
-def _m(bookmaker, home, away, league, kickoff=K, event_id="", link_ok=True):
+def _m(bookmaker, home, away, league, kickoff=K, event_id="", link_ok=True, betradar_id=""):
     return Match(
         bookmaker=bookmaker,
         home_team=home,
@@ -17,6 +17,7 @@ def _m(bookmaker, home, away, league, kickoff=K, event_id="", link_ok=True):
         kickoff=kickoff,
         url=f"https://example.test/{bookmaker}/{event_id}" if event_id else "",
         event_id=event_id,
+        betradar_id=betradar_id,
         deep_link_verified=link_ok,
         markets=[
             Market(
@@ -136,3 +137,19 @@ def test_gate_rejected_singleton_cannot_later_merge_into_wrong_group():
     assert len(groups) == 1
     assert {m.bookmaker for m in groups[0].matches} == {"mdshop", "sportplus"}
     assert all(m.bookmaker != "admiralbet" for m in groups[0].matches)
+
+
+def test_betradar_pair_groups_across_differently_named_leagues():
+    a = _m(
+        "mdshop", "Man. City", "Arsenal", "England 1",
+        event_id="1", betradar_id="111",
+    )
+    b = _m(
+        "wwin", "Manchester City FC", "Arsenal London", "Premier League",
+        event_id="2", betradar_id="111",
+    )
+    groups = MatchMatcher().group_matches([a, b])
+    assert len(groups) == 1
+    assert {m.bookmaker for m in groups[0].matches} == {"mdshop", "wwin"}
+    team = next(e for e in groups[0].evidence if e.rule == "team_identity")
+    assert team.reason == "betradar_id"

@@ -24,6 +24,7 @@ def _m(
     url="",
     event_id="",
     link_ok=True,
+    betradar_id="",
 ):
     m = Match(
         bookmaker=bookmaker,
@@ -36,6 +37,7 @@ def _m(
         category_tags=tags or [],
         url=url,
         event_id=event_id,
+        betradar_id=betradar_id,
         deep_link_verified=link_ok,
         markets=[
             Market(
@@ -879,3 +881,125 @@ def test_evaluating_against_a_group_accepts_a_declared_no_link_book(bookmaker):
     r = gate.evaluate(other, group)
     assert r.status == "verified", f"{bookmaker}: {r.reasons}"
     assert r.reasons == []
+
+
+def test_same_betradar_id_verifies_despite_different_names():
+    gate = CertaintyGate()
+    a = _m(
+        "mdshop", "Man. City", "Arsenal", "England 1",
+        event_id="1", betradar_id="111", link_ok=True,
+    )
+    b = _m(
+        "wwin", "Manchester City FC", "Arsenal London", "Premier League",
+        event_id="2", betradar_id="111", link_ok=True,
+    )
+    gate.normalize([a, b])
+    result = gate.evaluate_pair(a, b)
+    assert result.status == "verified", result.reasons
+    team = next(e for e in result.evidence if e.rule == "team_identity")
+    assert team.reason == "betradar_id"
+    league = next(e for e in result.evidence if e.rule == "league_identity")
+    assert league.reason == "betradar_id"
+
+
+def test_same_betradar_id_still_needs_the_kickoff():
+    gate = CertaintyGate()
+    a = _m("mdshop", "Man. City", "Arsenal", "England 1", betradar_id="111")
+    b = _m(
+        "wwin", "Manchester City FC", "Arsenal London", "Premier League",
+        kickoff=K + timedelta(minutes=60), betradar_id="111",
+    )
+    gate.normalize([a, b])
+    result = gate.evaluate_pair(a, b)
+    assert result.status != "verified"
+    assert "kickoff_delta" in result.reasons
+
+
+def test_different_betradar_ids_reject():
+    gate = CertaintyGate()
+    a = _m("mdshop", "Sarajevo", "Zeljeznicar", "BiH - Premier Liga", betradar_id="111")
+    b = _m("wwin", "Sarajevo", "Zeljeznicar", "Premijer Liga BiH", betradar_id="222")
+    gate.normalize([a, b])
+    result = gate.evaluate_pair(a, b)
+    assert result.status == "rejected"
+    assert "betradar_mismatch" in result.reasons
+
+
+def test_same_betradar_id_detects_swapped_orientation():
+    gate = CertaintyGate()
+    a = _m("mdshop", "Manchester City", "Arsenal", "England 1", betradar_id="111")
+    b = _m(
+        "wwin", "Arsenal London", "Manchester City FC", "Premier League",
+        betradar_id="111",
+    )
+    gate.normalize([a, b])
+    result = gate.evaluate_pair(a, b)
+    assert result.status == "verified", result.reasons
+    assert result.is_swapped is True
+
+
+def test_one_sided_betradar_id_changes_nothing():
+    gate = CertaintyGate()
+    a = _m("mdshop", "Manchester City", "Arsenal", "England 1", betradar_id="111")
+    b = _m("wwin", "Arsenal London", "Manchester City FC", "Premier League")
+    gate.normalize([a, b])
+    result = gate.evaluate_pair(a, b)
+    assert result.status != "verified"
+    assert "team_unresolved" in result.reasons
+
+
+def test_ledger_alias_verifies_without_the_legacy_allowlist(tmp_path):
+    from engine.mapping_evidence import Evidence, MappingLedger, team_alias_key
+
+    ledger = MappingLedger(tmp_path / "evidence.json")
+    key = team_alias_key("Man. Utd", "Manchester United")
+    ledger.accept(
+        "team_alias",
+        key,
+        [Evidence(type="betradar_shared_id", scan="s1", books=("mdshop", "wwin"))],
+        "same Betradar id",
+    )
+    gate = CertaintyGate(evidence=ledger)
+    a = _m("mdshop", "Como", "Manchester United", "England 1", event_id="1")
+    b = _m("wwin", "Como", "Man. Utd", "England 1", event_id="2")
+    gate.normalize([a, b])
+    result = gate.evaluate_pair(a, b)
+    assert result.status == "verified", result.reasons
+    team = next(e for e in result.evidence if e.rule == "team_identity")
+    assert team.source == "ledger"
+    assert team.reason == "ledger_alias"
+    assert key in team.evidence_keys
+
+
+def test_ledger_league_equivalence_verifies(tmp_path):
+    from engine.mapping_evidence import Evidence, MappingLedger, league_equivalence_key
+
+    ledger = MappingLedger(tmp_path / "evidence.json")
+    key = league_equivalence_key("premier_league", "championship")
+    ledger.accept(
+        "league_equivalence",
+        key,
+        [Evidence(type="exact_shared_fixture", scan="s1", books=("mdshop", "wwin"))],
+        "shared fixture",
+    )
+    gate = CertaintyGate(evidence=ledger)
+    a = _m("mdshop", "Sarajevo", "Zeljeznicar", "England 1", event_id="1")
+    b = _m("wwin", "Sarajevo", "Zeljeznicar", "Championship", event_id="2")
+    gate.normalize([a, b])
+    assert gate.evaluate_pair(a, b).status == "verified"
+
+
+def test_a_ledger_claim_does_not_leak_to_another_pair(tmp_path):
+    from engine.mapping_evidence import Evidence, MappingLedger, team_alias_key
+
+    ledger = MappingLedger(tmp_path / "evidence.json")
+    ledger.accept(
+        "team_alias",
+        team_alias_key("Man. Utd", "Manchester United"),
+        [Evidence(type="betradar_shared_id", scan="s1")],
+    )
+    gate = CertaintyGate(evidence=ledger)
+    a = _m("mdshop", "Como", "Manchester United", "England 1", event_id="1")
+    b = _m("wwin", "Como", "Man. City", "England 1", event_id="2")
+    gate.normalize([a, b])
+    assert "team_unresolved" in gate.evaluate_pair(a, b).reasons

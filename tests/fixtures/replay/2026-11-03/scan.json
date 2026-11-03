@@ -1,0 +1,344 @@
+{
+  "schema": 1,
+  "captured_at": "2026-11-03T12:00:00Z",
+  "source": "tests/fixtures/e2e_certified (real 2026-09-25 captures)",
+  "note": "Kickoffs are frozen at 2030-01-01T18:00; the replay harness shifts them to now.",
+  "matches": [
+    {
+      "bookmaker": "mbet",
+      "home_team": "Sarajevo",
+      "away_team": "Željezničar",
+      "home_team_normalized": "",
+      "away_team_normalized": "",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "BiH - Premier Liga",
+      "league_normalized": "",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2030-01-01T18:00:00",
+      "markets": [
+        {
+          "market_type": "1x2",
+          "odds": [
+            {
+              "label": "1",
+              "value": 5.0
+            },
+            {
+              "label": "X",
+              "value": 4.33
+            },
+            {
+              "label": "2",
+              "value": 1.45
+            }
+          ]
+        },
+        {
+          "market_type": "double_chance",
+          "odds": [
+            {
+              "label": "1X",
+              "value": 2.47
+            },
+            {
+              "label": "X2",
+              "value": 1.11
+            },
+            {
+              "label": "12",
+              "value": 1.14
+            }
+          ]
+        },
+        {
+          "market_type": "btts",
+          "odds": [
+            {
+              "label": "GG",
+              "value": 1.48
+            },
+            {
+              "label": "NG",
+              "value": 2.4
+            }
+          ]
+        },
+        {
+          "market_type": "over_under_2_5",
+          "odds": [
+            {
+              "label": "Over 2.5",
+              "value": 1.36
+            },
+            {
+              "label": "Under 2.5",
+              "value": 2.8
+            }
+          ]
+        },
+        {
+          "market_type": "over_under_1_5",
+          "odds": [
+            {
+              "label": "Over 1.5",
+              "value": 1.1
+            },
+            {
+              "label": "Under 1.5",
+              "value": 5.5
+            }
+          ]
+        },
+        {
+          "market_type": "over_under_3_5",
+          "odds": [
+            {
+              "label": "Over 3.5",
+              "value": 1.88
+            },
+            {
+              "label": "Under 3.5",
+              "value": 1.79
+            }
+          ]
+        }
+      ],
+      "url": "https://mbet.ba/",
+      "bet_url": "",
+      "match_code": "e:fb:van-ahl:0005",
+      "event_id": "e:fb:van-ahl:0005",
+      "betradar_id": "",
+      "deep_link_verified": false,
+      "category_tags": [],
+      "is_swapped": false,
+      "is_live": false,
+      "fetched_at": "2026-11-03T12:00:00"
+    },
+    {
+      "bookmaker": "wwin",
+      "home_team": "Zeljeznicar",
+      "away_team": "FK Sarajevo",
+      "home_team_normalized": "",
+      "away_team_normalized": "",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "Premijer Liga BiH",
+      "league_normalized": "",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2030-01-01T18:00:00",
+      "markets": [
+        {
+          "market_type": "1x2",
+          "odds": [
+            {
+              "label": "1",
+              "value": 2.06
+            },
+            {
+              "label": "X",
+              "value": 3.5
+            },
+            {
+              "label": "2",
+              "value": 3.05
+            }
+          ]
+        },
+        {
+          "market_type": "double_chance",
+          "odds": [
+            {
+              "label": "1X",
+              "value": 1.29
+            },
+            {
+              "label": "12",
+              "value": 1.24
+            },
+            {
+              "label": "X2",
+              "value": 1.56
+            }
+          ]
+        },
+        {
+          "market_type": "btts",
+          "odds": [
+            {
+              "label": "GG",
+              "value": 1.49
+            },
+            {
+              "label": "NG",
+              "value": 2.34
+            }
+          ]
+        },
+        {
+          "market_type": "over_under_1_5",
+          "odds": [
+            {
+              "label": "Over 1.5",
+              "value": 1.16
+            },
+            {
+              "label": "Under 1.5",
+              "value": 4.2
+            }
+          ]
+        },
+        {
+          "market_type": "over_under_2_5",
+          "odds": [
+            {
+              "label": "Over 2.5",
+              "value": 1.55
+            },
+            {
+              "label": "Under 2.5",
+              "value": 2.2
+            }
+          ]
+        },
+        {
+          "market_type": "over_under_3_5",
+          "odds": [
+            {
+              "label": "Over 3.5",
+              "value": 2.32
+            },
+            {
+              "label": "Under 3.5",
+              "value": 1.5
+            }
+          ]
+        }
+      ],
+      "url": "https://wwin.ba/kladjenje/",
+      "bet_url": "",
+      "match_code": "4620444",
+      "event_id": "4620444",
+      "betradar_id": "",
+      "deep_link_verified": false,
+      "category_tags": [],
+      "is_swapped": false,
+      "is_live": false,
+      "fetched_at": "2026-11-03T12:00:00"
+    },
+    {
+      "bookmaker": "sportplus",
+      "home_team": "Željezničar",
+      "away_team": "Sarajevo",
+      "home_team_normalized": "",
+      "away_team_normalized": "",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "BiH - Premier Liga",
+      "league_normalized": "",
+      "country": "BiH",
+      "country_normalized": "",
+      "kickoff": "2030-01-01T18:00:00",
+      "markets": [
+        {
+          "market_type": "1x2",
+          "odds": [
+            {
+              "label": "1",
+              "value": 2.6
+            },
+            {
+              "label": "X",
+              "value": 3.6
+            },
+            {
+              "label": "2",
+              "value": 2.55
+            }
+          ]
+        },
+        {
+          "market_type": "double_chance",
+          "odds": [
+            {
+              "label": "1X",
+              "value": 1.45
+            },
+            {
+              "label": "X2",
+              "value": 1.4
+            },
+            {
+              "label": "12",
+              "value": 1.25
+            }
+          ]
+        },
+        {
+          "market_type": "btts",
+          "odds": [
+            {
+              "label": "GG",
+              "value": 1.55
+            },
+            {
+              "label": "NG",
+              "value": 2.35
+            }
+          ]
+        },
+        {
+          "market_type": "over_under_2_5",
+          "odds": [
+            {
+              "label": "Over 2.5",
+              "value": 1.6
+            },
+            {
+              "label": "Under 2.5",
+              "value": 2.2
+            }
+          ]
+        },
+        {
+          "market_type": "over_under_1_5",
+          "odds": [
+            {
+              "label": "Over 1.5",
+              "value": 1.18
+            },
+            {
+              "label": "Under 1.5",
+              "value": 4.0
+            }
+          ]
+        },
+        {
+          "market_type": "over_under_3_5",
+          "odds": [
+            {
+              "label": "Over 3.5",
+              "value": 2.7
+            },
+            {
+              "label": "Under 3.5",
+              "value": 1.4
+            }
+          ]
+        }
+      ],
+      "url": "https://www.sportplus.ba/prematch/betting",
+      "bet_url": "",
+      "match_code": "3289374",
+      "event_id": "3289374",
+      "betradar_id": "",
+      "deep_link_verified": false,
+      "category_tags": [],
+      "is_swapped": false,
+      "is_live": false,
+      "fetched_at": "2026-11-03T12:00:00"
+    }
+  ]
+}
