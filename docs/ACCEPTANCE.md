@@ -65,8 +65,16 @@ same 1,037 groups and 9 surebets, and the run passed `--check`.
 
 After removing the cache's double JSON serialization, a three-cycle run started
 at **626.4 MB** and ended at **782.6 MB** (24.9%), with 0 surviving browsers and
-9–10 surebets per scan. The absolute high-water mark fell from 875 MB to 783 MB;
-the 24-hour run remains open. On the six-cycle soak's nine surebets, seven
+9–10 surebets per scan. The absolute high-water mark fell from 875 MB to 783 MB.
+
+A ten-cycle run on the final matching code produced this RSS curve:
+
+`592.8 → 701.7 → 760.4 → 758.5 → 757.5 → 796.0 → 768.4 → 767.4 → 767.4 → 767.4 MB`
+
+It **plateaued at about 767 MB after cycle 7**, with 29.45% growth from the first
+sample (limit 50%), 0 surviving browsers, 0 errors and 10–12 surebets per cycle.
+The plateau is the important result: growth is not linear. The 24-hour run
+remains open. On the six-cycle soak's nine surebets, seven
 re-verified at a fresh price (Najran–Jubbah, Anaitasuna–Alaves,
 Zakynthos–Niki Volou, Manchester United–Roma, Roma–Sassuolo, Villarreal–PSG and
 Mainz–Bayern); the two Boston United–Leicester U21 legs were gone on re-check and

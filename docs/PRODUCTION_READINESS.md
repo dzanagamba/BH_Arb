@@ -19,7 +19,7 @@ This is an evidence-based verdict, not a score:
 | Human input | Removed | The three write routes are gone; the Diagnostics tab is read-only. The evidence ledger is the only trust source. |
 | Freshness | Partial | The engine has odds TTL and every shown surebet is re-verified; there is still no per-book freshness budget, no last-known-value policy, and no push/streaming path. |
 | Execution | Partial | Stakes are rounded, legs are ordered, the slip re-plans, and every shown surebet is re-checked before placement. Book limits, partial acceptance, balance, and the "price moved between legs" workflow are not complete. |
-| Operations | Partial | Scheduler, per-book back-off and a 10-cycle soak exist; no alerting, no 24 h soak, no deployment, no health budget for mapping coverage. |
+| Operations | Partial | Scheduler, per-book back-off and a 10-cycle soak that plateaus at ~767 MB exist; no alerting, no 24 h soak, no deployment, no health budget for mapping coverage. |
 | Security | Good | Loopback by default, same-origin CORS, an all-route API-key guard, a CSRF guard, URL-scheme checks and CSP/anti-framing headers are in place; the dashboard prompts once. Inline handlers still require `script-src 'unsafe-inline'`, so a nonce-based strict CSP remains. |
 | Evaluation | Partial | Deterministic replay, a cold-start fixed point, a repeatable pairing audit and real scans exist. No large multi-scan corpus, no labelled precision/recall, no CLV/backtest. |
 
