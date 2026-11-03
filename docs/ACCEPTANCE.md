@@ -8,7 +8,7 @@ named next to it.
 
 | Check | Command | Result |
 |---|---|---|
-| Tests | `python -m pytest` | **1,172 passed** |
+| Tests | `python -m pytest` | **1,173 passed** |
 | Lint | `python -m ruff check .` | clean |
 | Types | `python -m mypy .` | clean on 120 source files |
 | Market doc | `python scripts/generate_market_mapping_doc.py --check` | in sync |
@@ -108,11 +108,13 @@ and are reported as gone rather than as confirmed arbs.
 
 The final-gate soak scan at **04:54 UTC** found **6,500 matches, 1,044 verified
 groups and 12 surebets**, including `mainz – bayern munich` 1X2 at 0.27%, a
-fixture that only paired after the anchor fix. The latest scan at **05:36 UTC**,
-after the abbreviation, punctuation, canonical-punctuation and prematch-expiry
-rules, found **6,397 matches, 1,036 verified groups and 8 surebets**. The
-Boston United–Leicester U21 pair from the earlier sample was gone on re-check
-and is reported as gone.
+fixture that only paired after the anchor fix. The latest scan at **06:18 UTC**, after the one-sided qualifier rule, found
+**6,681 matches, 1,077 verified groups and 11 surebets**. The 06:11 scan's 11
+surebets were re-checked: nine re-verified at a fresh price (Apollon
+Kalamarias–Panserraikos, Najran–Jubbah, Anaitasuna–Alaves, Manchester
+United–Roma twice, Estrela Amadora–Benfica, Barcelona–Aston Villa,
+Roma–Sassuolo and Villarreal–PSG); the two Boston United–Leicester U21 legs
+were gone and are reported as gone.
 
 ## Pairing coverage
 
@@ -122,35 +124,36 @@ repeats a bookmaker.
 
 | Metric | Value |
 |---|---:|
-| Matches | 6,397 |
-| Verified multi-book groups | 1,036 |
-| Listings in groups | 5,743 |
-| Ungrouped listings | 654 |
-| Duplicate listings from a book already in the group | 299 |
-| Strict misses (same league, ±15 min, both teams ≥80% alike) | 25 |
-| Strict miss rate | **0.39%** |
+| Matches | 6,681 |
+| Verified multi-book groups | 1,077 |
+| Listings in groups | 6,053 |
+| Ungrouped listings | 628 |
+| Duplicate listings from a book already in the group | 301 |
+| Strict misses (same league, ±15 min, both teams ≥80% alike) | 21 |
+| Strict miss rate | **0.31%** |
 | Groups repeating a bookmaker | 0 |
 
 Per-book grouping, including duplicate listings:
 
 | Book | Grouped / matches | Rate |
 |---|---:|---:|
-| MDShop | 525 / 527 | 99.6% |
-| Admiralbet | 525 / 527 | 99.6% |
-| MBet | 593 / 601 | 98.7% |
-| WWIN | 713 / 742 | 96.1% |
-| SportPlus | 718 / 750 | 95.7% |
-| Premier Kladionica | 738 / 834 | 88.5% |
-| MaxBet | 738 / 837 | 88.2% |
-| Betole | 935 / 1,243 | 75.2% |
-| Mozzartbet | 258 / 336 | 76.8% |
+| MDShop | 609 / 616 | 98.9% |
+| Admiralbet | 609 / 616 | 98.9% |
+| MBet | 622 / 634 | 98.1% |
+| WWIN | 732 / 763 | 95.9% |
+| SportPlus | 733 / 750 | 97.7% |
+| Premier Kladionica | 751 / 833 | 90.2% |
+| MaxBet | 753 / 836 | 90.1% |
+| Betole | 990 / 1,298 | 76.3% |
+| Mozzartbet | 254 / 335 | 75.8% |
 
 The low Betole/Mozzartbet rates are mostly duplicate listings and leagues no
-other book carries, not same-fixture misses: only 25 offers in the whole scan
+other book carries, not same-fixture misses: only 21 offers in the whole scan
 have a strict counterpart in another book that the matcher failed to pair. The
-remaining examples are abbreviations and city-qualified spellings such as
-`Qingdao H` / `Qingdao Hainiu`, `Dynamo D` / `Dynamo Dresden`, and
-`Central Coast (W)` / `Central Coast Mariners (W)`.
+remaining examples are abbreviations, transliterations and one-sided qualifiers
+the veto correctly keeps apart, such as `Hamburger` / `Hamburger SV`,
+`Enppi` / `Asyut Petrol`, `Chindia T.` / `Chindia Tar.`, and
+`AFC Emley` / `Emley`.
 
 ### Gate fixes that produced this measurement
 
@@ -178,7 +181,13 @@ remaining examples are abbreviations and city-qualified spellings such as
    were equal. Comparing canonical ids with the same punctuation folding fixed
    MBet/Admiralbet fixtures in Japan, Korea, Norway and Saudi Arabia; MBet's
    grouping rate rose from 97.3% to 98.7%.
-6. **Prematch expiry is real.** A group is dropped once the latest kickoff any
+6. **One-sided qualifiers are accepted only when unambiguous.** `Werder` /
+   `Werder Bremen`, `Central Coast` / `Central Coast Mariners` and
+   `Slatina CSM` / `CSM Slatina` pair. Extra tokens that can name a different
+   club (`City`, `United`, `Inter`, `Real`, `Atletico`, `Deportivo`) are
+   vetoed, and so are ambiguous shared names such as `Sporting` /
+   `Sporting CP`.
+7. **Prematch expiry is real.** A group is dropped once the latest kickoff any
    book claims is more than two minutes past. Live mode still prices started
    matches; the old 15-minute prematch grace kept pricing fixtures that had
    already begun.

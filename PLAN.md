@@ -7,7 +7,7 @@
 > entry, manual gate exception or manual CAPTCHA step** anywhere between scrape
 > and a shown surebet.
 >
-> **Baseline (2026-11-03, this worktree).** `python -m pytest` → **1172 passed** in 149 s; `ruff check .` clean; `mypy .` clean on 120 source files;
+> **Baseline (2026-11-03, this worktree).** `python -m pytest` → **1173 passed** in 149 s; `ruff check .` clean; `mypy .` clean on 120 source files;
 > `scripts/generate_market_mapping_doc.py --check` in sync. Environment is
 > `.venv` on CPython 3.11.18, installed with `uv`. The 953-passed figure in the
 > superseded plan was a 2026-10-20 measurement and is stale.
@@ -25,12 +25,13 @@
 > league fingerprints, legacy migration, read-only coverage endpoint, classifier,
 > consensus, registry merge, discovery CLI and raw-offer resolver are shipped.
 > Betole is now the ninth enabled book after fixing its kickoff and Betradar id;
-> the latest 9-book scan found 6,397 matches, 1,036 verified groups, 130 groups
-> carrying all nine books and **8 surebets**. The earlier Boston
-> United–Leicester U21 pair disappeared before the re-check and is reported as
-> gone. `scripts/pairing_audit.py --check` measures **25 strict misses in 6,397
-> offers (0.39%)** and zero groups repeating a bookmaker. The anchor-only gate defect, generic-league fingerprints and
-> club-designator rule are fixed and covered by regression tests. **1172 tests
+> the latest 9-book scan found 6,681 matches, 1,077 verified groups, 138 groups
+> carrying all nine books and **11 surebets**. Nine of the 06:11 sample
+> re-verified at a fresh price; the two Boston United–Leicester U21 legs
+> disappeared before the re-check and are reported as gone.
+> `scripts/pairing_audit.py --check` measures **21 strict misses in 6,681 offers
+> (0.31%)** and zero groups repeating a bookmaker. The anchor-only gate defect, generic-league fingerprints and
+> club-designator rule are fixed and covered by regression tests. **1173 tests
 > pass.** The acceptance record is `docs/ACCEPTANCE.md`; the production verdict
 > and research are in `docs/PRODUCTION_READINESS.md`.
 >

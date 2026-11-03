@@ -601,11 +601,48 @@ def test_token_abbreviations_are_not_different_clubs():
     assert gate._team_pair_details(
         "Manchester Utd", "manchester_utd", "Manchester City", "manchester_city"
     ) == (False, "")
+    # A one-sided qualifier is a different rule: the extra token is not a
+    # generic club word, so this pair is accepted by the qualifier path.
     assert gate._team_pair_details(
         "Central Coast (W)",
         "central_coast_w",
         "Central Coast Mariners (W)",
         "central_coast_mariners_w",
+    ) == (True, "qualifier")
+
+
+def test_a_one_sided_qualifier_is_accepted_only_when_it_is_not_a_club_word():
+    gate = CertaintyGate()
+    assert gate._team_pair_details(
+        "Werder", "werder", "Werder Bremen", "werder_bremen"
+    ) == (True, "qualifier")
+    assert gate._team_pair_details(
+        "Bayern", "bayern", "Bayern Munich", "bayern_munich"
+    ) == (True, "qualifier")
+    assert gate._team_pair_details(
+        "Central Coast (W)",
+        "central_coast_w",
+        "Central Coast Mariners (W)",
+        "central_coast_mariners_w",
+    ) == (True, "qualifier")
+    assert gate._team_pair_details(
+        "Slatina CSM", "slatina_csm", "CSM Slatina", "csm_slatina"
+    ) == (True, "qualifier")
+    # Ambiguous club words keep the pair unresolved.
+    assert gate._team_pair_details(
+        "Manchester", "manchester", "Manchester City", "manchester_city"
+    ) == (False, "")
+    assert gate._team_pair_details(
+        "Milan", "milan", "Inter Milan", "inter_milan"
+    ) == (False, "")
+    assert gate._team_pair_details(
+        "Madrid", "madrid", "Real Madrid", "real_madrid"
+    ) == (False, "")
+    assert gate._team_pair_details(
+        "Atletico Madrid", "atletico_madrid", "Madrid", "madrid"
+    ) == (False, "")
+    assert gate._team_pair_details(
+        "Sporting", "sporting", "Sporting CP", "sporting_cp"
     ) == (False, "")
 
 

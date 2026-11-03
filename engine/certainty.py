@@ -54,6 +54,28 @@ _DESIGNATOR_TOKENS = frozenset(CLUB_DESIGNATORS - {"atletico", "deportivo"})
 # Whole-token abbreviations that are not prefixes of the word they stand for.
 _TOKEN_SYNONYMS = {"utd": "united", "st": "saint"}
 
+# Extra tokens that can distinguish two clubs sharing a name. A one-sided
+# qualifier is accepted only when the extra token is not one of these:
+# "Manchester" / "Manchester City" and "Milan" / "Inter Milan" stay apart,
+# while "Werder" / "Werder Bremen" and "Central Coast" / "Central Coast
+# Mariners" are one club.
+_GENERIC_CLUB_TOKENS = frozenset({
+    "city", "united", "utd", "fc", "cf", "sc", "ac", "afc", "club",
+    "real", "sporting", "atletico", "deportivo", "inter",
+    "town", "rovers", "wanderers", "athletic", "county", "state", "national",
+    "reserve", "reserves", "women", "womens", "ladies",
+    "ii", "b", "u17", "u19", "u20", "u21", "u23", "gc",
+})
+
+# A shared name that several clubs in one city/league use. A one-sided
+# qualifier is not enough to pick between "Sporting" and "Sporting CP" or
+# "Manchester" and "Manchester City"; those stay unresolved.
+_AMBIGUOUS_SHARED_TOKENS = frozenset({
+    "sporting", "manchester", "milan", "madrid", "rome", "lisbon",
+    "paris", "london", "tokyo", "seoul", "belgrade", "zagreb", "sofia",
+    "bucharest", "istanbul", "athens", "cairo",
+})
+
 HARD_REJECT_REASONS = frozenset(
     {"league_mismatch", "category_mismatch", "betradar_mismatch", "orientation_unresolved"}
 )
@@ -246,6 +268,37 @@ class CertaintyGate:
         return True
 
     @staticmethod
+    def _one_sided_qualifier_match(left_raw: str, right_raw: str) -> bool:
+        """Same club name plus a qualifier on one side only.
+
+        ``Werder`` / ``Werder Bremen`` and ``Central Coast`` / ``Central Coast
+        Mariners`` pass. The extra tokens must not be generic club words:
+        ``Manchester`` / ``Manchester City`` and ``Milan`` / ``Inter Milan``
+        are different clubs. Token order alone is also accepted
+        (``Slatina CSM`` / ``CSM Slatina``).
+        """
+        left = name_identity.tokens(left_raw)
+        right = name_identity.tokens(right_raw)
+        if not left or not right or left == right:
+            return False
+        if sorted(left) == sorted(right):
+            return True
+
+        shorter, longer = (left, right) if len(left) < len(right) else (right, left)
+        if any(token in _AMBIGUOUS_SHARED_TOKENS for token in shorter):
+            return False
+        index = 0
+        extras: list[str] = []
+        for token in longer:
+            if index < len(shorter) and token == shorter[index]:
+                index += 1
+            else:
+                extras.append(token)
+        if index != len(shorter) or not extras:
+            return False
+        return not any(token in _GENERIC_CLUB_TOKENS for token in extras)
+
+    @staticmethod
     def _surface_team_key(name: str) -> str:
         """Normalize lossless spelling differences for an allowlisted score."""
         key = " ".join(name.strip().casefold().split()).rstrip(".")
@@ -322,6 +375,8 @@ class CertaintyGate:
         # "Central Coast Mariners" out.
         if self._token_abbreviation_match(left_raw, right_raw):
             return True, "abbreviation"
+        if self._one_sided_qualifier_match(left_raw, right_raw):
+            return True, "qualifier"
         return False, ""
 
     def _teams_match_details(self, a: Match, b: Match) -> tuple[bool, bool, str]:
@@ -640,6 +695,10 @@ class CertaintyGate:
             team_source = "rule"
             team_confidence = 1.0
             team_evidence_reason = "swapped" if is_swapped else "token_abbreviation"
+        elif alias_source == "qualifier":
+            team_source = "rule"
+            team_confidence = 1.0
+            team_evidence_reason = "swapped" if is_swapped else "one_sided_qualifier"
         elif alias_source:
             team_source = "allowlist"
             team_confidence = 1.0
