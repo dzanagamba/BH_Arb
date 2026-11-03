@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from config.settings import AUTO_SCAN_LIVE_MINUTES, AUTO_SCAN_PREMATCH_MINUTES
+from config.settings import AUTO_SCAN_LIVE_MINUTES, AUTO_SCAN_PREMATCH_MINUTES, CORS_ORIGINS
 from server.api import (
     _deep_link_decisions,
     _deep_link_verifications,
@@ -60,14 +60,17 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Allow any origin for local use (allow_credentials must be False when allow_origins=["*"])
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Same-origin by default: the dashboard is served by this process. A separate
+# frontend must be listed explicitly in CORS_ORIGINS; a wildcard is never used.
+_cors_origins = [origin.strip() for origin in CORS_ORIGINS.split(",") if origin.strip()]
+if _cors_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_cors_origins,
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 # Include API routes
 app.include_router(router, prefix="/api")

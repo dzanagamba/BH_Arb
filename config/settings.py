@@ -143,8 +143,11 @@ TEAM_MATCH_MIN_PERCENT = 70    # Min similarity (0-100) required for EACH team i
 BROWSER_CONCURRENCY = 3        # Max concurrent Playwright browsers (one per browser bookmaker)
 
 # --- Server Settings ---
-HOST = os.getenv("HOST", "0.0.0.0")
+HOST = os.getenv("HOST", "127.0.0.1")
 PORT = int(os.getenv("PORT", "8000"))
+# Comma-separated allowed origins. Empty means same-origin only (the dashboard
+# is served by this process); set it only when a separate frontend needs access.
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "")
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").strip().upper()
 # Optional API key — when set, POST /api/scan, /api/config/toggle, /api/recalculate,
 # /api/verify and GET /api/history require an `X-API-Key` header.

@@ -16,7 +16,7 @@ This is an evidence-based verdict, not a score:
 | Freshness | Partial | The engine has odds TTL and the bet slip re-checks, but there is no per-book freshness budget, no last-known-value policy, and no push/streaming path. |
 | Execution | Partial | Stakes are rounded, legs are ordered, and the slip re-plans. Book limits, partial acceptance, balance, and the "price moved between legs" workflow are not complete. |
 | Operations | Missing | No scheduler/back-off, no alerting, no 24 h soak, no deployment, no health budget for mapping coverage. |
-| Security | Missing | The paused security-hardening stash is still unapplied; the server is not safe to expose beyond localhost. |
+| Security | Partial | The server now binds loopback by default and CORS is same-origin unless `CORS_ORIGINS` names an origin. The paused stash (API key on every route, CSRF guard, XSS sweep) is still unapplied. |
 | Evaluation | Partial | Deterministic replay, a cold-start fixed point and two real scans exist. No large multi-scan corpus, no labelled precision/recall, no CLV/backtest. |
 
 The honest summary: **the engine can prove a match and price it on real data
@@ -43,6 +43,21 @@ This is meaningful evidence for correctness. It is **not** evidence of coverage:
 8,618 candidate pairs remained unresolved. Both books' routes were verified on
 samples (`scripts/verify_deeplinks.py`), so a full link sweep is the next
 coverage lever.
+
+### Pairing coverage on that scan
+
+The scan is a direct measurement of the naming problem:
+
+| Ground truth | Fixtures | Grouped | Missed | Miss rate |
+|---|---|---|---|---|
+| Same non-empty Betradar id on >1 book | 736 | 711 | 25 | 3.4% |
+| Identical raw teams + kickoff on >1 book | 1,032 | 986 | 46 | 4.5% |
+
+The missed Betradar cases are almost all MaxBet, whose groups stay unverified
+until its per-event link is proven; the missed exact-fixture cases are MaxBet,
+Mozzartbet and the MDShop/Admiralbet pair, which is one NSoft price source and is
+correctly not treated as two books. This is the strongest evidence so far that
+the ledger, shared-opponent blocking and league fingerprints are doing the job.
 
 ## What the research says
 
@@ -121,8 +136,9 @@ coverage lever.
 5. **Operate it.** Scheduler with per-book back-off, 24 h soak, memory/browser
    leak checks, health/alerting on mapping coverage and stale books, and a
    documented persistent deployment.
-6. **Harden it.** Apply the paused security stash: loopback default, API key on
-   every state-changing route, CSRF guard, same-origin CORS, XSS escaping.
+6. **Harden it.** Loopback and same-origin CORS are now the defaults; apply the
+   rest of the paused stash: API key on every state-changing route, CSRF guard,
+   XSS escaping, and the dashboard's key prompt.
 7. **Measure quality.** Precision/recall on a labelled corpus, false-merge rate,
    mapping coverage, price-check outliers, CLV/backtest once real bets are
    recorded. A low coverage number is a finding, not a threshold to lower.
