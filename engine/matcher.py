@@ -592,10 +592,13 @@ def _team_index_keys(name: str) -> set[str]:
 def _processing_order_key(match: Match) -> tuple[object, ...]:
     """Total order over normalized matches, independent of input position.
 
-    Specific leagues sort before generic ones, then by league, kickoff (naive
-    UTC; missing last within a league), bookmaker (registry order, so the
-    anchoring book is a configured choice), normalized teams and the
-    remaining identifying fields so no two distinct listings tie.
+    The caller has already put specific leagues before generic/unmapped ones
+    with ``is_open``; this key must not reorder by a different definition of
+    "generic", or an unmapped league would anchor a group it is about to be
+    treated as open against. Within that bucket: league, kickoff (naive UTC;
+    missing last within a league), bookmaker (registry order, so the anchoring
+    book is a configured choice), normalized teams and the remaining
+    identifying fields so no two distinct listings tie.
     """
     kickoff = ""
     if match.kickoff:
@@ -606,7 +609,6 @@ def _processing_order_key(match: Match) -> tuple[object, ...]:
         )
         kickoff = kickoff_utc.isoformat()
     return (
-        1 if match.league_normalized in GENERIC_LEAGUES else 0,
         match.league_normalized,
         kickoff == "",
         kickoff,

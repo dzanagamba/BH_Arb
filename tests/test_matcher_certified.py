@@ -2,6 +2,7 @@
 
 from datetime import datetime, timedelta
 
+from engine.mapping_evidence import Evidence, MappingLedger
 from engine.matcher import MatchMatcher
 from models.schemas import Market, MarketType, Match, OddsValue
 
@@ -153,3 +154,39 @@ def test_betradar_pair_groups_across_differently_named_leagues():
     assert {m.bookmaker for m in groups[0].matches} == {"mdshop", "wwin"}
     team = next(e for e in groups[0].evidence if e.rule == "team_identity")
     assert team.reason == "betradar_id"
+
+
+def test_an_unmapped_league_does_not_anchor_before_a_generic_league(tmp_path):
+    """Betole's "germany, bundesliga" must not sort as a specific league.
+
+    It is unmapped, so the candidate stage treats it as open. When the sort key
+    disagreed, Betole anchored the group first and Mozzart's later "bundesliga"
+    listing was rejected on the anchor's league. With the same definition in
+    both places, Mozzart anchors and Betole joins through the resolver.
+    """
+    ledger = MappingLedger(tmp_path / "evidence.json")
+    teams = sorted({"stuttgart", "werder", "werder bremen", "mainz"})
+    for league in ("bundesliga", "germany, bundesliga"):
+        ledger.accept(
+            "league_fingerprint",
+            league,
+            [Evidence(type="league_fingerprint", detail={"teams": teams})],
+        )
+    ledger.save()
+
+    mozzart = _m("mozzartbet", "Stuttgart", "Werder", "Bundesliga", event_id="1")
+    betole = _m(
+        "betole", "Stuttgart", "Werder Bremen", "Germany, Bundesliga", event_id="2"
+    )
+    mdshop = _m("mdshop", "Stuttgart", "Werder Bremen", "Bundesliga", event_id="3")
+
+    groups = MatchMatcher(evidence_path=ledger.path).group_matches(
+        [betole, mozzart, mdshop]
+    )
+
+    assert len(groups) == 1
+    assert {m.bookmaker for m in groups[0].matches} == {
+        "mozzartbet",
+        "betole",
+        "mdshop",
+    }

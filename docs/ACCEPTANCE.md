@@ -8,7 +8,7 @@ named next to it.
 
 | Check | Command | Result |
 |---|---|---|
-| Tests | `python -m pytest` | **1,173 passed** |
+| Tests | `python -m pytest` | **1,174 passed** |
 | Lint | `python -m ruff check .` | clean |
 | Types | `python -m mypy .` | clean on 120 source files |
 | Market doc | `python scripts/generate_market_mapping_doc.py --check` | in sync |
@@ -108,13 +108,12 @@ and are reported as gone rather than as confirmed arbs.
 
 The final-gate soak scan at **04:54 UTC** found **6,500 matches, 1,044 verified
 groups and 12 surebets**, including `mainz – bayern munich` 1X2 at 0.27%, a
-fixture that only paired after the anchor fix. The latest scan at **06:18 UTC**, after the one-sided qualifier rule, found
-**6,681 matches, 1,077 verified groups and 11 surebets**. The 06:11 scan's 11
-surebets were re-checked: nine re-verified at a fresh price (Apollon
-Kalamarias–Panserraikos, Najran–Jubbah, Anaitasuna–Alaves, Manchester
-United–Roma twice, Estrela Amadora–Benfica, Barcelona–Aston Villa,
-Roma–Sassuolo and Villarreal–PSG); the two Boston United–Leicester U21 legs
-were gone and are reported as gone.
+fixture that only paired after the anchor fix. The latest scan at **06:30 UTC**, after the processing-order fix, found
+**6,567 matches, 1,073 verified groups and 10 surebets**. The 10 were re-checked:
+eight re-verified at a fresh price (Apollon Kalamarias–Panserraikos,
+Najran–Jubbah, Manchester United–Roma twice, Estrela Amadora–Benfica,
+Bodo/Glimt–Lille, Roma–Sassuolo and Preston–Sheffield United); the two Boston
+United–Leicester U21 legs were gone and are reported as gone.
 
 ## Pairing coverage
 
@@ -124,31 +123,31 @@ repeats a bookmaker.
 
 | Metric | Value |
 |---|---:|
-| Matches | 6,681 |
-| Verified multi-book groups | 1,077 |
-| Listings in groups | 6,053 |
-| Ungrouped listings | 628 |
-| Duplicate listings from a book already in the group | 301 |
-| Strict misses (same league, ±15 min, both teams ≥80% alike) | 21 |
-| Strict miss rate | **0.31%** |
+| Matches | 6,567 |
+| Verified multi-book groups | 1,073 |
+| Listings in groups | 5,940 |
+| Ungrouped listings | 627 |
+| Duplicate listings from a book already in the group | 305 |
+| Strict misses (same league, ±15 min, both teams ≥80% alike) | 18 |
+| Strict miss rate | **0.27%** |
 | Groups repeating a bookmaker | 0 |
 
 Per-book grouping, including duplicate listings:
 
 | Book | Grouped / matches | Rate |
 |---|---:|---:|
-| MDShop | 609 / 616 | 98.9% |
-| Admiralbet | 609 / 616 | 98.9% |
-| MBet | 622 / 634 | 98.1% |
-| WWIN | 732 / 763 | 95.9% |
-| SportPlus | 733 / 750 | 97.7% |
-| Premier Kladionica | 751 / 833 | 90.2% |
-| MaxBet | 753 / 836 | 90.1% |
-| Betole | 990 / 1,298 | 76.3% |
-| Mozzartbet | 254 / 335 | 75.8% |
+| MDShop | 617 / 629 | 98.1% |
+| Admiralbet | 626 / 638 | 98.1% |
+| MBet | 619 / 634 | 97.6% |
+| WWIN | 733 / 763 | 96.1% |
+| SportPlus | 735 / 750 | 98.0% |
+| Premier Kladionica | 751 / 834 | 90.0% |
+| MaxBet | 754 / 837 | 90.1% |
+| Betole | 843 / 1,147 | 73.5% |
+| Mozzartbet | 262 / 335 | 78.2% |
 
 The low Betole/Mozzartbet rates are mostly duplicate listings and leagues no
-other book carries, not same-fixture misses: only 21 offers in the whole scan
+other book carries, not same-fixture misses: only 18 offers in the whole scan
 have a strict counterpart in another book that the matcher failed to pair. The
 remaining examples are abbreviations, transliterations and one-sided qualifiers
 the veto correctly keeps apart, such as `Hamburger` / `Hamburger SV`,
@@ -187,7 +186,11 @@ the veto correctly keeps apart, such as `Hamburger` / `Hamburger SV`,
    club (`City`, `United`, `Inter`, `Real`, `Atletico`, `Deportivo`) are
    vetoed, and so are ambiguous shared names such as `Sporting` /
    `Sporting CP`.
-7. **Prematch expiry is real.** A group is dropped once the latest kickoff any
+7. **Processing order uses the same open-league definition as candidates.**
+   Betole's unmapped `germany, bundesliga` no longer sorts as a specific league
+   ahead of Mozzart's `bundesliga`, so Mozzart anchors and Betole joins through
+   the resolver instead of one of them becoming a singleton.
+8. **Prematch expiry is real.** A group is dropped once the latest kickoff any
    book claims is more than two minutes past. Live mode still prices started
    matches; the old 15-minute prematch grace kept pricing fixtures that had
    already begun.
