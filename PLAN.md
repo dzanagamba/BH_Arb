@@ -1197,7 +1197,7 @@ counts.
 - **Verify:** the old cards' tests; a 24 h run for M4-1; a token check for
   M4-2.
 - **Done when:** the old M4-1/M4-2 done conditions are met.
-- **Log:** Added `AUTO_SCAN_PREMATCH_MINUTES`/`AUTO_SCAN_LIVE_MINUTES` (0 = off), `server/scheduler.py`, `start_scan_if_idle`, lifespan task start/stop, and `scheduler` in `/api/health`. The loop never overlaps a manual scan or a verify lock; exceptions are logged and the loop continues. Per-book backoff now skips a book after 3 empty/error scheduled runs, doubles the wait to a 60-minute cap, resets on a non-empty run, and is ignored by manual scans; `/api/health` exposes the counters. 6 scheduler tests. Added `scripts/soak.py`; a 2-cycle smoke passed at 4.5% RSS growth and 0 surviving browsers. The 24-hour run is still open. Notifications remain.
+- **Log:** Added `AUTO_SCAN_PREMATCH_MINUTES`/`AUTO_SCAN_LIVE_MINUTES` (0 = off), `server/scheduler.py`, `start_scan_if_idle`, lifespan task start/stop, and `scheduler` in `/api/health`. The loop never overlaps a manual scan or a verify lock; exceptions are logged and the loop continues. Per-book backoff now skips a book after 3 empty/error scheduled runs, doubles the wait to a 60-minute cap, resets on a non-empty run, and is ignored by manual scans; `/api/health` exposes the counters. 6 scheduler tests. Added `scripts/soak.py`; a 3-cycle smoke passed at 19.3% RSS growth and 0 surviving browsers. The 24-hour run is still open. Notifications remain.
 
 #### A7-3 · Re-apply security hardening
 

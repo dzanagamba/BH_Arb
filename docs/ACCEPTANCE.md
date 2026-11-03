@@ -21,14 +21,14 @@ false merges and 0 unresolved evidence-backed pairs.
 
 ## Soak smoke (not the 24-hour gate)
 
-`python scripts/soak.py --cycles 2 --interval 5 --pid <server-pid> --check`:
+`python scripts/soak.py --cycles 3 --interval 5 --pid <server-pid> --check`:
 
 | Sample | Matches | Groups | Surebets | RSS | Browsers | Errors |
 |---|---:|---:|---:|---:|---:|---:|
-| 1 | 6,504 | 1,047 | 7 | 746.0 MB | 0 | 1 |
-| 2 | 6,504 | 1,047 | 7 | 779.7 MB | 0 | 1 |
+| 1 | 6,501 | 1,046 | 7 | 715.6 MB | 0 | 1 |
+| 3 | 6,500 | 1,046 | 7 | 853.4 MB | 0 | 1 |
 
-Memory grew **4.5%** (limit 50%), no browser process survived a scan, and the
+Memory grew **19.3%** (limit 50%), no browser process survived a scan, and the
 run passed `--check`. This is a smoke test; the 24-hour run is still open.
 
 ## Real prematch scan
