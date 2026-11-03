@@ -7,7 +7,7 @@
 > entry, manual gate exception or manual CAPTCHA step** anywhere between scrape
 > and a shown surebet.
 >
-> **Baseline (2026-11-03, this worktree).** `python -m pytest` → **1150 passed** in 90 s; `ruff check .` clean; `mypy .` clean on 111 source files;
+> **Baseline (2026-11-03, this worktree).** `python -m pytest` → **1154 passed** in 90 s; `ruff check .` clean; `mypy .` clean on 111 source files;
 > `scripts/generate_market_mapping_doc.py --check` in sync. Environment is
 > `.venv` on CPython 3.11.18, installed with `uv`. The 953-passed figure in the
 > superseded plan was a 2026-10-20 measurement and is stale.
@@ -26,7 +26,7 @@
 > consensus, registry merge, discovery CLI and raw-offer resolver are shipped.
 > Betole is now the ninth enabled book after fixing its kickoff and Betradar id;
 > the 9-book scan found 6,503 matches, 1,039 verified groups and **8 surebets**,
-> all re-verified by `POST /api/verify`; two price-outlier surebets were dropped. **1150 tests pass.** The acceptance
+> all re-verified by `POST /api/verify`; two price-outlier surebets were dropped. **1154 tests pass.** The acceptance
 > record is `docs/ACCEPTANCE.md`; the production verdict and research are in
 > `docs/PRODUCTION_READINESS.md`.
 >
@@ -1197,7 +1197,7 @@ counts.
 - **Verify:** the old cards' tests; a 24 h run for M4-1; a token check for
   M4-2.
 - **Done when:** the old M4-1/M4-2 done conditions are met.
-- **Log:** Added `AUTO_SCAN_PREMATCH_MINUTES`/`AUTO_SCAN_LIVE_MINUTES` (0 = off), `server/scheduler.py`, `start_scan_if_idle`, lifespan task start/stop, and `scheduler` in `/api/health`. The loop never overlaps a manual scan or a verify lock; exceptions are logged and the loop continues. Per-book backoff now skips a book after 3 empty/error scheduled runs, doubles the wait to a 60-minute cap, resets on a non-empty run, and is ignored by manual scans; `/api/health` exposes the counters. 6 scheduler tests. Notifications remain.
+- **Log:** Added `AUTO_SCAN_PREMATCH_MINUTES`/`AUTO_SCAN_LIVE_MINUTES` (0 = off), `server/scheduler.py`, `start_scan_if_idle`, lifespan task start/stop, and `scheduler` in `/api/health`. The loop never overlaps a manual scan or a verify lock; exceptions are logged and the loop continues. Per-book backoff now skips a book after 3 empty/error scheduled runs, doubles the wait to a 60-minute cap, resets on a non-empty run, and is ignored by manual scans; `/api/health` exposes the counters. 6 scheduler tests. Added `scripts/soak.py`; a 2-cycle smoke passed at 4.5% RSS growth and 0 surviving browsers. The 24-hour run is still open. Notifications remain.
 
 #### A7-3 · Re-apply security hardening
 

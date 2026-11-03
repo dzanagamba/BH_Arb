@@ -8,7 +8,7 @@ named next to it.
 
 | Check | Command | Result |
 |---|---|---|
-| Tests | `python -m pytest` | **1,150 passed** |
+| Tests | `python -m pytest` | **1,154 passed** |
 | Lint | `python -m ruff check .` | clean |
 | Types | `python -m mypy .` | clean on 111 source files |
 | Market doc | `python scripts/generate_market_mapping_doc.py --check` | in sync |
@@ -18,6 +18,18 @@ named next to it.
 The cold replay starts with an empty evidence ledger, learns from the frozen
 corpus, and reaches a pass that adds no claim and changes no verdict. It has 0
 false merges and 0 unresolved evidence-backed pairs.
+
+## Soak smoke (not the 24-hour gate)
+
+`python scripts/soak.py --cycles 2 --interval 5 --pid <server-pid> --check`:
+
+| Sample | Matches | Groups | Surebets | RSS | Browsers | Errors |
+|---|---:|---:|---:|---:|---:|---:|
+| 1 | 6,504 | 1,047 | 7 | 746.0 MB | 0 | 1 |
+| 2 | 6,504 | 1,047 | 7 | 779.7 MB | 0 | 1 |
+
+Memory grew **4.5%** (limit 50%), no browser process survived a scan, and the
+run passed `--check`. This is a smoke test; the 24-hour run is still open.
 
 ## Real prematch scan
 
