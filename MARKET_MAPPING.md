@@ -159,7 +159,7 @@ A name pattern applies to any source ID that matches it.
 | Bookmaker | Excluded IDs / name patterns |
 | --- | --- |
 | `admiralbet` | `1`, `6`, `9`, `10`, `11`, `12`, `14`, `16`, `17`, `18`, `24`, `27`, `28`, `30`, `33`, `35`, `37`, `38`, `39`, `41`, `42`, `43`, `44`, `54`, `56`, `57`, `59`, `60`, `136`, `140`, `143`, `144`, `148`, `149`, `153`, `154`, `161`, `162`, `166`, `174`, `261`, `303`, `304`, `418`, `419`, `437`, `534`, `688`, `689`, `973`, `974`, `975`, `976`, `977`, `978`, `995`, `1064`, `1065`, `1066`, `1067`, `1112`, `1236`, `1237`, `1238`, `1239`, `1240`, `1241`, `1242`, `1243`, `1244`, `1245`, `1246`, `1247`, `1248`, `1249`, `1250`, `1251`, `1252`, `1685`, `1686`, `1687`, `1688`, `1690`, `1691` |
-| `betole` | `335`, `336` |
+| `betole` | `284`, `285`, `286`, `295`, `296`, `316`, `317`, `335`, `336`, `363`, `364`, `615`, `50244`, `50310`, `50311`, `50685`, `51568`, `53171`, `55173`, `55182`, `55352`, `55353` |
 | `mbet` | `lfb:3waagn`, `lfb:atg`, `lfb:atgi1sth`, `lfb:bhats`, `lfb:bhhts`, `lfb:btts1hny`, `lfb:cs`, `lfb:dc1sth`, `lfb:dc2ndh`, `lfb:dcag`, `lfb:dnb`, `lfb:dnb1sth`, `lfb:dnb2ndh`, `lfb:eg`, `lfb:eg1sth`, `lfb:eo`, `lfb:gg3ny`, `lfb:h`, `lfb:hf`, `lfb:htg`, `lfb:htgi1sth`, `lfb:hwmg1ste2nd`, `lfb:ng`, `lfb:tco`, `lfb:tg1sth`, `lfb:tg2ndh`, `lfb:tw1sth`, `lfb:tw2ndh`, `lfb:wag`, `ofb:1hfg`, `ofb:2hfg`, `ofb:acar`, `ofb:asom`, `ofb:asot`, `ofb:atc`, `ofb:atfo`, `ofb:atg`, `ofb:atgc`, `ofb:aweh`, `ofb:btrc`, `ofb:btrc2`, `ofb:car1`, `ofb:cgg`, `ofb:coh`, `ofb:cor`, `ofb:corfh`, `ofb:cr`, `ofb:crfh`, `ofb:ctg`, `ofb:dcg`, `ofb:dchtft2`, `ofb:dchtft3`, `ofb:dchtft32`, `ofb:dnb`, `ofb:dnbfh`, `ofb:dnbsh`, `ofb:dw`, `ofb:etc`, `ofb:etcfh`, `ofb:fgm`, `ofb:fgs`, `ofb:fhatg`, `ofb:fhcar`, `ofb:fhg`, `ofb:fhhtg`, `ofb:fhoff`, `ofb:fi`, `ofb:frcor`, `ofb:fsg`, `ofb:fsgg`, `ofb:fts`, `ofb:gg2+`, `ofb:ggg`, `ofb:ggi`, `ofb:ggii`, `ofb:hcar`, `ofb:hsom`, `ofb:hsot`, `ofb:htc`, `ofb:htdc`, `ofb:htfo`, `ofb:htft`, `ofb:htftg`, `ofb:htfthcg`, `ofb:htg`, `ofb:htgc`, `ofb:hthc`, `ofb:hweh`, `ofb:hwmg`, `ofb:lts`, `ofb:mbc1`, `ofb:oe`, `ofb:or`, `ofb:owg`, `ofb:paaw`, `ofb:paho`, `ofb:pn`, `ofb:rc`, `ofb:sh`, `ofb:shatg`, `ofb:shdc`, `ofb:shg`, `ofb:shhtg`, `ofb:som`, `ofb:sot`, `ofb:sott`, `ofb:sw`, `ofb:t1g`, `ofb:tc`, `ofb:tcfh`, `ofb:tfo`, `ofb:tgra`, `ofb:tgrh`, `ofb:tof`, `ofb:tofa`, `ofb:tofh`, `ofb:toq`, `ofb:twfb`, `ofb:wma`, `ofb:wmh` |
 | `mdshop` | `1`, `6`, `9`, `10`, `11`, `12`, `14`, `16`, `17`, `18`, `24`, `27`, `28`, `30`, `33`, `35`, `37`, `38`, `39`, `41`, `42`, `43`, `44`, `54`, `56`, `57`, `59`, `60`, `136`, `140`, `143`, `144`, `148`, `149`, `153`, `154`, `161`, `162`, `166`, `174`, `261`, `303`, `304`, `418`, `419`, `437`, `534`, `688`, `689`, `973`, `974`, `975`, `976`, `977`, `978`, `995`, `1064`, `1065`, `1066`, `1067`, `1112`, `1236`, `1237`, `1238`, `1239`, `1240`, `1241`, `1242`, `1243`, `1244`, `1245`, `1246`, `1247`, `1248`, `1249`, `1250`, `1251`, `1252`, `1685`, `1686`, `1687`, `1688`, `1690`, `1691` |
 | `mozzartbet` | `141`, `*DALJE*`, `*KVALIFIKACIJE*`, `*PROLAZ*` |
@@ -377,15 +377,18 @@ until a concrete payload is captured.
 
 ## Betole
 
-Betole is disabled by default. Its direct prematch feed is not NSoft `betTypeId`
-data; odds are keyed by numeric pick codes in `esMatches[].odds`, and the
-result pick codes carry the source labels `KI_1`/`KI_X`/`KI_2`. The live feed and
-the `ttg_lang` market definitions were checked directly.
+Betole is enabled. Its direct prematch feed is not NSoft `betTypeId` data; odds
+are keyed by numeric pick codes in `esMatches[].odds`, and the result pick codes
+carry the source labels `KI_1`/`KI_X`/`KI_2`. The scraper reads `kickOffTime` and
+keeps `brMatchId` as a Betradar id. On 2026-11-03 it returned 1,239 timestamped
+matches. The live feed and the `ttg_lang` market definitions were checked
+directly.
 
 The scraper uses `/restapi/offer/ba/sport/S/desk`, skips live/blocked events, and
 paginates with the feed's `from` offset. Pick codes `4`/`5`/`6` are a supported
 experimental first-half result rather than an excluded market, and the period and
-combination codes (`10`-`18`, `284`-`286`, `295`-`296`) are not mapped. The
+combination codes (`10`-`18`, `284`-`286`, `295`-`296`) are not mapped and are
+declared excluded in the registry, so they stay out of the unmapped diagnostic. The
 `IDE DALJE` advance/qualification pair is `335`/`336`. Synthetic tests also
 cover the legacy reference resolver and the verified pick-code mappings.
 
