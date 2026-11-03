@@ -84,6 +84,7 @@ from scrapers.mozzartbet import MozzartbetScraper
 from scrapers.premier_kladionica import PremierKladionicaScraper
 from scrapers.sportplus import SportPlusScraper
 from scrapers.wwin import WWINScraper
+from scripts.pairing_audit import audit as audit_pairing
 from server.mapping_coverage import build_coverage
 
 logger = logging.getLogger(__name__)
@@ -195,6 +196,7 @@ live_status = ScanStatus(mode="live")    # live scans
 cached_surebets: list[dict] = []
 cached_matches: list[dict] = []
 cached_match_groups_report: list[dict] = []
+_pairing_summary: dict[str, dict[str, Any]] = {}
 cached_per_bookie: dict[str, int] = {}  # bookmaker_id -> match count
 cached_live_surebets: list[dict] = []
 cached_live_matches: list[dict] = []
@@ -1553,6 +1555,29 @@ async def run_scan(mode: str = "prematch", scheduled: bool = False):
         _save_cache(mode)
         _append_history(len(groups), mode)
 
+        # Pairing quality is a health metric, not a separate script only. The
+        # audit reads the same cached rows the dashboard serves, so the number
+        # cannot drift from the list it describes.
+        try:
+            pairing = audit_pairing(
+                {"matches": matches_cache, "match_groups": report_cache}
+            )
+            _pairing_summary[mode] = {
+                key: pairing.get(key)
+                for key in (
+                    "matches",
+                    "groups",
+                    "ungrouped",
+                    "duplicate_listings",
+                    "strict_misses",
+                    "strict_miss_rate",
+                    "duplicate_book_groups",
+                )
+            }
+        except Exception as exc:  # a metric must never stop a scan
+            logger.warning("Pairing audit failed: %s", exc)
+            _pairing_summary[mode] = {"error": str(exc)[:200]}
+
         logger.info(
             f"🎯 {'Live' if is_live else 'Prematch'} scan complete: {len(all_matches)} matches scraped, "
             f"{len(groups)} match groups, {len(surebets)} surebets found"
@@ -1872,6 +1897,8 @@ async def health():
         "matches_cached": len(cached_matches),
         "live_surebets_cached": len(cached_live_surebets),
         "live_matches_cached": len(cached_live_matches),
+        "pairing": _pairing_summary.get("prematch") or {},
+        "live_pairing": _pairing_summary.get("live") or {},
         "unmapped_markets": dict(unmapped_markets),
         "verified_groups": sum(
             1
@@ -1969,6 +1996,7 @@ async def get_results(mode: str = "prematch"):
         "mode": mode,
         "match_groups": len(report_cache),
         "group_statuses": group_statuses,
+        "pairing": _pairing_summary.get(mode) or {},
         "last_scan_time": (
             status.last_scan_time.isoformat()
             if status.last_scan_time
