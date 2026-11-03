@@ -31,7 +31,7 @@ BOOKMAKERS = {
         "name": "Betole",
         "base_url": "https://www.betole.ba",
         "soccer_url": "https://www.betole.ba",
-        "enabled": False,
+        "enabled": True,
         "color": "#B71C1C",
     },
     "mbet": {

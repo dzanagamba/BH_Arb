@@ -34,6 +34,7 @@ Two headless prematch scans were run against the live books, not fixtures.
 | Baseline (legacy mappings) | 5,285 | 8/8 enabled | 811 | 3,536 | 3,526 | 0 | 0 | 0 |
 | With learned ledger | 5,287 | 8/8 enabled | 797 | 3,645 | 3,704 | 0 | 0 | 0 |
 | With in-scan learning | 5,276 | 8/8 enabled | 796 | 3,644 | 3,698 | 0 | 0 | 0 |
+| With Betole enabled | 6,503 | 9/9 enabled | 1,037 | 5,683 | 4,424 | 1 | 0 | 6 |
 
 The learned ledger was produced by `scripts/learn_mappings.py` from the first
 scan: 1,795 accepted claims and 866 quarantined. The second scan grouped 109
@@ -71,19 +72,22 @@ the ledger, shared-opponent blocking and league fingerprints are doing the job.
 |---|---|---|---|---|
 | nara – kusatsu | O/U 2.5 | 3.18% | mbet / mozzartbet | yes, unchanged |
 | nara – kusatsu | BTTS | 0.54% | wwin / mozzartbet | yes, unchanged |
+| anaitasuna ft – alaves | BTTS | 1.69% | betole / maxbet | yes, unchanged |
 | fulham – newcastle | 1X2 | 0.49% (dust) | sportplus / mozzartbet / maxbet | yes, unchanged |
 | atl madrid – bayern munich | draw / not-draw | 0.42% (dust) | mdshop / mozzartbet | yes, unchanged |
 | roma – sassuolo | home / not-home | 0.42% (dust) | mbet / mozzartbet | yes, unchanged |
 
-The scan had 5,267 matches, 898 verified groups, 4,709 grouped listings, 4,177
-price comparisons, 0 false merges and 1 price outlier. The outlier was the
+The 9-book scan had 6,503 matches, 1,037 verified groups, 5,683 grouped
+listings, 4,424 price comparisons, 0 false merges and 1 price outlier. The outlier was the
 `boston utd – leicester u21` MaxBet X2 leg; the price guard dropped that surebet
 instead of showing it. The five above passed the guard and `POST /api/verify`
 returned `still_profitable: true` for every one, with unchanged odds.
 
 This is the first end-to-end evidence that the product can do the job it exists
-for. The route-pattern proof for MaxBet/Mozzartbet was the coverage unlock: it
-raised grouped listings from 3,645 to 4,709 and produced the first real arbs.
+for. The route-pattern proof for MaxBet/Mozzartbet and enabling Betole were the
+coverage unlocks: grouped listings rose from 3,645 to 5,683. Betole also carries
+a Betradar match id, which its scraper now keeps; its kickoff field was never
+read before 2026-11-03.
 
 ## What the research says
 

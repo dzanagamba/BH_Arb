@@ -124,6 +124,41 @@ def _parse_betole_markets(raw_odds: dict, mode: str = "prematch") -> list[Market
     return markets
 
 
+def _event_to_match(event: dict, live: bool) -> Match | None:
+    """Build one Match from a Betole desk event, including its Betradar id."""
+    event_id = str(event.get("id") or event.get("matchCode") or "")
+    if not event_id:
+        return None
+    if bool(event.get("live")) != live:
+        return None
+    if event.get("blocked"):
+        return None
+    home = str(event.get("home") or "").strip()
+    away = str(event.get("away") or "").strip()
+    if not home or not away:
+        return None
+    if live and "srl" in f"{home} {away}".lower():
+        return None  # Simulated reality — not a real match
+    markets = _parse_betole_markets(event.get("odds", {}), mode="live" if live else "prematch")
+    if not markets:
+        return None
+    return Match(
+        bookmaker=BOOKMAKER_ID,
+        home_team=home,
+        away_team=away,
+        league=str(event.get("leagueName") or "Fudbal"),
+        kickoff=_extract_kickoff({"kickOffTime": event.get("kickOffTime")}),
+        markets=markets,
+        url=OFFER_URL,
+        match_code=str(event.get("matchCode") or event_id),
+        event_id=event_id,
+        betradar_id=str(event.get("brMatchId") or ""),
+        deep_link_verified=False,
+        is_live=live,
+        fetched_at=datetime.now(UTC).replace(tzinfo=None),
+    )
+
+
 class BetoleScraper:
     """Scraper for betole.ba — ExeFeed platform."""
 
@@ -172,39 +207,9 @@ class BetoleScraper:
                         continue
                     seen_ids.add(event_id)
                     new_events += 1
-
-                    is_live_flag = bool(event.get("live"))
-                    if is_live_flag != live:
-                        continue
-                    if event.get("blocked"):
-                        continue
-                    home = str(event.get("home") or "").strip()
-                    away = str(event.get("away") or "").strip()
-                    if not home or not away:
-                        continue
-                    name_l = f"{home} {away}".lower()
-                    if live and "srl" in name_l:
-                        continue  # Simulated reality — not a real match
-
-                    markets = _parse_betole_markets(
-                        event.get("odds", {}), mode="live" if live else "prematch"
-                    )
-                    if not markets:
-                        continue
-                    matches.append(Match(
-                        bookmaker=BOOKMAKER_ID,
-                        home_team=home,
-                        away_team=away,
-                        league=str(event.get("leagueName") or "Fudbal"),
-                        kickoff=_extract_kickoff({"kickOffTime": event.get("kickOffTime")}),
-                        markets=markets,
-                        url=OFFER_URL,
-                        match_code=str(event.get("matchCode") or event_id),
-                        event_id=event_id,
-                        deep_link_verified=False,
-                        is_live=live,
-                        fetched_at=datetime.now(UTC).replace(tzinfo=None),
-                    ))
+                    match = _event_to_match(event, live)
+                    if match is not None:
+                        matches.append(match)
 
                 if len(events) < PAGE_SIZE or new_events == 0:
                     break

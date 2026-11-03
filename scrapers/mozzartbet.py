@@ -91,7 +91,7 @@ def _extract_league(event: dict) -> str:
 
 
 def _extract_kickoff(event: dict) -> datetime | None:
-    for k in ["startTime", "kickOff", "kickoff", "startAt", "date",
+    for k in ["startTime", "kickOffTime", "kickOff", "kickoff", "startAt", "date",
               "matchTime", "eventDate", "startDate", "timestamp", "dateTime"]:
         v = event.get(k)
         if v:

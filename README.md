@@ -58,7 +58,7 @@ A web-based arbitrage betting detection tool for the Bosnian market.
 
 ## What it does
 
-1. Scrapes football odds from Bosnian bookmakers: Mozzartbet, MDShop, Admiralbet, MBet, SportPlus, Premier Kladionica, WWIN and MaxBet are on; Betole and EVLBet are off by default (EVLBet's feed returns no football events and has no captured payload)
+1. Scrapes football odds from Bosnian bookmakers: Mozzartbet, MDShop, Admiralbet, MBet, SportPlus, Premier Kladionica, WWIN, MaxBet and Betole are on; EVLBet is off by default (EVLBet's feed returns no football events and has no captured payload)
 2. Learns team, league and market names from the fixtures the books share on every scan (Bosnian diacritics, Cyrillic, abbreviations, youth/reserve/women markers), and keeps the evidence in a provenance ledger
 3. Groups the same real-world event across bookmakers, and only a group the certainty gate *proves* is the same event is ever priced
 4. Detects arbitrage (surebet) opportunities where odds guarantee a profit regardless of match outcome (enforcing strict 1-bet-per-bookmaker rule)
