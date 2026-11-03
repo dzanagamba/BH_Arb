@@ -13,6 +13,8 @@ def test_stable_samples_pass():
     report = summarize([_sample(500), _sample(520)])
     assert report["ok"] is True
     assert report["memory_growth"] == 0.04
+    assert report["rss_series"] == [500, 520]
+    assert [sample["rss_mb"] for sample in report["history"]] == [500, 520]
 
 
 def test_memory_growth_over_the_limit_fails():

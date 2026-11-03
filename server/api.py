@@ -249,7 +249,7 @@ def _atomic_write_json(path: str, payload: object, prefix: str) -> None:
     fd, temp_path = tempfile.mkstemp(prefix=f".{prefix}.", suffix=".tmp", dir=directory, text=True)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as file:
-            json.dump(payload, file, ensure_ascii=False, indent=2)
+            json.dump(payload, file, ensure_ascii=False, indent=2, default=str)
             file.flush()
             os.fsync(file.fileno())
         os.replace(temp_path, path)
@@ -1577,10 +1577,11 @@ def _save_cache(mode: str = "prematch"):
     cache_file = _LIVE_CACHE_FILE if mode == "live" else _PREMATCH_CACHE_FILE
     try:
         scan_time = status.last_scan_time.isoformat() if status.last_scan_time else None
-        # Round-tripped through `default=str` first so any stray datetime is
-        # serialised, then written atomically: a crash mid-write must leave the
-        # previous snapshot, never a truncated file the next boot cannot parse.
-        payload = json.loads(json.dumps({
+        # `_atomic_write_json` uses `default=str`, so the payload is written
+        # directly. Round-tripping it through `json.dumps`/`json.loads` first
+        # built two full-size strings for a 180 MB cache and left the RSS
+        # high-water mark behind after every scan.
+        payload = {
             "surebets": surebets_cache,
             "matches": matches_cache,
             "matches_count": len(matches_cache),
@@ -1588,7 +1589,7 @@ def _save_cache(mode: str = "prematch"):
             "mode": mode,
             "scan_time": scan_time,
             "fetched_at": scan_time,
-        }, default=str))
+        }
         _atomic_write_json(cache_file, payload, os.path.basename(cache_file))
     except Exception as e:
         logger.warning(f"Cache save failed: {e}")

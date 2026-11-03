@@ -8,9 +8,9 @@ named next to it.
 
 | Check | Command | Result |
 |---|---|---|
-| Tests | `python -m pytest` | **1,171 passed** |
+| Tests | `python -m pytest` | **1,172 passed** |
 | Lint | `python -m ruff check .` | clean |
-| Types | `python -m mypy .` | clean on 119 source files |
+| Types | `python -m mypy .` | clean on 120 source files |
 | Market doc | `python scripts/generate_market_mapping_doc.py --check` | in sync |
 | Cold replay | `python scripts/replay_mappings.py tests/fixtures/replay/2026-11-03 --cold --check` | exit 0, fixed point |
 | Seeded replay | `python scripts/replay_mappings.py tests/fixtures/replay/2026-11-03 --seeded --check` | exit 0 |
@@ -61,11 +61,16 @@ on the final code (punctuation, expiry and CSP included):
 | 6 | 6,397 | 1,037 | 9 | 870.5 MB | 0 | 0 |
 
 Memory grew **15.27%**, no browser process survived, all six scans returned the
-same 1,037 groups and 9 surebets, and the run passed `--check`. On the soak's
-nine surebets, seven re-verified at a fresh price (Najran–Jubbah, Anaitasuna–Alaves,
+same 1,037 groups and 9 surebets, and the run passed `--check`.
+
+After removing the cache's double JSON serialization, a three-cycle run started
+at **626.4 MB** and ended at **782.6 MB** (24.9%), with 0 surviving browsers and
+9–10 surebets per scan. The absolute high-water mark fell from 875 MB to 783 MB;
+the 24-hour run remains open. On the six-cycle soak's nine surebets, seven
+re-verified at a fresh price (Najran–Jubbah, Anaitasuna–Alaves,
 Zakynthos–Niki Volou, Manchester United–Roma, Roma–Sassuolo, Villarreal–PSG and
 Mainz–Bayern); the two Boston United–Leicester U21 legs were gone on re-check and
-are reported as gone. The 24-hour run is still open.
+are reported as gone.
 
 ## Real prematch scan (verified sample)
 

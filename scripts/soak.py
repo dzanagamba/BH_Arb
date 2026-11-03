@@ -94,6 +94,11 @@ def summarize(samples: list[Sample], max_growth: float = 0.50) -> dict[str, Any]
         "samples": len(samples),
         "first": asdict(first),
         "last": asdict(last),
+        # The whole curve, not just the endpoints: a long run is judged by
+        # whether RSS plateaus or keeps climbing, and two numbers cannot show
+        # that.
+        "history": [asdict(sample) for sample in samples],
+        "rss_series": [sample.rss_mb for sample in samples],
         "memory_growth": growth,
         "max_growth": max_growth,
         "ok": not problems,
