@@ -27,21 +27,23 @@ false merges and 0 unresolved evidence-backed pairs.
 |---|---|
 | Books returning matches | 9 / 9 enabled (Betole, MaxBet, MDShop, Admiralbet, MBet, SportPlus, Premier Kladionica, WWIN, Mozzartbet) |
 | Matches | 6,503 |
-| Verified groups | 1,037 |
-| Listings in groups | 5,683 |
-| Price comparisons | 4,424 |
+| Verified groups | 1,039 |
+| Listings in groups | 5,754 |
+| Price comparisons | 4,481 |
 | False merges (different Betradar ids in one group) | 0 |
-| Price outliers | 1 (dropped with its surebet) |
-| Surebets shown | 6 |
+| Price outliers | 3 (two dropped with their surebets) |
+| Surebets shown | 8 |
 
-The one outlier was the `boston utd – leicester u21` MaxBet X2 leg. The price
-guard dropped that surebet instead of showing it. The six shown were re-checked
-with `POST /api/verify`; every one returned `still_profitable: true` on a fresh
-scrape.
+Two outlier surebets were dropped: `boston utd – leicester u21` (MaxBet X2) and
+`ael limassol – iraklis gerolakkou` (Betole GG, a 10.75% phantom). The eight shown
+were re-checked with `POST /api/verify`; every one returned `still_profitable:
+true` on a fresh scrape.
 
 | Match | Market | Profit | Books |
 |---|---|---:|---|
-| nara – kusatsu | O/U 2.5 | 3.18% | mbet / mozzartbet |
+| kanazawa – parceiro n | 1X2 | 7.59% | mdshop / sportplus / mozzartbet |
+| kanazawa – parceiro n | 1X2 + DC | 5.96% | mdshop / mozzartbet |
+| nara – kusatsu | O/U 2.5 | 3.94% | mbet / mozzartbet |
 | anaitasuna ft – alaves | BTTS | 1.69% | betole / maxbet |
 | nara – kusatsu | BTTS | 0.54% | wwin / mozzartbet |
 | fulham – newcastle | 1X2 | 0.49% (dust) | sportplus / mozzartbet / maxbet |

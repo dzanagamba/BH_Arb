@@ -34,7 +34,7 @@ Two headless prematch scans were run against the live books, not fixtures.
 | Baseline (legacy mappings) | 5,285 | 8/8 enabled | 811 | 3,536 | 3,526 | 0 | 0 | 0 |
 | With learned ledger | 5,287 | 8/8 enabled | 797 | 3,645 | 3,704 | 0 | 0 | 0 |
 | With in-scan learning | 5,276 | 8/8 enabled | 796 | 3,644 | 3,698 | 0 | 0 | 0 |
-| With Betole enabled | 6,503 | 9/9 enabled | 1,037 | 5,683 | 4,424 | 1 | 0 | 6 |
+| With Betole enabled | 6,503 | 9/9 enabled | 1,039 | 5,754 | 4,481 | 3 | 0 | 8 |
 
 The learned ledger was produced by `scripts/learn_mappings.py` from the first
 scan: 1,795 accepted claims and 866 quarantined. The second scan grouped 109
@@ -70,15 +70,17 @@ the ledger, shared-opponent blocking and league fingerprints are doing the job.
 
 | Match | Market | Profit | Books | Re-verified |
 |---|---|---|---|---|
-| nara – kusatsu | O/U 2.5 | 3.18% | mbet / mozzartbet | yes, unchanged |
-| nara – kusatsu | BTTS | 0.54% | wwin / mozzartbet | yes, unchanged |
+| kanazawa – parceiro n | 1X2 | 7.59% | mdshop / sportplus / mozzartbet | yes, unchanged |
+| kanazawa – parceiro n | 1X2 + DC | 5.96% | mdshop / mozzartbet | yes, unchanged |
+| nara – kusatsu | O/U 2.5 | 3.94% | mbet / mozzartbet | yes, unchanged |
+| nara – kusatsu | BTTS | 1.69% | wwin / mozzartbet | yes, unchanged |
 | anaitasuna ft – alaves | BTTS | 1.69% | betole / maxbet | yes, unchanged |
 | fulham – newcastle | 1X2 | 0.49% (dust) | sportplus / mozzartbet / maxbet | yes, unchanged |
 | atl madrid – bayern munich | draw / not-draw | 0.42% (dust) | mdshop / mozzartbet | yes, unchanged |
 | roma – sassuolo | home / not-home | 0.42% (dust) | mbet / mozzartbet | yes, unchanged |
 
-The 9-book scan had 6,503 matches, 1,037 verified groups, 5,683 grouped
-listings, 4,424 price comparisons, 0 false merges and 1 price outlier. The outlier was the
+The 9-book scan had 6,503 matches, 1,039 verified groups, 5,754 grouped
+listings, 4,481 price comparisons, 0 false merges and 3 price outliers. The outlier was the
 `boston utd – leicester u21` MaxBet X2 leg; the price guard dropped that surebet
 instead of showing it. The five above passed the guard and `POST /api/verify`
 returned `still_profitable: true` for every one, with unchanged odds.

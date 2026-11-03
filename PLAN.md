@@ -25,8 +25,8 @@
 > league fingerprints, legacy migration, read-only coverage endpoint, classifier,
 > consensus, registry merge, discovery CLI and raw-offer resolver are shipped.
 > Betole is now the ninth enabled book after fixing its kickoff and Betradar id;
-> the 9-book scan found 6,503 matches, 1,037 verified groups and **6 surebets**,
-> all re-verified by `POST /api/verify`. **1150 tests pass.** The acceptance
+> the 9-book scan found 6,503 matches, 1,039 verified groups and **8 surebets**,
+> all re-verified by `POST /api/verify`; two price-outlier surebets were dropped. **1150 tests pass.** The acceptance
 > record is `docs/ACCEPTANCE.md`; the production verdict and research are in
 > `docs/PRODUCTION_READINESS.md`.
 >
