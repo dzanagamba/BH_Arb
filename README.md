@@ -1,110 +1,87 @@
-# Surebet Scanner — Muse 12 🎯
+# BH_Arb
 
-A web-based arbitrage betting detection tool for the Bosnian market.
+Arbitrage research scanner for the Bosnian football betting market. It compares
+odds across bookmakers, proves which listings describe the same match, and
+prices only the groups the certainty gate can defend. It never places a bet.
 
-> **Open work** lives in [`PLAN.md`](PLAN.md) §4 *TODO*. The design history of
-> the mapping-certainty rework is in [`docs/HANDOFF.md`](docs/HANDOFF.md).
-
-> ### Which groups reach `verified`
+> ### What `verified` means
 >
-> A surebet is only ever shown for a match group the certainty gate has
-> **`verified`**, and `verified` includes the link half of the claim. Which
-> proofs satisfy that half is decided per book, by the book's own declaration in
+> A surebet is shown only for a match group the certainty gate marks `verified`,
+> and `verified` includes the link half of the claim. Which proof satisfies that
+> half is decided per book, by the book's declaration in
 > `config/bookmaker_deeplinks.json`:
 >
-> * **The book declares that it has no per-event route**
->   (`supports_event_id: false`) — eight of the ten books. There is no
->   per-event URL to prove, so the declaration is itself the proof: the group
->   records a `no_event_link` evidence note and is verified on identity alone —
->   league, kickoff, category, teams, orientation. A book with no declaration at
->   all is *not* accepted this way: the gate fails safe and treats its link as
->   unproven.
-> * **The book declares a per-event route** (`supports_event_id: true`) — the
->   route has to be proven by a real browser check. Mozzartbet and MaxBet declare
->   one, and their path-based patterns were browser-proven on 2026-11-03 on three
->   sampled events each: the path embeds the book's own event id, and the feed
->   supplies that id for every listing. A listing with an event id is therefore
->   verified with a `route_pattern_verified` note; a listing with no event id
->   still blocks. MDShop's and Admiralbet's declared `?event=<id>` routes are
->   **inert** — the served page is byte-identical to the plain football page and
->   the id appears nowhere in it — so on 2026-10-20 both were re-declared
->   `supports_event_id: false` with a dated note, and they now verify on identity
->   like the other route-less books.
+> * A book that declares **no per-event route** (`supports_event_id: false`,
+>   eight of the ten books) has **no per-event URL** to prove, so the
+>   declaration is the proof: the group carries a `no_event_link` evidence note and is verified on identity alone — league, kickoff, category, teams, orientation. A book with no declaration at all is refused; the gate fails safe.
+> * A book that declares a route (`supports_event_id: true` — **Mozzartbet** and
+>   **MaxBet**) must prove it. Their path-based patterns were browser-proven on
+>   2026-11-03 on three sampled events each: a listing with an event id verifies
+>   with a `route_pattern_verified` note, while a listing without an id still
+>   blocks. MDShop's and Admiralbet's declared `?event=<id>` routes are
+>   **inert** — the served page is byte-identical to the plain football page —
+>   so on 2026-10-20 both were re-declared `supports_event_id: false` and now
+>   verify on identity like the other route-less books.
 >
-> So what blocks `verified` today is identity, not links: league names the
+> What blocks `verified` today is identity, not links: league names the
 > mappings do not equate, team spellings the ledger has not proven, and kickoff
-> deltas. Read [Match & mapping certainty](#match--mapping-certainty) before
-> concluding anything about yield from a scan.
+> deltas.
 >
-> **Re-check this claim yourself.** The part the repo can reproduce is *which
-> books declare a per-event route at all* — two, `mozzartbet` and `maxbet`, in
-> `config/bookmaker_deeplinks.json`:
+> The repo can reproduce which books declare a route:
 >
 > ```bash
 > python -c "import json;d=json.load(open('config/bookmaker_deeplinks.json'));print([b for b,v in d.items() if v.get('supports_event_id') is True])"
 > ```
 >
-> That the NSoft routes are *inert* is a measurement, not a repo fact, taken on
-> 2026-09-25 and re-checked in a browser on 2026-10-20: see
-> `scripts/verify_deeplinks.py` (command in *Tools* below), whose module
-> docstring records the findings.
-> Re-running it costs one browser navigation per event and a full pass over one
-> book takes about 92 minutes, so treat the inertness as a dated measurement to
-> re-confirm, not a permanent property. A sweep does converge — one call after
-> the last reports nothing left to check — but only because
-> `DEEP_LINK_DECISION_TTL_SECONDS` is longer than a pass; see *Tools*. The doc
-> claims in this section are themselves checked by `tests/test_readme_claims.py`,
-> so a claim here that stops matching the code fails the suite.
+> The inertness itself is a dated browser measurement, not a repo fact: taken on
+> 2026-09-25 and re-checked on 2026-10-20. See `scripts/verify_deeplinks.py`,
+> whose module docstring records the findings. These claims are checked by
+> `tests/test_readme_claims.py`, so a claim that stops matching the code fails
+> the suite.
 
 ## What it does
 
-1. Scrapes football odds from Bosnian bookmakers: Mozzartbet, MDShop, Admiralbet, MBet, SportPlus, Premier Kladionica, WWIN, MaxBet and Betole are on; EVLBet is off by default (EVLBet's feed returns no football events and has no captured payload)
-2. Learns team, league and market names from the fixtures the books share on every scan (Bosnian diacritics, Cyrillic, abbreviations, youth/reserve/women markers), and keeps the evidence in a provenance ledger
-3. Groups the same real-world event across bookmakers, and only a group the certainty gate *proves* is the same event is ever priced
-4. Detects arbitrage (surebet) opportunities where odds guarantee a profit regardless of match outcome (enforcing strict 1-bet-per-bookmaker rule)
-5. Helps place one: the bet slip re-checks the odds, orders the legs, rounds the stakes and re-plans the rest when a price moves (see *Using the dashboard*)
-6. Supports two feeds — **Upcoming** (prematch) and **Live** (in-play) — each with its own cache, diagnostics queue and history
+- **Scrapes** ten configured Bosnian bookmakers. Mozzartbet, MDShop, Admiralbet,
+  Betole, MBet, SportPlus, Premier Kladionica, WWIN and MaxBet are enabled by
+  default; EVLBet is configured but disabled because its feed returns no
+  football events.
+- **Learns names** from the fixtures the books share on every scan — Bosnian
+  diacritics, Cyrillic, abbreviations, youth/reserve/women markers — and keeps
+  the evidence in a provenance ledger.
+- **Groups events** across books and lets only a group the certainty gate proves
+  is the same event reach pricing.
+- **Prices surebets**: for each verified group it finds the combination of
+  distinct bookmakers whose odds guarantee a profit, then returns the stake
+  split, worst-case return and margin. A book contributes at most one leg, and
+  books that share an odds feed (MDShop and Admiralbet both run on NSoft) count
+  as one price source.
+- **Re-checks a bet slip**: before you place a bet, the dashboard can re-scrape
+  only the books in that surebet, re-price the exact outcomes, and tell you
+  whether the edge still exists.
+- **Runs two independent feeds**: **Upcoming** (prematch) and **Live**
+  (in-play), each with its own cache, locks, diagnostics queue and history.
 
-## Project layout
+## Quick start
 
-| Path | What lives there |
-|---|---|
-| `main.py` | Entry point — starts uvicorn on `HOST`/`PORT` |
-| `server/` | FastAPI app (`app.py`) and every `/api/*` route plus scan orchestration (`api.py`) |
-| `scrapers/` | One module per bookmaker; `base.py` holds the shared Playwright launcher and httpx retry, `common.py` the shared parsing and deep-link helpers |
-| `engine/` | `normalizer.py` (names), `matcher.py` + `certainty.py` (grouping and the gate), `market_registry.py`, `arbitrage.py` (pricing and stakes), `ai.py` (optional candidate ranking) |
-| `models/schemas.py` | Pydantic models shared by all of the above |
-| `config/` | `settings.py` plus the JSON mappings, market registry, deep-link declarations and alias allowlist |
-| `frontend/` | The static dashboard served at `/` |
-| `scripts/` | Operator tools: deep-link verification, fixture capture, mapping generators, the `MARKET_MAPPING.md` generator |
-| `tests/` | pytest suite; `tests/fixtures/markets/` holds captured bookmaker payloads |
+### Requirements
 
-## Setup
-
-### Prerequisites
 - Python 3.11+
 - pip
+- Network access to the bookmakers for live scans
+- Playwright Chromium for the browser-backed books
 
 ### Install
 
 ```bash
-git clone https://github.com/dzanagamba/surebet-muse12.git
-cd surebet-muse12
+git clone https://github.com/dzanagamba/BH_Arb.git
+cd BH_Arb
 
-# Create virtual environment
-python -m venv venv
+python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
 
-# Activate (Windows)
-venv\Scripts\activate
-
-# Activate (Linux/Mac)
-source venv/bin/activate
-
-# Install dependencies
 pip install -r requirements.txt
-
-# Install Playwright browsers
 playwright install chromium
+cp .env.example .env
 ```
 
 ### Run
@@ -113,289 +90,310 @@ playwright install chromium
 python main.py
 ```
 
-- **Dashboard**: http://localhost:8000
-- **API Docs**: http://localhost:8000/docs
-- **Health Check**: http://localhost:8000/api/health
+- Dashboard: http://localhost:8000
+- API docs: http://localhost:8000/docs
+- Health check: http://localhost:8000/api/health
 
-  Two of its fields exist because a safety gate depends on a config file the
-  process reads once. `deep_link_declarations` echoes the
-  `{book: supports_event_id}` map **the gate is currently using** — the config is
-  cached in memory on first use and never invalidated, so editing
-  `config/bookmaker_deeplinks.json` needs a restart, and a book with
-  `"configured": false` is one the gate is silently failing safe on.
-  `unverified_links` counts matches whose link is unproven *and can still block*,
-  using the gate's own predicate: a book that declares no per-event route is
-  excluded, and a book with no declaration is included, because that is the case
-  where the gate refuses everything and this counter is the only thing that says
-  so.
+Open the dashboard and press **Scan now**. A prematch scan takes about three
+minutes because most bookmakers are fetched live. The server binds to
+`127.0.0.1` by default; set `API_KEY` before exposing it beyond localhost.
+
+## How it works
+
+A scan is orchestrated by `server/api.py` and moves through one pipeline:
+
+```text
+POST /api/scan
+  → scrapers/*.py            fetch and normalize one bookmaker's offers
+  → engine/normalizer.py     canonical team, league and market names
+  → engine/matcher.py        candidate match groups
+  → engine/certainty.py      verified / suggested / rejected, with evidence
+  → engine/arbitrage.py      stake split, worst case, profit margin
+  → cache/*.json + frontend  results for the dashboard
+```
+
+- Scrapers run concurrently. Browser-backed books (`mozzartbet`, `admiralbet`,
+  `wwin`) share a Playwright concurrency limit; the rest use direct HTTP.
+- Mapping learning runs before grouping, so aliases and league equivalences
+  proved by the current scan are available to the matcher in the same pass.
+- Prematch and live scans do not share state. They have separate locks and
+  write `cache/last_scan.json` and `cache/last_live_scan.json`.
+- Only `verified` groups are priced. Suggested and rejected pairings never reach
+  the arbitrage engine; they are collected for the read-only Diagnostics view.
+- A successful scan is cached for 30 minutes. A restored snapshot is re-checked
+  against the link store, so a group survives a restart only while its link
+  proofs are still fresh.
+- `POST /api/verify` re-scrapes just the books in one surebet, applies the same
+  pipeline, and re-prices the exact market and outcomes the surebet was built
+  on.
 
 ## Using the dashboard
 
-Open http://localhost:8000 and press **Scan now** (a prematch scan takes about
-three minutes).
-
-* **Surebets** — the list on the left, best profit first (`j`/`k` move through
-  it). Picking one opens the **bet slip** on the right, which:
-  1. re-checks the odds at every bookmaker in it (`POST /api/verify`) and says
-     plainly whether it is still a surebet; a check older than two minutes
-     (30 s live) is marked stale;
-  2. lists the legs in the order to place them — longest odds first, since that
-     price is the one most likely to move or be limited;
-  3. gives each leg's stake rounded to whole KM (changeable in Settings), the
-     profit *after* rounding, and a warning when rounding eats the edge;
-  4. shows how each bookmaker spells the match and copies it for the site's
-     search, since most books have no per-event page; **Open ↗** opens the book;
-  5. after you place a leg, type the odds you actually got and press
-     **Mark placed** — the remaining stakes are re-planned to cover it, and the
-     slip turns red if the bet is no longer an arbitrage;
-  6. lists why the scanner trusts the legs are the same match.
-* **Review** — pairings the gate refused because two books spell a team
-  differently. Each shows how alike the names are; **Select strong** ticks the
-  ones whose approval clears every blocker, and **Approve selected** writes them
-  to the alias allowlist after a confirmation. The next scan uses them.
-* **History** — every scan's counts and errors.
-* **Settings** (gear) — default stake, rounding, auto-rescan, alert chime,
-  which bookmakers to scan, experimental markets, and the health line.
+- **Surebets** — best profit first. Selecting one opens the bet slip, which
+  re-checks the odds, orders legs longest-odds-first, rounds stakes to whole KM,
+  shows the profit after rounding, and re-plans the remaining legs after you
+  mark one as placed. It also lists the evidence that the legs are the same
+  match.
+- **Diagnostics** — pairings the gate could not prove, with the evidence it
+  used. This view is read-only: the evidence ledger learns automatically, and
+  nothing here changes a mapping.
+- **History** — per-scan counts and errors for both feeds.
+- **Settings** — default stake, rounding, auto-rescan, alert sound, enabled
+  bookmakers, experimental markets, and the health line.
 
 ## Configuration
 
-Set these in `.env` (copy `.env.example`):
-- `HOST` / `PORT` — bind address and port (default `127.0.0.1` / `8000`; set `HOST=0.0.0.0` only behind a firewall and an API key)
-- `CORS_ORIGINS` — comma-separated origins for a separate frontend; empty means same-origin only
-- `API_KEY` — when set, every `/api` route except `/api/health` requires an `X-API-Key` header; the dashboard asks for it once per tab. Unset by default, so set it before exposing the server beyond localhost
-- `SCAN_RATE_LIMIT` — max scans a client may trigger per minute (default `3`)
-- `HEADLESS` — `true` for background browser execution (default), or `false` to view browser windows (useful if CAPTCHA solving is required)
-- `LOG_LEVEL` — `DEBUG`, `INFO` (default), `WARNING` or `ERROR`
-- `VERIFY_SSL` — `True` to enforce TLS certificate verification on direct httpx API calls (default `False`)
+Copy `.env.example` to `.env` and set only what you need:
 
-Edit `config/settings.py` to change:
-- `MIN_PROFIT_PERCENT` — Minimum profit % to show as a surebet (default: 0.5%)
-- `KICKOFF_WINDOW_MINUTES` — Max kickoff time difference to group matches (default: 120)
-- `DEFAULT_INVESTMENT` — Default total investment for stake calculation (default: 100 BAM)
-- Bookmaker `enabled` status — Toggle individual bookmakers ON/OFF via config or the web UI
+| Variable | Default | Purpose |
+|---|---|---|
+| `HOST` / `PORT` | `127.0.0.1` / `8000` | Bind address and port. Use `0.0.0.0` only behind a firewall and with `API_KEY` set. |
+| `API_KEY` | *(empty)* | When set, every `/api` route except `/api/health` requires an `X-API-Key` header. The dashboard asks for it once per tab. |
+| `CORS_ORIGINS` | *(empty)* | Comma-separated origins for a separate frontend; empty means same-origin only. |
+| `SCAN_RATE_LIMIT` | `3` | Maximum scans a client may trigger per minute. |
+| `HEADLESS` | `true` | Set `false` to watch Playwright browsers, for example while solving a CAPTCHA. |
+| `LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING` or `ERROR`. |
+| `VERIFY_SSL` | `false` | Enforce TLS verification on direct httpx calls. |
+| `AUTO_SCAN_PREMATCH_MINUTES` | `0` | Scheduled prematch scans; `0` disables them. |
+| `AUTO_SCAN_LIVE_MINUTES` | `0` | Scheduled live scans; `0` disables them. |
+| `AUTO_LEARN_MAPPINGS` | `true` | Learn team/league/market claims from each real scan. |
+| `PRICE_GUARD_ENABLED` | `true` | Drop a surebet whose leg is a price outlier against the other books. |
 
-## Development
-
-```bash
-# Dev tools first: pip install -r requirements-dev.txt
-# Run the test suite (CI runs this plus the commands below on every push:
-# .github/workflows/ci.yml)
-python -m pytest
-python scripts/generate_market_mapping_doc.py --check
-
-# Lint / type check
-python -m ruff check .
-python -m mypy .
-```
+Tuning that belongs in code lives in `config/settings.py`: `MIN_PROFIT_PERCENT`
+(default `0.5`), `DUST_PROFIT_PERCENT` (`0.2`), `DEFAULT_INVESTMENT` (`100` BAM),
+`KICKOFF_WINDOW_MINUTES` (`120`), `MAX_SUREBET_PROFIT_PERCENT` (`20`),
+`ODDS_TTL_SECONDS`, `PRICE_SOURCES`, and `BROWSER_CONCURRENCY`.
 
 ## Match & mapping certainty
 
-Since the mapping rework, "these two listings are the same match" is no longer a
-fuzzy score with a threshold. It is a claim that has to be proven, and the
-certainty gate is the only thing that decides it.
+"These two listings are the same match" is not a fuzzy score with a threshold.
+It is a claim that has to be proven, and the certainty gate is the only thing
+that decides it.
 
-### The two stages
+### Stage 1 — deterministic rules
 
-**Stage 1 — rules (`engine/certainty.py`, used by `engine/matcher.py`).**
-Every candidate pairing is evaluated against hard, deterministic gates. Each gate
-appends a `MatchEvidence` record explaining what it found, and the pair's status
-follows from the reasons left over:
+`engine/certainty.py`, used by `engine/matcher.py`, evaluates every candidate
+pairing against hard, deterministic gates. Each gate appends a `MatchEvidence`
+record explaining what it found, and the pair's status follows from the reasons
+left over:
 
 | Status | Meaning | Reason vocabulary |
 |---|---|---|
-| `verified` | **Zero** reasons. Every part of the claim is proven, links included. These are the only groups that reach arbitrage. | — |
+| `verified` | Zero reasons. Every part of the claim is proven, links included. These are the only groups that reach arbitrage. | — |
 | `suggested` | At least one reason is outstanding — the identity is plausible but incomplete. Not priced; shown in the read-only Diagnostics queue. | `kickoff_missing`, `kickoff_delta`, `team_unresolved`, `link_unverified`, `no_event_link` |
 | `rejected` | A hard gate contradicts the claim. | `league_mismatch`, `category_mismatch`, `betradar_mismatch` |
 
-The reason strings above are the vocabulary the gate actually emits, and
-`tests/test_readme_claims.py` proves it by *running* the gate over one broken
-claim per reason and reading the results back — so a reason added or removed in
-`engine/certainty.py` fails this table. One wrinkle worth knowing:
-`HARD_REJECT_REASONS` — named as a symbol rather than cited by line, because a
-line number here is stale the moment the module's imports change — also lists
-`orientation_unresolved`, which the gate never emits; the unresolvable-orientation
-case is reported as `team_unresolved`. Until that entry is either produced or
-deleted, treat `rejected` as the reasons above except `orientation_unresolved`.
+The reason strings are the vocabulary the gate actually emits, and
+`tests/test_readme_claims.py` proves it by running the gate over one broken claim
+per reason and reading the results back. One wrinkle: `HARD_REJECT_REASONS` also
+lists `orientation_unresolved`, which the gate never emits; the
+unresolvable-orientation case is reported as `team_unresolved`. Treat
+`rejected` as the reasons above except `orientation_unresolved` until that entry
+is produced or deleted.
 
-Six rules inside stage 1 matter more than the rest:
+The rules that matter most:
 
-* **The evidence ledger is the trust source.** Team aliases and league
+- **The evidence ledger is the trust source.** Team aliases and league
   equivalences are learned from shared fixtures and Betradar ids, then persisted
   in `config/generated/mapping_evidence.json`. The reviewed allowlist and
-  `config/team_alias_reviewed.json` are migration input only; nothing in the
-  default pipeline asks a person to approve a pair. A raw-name difference can
-  also be settled by the deterministic rules below, with league, kickoff and
-  category still required.
-* **Lossless name rules are deterministic, not fuzzy guesses.** A leading or
+  `config/team_alias_reviewed.json` are migration input only; the default
+  pipeline never asks a person to approve a pair.
+- **Lossless name rules are deterministic, not fuzzy guesses.** A leading or
   trailing club designator (`FC Liefering` / `Liefering`), a token abbreviation
   (`Man Utd` / `Manchester Utd`, `Dynamo D` / `Dynamo Dresden`), or a
   punctuation-only difference (`Shimizu S-Pulse` / `Shimizu S Pulse`) is
   accepted. A shared city token is not enough: `Manchester Utd` /
   `Manchester City` is rejected.
-* **The group, not its first member, proves identity.** A candidate can be
-  proved by the group's canonical league or by any supporting member, and a
-  generic league name (`bundesliga`) is fingerprinted by its team set and
-  resolved per fixture against a country-qualified spelling.
-* **Links are a machine fact, not a human one.** `deep_link_verified` may only be
-  set by an actual browser check (`scripts/verify_deeplinks.py`), never by a
-  human approval.
-* **An unmapped league name does not block an exact fixture.** Bookmakers name
-  competitions inconsistently ("Liga Two", "ENGLAND 2", "OBOS Liga"), and a
-  name no mapping covers can never equal anything. When at least one side's
-  league is unmapped, the pair passes the league check only if both teams match
-  exactly (raw spellings, no alias), the kickoff is inside the verified window
-  and the categories agree — recorded as `league_unmapped_teams_exact`
-  evidence. Two *mapped* leagues that differ still reject.
-* **A book that declares no per-event route is verified on identity alone.**
-  The eight books declaring `supports_event_id: false` in
+- **The group, not its first member, proves identity.** A candidate can be
+  proved by the group's canonical league or by any supporting member. A generic
+  league name (`bundesliga`) is fingerprinted by its team set and resolved per
+  fixture against a country-qualified spelling.
+- **Links are a machine fact.** It is never by a human approval that `deep_link_verified` is set; only `scripts/verify_deeplinks.py` or `POST /api/verify-links`, after a real browser check, may set it.
+- **An unmapped league name does not block an exact fixture.** When at least one
+  side's league is unmapped, the pair passes the league check only if both teams
+  match exactly (raw spellings, no alias), the kickoff is inside the verified
+  window and the categories agree — recorded as `league_unmapped_teams_exact`
+  evidence. Two mapped leagues that differ still reject.
+- **A book that declares no per-event route is verified on identity alone.** The
+  eight books declaring `supports_event_id: false` in
   `config/bookmaker_deeplinks.json` have no per-event URL to prove, so the
   declaration is the proof and the group carries a `no_event_link` evidence note
-  instead of a reason. A book with **no declaration at all** is refused: the gate
+  instead of a reason. A book with no declaration at all is refused: the gate
   fails safe, because an absent declaration is silence rather than proof of
   absence.
-* **A shared Betradar id proves identity.** MDShop, Admiralbet, SportPlus and
+- **A shared Betradar id proves identity.** MDShop, Admiralbet, SportPlus and
   WWIN carry the provider's match id. Two listings with the same non-empty id
   pass the league and team checks whatever their names (evidence reason
   `betradar_id`); kickoff, category and link checks still apply. Two different
   ids reject with `betradar_mismatch`.
 
-**Stage 2 — AI proposals (`engine/ai.py`, used by `server/api.py`).** The AI is
-consulted only about pairings the rules could not settle, and only to **rank**
-them for diagnostics. It cannot create a pairing, cannot approve one, and its
-verdict is never a confidence: a "same event" answer raises a queue entry's
-position and nothing else. A negative verdict sets the confidence to 0 and says
-"AI says not the same event".
+### Stage 2 — AI proposals (optional)
+
+`engine/ai.py` is consulted only about pairings the rules could not settle, and
+only to rank them for Diagnostics. It cannot create a pairing, cannot approve
+one, and its answer is never a confidence: a "same event" answer raises a queue
+entry's position and nothing else. A negative verdict sets the confidence to 0
+and says "AI says not the same event".
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `AI_API_KEY` | *(empty)* | API key. Unset means the AI stage is never entered. |
+| `AI_BASE_URL` | `https://api.openai.com/v1` | Any OpenAI-compatible base URL (Ollama, LM Studio, a gateway). |
+| `AI_MODEL` | `gpt-4o-mini` | Model id. |
 
 ### Diagnostics queue
 
 Pairings the gate refused are collected every scan into a per-feed queue
 (`pending_candidates` for prematch, `pending_live_candidates` for live, so one
-feed's scan never wipes the other's) and shown in the dashboard's **Diagnostics**
-tab for the feed on screen. There is no dedicated URL: Diagnostics is the second
-tab of the dashboard, so open `http://localhost:8000` and click **Diagnostics**.
-It is populated by `GET /api/candidates?mode=prematch|live` and is **read-only**:
-there is no approve or reject endpoint. The evidence ledger learns team, league
-and market spellings automatically on every scan; the tab exists so an operator
-can inspect what the gate refused and why.
+feed's scan never wipes the other's) and shown in the dashboard's
+**Diagnostics** tab for the feed on screen. There is no dedicated URL:
+Diagnostics is the second tab of the dashboard, so open
+`http://localhost:8000` and click **Diagnostics**. It is populated by
+`GET /api/candidates?mode=prematch|live` and is read-only: there is no approve
+or reject endpoint. The evidence ledger learns team, league and market spellings
+automatically on every scan; the tab exists so an operator can inspect what the
+gate refused and why.
 
-### Environment variables
+### Deep-link verification
 
-All three are optional. With `AI_API_KEY` unset the AI stage is never entered and
-the whole system runs on rules plus human review.
-
-| Variable | Default | Meaning |
-|---|---|---|
-| `AI_API_KEY` | *(empty)* | API key. Unset ⇒ `MatchAI.available` is `False` and no AI adapter is built. |
-| `AI_BASE_URL` | `https://api.openai.com/v1` | Any OpenAI-compatible base URL (Ollama, LM Studio, a gateway). |
-| `AI_MODEL` | `gpt-4o-mini` | Model id. |
-
-### Tools
+`scripts/verify_deeplinks.py` proves a bookmaker's per-event links with real
+browser navigations. It reads `cache/last_scan.json`, so run a scan first:
 
 ```bash
-# Rewrite the generated ID tables in MARKET_MAPPING.md from
-# config/bookmaker_markets.json, or fail if they are stale.
-python scripts/generate_market_mapping_doc.py
-python scripts/generate_market_mapping_doc.py --check
-
-# Learn league names and team spellings from fixtures the books share (same
-# two teams + kickoff, or the same Betradar match id). Prints a summary; --report
-# writes every proposal with its fixtures; --apply writes config/league_mappings.json
-# and config/team_alias_allowlist.json. Run it on a fresh scan now and then.
-python scripts/derive_mappings.py cache/last_scan.json --report proposals.json
-python scripts/derive_mappings.py cache/last_scan.json --apply
-
-# Prove a bookmaker's per-event deep links, one browser navigation per event.
-# Reads cache/last_scan.json, so run a scan first. Defaults to every book that
-# declares a per-event route; --limit defaults to 3, --offset defaults to 0.
 python scripts/verify_deeplinks.py mozzartbet --limit 3
 python scripts/verify_deeplinks.py --mode live --limit 20
 python scripts/verify_deeplinks.py mozzartbet --limit 20 --offset 20
 ```
 
-`verify_deeplinks.py` is deliberately **not** part of a scan: each event costs a
-real browser navigation. It writes its verdicts into
-`cache/deep_link_verifications.json`, and the next scan reads that store.
+The script writes verdicts to `cache/deep_link_verifications.json`; the next scan
+reads that store. It is deliberately not part of a scan because each event costs
+a real browser navigation.
 
-**A sweep advances — it is not a one-shot operation.** `build_targets` takes
+**A sweep advances; it is not a one-shot operation.** `build_targets` takes
 `settled` (event ids the caller has already decided) and `offset` (a positional
 resume, for a caller with no store of its own — which is the CLI), and the
 `settled` ids are skipped *before* the window is cut, so a call spends its whole
 budget on events nobody has looked at. `POST /api/verify-links` fills `settled`
-itself from the events it has already decided, which it keeps in
-`cache/deep_link_decisions.json`, so its caller keeps no cursor. Every response
-echoes `remaining` — the undecided events the run did not reach — and once a book
-is fully decided the call reports `remaining: 0` and checks nothing, so a sweep
-loop knows when to stop. Only a completed check settles an event: a navigation
-that errored is not a verdict, so it is offered again on the next call. The
-endpoint stays rate-limited and capped for the same reason.
+itself from `cache/deep_link_decisions.json`, so its caller keeps no cursor.
+Every response echoes `remaining`, and once a book is fully decided the call
+reports `remaining: 0` and checks nothing.
 
-**Both store lifetimes must outlast one pass, and they are not equal.** A proof
-in `cache/deep_link_verifications.json` is what lets a group reach `verified`, so
-if it expires before the sweep that writes it finishes, the sweep can never hold a
-complete set and no surebet can exist — which is exactly what happened: a pass over
-Mozzartbet's 1,236 published events measured at 92 minutes against a one-hour
-proof lifetime, and 412 stored proofs aged out with 0 of 4,260 cached matches
-carrying `deep_link_verified`. So `DEEP_LINK_VERIFICATION_TTL_SECONDS` (24h) is
-longer than a pass by 15.6x, and `DEEP_LINK_DECISION_TTL_SECONDS` (6h) is longer
-than one by 3.9x — a decision carries no verdict, only "a check completed", so it
-needs to outlive a pass and nothing more, and being too short has a functional
-cost as well as a safety one: a book whose first decisions expire mid-pass is
-offered them again before the pass reaches the back, so it walks in circles. The
-proof is the longer of the two because it is the only one of the two that grants
-anything. Both numbers are re-derived from that measurement by
-`tests/test_verify_links.py::test_every_link_lifetime_outlives_a_full_pass_over_the_largest_book`,
-and re-measure the sweep before trusting them: the per-event cost is a real browser
-navigation, so the headroom is a number of events, not a promise.
+**A sweep does converge.** Both stores must outlive one pass. The proof is the longer of the two:
+`DEEP_LINK_VERIFICATION_TTL_SECONDS` (24h) outlives a pass, while
+`DEEP_LINK_DECISION_TTL_SECONDS` (6h) only needs to outlive it, because a
+decision says "a check completed" and carries no verdict. The numbers come from
+a measured 92-minute pass over Mozzartbet's published events; re-measure the
+sweep before trusting the headroom.
 
 ### Fixed defects, and what keeps them fixed
 
 Two live-mode defects were measured and recorded in-repo on 2026-09-25 and have
 since been fixed. Each now has a regression test instead of a tripwire.
 
-* **`premier_kladionica` live BTTS.** The live feed names the block
-  `LIVE - OBA TIMA DAJU GOL` while prematch uses `OBA DAJU GOL`, and the parser
-  compared both modes against the prematch spelling, so the registry's live row
-  was unreachable (it was guarded by a strict xfail whose XPASS would fail the
-  suite). The parser now matches per mode (`NAME_BTTS` / `NAME_BTTS_LIVE`); the
-  registry row was deliberately not renamed, since prematch really is spelled the
-  other way. `tests/test_market_fixtures.py` checks both modes against the
-  captured payloads.
-* **NSoft live window (`mdshop`, `admiralbet`).** NSoft filters events by
+- **`premier_kladionica` live BTTS.** The live feed names the block
+  `LIVE - OBA TIMA DAJU GOL` while prematch uses `OBA DAJU GOL`, so the parser
+  compared both modes against the prematch spelling and the registry's live row
+  was unreachable. The parser now matches per mode (`NAME_BTTS` /
+  `NAME_BTTS_LIVE`); `tests/test_market_fixtures.py` checks both modes against
+  the captured payloads.
+- **NSoft live window (`mdshop`, `admiralbet`).** NSoft filters events by
   kickoff against `dateFrom`, and both scrapers built the live request with
-  `dateFrom=now`, so every already-started in-play game was filtered out. At
-  2026-09-25 17:00 UTC that request returned `{"events": []}` while
-  35 live football events were available — and 35 the moment `dateFrom` was
-  moved back 12 hours. Both scrapers now take their window from one shared helper,
-  `scrapers.common.nsoft_event_window`, which looks back 12 hours for live (the
-  window the committed live fixtures were captured with) and forward 14 days for
-  prematch. `tests/test_live_mode.py` pins the window each scraper requests.
+  `dateFrom=now`, so already-started in-play games were filtered out. At
+  2026-09-25 17:00 UTC that request returned no events while 35 live football events
+  were available once the window moved back 12 hours. Both scrapers now take
+  their window from `scrapers.common.nsoft_event_window`, and
+  `tests/test_live_mode.py` pins the window each scraper requests.
 
 ### Re-verifying a surebet before betting
 
-The card's **Verify** button calls `POST /api/verify`, which re-scrapes only the
-books in that surebet, runs them through the same pipeline a scan uses (stored
-link proofs applied, certainty gate, verified groups only) and re-prices the
-**exact outcomes the surebet was built on** — the same line, the same 1X2/double
-chance partition, in the cached home/away frame even if a book now lists the
-fixture reversed. `still_profitable` is true for any remaining positive margin;
+The bet slip's **Verify** button calls `POST /api/verify`. That re-scrapes only
+the books in the surebet, runs the same pipeline (stored link proofs applied,
+certainty gate, verified groups only), and re-prices the exact outcomes the
+surebet was built on — the same line and the same 1X2/double-chance partition,
+in the cached home/away frame even if a book now lists the fixture reversed.
+`still_profitable` is true for any remaining positive margin;
 `meets_min_profit` says whether it still clears `MIN_PROFIT_PERCENT`.
 
-## Adding more leagues/teams
+## Project layout
 
-- Edit `config/league_mappings.json` to add new league name variations
-- Edit `config/team_mappings.json` to add new team name variations
+| Path | Responsibility |
+|---|---|
+| `main.py` | Starts uvicorn on `HOST`/`PORT`. |
+| `server/` | FastAPI app (`app.py`), all `/api/*` routes and scan orchestration (`api.py`), scheduling and mapping coverage. |
+| `scrapers/` | One module per bookmaker. `base.py` holds the shared Playwright launcher and HTTP retry; `common.py` holds shared parsing, windows and deep-link helpers. |
+| `engine/` | Normalization, name/league resolution, mapping learning, matching, the certainty gate, market registry, price guard and arbitrage pricing. |
+| `models/schemas.py` | Pydantic models shared by every layer. |
+| `config/` | Runtime settings, bookmaker and market registries, deep-link declarations, league/team mappings, and the generated evidence ledger. |
+| `frontend/` | Static dashboard served at `/`; no bundler. |
+| `scripts/` | Operator tools for deep-link checks, fixture capture, mapping derivation and `MARKET_MAPPING.md` generation. |
+| `tests/` | Offline pytest suite; `tests/fixtures/markets/` holds captured bookmaker payloads. |
+| `cache/` | Gitignored runtime state: last scan per feed, history, link proofs and decisions. |
+| `PLAN.md` | Open work and the autonomy contract. |
+| `docs/HANDOFF.md` | Design history and remaining work. |
+
+## Development
+
+Install the dev tools once, then run the same checks as CI:
+
+```bash
+pip install -r requirements-dev.txt
+
+python -m pytest
+python -m ruff check .
+python -m mypy .
+python scripts/generate_market_mapping_doc.py --check
+```
+
+- Tests must stay offline: use fakes, `httpx.MockTransport` or
+  `tests/fixtures/`. A test must never call a bookmaker.
+- Frontend tests execute the shipped JavaScript under Node 22. Without Node they
+  skip, so a green local run can hide frontend breakage.
+- `tests/test_readme_claims.py` checks the factual claims in this file against
+  the code. If you change behavior documented here, update the README and run
+  that file specifically.
+- `MARKET_MAPPING.md` is generated from `config/bookmaker_markets.json` between
+  marker comments. Regenerate it; never hand-edit the generated block.
+- `tests/fixtures/e2e_certified/` is frozen. Do not edit or re-capture it.
+
+## Operator tools
+
+```bash
+# Learn league names and team spellings from fixtures the books share.
+# --report writes every proposal with its fixtures; --apply writes config/.
+python scripts/derive_mappings.py cache/last_scan.json --report proposals.json
+python scripts/derive_mappings.py cache/last_scan.json --apply
+
+# Regenerate the ID tables in MARKET_MAPPING.md, or fail if they are stale.
+python scripts/generate_market_mapping_doc.py
+python scripts/generate_market_mapping_doc.py --check
+```
+
+## Adding bookmakers, markets and names
+
+- **Bookmaker:** add `scrapers/<book>.py`, register it in `SCRAPERS` and
+  `BOOKMAKERS`, add its deep-link declaration, market registry rows and captured
+  fixtures, then add parser and gate tests. Mark it as a Playwright book only if
+  it really needs a browser.
+- **Market:** add the source ids and labels to `config/bookmaker_markets.json`,
+  capture a payload under `tests/fixtures/markets/`, add a registry test, and
+  regenerate `MARKET_MAPPING.md`.
+- **League and team names:** do not hand-edit
+  `config/team_alias_allowlist.json`, `config/league_mappings.json` or
+  `config/league_equivalences.json`. The ledger learns from scans; use
+  `scripts/derive_mappings.py` for bulk changes and inspect the Diagnostics tab
+  to see what the gate refused.
 
 ## Notes
 
-- Mozzartbet and Admiralbet run hybrid Playwright sessions to bypass Cloudflare protection and fetch live API data
-- Direct HTTP scrapers (MDShop, MBet, SportPlus, EVLBet, and Betole's prematch feed) fetch API data directly without browser overhead
-- Betole is disabled (`"enabled": False`) by default to save system resources
-- All odds are displayed as European decimal odds
-- Stakes are calculated for the configured `DEFAULT_INVESTMENT` and can be adjusted live in the dashboard (with optional rounding to whole KM)
-- Last scan results — surebets, matches and the match report — are cached to
-  `cache/last_scan.json` and restored on startup, for 30 minutes; past that the
-  file is discarded rather than replayed. A restored report is re-checked against
-  the link store rather than trusted, so a `verified` group survives a restart only
-  while every one of its legs still has a fresh proof — a snapshot older than the
-  proofs it was decided on is dropped, not shown.
-- Verified football market mappings and deliberately excluded offers are documented in `MARKET_MAPPING.md`
+- All odds are European decimal odds. Stakes are calculated for
+  `DEFAULT_INVESTMENT` and can be adjusted in the dashboard.
+- `MIN_PROFIT_PERCENT` is the display floor for a surebet; `DUST_PROFIT_PERCENT`
+  is the lower bound for low-value "dust" opportunities shown separately.
+- Mozzartbet, Admiralbet and WWIN use Playwright sessions to fetch their live
+  feeds. MDShop, MBet, SportPlus, Betole, Premier Kladionica and MaxBet use
+  direct HTTP.
+- EVLBet is disabled by default because its feed returns no football events.
+- The engine enforces at most one leg per bookmaker and at most one leg per
+  price source. MDShop and Admiralbet share the NSoft feed.
+- This is a research tool. It does not log in to bookmakers, move money or place
+  bets.
