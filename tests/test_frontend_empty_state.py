@@ -1105,7 +1105,7 @@ def test_the_copy_table_is_served_from_the_mount_the_script_uses():
 
 # Two books that declare a per-event route (see tests/conftest.py), so an
 # unproven link on them really blocks.
-LEFT, RIGHT = "mdshop", "mozzartbet"
+LEFT, RIGHT = "undeclared_book", "undeclared_book2"
 
 
 def _btts(bookmaker: str, gg: float, ng: float, *, verified: bool, kickoff=None) -> Match:

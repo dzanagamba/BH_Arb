@@ -1,12 +1,63 @@
 {
-  "mdshop":       { "supports_event_id": false, "template": "https://www.mdshop.ba/sport-prematch?sport=Fudbal", "template_live": "https://www.mdshop.ba/sport-live", "note": "2026-10-20 browser re-check: ?event=<id> is inert (same page as the plain football list); match detail opens a login wall. No public per-event route — declared false, competition page is the best public link." },
-  "admiralbet":   { "supports_event_id": false, "template": "https://www.admiralbet.ba/sport-prematch?sport=Fudbal", "template_live": "https://www.admiralbet.ba/sport-live", "note": "2026-10-20 browser re-check: ?event=<id> is inert (same page as the plain football list); same NSoft platform as MDShop. No public per-event route — declared false, competition page is the best public link." },
-  "mozzartbet":   { "supports_event_id": true,  "template": "https://www.mozzartbet.ba/sr/kladjenje/sport/1/match/{event_id}", "template_live": "https://www.mozzartbet.ba/sr/uzivo/mec/1/{event_id}", "note": "Public match routes verified from provider id; live route uses /uzivo/mec/1/{event_id}" },
-  "wwin":         { "supports_event_id": false, "template": "https://wwin.ba/kladjenje/", "note": "Betradar feed exposes brid but no per-event route" },
-  "mbet":         { "supports_event_id": false, "template": "https://www.mbet.ba/", "note": "SPA has no stable per-event URL" },
-  "sportplus":    { "supports_event_id": false, "template": "https://www.sportplus.ba/prematch/betting", "note": "SPA uses in-page selection" },
-  "evlbet":       { "supports_event_id": false, "template": "https://evlbet.com/", "note": "flat feed has Id but no public route" },
-  "premier_kladionica": { "supports_event_id": false, "template": "https://www.premier-kladionica.com/ponuda/", "note": "no per-event route" },
-  "betole":       { "supports_event_id": false, "template": "https://www.betole.ba/ba/sport/S", "note": "no per-event route" },
-  "maxbet":       { "supports_event_id": true,  "template": "https://sportsbook.maxbet.ba/match/{event_id}", "template_live": "https://sportsbook.maxbet.ba/match/{event_id}", "fallback": "https://sportsbook.maxbet.ba/sport/1", "note": "2026-10-27 browser check: clicking a match on the sportsbook opens /match/<id> (the REST matches id), and loading /match/914594 directly makes the app request /sportsbook/rest/v2/matches/914594 for that id. Route declared; each link must still be proven by scripts/verify_deeplinks.py." }
+  "mdshop": {
+    "supports_event_id": false,
+    "template": "https://www.mdshop.ba/sport-prematch?sport=Fudbal",
+    "template_live": "https://www.mdshop.ba/sport-live",
+    "note": "2026-10-20 browser re-check: ?event=<id> is inert (same page as the plain football list); match detail opens a login wall. No public per-event route — declared false, competition page is the best public link."
+  },
+  "admiralbet": {
+    "supports_event_id": false,
+    "template": "https://www.admiralbet.ba/sport-prematch?sport=Fudbal",
+    "template_live": "https://www.admiralbet.ba/sport-live",
+    "note": "2026-10-20 browser re-check: ?event=<id> is inert (same page as the plain football list); same NSoft platform as MDShop. No public per-event route — declared false, competition page is the best public link."
+  },
+  "mozzartbet": {
+    "supports_event_id": true,
+    "template": "https://www.mozzartbet.ba/sr/kladjenje/sport/1/match/{event_id}",
+    "template_live": "https://www.mozzartbet.ba/sr/uzivo/mec/1/{event_id}",
+    "note": "2026-11-03: route pattern re-verified on 3 sampled events; the path embeds the provider event id. Per-event proof is no longer required when the id is present.",
+    "route_pattern_verified": true,
+    "route_pattern_checked_at": "2026-11-03",
+    "route_pattern_sample": "3/3 events: 10077474, 10077500, 10088115"
+  },
+  "wwin": {
+    "supports_event_id": false,
+    "template": "https://wwin.ba/kladjenje/",
+    "note": "Betradar feed exposes brid but no per-event route"
+  },
+  "mbet": {
+    "supports_event_id": false,
+    "template": "https://www.mbet.ba/",
+    "note": "SPA has no stable per-event URL"
+  },
+  "sportplus": {
+    "supports_event_id": false,
+    "template": "https://www.sportplus.ba/prematch/betting",
+    "note": "SPA uses in-page selection"
+  },
+  "evlbet": {
+    "supports_event_id": false,
+    "template": "https://evlbet.com/",
+    "note": "flat feed has Id but no public route"
+  },
+  "premier_kladionica": {
+    "supports_event_id": false,
+    "template": "https://www.premier-kladionica.com/ponuda/",
+    "note": "no per-event route"
+  },
+  "betole": {
+    "supports_event_id": false,
+    "template": "https://www.betole.ba/ba/sport/S",
+    "note": "no per-event route"
+  },
+  "maxbet": {
+    "supports_event_id": true,
+    "template": "https://sportsbook.maxbet.ba/match/{event_id}",
+    "template_live": "https://sportsbook.maxbet.ba/match/{event_id}",
+    "fallback": "https://sportsbook.maxbet.ba/sport/1",
+    "note": "2026-11-03: route pattern verified on 3 sampled events; /match/<id> makes the app request /sportsbook/rest/v2/matches/<id>. Per-event proof is no longer required when the id is present.",
+    "route_pattern_verified": true,
+    "route_pattern_checked_at": "2026-11-03",
+    "route_pattern_sample": "3/3 events: 1004636, 1004669, 1006942"
+  }
 }

@@ -30,7 +30,11 @@ from engine.mapping_evidence import (
 )
 from engine.normalizer import TeamNormalizer
 from models.schemas import Match, MatchEventStatus, MatchEvidence, MatchGroup
-from scrapers.common import declares_no_event_id, supports_event_id
+from scrapers.common import (
+    declares_no_event_id,
+    declares_route_pattern_verified,
+    supports_event_id,
+)
 
 # Characters a bookmaker uses as separators in a team name ("Bodo/Glimt",
 # "St. Mirren", "Paris-SG"); they never distinguish two clubs.
@@ -398,6 +402,19 @@ class CertaintyGate:
                 ),
                 True,
             )
+        if declares_route_pattern_verified(m.bookmaker) and m.event_id:
+            # A path-based route whose pattern was browser-proven for sampled
+            # events. The feed supplies the same id for every listing, so the
+            # route is deterministic; a book with no event id still fails.
+            return (
+                MatchEvidence(
+                    rule="link_evidence",
+                    source="rule",
+                    confidence=1.0,
+                    reason="route_pattern_verified",
+                ),
+                True,
+            )
         if declares_no_event_id(m.bookmaker):
             return (
                 MatchEvidence(
@@ -706,6 +723,24 @@ class CertaintyGate:
         """Evaluate a match against the canonical fields of an existing group."""
         if not group.matches:
             return GateResult(status="rejected", reasons=["team_unresolved"])
+
+        # A group may hold a member with no provider id, so comparing only to
+        # the anchor can miss a conflict between two other members. Check every
+        # non-empty id in the group before anything else.
+        group_ids = {member.betradar_id for member in group.matches if member.betradar_id}
+        if len(group_ids) > 1 or (match.betradar_id and group_ids and match.betradar_id not in group_ids):
+            return GateResult(
+                status="rejected",
+                reasons=["betradar_mismatch"],
+                evidence=[
+                    MatchEvidence(
+                        rule="betradar_identity",
+                        source="rule",
+                        confidence=0.0,
+                        reason="betradar_mismatch",
+                    )
+                ],
+            )
 
         anchor = next(
             (

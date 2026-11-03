@@ -163,8 +163,8 @@ def _headline_problems(text: str) -> list[str]:
     )
     if not headline:
         return ["no callout claim states that the declared routes are inert"]
-    if not re.search(r"[Oo]nly Mozzartbet", headline):
-        problems.append("the headline never names Mozzartbet as the one verifying link")
+    if "mozzartbet" not in headline.lower():
+        problems.append("the headline never names Mozzartbet as a declared-route book")
 
     declaring = _declaring_books()
     sentences = re.split(r"(?<=[.!?])\**\s+", headline)
@@ -220,8 +220,9 @@ def test_headline_check_fails_when_a_book_is_unlinked_from_the_inertness():
     claim -- as the real one does -- so only a headline-scoped check catches this.
     """
     broken = README.replace(
-        "MDShop's and Admiralbet's declared `?event=<id>` routes are **inert**",
-        "MDShop's and Admiralbet's declared `?event=<id>` routes are **active**",
+        "routes are\n>   **inert**",
+        "routes are\n>   **active**",
+        1,
     )
     assert broken != README, "the mutation did not apply; the check is untested"
     assert "mdshop" in broken.lower() and "admiralbet" in broken.lower(), (
@@ -246,8 +247,9 @@ def test_headline_check_fails_when_a_route_less_book_is_called_inert():
         "betole now declares a route, so this companion no longer tests what it says"
     )
     broken = README.replace(
-        "MDShop's and Admiralbet's declared `?event=<id>` routes are **inert**",
-        "MDShop's, Admiralbet's and Betole's `?event=<id>` routes are **inert**",
+        "MDShop's and Admiralbet's declared `?event=<id>` routes are",
+        "MDShop's, Admiralbet's and Betole's `?event=<id>` routes are",
+        1,
     )
     assert broken != README, "the mutation did not apply; the check is untested"
     problems = _headline_problems(broken)
@@ -266,10 +268,10 @@ _ROUTE_LESS_BOOK = "mbet"      # config: supports_event_id false
 _ROUTE_BEARING_BOOK = "mozzartbet"  # config: supports_event_id true
 
 
-def _gate_status_for(bookmaker: str) -> str:
+def _gate_status_for(bookmaker: str, event_id: str = "e2") -> str:
     """The gate's answer for one book's unproven link, as the callout describes it."""
     gate = CertaintyGate()
-    pair = [_match(), _match(bookmaker=bookmaker, deep_link_verified=False)]
+    pair = [_match(), _match(bookmaker=bookmaker, event_id=event_id, deep_link_verified=False)]
     gate.normalize(pair)
     return gate.evaluate_pair(*pair).status
 
@@ -288,7 +290,9 @@ def _link_policy_problems(text: str) -> list[str]:
     problems: list[str] = []
     route_less, route_bearing = _ROUTE_LESS_BOOK, _ROUTE_BEARING_BOOK
     less_status = _gate_status_for(route_less)
-    bearing_status = _gate_status_for(route_bearing)
+    # A route-pattern book is verified when it carries an event id; the fail-safe
+    # case is the same book with no id, so test that branch here.
+    bearing_status = _gate_status_for(route_bearing, event_id="")
     if less_status != "verified":
         problems.append(
             f"{route_less} declares no per-event route and the gate answers "
@@ -464,11 +468,10 @@ def _observed_reasons() -> tuple[set[str], set[str]]:
         _match(bookmaker="mbet", event_id="e2", kickoff=None),
         _match(bookmaker="mbet", event_id="e2", kickoff=kickoff + timedelta(minutes=30)),
         _match(bookmaker="mbet", event_id="e2", home_team="Gamma SC", away_team="Delta Club"),
-        # `link_unverified` needs a book that DECLARES a per-event route: the
-        # books declaring `supports_event_id: false` are accepted with a
-        # `no_event_link` evidence note instead. Mozzartbet is the one book whose
-        # shipped declaration names a route.
-        _match(bookmaker="mozzartbet", event_id="e4", deep_link_verified=False),
+        # `link_unverified` needs a book that declares a route but carries no
+        # event id, or a book with no declaration at all. MaxBet's route pattern
+        # is proven, so the no-id branch is the one that still blocks.
+        _match(bookmaker="maxbet", event_id="", deep_link_verified=False),
         # ...and `no_event_link` is now reachable only through a book that has
         # declared nothing at all, which is the fail-safe branch. It also needs
         # the link UNPROVEN as well as absent: _link_evidence returns

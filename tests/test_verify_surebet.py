@@ -130,10 +130,10 @@ def test_a_moved_leg_is_reported_as_no_longer_profitable(harness):
     assert body["drift"]["X"]["changed"] is True
 
 
-def test_a_leg_on_a_proven_route_is_found_once_the_proof_is_applied(harness):
-    """A book that declares a per-event route only verifies on a stored proof.
+def test_a_leg_on_a_proven_route_pattern_is_found_without_a_stored_proof(harness):
+    """A dated route-pattern proof is enough when the listing has an event id.
 
-    The scan applies that proof before grouping; verify must too, or every
+    The scan applies the declaration before grouping; verify must too, or every
     surebet with such a leg reads "not found" no matter what the odds do.
     """
     books = _arb_books(first="mozzartbet")
@@ -142,13 +142,7 @@ def test_a_leg_on_a_proven_route_is_found_once_the_proof_is_applied(harness):
     cached = _cache_surebet(proven, MarketType.MATCH_RESULT)
     for match in books:  # scrapers always emit deep_link_verified=False
         harness[match.bookmaker] = [match]
-    api._deep_link_verifications["prematch"] = {
-        "mozzartbet|ev-1": {
-            "verified": True,
-            "checked_at": datetime.now(UTC).replace(tzinfo=None).isoformat(),
-            "url": "https://www.mozzartbet.ba/x",
-        }
-    }
+    api._deep_link_verifications["prematch"] = {}
 
     body = _verify(cached["id"])
 
@@ -157,7 +151,9 @@ def test_a_leg_on_a_proven_route_is_found_once_the_proof_is_applied(harness):
 
 def test_without_a_proof_the_route_book_leg_stays_unverified(harness):
     books = _arb_books(first="mozzartbet")
-    books[0] = books[0].model_copy(update={"event_id": "ev-1", "match_code": "ev-1"})
+    # The route pattern is proven, but a listing with no event id has no link to
+    # open, so this is the branch that still blocks.
+    books[0] = books[0].model_copy(update={"event_id": "", "match_code": ""})
     proven = [books[0].model_copy(update={"deep_link_verified": True}), *books[1:]]
     cached = _cache_surebet(proven, MarketType.MATCH_RESULT)
     for match in books:

@@ -7,7 +7,7 @@
 > entry, manual gate exception or manual CAPTCHA step** anywhere between scrape
 > and a shown surebet.
 >
-> **Baseline (2026-11-03, this worktree).** `python -m pytest` → **1138 passed** in 37 s; `ruff check .` clean; `mypy .` clean on 106 source files;
+> **Baseline (2026-11-03, this worktree).** `python -m pytest` → **1145 passed** in 78 s; `ruff check .` clean; `mypy .` clean on 108 source files;
 > `scripts/generate_market_mapping_doc.py --check` in sync. Environment is
 > `.venv` on CPython 3.11.18, installed with `uv`. The 953-passed figure in the
 > superseded plan was a 2026-10-20 measurement and is stale.
@@ -24,7 +24,7 @@
 > (A3-1). The evidence ledger, learner, gate integration, contradiction resolver,
 > league fingerprints, legacy migration, read-only coverage endpoint, classifier,
 > consensus, registry merge, discovery CLI and raw-offer resolver are shipped.
-> 1138 tests pass. **Real scan evidence (2026-11-03):** a headless prematch
+> 1145 tests pass. **Real scan evidence (2026-11-03):** a headless prematch
 > scan returned 5,285 matches from all 8 enabled books, 811 verified groups,
 > 3,526 price comparisons and 0 outliers; a second scan with a learned ledger
 > (1,795 accepted claims) returned 797 groups, 3,645 grouped listings, 3,704

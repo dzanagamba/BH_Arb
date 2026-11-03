@@ -13,9 +13,11 @@ rejected only when the caller sees the pattern across its sample.
 from __future__ import annotations
 
 import statistics
+from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Literal
 
+from config.settings import price_source
 from models.schemas import Market, MarketType
 
 _COMPLETE: dict[MarketType, tuple[frozenset[str], int]] = {
@@ -110,3 +112,50 @@ def compare(
         [],
         f"all outcomes within {threshold} of {len(reference)} books",
     )
+
+
+def find_outliers(groups, threshold: float = 0.10) -> tuple[list[dict], int]:
+    """Return (outliers, group/market comparisons) for verified groups.
+
+    A group needs at least three distinct price sources: a median of one other
+    book is no reference. NSoft's two books count once.
+    """
+    outliers: list[dict] = []
+    compared = 0
+    for group in groups:
+        by_market: dict[MarketType, dict[str, dict[str, float]]] = defaultdict(dict)
+        names: dict[str, list[str]] = defaultdict(list)
+        for match in group.matches:
+            if match.bookmaker not in names[price_source(match.bookmaker)]:
+                names[price_source(match.bookmaker)].append(match.bookmaker)
+        for match in group.matches:
+            for market in match.markets:
+                probs = devigged(market)
+                if probs is not None:
+                    by_market[market.market_type].setdefault(
+                        price_source(match.bookmaker), probs
+                    )
+        for market_type, per_book in by_market.items():
+            if len(per_book) < 3:
+                continue
+            compared += 1
+            for book, probs in per_book.items():
+                for label, probability in probs.items():
+                    others = [
+                        other[label] for source, other in per_book.items() if source != book
+                    ]
+                    gap = probability - statistics.median(others)
+                    if abs(gap) > threshold:
+                        outliers.append(
+                            {
+                                "match": f"{group.canonical_home} - {group.canonical_away}",
+                                "league": group.league,
+                                "market": market_type.value,
+                                "bookmaker": "+".join(names[book]),
+                                "label": label,
+                                "prob": round(probability, 3),
+                                "median_others": round(statistics.median(others), 3),
+                                "gap": round(gap, 3),
+                            }
+                        )
+    return outliers, compared

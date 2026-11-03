@@ -2,9 +2,11 @@
 
 ## Verdict
 
-**Not production-ready yet.** The core correctness layer is now much stronger
-than the starting point, but the product cannot yet be trusted to run unattended
-against real bookmakers and show a surebet a person could place.
+**The prematch pipeline now finds and re-verifies real surebets; the product is
+not yet safe for unattended betting.** On 2026-11-03 a real scan found five
+surebets after a price-outlier guard dropped a sixth, and all five re-verified as
+still profitable on a fresh scrape. The remaining gaps are execution, operations,
+market breadth and security, not the core match/price engine.
 
 This is an evidence-based verdict, not a score:
 
@@ -13,8 +15,8 @@ This is an evidence-based verdict, not a score:
 | Event identity | Good and improving | Ledger, Betradar ids, shared-fixture learning, league fingerprints and shared-opponent blocking exist. No real-scan precision/recall measurement yet. |
 | Market identity | Partial | Label classifier + cross-book consensus + generated registry + raw-offer resolver exist. Only the NSoft parser publishes `source_id`; the other scrapers still use the hand-written registry. First-half and AH rows are not proven. |
 | Human input | Disabled by default | The three write routes return 403 unless `HUMAN_MAPPING_ENABLED=true`; the Review UI hides its actions. The ledger is the only default trust source. Full route deletion remains A4-1. |
-| Freshness | Partial | The engine has odds TTL and the bet slip re-checks, but there is no per-book freshness budget, no last-known-value policy, and no push/streaming path. |
-| Execution | Partial | Stakes are rounded, legs are ordered, and the slip re-plans. Book limits, partial acceptance, balance, and the "price moved between legs" workflow are not complete. |
+| Freshness | Partial | The engine has odds TTL and every shown surebet is re-verified; there is still no per-book freshness budget, no last-known-value policy, and no push/streaming path. |
+| Execution | Partial | Stakes are rounded, legs are ordered, the slip re-plans, and every shown surebet is re-checked before placement. Book limits, partial acceptance, balance, and the "price moved between legs" workflow are not complete. |
 | Operations | Missing | No scheduler/back-off, no alerting, no 24 h soak, no deployment, no health budget for mapping coverage. |
 | Security | Partial | The server now binds loopback by default and CORS is same-origin unless `CORS_ORIGINS` names an origin. The paused stash (API key on every route, CSRF guard, XSS sweep) is still unapplied. |
 | Evaluation | Partial | Deterministic replay, a cold-start fixed point and two real scans exist. No large multi-scan corpus, no labelled precision/recall, no CLV/backtest. |
@@ -62,6 +64,26 @@ until its per-event link is proven; the missed exact-fixture cases are MaxBet,
 Mozzartbet and the MDShop/Admiralbet pair, which is one NSoft price source and is
 correctly not treated as two books. This is the strongest evidence so far that
 the ledger, shared-opponent blocking and league fingerprints are doing the job.
+
+### First real surebets (2026-11-03 03:24 UTC)
+
+| Match | Market | Profit | Books | Re-verified |
+|---|---|---|---|---|
+| nara – kusatsu | O/U 2.5 | 3.18% | mbet / mozzartbet | yes, unchanged |
+| nara – kusatsu | BTTS | 0.54% | wwin / mozzartbet | yes, unchanged |
+| fulham – newcastle | 1X2 | 0.49% (dust) | sportplus / mozzartbet / maxbet | yes, unchanged |
+| atl madrid – bayern munich | draw / not-draw | 0.42% (dust) | mdshop / mozzartbet | yes, unchanged |
+| roma – sassuolo | home / not-home | 0.42% (dust) | mbet / mozzartbet | yes, unchanged |
+
+The scan had 5,267 matches, 898 verified groups, 4,709 grouped listings, 4,177
+price comparisons, 0 false merges and 1 price outlier. The outlier was the
+`boston utd – leicester u21` MaxBet X2 leg; the price guard dropped that surebet
+instead of showing it. The five above passed the guard and `POST /api/verify`
+returned `still_profitable: true` for every one, with unchanged odds.
+
+This is the first end-to-end evidence that the product can do the job it exists
+for. The route-pattern proof for MaxBet/Mozzartbet was the coverage unlock: it
+raised grouped listings from 3,645 to 4,709 and produced the first real arbs.
 
 ## What the research says
 

@@ -108,6 +108,13 @@ from scrapers.sportplus import SportPlusScraper
 from scrapers.wwin import _build_markets_from_bets
 from server import api
 
+
+@pytest.fixture(autouse=True)
+def _disable_price_guard(monkeypatch):
+    """The certified captures are three different real fixtures, so a cross-book
+    price comparison is meaningless here; the guard has its own unit tests."""
+    monkeypatch.setattr(api, "PRICE_GUARD_ENABLED", False)
+
 # Frozen copies of the 2026-09-25 captures. This test pins their prices (see
 # EXPECTED_LEGS), so it must not follow tests/fixtures/markets/ when that is refreshed.
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "e2e_certified"

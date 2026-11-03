@@ -848,10 +848,10 @@ def test_every_declared_route_book_blocks_and_every_other_book_is_accepted():
                link_ok=False)
         gate.normalize([a, b])
         r = gate.evaluate_pair(a, b)
-        if bookmaker in declared:
+        if bookmaker in declared and raw[bookmaker].get("route_pattern_verified") is not True:
             assert r.reasons == ["link_unverified"], f"{bookmaker}: {r.reasons}"
         else:
-            assert r.reasons == [], f"{bookmaker} declares no route: {r.reasons}"
+            assert r.reasons == [], f"{bookmaker}: {r.reasons}"
 
 
 def test_a_verified_link_still_wins_over_the_declaration():
@@ -1003,3 +1003,59 @@ def test_a_ledger_claim_does_not_leak_to_another_pair(tmp_path):
     b = _m("wwin", "Como", "Man. City", "England 1", event_id="2")
     gate.normalize([a, b])
     assert "team_unresolved" in gate.evaluate_pair(a, b).reasons
+
+
+def test_a_dated_route_pattern_proof_settles_the_link():
+    gate = CertaintyGate()
+    a = _m("maxbet", "Sarajevo", "Zeljeznicar", "BiH - Premier Liga", event_id="1", link_ok=False)
+    b = _m("wwin", "Sarajevo", "Zeljeznicar", "Premijer Liga BiH", event_id="2", link_ok=False)
+    gate.normalize([a, b])
+    result = gate.evaluate_pair(a, b)
+    assert result.status == "verified", result.reasons
+    links = [e for e in result.evidence if e.rule == "link_evidence"]
+    assert any(e.reason == "route_pattern_verified" for e in links)
+
+
+def test_a_route_pattern_without_an_event_id_still_blocks():
+    gate = CertaintyGate()
+    a = _m("maxbet", "Sarajevo", "Zeljeznicar", "BiH - Premier Liga", event_id="", link_ok=False)
+    b = _m("wwin", "Sarajevo", "Zeljeznicar", "Premijer Liga BiH", event_id="2", link_ok=False)
+    gate.normalize([a, b])
+    result = gate.evaluate_pair(a, b)
+    assert result.status != "verified"
+    assert "link_unverified" in result.reasons
+
+
+def test_an_undeclared_book_with_a_url_still_blocks():
+    gate = CertaintyGate()
+    a = _m("undeclared_book", "Sarajevo", "Zeljeznicar", "BiH - Premier Liga",
+           event_id="1", url="https://example.test/1", link_ok=False)
+    b = _m("wwin", "Sarajevo", "Zeljeznicar", "Premijer Liga BiH", event_id="2", link_ok=False)
+    gate.normalize([a, b])
+    assert "link_unverified" in gate.evaluate_pair(a, b).reasons
+
+
+def test_a_group_with_two_betradar_ids_is_rejected():
+    gate = CertaintyGate()
+    first = _m("mdshop", "Sarajevo", "Zeljeznicar", "BiH - Premier Liga", betradar_id="111")
+    second = _m("wwin", "Sarajevo", "Zeljeznicar", "Premijer Liga BiH", betradar_id="222")
+    candidate = _m("mbet", "Sarajevo", "Zeljeznicar", "Premijer Liga BiH", betradar_id="333")
+    gate.normalize([first, second, candidate])
+    group = _g(first, league=first.league_normalized)
+    group.matches.append(second)
+    result = gate.evaluate(candidate, group)
+    assert result.status == "rejected"
+    assert "betradar_mismatch" in result.reasons
+
+
+def test_a_different_id_is_rejected_when_the_anchor_has_none():
+    gate = CertaintyGate()
+    anchor = _m("mdshop", "Sarajevo", "Zeljeznicar", "BiH - Premier Liga")
+    candidate = _m("wwin", "Sarajevo", "Zeljeznicar", "Premijer Liga BiH", betradar_id="222")
+    other = _m("mbet", "Sarajevo", "Zeljeznicar", "Premijer Liga BiH", betradar_id="111")
+    gate.normalize([anchor, candidate, other])
+    group = _g(anchor, league=anchor.league_normalized)
+    group.matches.append(other)
+    result = gate.evaluate(candidate, group)
+    assert result.status == "rejected"
+    assert "betradar_mismatch" in result.reasons

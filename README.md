@@ -19,16 +19,17 @@ A web-based arbitrage betting detection tool for the Bosnian market.
 >   league, kickoff, category, teams, orientation. A book with no declaration at
 >   all is *not* accepted this way: the gate fails safe and treats its link as
 >   unproven.
-> * **The book declares a per-event route** (`supports_event_id: true`) — then
->   the route has to be opened and proven by a real browser check. Only
->   Mozzartbet and MaxBet declare one. Mozzartbet's links are proven; MaxBet was
->   added on 2026-10-27 and its `/match/<id>` links are not proven yet, so a
->   group holding a MaxBet listing stays unverified until
->   `scripts/verify_deeplinks.py maxbet` proves its link. MDShop's and Admiralbet's declared `?event=<id>` routes are **inert** — the served page
->   is byte-identical to the plain football page and the id appears nowhere in
->   it — so on 2026-10-20 both were re-declared `supports_event_id: false` with
->   a dated note, and they now verify on identity like the other route-less
->   books.
+> * **The book declares a per-event route** (`supports_event_id: true`) — the
+>   route has to be proven by a real browser check. Mozzartbet and MaxBet declare
+>   one, and their path-based patterns were browser-proven on 2026-11-03 on three
+>   sampled events each: the path embeds the book's own event id, and the feed
+>   supplies that id for every listing. A listing with an event id is therefore
+>   verified with a `route_pattern_verified` note; a listing with no event id
+>   still blocks. MDShop's and Admiralbet's declared `?event=<id>` routes are
+>   **inert** — the served page is byte-identical to the plain football page and
+>   the id appears nowhere in it — so on 2026-10-20 both were re-declared
+>   `supports_event_id: false` with a dated note, and they now verify on identity
+>   like the other route-less books.
 >
 > So what blocks `verified` today is identity, not links: league names the
 > mappings do not equate, team spellings no one has approved, and kickoff

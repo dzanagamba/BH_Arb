@@ -555,6 +555,17 @@ def _declared_config(bookmaker: str) -> dict:
     return value if isinstance(value, dict) else {}
 
 
+def declares_route_pattern_verified(bookmaker: str) -> bool:
+    """Whether the book's per-event route pattern has a dated browser proof.
+
+    The route embeds the book's own event id. A sampled browser check proves the
+    pattern serves the event for that id; the feed then supplies the id for every
+    listing. This is the industry norm for path-based bookmaker routes and is
+    recorded with a date and a sample in ``config/bookmaker_deeplinks.json``.
+    """
+    return _declared_config(bookmaker).get("route_pattern_verified") is True
+
+
 def supports_event_id(bookmaker: str) -> bool:
     """Return whether a bookmaker declares a per-event deep-link route.
 

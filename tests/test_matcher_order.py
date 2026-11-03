@@ -60,9 +60,9 @@ def _scan() -> list[Match]:
     that fixture was orphaned), and same-name traps that must stay apart.
     """
     return [
-        # Sarajevo vs Željezničar — Mozzartbet's link is unproven.
-        _m("mozzartbet", "Sarajevo", "Željezničar", "BiH - Premier Liga",
-           event_id="moz-1", link_ok=False),
+        # Sarajevo vs Željezničar — an undeclared book with an unproven link.
+        _m("undeclared_book", "Sarajevo", "Željezničar", "BiH - Premier Liga",
+           event_id="un-1", link_ok=False),
         _m("mdshop", "Sarajevo", "Željezničar", "BiH - Premier Liga", event_id="md-1"),
         _m("mbet", "Zeljeznicar", "FK Sarajevo", "Premijer Liga BiH", event_id="mb-1"),
         _m("sportplus", "Sarajevo", "Željezničar", "BiH - Premier Liga",

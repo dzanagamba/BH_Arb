@@ -45,6 +45,7 @@ from config.settings import (
     MIN_LEARN_MATCHES,
     MIN_PROFIT_PERCENT,
     ODDS_TTL_SECONDS,
+    PRICE_GUARD_ENABLED,
     RATE_LIMIT_WINDOW_SECONDS,
     SCAN_RATE_LIMIT,
     VERIFIED_KICKOFF_WINDOW_MINUTES,
@@ -56,6 +57,7 @@ from engine.mapping_evidence import MappingLedger
 from engine.mapping_learner import learn
 from engine.market_registry import unmapped_markets
 from engine.matcher import MatchMatcher, swap_match_teams_and_odds
+from engine.price_guard import filter_price_outliers
 from models.schemas import (
     CandidateReview,
     MarketType,
@@ -67,7 +69,11 @@ from models.schemas import (
 )
 from scrapers.admiralbet import AdmiralbetScraper
 from scrapers.betole import BetoleScraper
-from scrapers.common import declares_no_event_id, effective_deeplink_declarations
+from scrapers.common import (
+    declares_no_event_id,
+    declares_route_pattern_verified,
+    effective_deeplink_declarations,
+)
 from scrapers.evlbet import EvlbetScraper
 from scrapers.maxbet import MaxBetScraper
 from scrapers.mbet import MBetScraper
@@ -1477,6 +1483,19 @@ async def run_scan(mode: str = "prematch"):
             allow_past_kickoffs=is_live,
             enabled_markets=_enabled_markets(),
         )
+        price_dropped = []
+        if PRICE_GUARD_ENABLED:
+            surebets, price_dropped = filter_price_outliers(surebets, groups)
+        if price_dropped:
+            detail = ", ".join(
+                f"{item['surebet'].home_team}-{item['surebet'].away_team} "
+                f"({item['outlier']['bookmaker']} {item['outlier']['label']})"
+                for item in price_dropped[:5]
+            )
+            logger.warning("Dropped %s surebet(s) with a price outlier: %s", len(price_dropped), detail)
+            status.errors.append(
+                f"{len(price_dropped)} surebet(s) dropped: a leg was a price outlier"
+            )
 
         # --- Update state ---
         status.surebets_found = len(surebets)
@@ -1596,6 +1615,8 @@ def _restorable_match_groups(report: object, mode: str) -> list[dict]:
             if declares_no_event_id(bookmaker):
                 continue  # the declaration IS the proof; no link exists to store
             event_id = str(leg.get("event_id") or "")
+            if declares_route_pattern_verified(bookmaker) and event_id:
+                continue  # the dated pattern proof settles this route
             record = entries.get(_deep_link_key(bookmaker, event_id)) if event_id else None
             if not _deep_link_record_is_fresh(record, reference):
                 proven = False
@@ -1782,6 +1803,7 @@ def _unverified_link_count(matches: list[dict]) -> int:
         if match.get("event_id")
         and not match.get("deep_link_verified")
         and not declares_no_event_id(str(match.get("bookmaker", "")))
+        and not declares_route_pattern_verified(str(match.get("bookmaker", "")))
     )
 
 

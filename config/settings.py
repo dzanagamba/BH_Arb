@@ -166,6 +166,12 @@ AUTO_LEARN_MAPPINGS = os.getenv("AUTO_LEARN_MAPPINGS", "true").strip().lower() i
     "yes",
 )
 MIN_LEARN_MATCHES = int(os.getenv("MIN_LEARN_MATCHES", "50"))
+# Drop a surebet whose leg is a price outlier against the other books.
+PRICE_GUARD_ENABLED = os.getenv("PRICE_GUARD_ENABLED", "true").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+)
 # Max on-demand deep-link checks per minute per client IP (0 disables the limit).
 # A check drives a real browser against a bookmaker's site for seconds per event,
 # and API_KEY is empty by default, so the endpoint throttles itself: a lock only
