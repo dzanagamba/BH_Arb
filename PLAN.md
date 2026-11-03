@@ -7,7 +7,7 @@
 > entry, manual gate exception or manual CAPTCHA step** anywhere between scrape
 > and a shown surebet.
 >
-> **Baseline (2026-11-03, this worktree).** `python -m pytest` → **1145 passed** in 90 s; `ruff check .` clean; `mypy .` clean on 109 source files;
+> **Baseline (2026-11-03, this worktree).** `python -m pytest` → **1147 passed** in 90 s; `ruff check .` clean; `mypy .` clean on 110 source files;
 > `scripts/generate_market_mapping_doc.py --check` in sync. Environment is
 > `.venv` on CPython 3.11.18, installed with `uv`. The 953-passed figure in the
 > superseded plan was a 2026-10-20 measurement and is stale.
@@ -26,7 +26,7 @@
 > consensus, registry merge, discovery CLI and raw-offer resolver are shipped.
 > Betole is now the ninth enabled book after fixing its kickoff and Betradar id;
 > the 9-book scan found 6,503 matches, 1,039 verified groups and **8 surebets**,
-> all re-verified by `POST /api/verify`; two price-outlier surebets were dropped. **1145 tests pass.** The acceptance
+> all re-verified by `POST /api/verify`; two price-outlier surebets were dropped. **1147 tests pass.** The acceptance
 > record is `docs/ACCEPTANCE.md`; the production verdict and research are in
 > `docs/PRODUCTION_READINESS.md`.
 >
@@ -1201,7 +1201,7 @@ counts.
 
 #### A7-3 · Re-apply security hardening
 
-- [ ] **Status:** TODO
+- [~] **Status:** PARTIAL 2026-11-03 (loopback, same-origin CORS, all-route API key and dashboard prompt shipped; CSRF and XSS sweep remain)
 - **Needs:** offline.
 - **Depends on:** A6-4.
 - **Files:** as the old M4-3 card lists.
@@ -1211,7 +1211,7 @@ counts.
   tests, update `.env.example` and README. Do not drop the stash.
 - **Verify:** the old card's tests; S1.
 - **Done when:** the hardening is applied and the operator can drop the stash.
-- **Log:** —
+- **Log:** Loopback default, same-origin CORS and a single middleware guard requiring `X-API-Key` on every `/api` route except `/api/health` are shipped. The dashboard routes every API call through `apiFetch` and prompts once per tab. 2 tests cover read routes, wrong keys and the public health route. CSRF and the XSS sweep remain from the stash.
 
 #### A7-4 · Documentation and claim tests
 

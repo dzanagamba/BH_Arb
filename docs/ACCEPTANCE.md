@@ -8,9 +8,9 @@ named next to it.
 
 | Check | Command | Result |
 |---|---|---|
-| Tests | `python -m pytest` | **1,150 passed** |
+| Tests | `python -m pytest` | **1,147 passed** |
 | Lint | `python -m ruff check .` | clean |
-| Types | `python -m mypy .` | clean on 109 source files |
+| Types | `python -m mypy .` | clean on 110 source files |
 | Market doc | `python scripts/generate_market_mapping_doc.py --check` | in sync |
 | Cold replay | `python scripts/replay_mappings.py tests/fixtures/replay/2026-11-03 --cold --check` | exit 0, fixed point |
 | Seeded replay | `python scripts/replay_mappings.py tests/fixtures/replay/2026-11-03 --seeded --check` | exit 0 |
