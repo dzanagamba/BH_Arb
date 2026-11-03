@@ -29,6 +29,7 @@ from config.settings import (
     MAX_SUREBET_PROFIT_PERCENT,
     MIN_PROFIT_PERCENT,
     ODDS_TTL_SECONDS,
+    PREMATCH_EXPIRY_BUFFER_MINUTES,
     price_source,
 )
 from models.schemas import Market, MarketType, Match, MatchGroup, Surebet, SurebetStake
@@ -169,6 +170,26 @@ class ArbitrageEngine:
         now_utc_naive = datetime.now(UTC).replace(tzinfo=None)
         return kickoff < (now_utc_naive - timedelta(minutes=buffer_minutes))
 
+    @staticmethod
+    def _latest_kickoff(group: MatchGroup) -> datetime | None:
+        """The last kickoff any book in the group claims, as naive UTC.
+
+        Bookmakers disagree by up to the gate's kickoff window. Using the
+        canonical (often earliest) time expired a fixture before the book that
+        starts later had kicked off; using the latest member time is the
+        conservative prematch choice.
+        """
+        kickoffs = []
+        for match in group.matches:
+            if match.kickoff is None:
+                continue
+            kickoffs.append(
+                match.kickoff.astimezone(UTC).replace(tzinfo=None)
+                if match.kickoff.tzinfo is not None
+                else match.kickoff
+            )
+        return max(kickoffs) if kickoffs else group.kickoff
+
     def find_surebets(
         self,
         groups: list[MatchGroup],
@@ -203,10 +224,23 @@ class ArbitrageEngine:
                     f"Skipping {group.status} group: {group.canonical_home} vs {group.canonical_away}"
                 )
                 continue
-            # Skip matches whose kickoff has already passed (prematch mode only;
-            # live matches are in play right now and remain actionable)
-            if not allow_past_kickoffs and self._is_expired(group.kickoff):
-                logger.debug(f"Skipping expired match group: {group.canonical_home} vs {group.canonical_away} ({group.kickoff})")
+            # Skip matches whose latest member kickoff has already passed
+            # (prematch mode only; live matches are in play right now and
+            # remain actionable). The two-minute buffer is clock tolerance, not
+            # a window to keep pricing a match that has started.
+            latest_kickoff = self._latest_kickoff(group)
+            if (
+                not allow_past_kickoffs
+                and self._is_expired(
+                    latest_kickoff, buffer_minutes=PREMATCH_EXPIRY_BUFFER_MINUTES
+                )
+            ):
+                logger.debug(
+                    "Skipping expired match group: %s vs %s (%s)",
+                    group.canonical_home,
+                    group.canonical_away,
+                    latest_kickoff,
+                )
                 continue
             # P2: reject groups with stale odds (any leg older than TTL)
             def _fetched_age_sec(fetched_at: datetime | None) -> float:

@@ -8,7 +8,7 @@ named next to it.
 
 | Check | Command | Result |
 |---|---|---|
-| Tests | `python -m pytest` | **1,168 passed** |
+| Tests | `python -m pytest` | **1,171 passed** |
 | Lint | `python -m ruff check .` | clean |
 | Types | `python -m mypy .` | clean on 119 source files |
 | Market doc | `python scripts/generate_market_mapping_doc.py --check` | in sync |
@@ -88,10 +88,11 @@ and are reported as gone rather than as confirmed arbs.
 
 The final-gate soak scan at **04:54 UTC** found **6,500 matches, 1,044 verified
 groups and 12 surebets**, including `mainz – bayern munich` 1X2 at 0.27%, a
-fixture that only paired after the anchor fix. A later scan at **05:08 UTC**,
-after the abbreviation and punctuation rules, found **6,377 matches, 1,030
-verified groups and 6 surebets** as the feed shrank toward kickoff. These later
-counts are scan-level measurements and were not individually re-verified.
+fixture that only paired after the anchor fix. The latest scan at **05:25 UTC**,
+after the abbreviation, punctuation and prematch-expiry rules, found **6,394
+matches, 1,032 verified groups and 7 surebets**. Five of those seven re-verified
+at a fresh price; the two Boston United–Leicester U21 legs were gone on
+re-check and are reported as gone.
 
 ## Pairing coverage
 
@@ -101,28 +102,28 @@ repeats a bookmaker.
 
 | Metric | Value |
 |---|---:|
-| Matches | 6,377 |
-| Verified multi-book groups | 1,030 |
-| Listings in groups | 5,712 |
-| Ungrouped listings | 665 |
-| Duplicate listings from a book already in the group | 312 |
+| Matches | 6,394 |
+| Verified multi-book groups | 1,032 |
+| Listings in groups | 5,723 |
+| Ungrouped listings | 671 |
+| Duplicate listings from a book already in the group | 299 |
 | Strict misses (same league, ±15 min, both teams ≥80% alike) | 31 |
-| Strict miss rate | **0.49%** |
+| Strict miss rate | **0.48%** |
 | Groups repeating a bookmaker | 0 |
 
 Per-book grouping, including duplicate listings:
 
 | Book | Grouped / matches | Rate |
 |---|---:|---:|
-| MDShop | 523 / 525 | 99.6% |
-| Admiralbet | 523 / 525 | 99.6% |
+| MDShop | 525 / 527 | 99.6% |
+| Admiralbet | 525 / 527 | 99.6% |
 | MBet | 585 / 601 | 97.3% |
-| WWIN | 711 / 740 | 96.1% |
+| WWIN | 712 / 741 | 96.1% |
 | SportPlus | 717 / 750 | 95.6% |
-| MaxBet | 734 / 826 | 88.9% |
-| Premier Kladionica | 734 / 831 | 88.3% |
+| Premier Kladionica | 736 / 834 | 88.2% |
+| MaxBet | 736 / 838 | 87.8% |
 | Betole | 930 / 1,239 | 75.1% |
-| Mozzartbet | 255 / 340 | 75.0% |
+| Mozzartbet | 257 / 337 | 76.3% |
 
 The low Betole/Mozzartbet rates are mostly duplicate listings and leagues no
 other book carries, not same-fixture misses: only 31 offers in the whole scan
@@ -152,6 +153,10 @@ remaining examples are abbreviations and city-qualified spellings such as
    `germany, bundesliga`. The learner now records generic fingerprints and the
    resolver compares canonical team ids, so `Mainz – Bayern` pairs across all
    nine books.
+5. **Prematch expiry is real.** A group is dropped once the latest kickoff any
+   book claims is more than two minutes past. Live mode still prices started
+   matches; the old 15-minute prematch grace kept pricing fixtures that had
+   already begun.
 
 ## Betole and EVLBet
 

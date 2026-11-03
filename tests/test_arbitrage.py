@@ -100,6 +100,39 @@ def test_expired_match_skipped():
     assert len(surebets) == 0
 
 
+def test_a_match_that_kicked_off_is_not_priced_as_prematch():
+    ten_minutes_ago = datetime.now(UTC).replace(tzinfo=None) - timedelta(minutes=10)
+    group = _group(
+        {"mdshop": (2.40, 1.90), "mbet": (2.20, 1.85)}, kickoff=ten_minutes_ago
+    )
+    engine = ArbitrageEngine()
+    assert engine.find_surebets([group], min_profit=0.5, investment=100.0) == []
+
+
+def test_a_later_member_kickoff_keeps_the_group_alive():
+    ten_minutes_ago = datetime.now(UTC).replace(tzinfo=None) - timedelta(minutes=10)
+    in_five_minutes = datetime.now(UTC).replace(tzinfo=None) + timedelta(minutes=5)
+    group = _group(
+        {"mdshop": (2.40, 1.90), "mbet": (2.20, 1.85)}, kickoff=ten_minutes_ago
+    )
+    group.matches[1].kickoff = in_five_minutes
+    engine = ArbitrageEngine()
+    assert len(engine.find_surebets([group], min_profit=0.5, investment=100.0)) == 1
+
+
+def test_live_mode_still_prices_a_started_match():
+    ten_minutes_ago = datetime.now(UTC).replace(tzinfo=None) - timedelta(minutes=10)
+    group = _group(
+        {"mdshop": (2.40, 1.90), "mbet": (2.20, 1.85)}, kickoff=ten_minutes_ago
+    )
+    engine = ArbitrageEngine()
+    assert len(
+        engine.find_surebets(
+            [group], min_profit=0.5, investment=100.0, allow_past_kickoffs=True
+        )
+    ) == 1
+
+
 def test_expiry_uses_utc_not_local_time():
     # Naive-UTC kickoff 90 minutes from now must NOT be expired on any machine,
     # even one whose local clock is ahead of UTC (old code expired it ~2h early).

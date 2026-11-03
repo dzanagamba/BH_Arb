@@ -111,6 +111,7 @@ MIN_PROFIT_PERCENT = 0.5       # Minimum profit % to show as surebet
 DUST_PROFIT_PERCENT = 0.2      # Lower bound for "dust" (low-value) surebets shown in separate tab
 DEFAULT_INVESTMENT = 100.0     # Default total investment (BAM/KM)
 EXPIRY_BUFFER_MINUTES = 15     # Grace period (min) before treating a match as expired
+PREMATCH_EXPIRY_BUFFER_MINUTES = 2  # Clock tolerance after the latest member kickoff
 # Books that run on one odds feed quote identical prices, so a bet at one and a
 # bet at the other is not two independent prices: the engine takes at most one
 # leg per price source. MDShop and Admiralbet are both NSoft (see MARKET_MAPPING.md).
