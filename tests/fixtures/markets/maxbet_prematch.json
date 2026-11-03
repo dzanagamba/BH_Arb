@@ -1,0 +1,198 @@
+{
+  "bookmaker": "maxbet",
+  "mode": "prematch",
+  "captured_at": "2026-10-26",
+  "endpoint": "https://sportsbook.maxbet.ba/sportsbook/rest/v2/matches?sportId=1&ot=1&ot=10&ot=27&ot=17&ln=cnr",
+  "source": "live_api_response",
+  "payload_kind": "maxbet_match_odds",
+  "provenance": "odds[] of one football match (id 985993, 'Libertad v Independiente FBC') from the live MaxBet sportsbook /rest/v2/matches response, trimmed to the open markets the registry maps plus the unpriced 4.5 total as a control.",
+  "dropped_bet_fields": [
+    "isPlayerMarket",
+    "description"
+  ],
+  "dropped_odd_fields": [
+    "id",
+    "description",
+    "updateDate",
+    "providerTimestamp",
+    "externalIds"
+  ],
+  "excluded_ids_present": [],
+  "bets": [
+    {
+      "id": 17,
+      "name": "Ukupno golova",
+      "specifiers": {
+        "total": "1.5"
+      },
+      "outcomes": [
+        {
+          "outcome": "Manje {total}",
+          "outcomeId": "17002",
+          "status": 0,
+          "oddValue": 4.0,
+          "marketAvailableForBetting": true
+        },
+        {
+          "outcome": "Više {total}",
+          "outcomeId": "17001",
+          "status": 0,
+          "oddValue": 1.2,
+          "marketAvailableForBetting": true
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "name": "Ukupno golova",
+      "specifiers": {
+        "total": "2.5"
+      },
+      "outcomes": [
+        {
+          "outcome": "Manje {total}",
+          "outcomeId": "17002",
+          "status": 0,
+          "oddValue": 2.1,
+          "marketAvailableForBetting": true
+        },
+        {
+          "outcome": "Više {total}",
+          "outcomeId": "17001",
+          "status": 0,
+          "oddValue": 1.65,
+          "marketAvailableForBetting": true
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "name": "Ukupno golova",
+      "specifiers": {
+        "total": "3.5"
+      },
+      "outcomes": [
+        {
+          "outcome": "Manje {total}",
+          "outcomeId": "17002",
+          "status": 0,
+          "oddValue": 1.4,
+          "marketAvailableForBetting": true
+        },
+        {
+          "outcome": "Više {total}",
+          "outcomeId": "17001",
+          "status": 0,
+          "oddValue": 2.75,
+          "marketAvailableForBetting": true
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "name": "Konačan ishod",
+      "outcomes": [
+        {
+          "outcome": "1",
+          "outcomeId": "1001",
+          "status": 0,
+          "oddValue": 1.31,
+          "marketAvailableForBetting": true
+        },
+        {
+          "outcome": "X",
+          "outcomeId": "1002",
+          "status": 0,
+          "oddValue": 4.9,
+          "marketAvailableForBetting": true
+        },
+        {
+          "outcome": "2",
+          "outcomeId": "1003",
+          "status": 0,
+          "oddValue": 8.25,
+          "marketAvailableForBetting": true
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "name": "Dupla šansa",
+      "outcomes": [
+        {
+          "outcome": "1X",
+          "outcomeId": "10001",
+          "status": 0,
+          "oddValue": 1.06,
+          "marketAvailableForBetting": true
+        },
+        {
+          "outcome": "12",
+          "outcomeId": "10002",
+          "status": 0,
+          "oddValue": 1.15,
+          "marketAvailableForBetting": true
+        },
+        {
+          "outcome": "X2",
+          "outcomeId": "10003",
+          "status": 0,
+          "oddValue": 3.2,
+          "marketAvailableForBetting": true
+        }
+      ]
+    },
+    {
+      "id": 27,
+      "name": "GG - NG",
+      "outcomes": [
+        {
+          "outcome": "GG",
+          "outcomeId": "27001",
+          "status": 0,
+          "oddValue": 2.0,
+          "marketAvailableForBetting": true
+        },
+        {
+          "outcome": "NG",
+          "outcomeId": "27002",
+          "status": 0,
+          "oddValue": 1.7,
+          "marketAvailableForBetting": true
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "name": "Ukupno golova",
+      "specifiers": {
+        "total": "4.5"
+      },
+      "outcomes": [
+        {
+          "outcome": "Manje {total}",
+          "outcomeId": "17002",
+          "status": 0,
+          "oddValue": 1.11111,
+          "marketAvailableForBetting": true
+        },
+        {
+          "outcome": "Više {total}",
+          "outcomeId": "17001",
+          "status": 0,
+          "oddValue": 5.5,
+          "marketAvailableForBetting": true
+        }
+      ]
+    }
+  ],
+  "expected_markets": [
+    "1x2",
+    "btts",
+    "double_chance",
+    "over_under_1_5",
+    "over_under_2_5",
+    "over_under_3_5"
+  ],
+  "uncovered_registry_rows": []
+}

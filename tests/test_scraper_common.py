@@ -1,0 +1,109 @@
+"""Tests for shared scraper helpers."""
+
+import logging
+from datetime import datetime
+
+from models.schemas import MarketType
+from scrapers.common import normalize_outcome, parse_dt, parse_teams_from_name
+
+
+def test_parse_dt_iso():
+    dt = parse_dt("2026-08-15T18:00:00")
+    assert dt == datetime(2026, 8, 15, 18, 0, 0)
+
+
+def test_parse_dt_with_offset_converted_to_utc():
+    dt = parse_dt("2026-08-15T18:00:00+02:00")
+    assert dt == datetime(2026, 8, 15, 16, 0, 0)  # 18:00 +02:00 == 16:00 UTC
+
+
+def test_parse_dt_zulu_suffix():
+    dt = parse_dt("2026-08-15T18:00:00Z")
+    assert dt == datetime(2026, 8, 15, 18, 0, 0)
+
+
+def test_parse_dt_epoch_ms():
+    dt = parse_dt(1_752_000_000_000)
+    assert dt is not None
+    assert dt.tzinfo is None  # naive UTC
+
+
+def test_parse_dt_invalid():
+    assert parse_dt("not-a-date") is None
+    assert parse_dt(None) is None
+
+
+def test_parse_dt_debug_logging(caplog):
+    """Verify debug logs are emitted when parse_dt fails on bad inputs."""
+    with caplog.at_level(logging.DEBUG):
+        assert parse_dt("garbage") is None
+        assert parse_dt("") is None
+        assert "Failed to parse" in caplog.text
+
+
+def test_parse_teams_from_name():
+    assert parse_teams_from_name("Sarajevo - Željezničar") == ("Sarajevo", "Željezničar")
+    assert parse_teams_from_name("Sarajevo vs Željezničar") == ("Sarajevo", "Željezničar")
+    assert parse_teams_from_name("") == ("", "")
+
+
+def test_normalize_outcome_match_result():
+    assert normalize_outcome("1", MarketType.MATCH_RESULT) == "1"
+    assert normalize_outcome("neriješeno", MarketType.MATCH_RESULT) == "X"
+    assert normalize_outcome("2", MarketType.MATCH_RESULT) == "2"
+
+
+def test_normalize_outcome_over_under():
+    assert normalize_outcome("više", MarketType.OVER_UNDER_2_5) == "Over 2.5"
+    assert normalize_outcome("manje", MarketType.OVER_UNDER_2_5) == "Under 2.5"
+    assert normalize_outcome("0-2", MarketType.OVER_UNDER_2_5) == "Under 2.5"
+
+
+def test_normalize_outcome_btts_and_dc():
+    assert normalize_outcome("gol-gol", MarketType.BTTS) == "GG"
+    assert normalize_outcome("ng", MarketType.BTTS) == "NG"
+    assert normalize_outcome("X2", MarketType.DOUBLE_CHANCE) == "X2"
+
+
+def test_normalize_outcome_bosnian_home_away():
+    assert normalize_outcome("Dom", MarketType.MATCH_RESULT) == "1"
+    assert normalize_outcome("Gost", MarketType.MATCH_RESULT) == "2"
+
+
+def test_mdshop_dedup_by_event_id():
+    from scrapers.mdshop import MDShopScraper
+
+    scraper = MDShopScraper()
+    seen: set = set()
+    bets = [
+        {
+            "betTypeId": 135,
+            "betOutcomes": [
+                {"name": "1", "odd": 2.1},
+                {"name": "X", "odd": 3.2},
+                {"name": "2", "odd": 3.5},
+            ],
+        }
+    ]
+    ev1 = {"name": "Sarajevo - Zeljeznicar", "id": 111,
+           "dateTime": "2026-08-15T18:00:00", "bets": bets}
+    ev2 = {"name": "Sarajevo - Zeljeznicar", "id": 222,
+           "dateTime": "2026-08-22T18:00:00", "bets": bets}
+
+    # Same event ID twice → second occurrence must be dropped
+    assert scraper._parse_event(ev1, "football", seen) is not None
+    assert scraper._parse_event(ev1, "football", seen) is None
+    # Same teams, different event ID (2nd meeting in the window) → kept
+    assert scraper._parse_event(ev2, "football", seen) is not None
+
+
+def test_parse_local_dt_reads_naive_values_as_sarajevo_time():
+    from scrapers.common import parse_local_dt
+
+    # Summer (CEST, UTC+2) and winter (CET, UTC+1).
+    assert parse_local_dt("2026-10-20T20:45:00") == datetime(2026, 10, 20, 18, 45)
+    assert parse_local_dt("2026-12-20T20:45:00") == datetime(2026, 12, 20, 19, 45)
+    # An explicit offset is already absolute and is not shifted again.
+    assert parse_local_dt("2026-10-20T20:45:00Z") == datetime(2026, 10, 20, 20, 45)
+    assert parse_local_dt("2026-10-20T20:45:00+02:00") == datetime(2026, 10, 20, 18, 45)
+    assert parse_local_dt(None) is None

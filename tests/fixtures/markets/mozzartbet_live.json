@@ -1,0 +1,198 @@
+{
+  "bookmaker": "mozzartbet",
+  "mode": "live",
+  "captured_at": "2026-10-20",
+  "endpoint": "POST https://www.mozzartbet.ba/betting/matches body={\"date\":\"live\",\"sportId\":1,...}",
+  "source": "live_api_response",
+  "payload_kind": "mozzartbet_event_odds",
+  "provenance": "odds[] of one football item (id 10047460) from the live Mozzartbet betting/matches response, filtered to games 1/2/3/130 plus the excluded game 141 (Mozzart kombinacije). The feed serves no over_under_1_5, over_under_3_5 subgame pair for game 3 that would complete a totals market, so those registry rows stay unexercised: a totals market needs both legs and the registry's min_legs is 2.",
+  "dropped_odd_fields": [
+    "id",
+    "rank",
+    "specialOddValue",
+    "priority",
+    "topOdd"
+  ],
+  "dropped_subgame_fields": [
+    "id",
+    "rank",
+    "description",
+    "fullId"
+  ],
+  "dropped_game_fields": [
+    "rank",
+    "specialOddValueType"
+  ],
+  "excluded_ids_present": [
+    {
+      "id": 141,
+      "context": "kmb Mozzart kombinazzije"
+    }
+  ],
+  "bets": [
+    {
+      "game": {
+        "id": 1,
+        "shortName": "ki",
+        "name": "Konačan ishod"
+      },
+      "subgame": {
+        "name": "1"
+      },
+      "value": 1.57
+    },
+    {
+      "game": {
+        "id": 1,
+        "shortName": "ki",
+        "name": "Konačan ishod"
+      },
+      "subgame": {
+        "name": "X"
+      },
+      "value": 4.5
+    },
+    {
+      "game": {
+        "id": 1,
+        "shortName": "ki",
+        "name": "Konačan ishod"
+      },
+      "subgame": {
+        "name": "2"
+      },
+      "value": 5.3
+    },
+    {
+      "game": {
+        "id": 2,
+        "shortName": "ds",
+        "name": "Dupla šansa"
+      },
+      "subgame": {
+        "name": "1X"
+      },
+      "value": 1.16
+    },
+    {
+      "game": {
+        "id": 2,
+        "shortName": "ds",
+        "name": "Dupla šansa"
+      },
+      "subgame": {
+        "name": "12"
+      },
+      "value": 1.21
+    },
+    {
+      "game": {
+        "id": 2,
+        "shortName": "ds",
+        "name": "Dupla šansa"
+      },
+      "subgame": {
+        "name": "X2"
+      },
+      "value": 2.43
+    },
+    {
+      "game": {
+        "id": 3,
+        "shortName": "ug",
+        "name": "Ukupno golova"
+      },
+      "subgame": {
+        "name": "0-2"
+      },
+      "value": 2.55
+    },
+    {
+      "game": {
+        "id": 3,
+        "shortName": "ug",
+        "name": "Ukupno golova"
+      },
+      "subgame": {
+        "name": "3+"
+      },
+      "value": 1.45
+    },
+    {
+      "game": {
+        "id": 3,
+        "shortName": "ug",
+        "name": "Ukupno golova"
+      },
+      "subgame": {
+        "name": "2+"
+      },
+      "value": 1.15
+    },
+    {
+      "game": {
+        "id": 130,
+        "shortName": "tgg",
+        "name": "Oba tima daju gol"
+      },
+      "subgame": {
+        "name": "gg"
+      },
+      "value": 1.52
+    },
+    {
+      "game": {
+        "id": 130,
+        "shortName": "tgg",
+        "name": "Oba tima daju gol"
+      },
+      "subgame": {
+        "name": "ng"
+      },
+      "value": 2.35
+    },
+    {
+      "game": {
+        "id": 130,
+        "shortName": "tgg",
+        "name": "Oba tima daju gol"
+      },
+      "subgame": {
+        "name": "gg3+"
+      },
+      "value": 1.8
+    },
+    {
+      "game": {
+        "id": 141,
+        "shortName": "kmb",
+        "name": "Mozzart kombinazzije"
+      },
+      "subgame": {
+        "name": "1+I&2+II"
+      },
+      "value": 2.15
+    },
+    {
+      "game": {
+        "id": 141,
+        "shortName": "kmb",
+        "name": "Mozzart kombinazzije"
+      },
+      "subgame": {
+        "name": "1+I&1+II"
+      },
+      "value": 1.4
+    }
+  ],
+  "expected_markets": [
+    "1x2",
+    "btts",
+    "double_chance",
+    "over_under_2_5"
+  ],
+  "uncovered_registry_rows": [
+    "over_under_1_5",
+    "over_under_3_5"
+  ]
+}

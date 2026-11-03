@@ -1,0 +1,2545 @@
+{
+    "_comment": "Map canonical league ID -> array of known name variations across 4 bookmakers",
+    "premier_liga_bih": [
+        "PLBIH",
+        "Bosna i Hercegovina - Premier Liga",
+        "BiH - Premier Liga",
+        "Bosna - Premier Liga",
+        "Bosna - Premijer Liga",
+        "PREMIER LIGA",
+        "Bosnia - Premier League",
+        "Premier Liga BiH",
+        "Premier Liga",
+        "BIH Premijer Liga",
+        "BIH Premier Liga",
+        "Premijer Liga BiH"
+    ],
+    "prva_liga_fbih": [
+        "Bosna FBiH - Prva Liga",
+        "First League FBiH",
+        "Prva Liga FBiH",
+        "1. Liga FBiH",
+        "Bosna - Prva Liga FBiH",
+        "BiH - Prva Liga FBiH"
+    ],
+    "prva_liga_rs": [
+        "Bosna RS - Prva Liga",
+        "Prva Liga RS",
+        "1. Liga RS",
+        "Republika Srpska - Prva Liga",
+        "First League RS",
+        "BiH - Prva Liga RS"
+    ],
+    "premier_league": [
+        "Engleska - Premier liga",
+        "Engleska Premier League",
+        "Engleska - Premijer Liga",
+        "England Premier League",
+        "ENGLESKA 1",
+        "Engleska - Premier League",
+        "Engleska 1.Liga",
+        "EPL",
+        "Eng - Premijer Liga",
+        "England - Premier League",
+        "Engleska 1",
+        "Premier League",
+        "ENGLAND 1",
+        "ENGLESKA PREMIER LIGA"
+    ],
+    "championship": [
+        "EFL Championship",
+        "England - Championship",
+        "Engleska 2",
+        "ENGLESKA 2",
+        "Engleska Championship",
+        "Engleska - Championship",
+        "Championship",
+        "ENGLAND 2",
+        "ENGLESKA CHAMPIONSHIP FL"
+    ],
+    "league_one": [
+        "League One",
+        "EFL League One",
+        "Engleska - League One",
+        "ENGLAND 3",
+        "England 3",
+        "Engleska 3",
+        "ENGLESKA  3",
+        "ENGLESKA FL 1",
+        "ENGLESKA - 1.LIGA",
+        "Engleska - Liga 1",
+        "Engleska - Liga One"
+    ],
+    "fa_cup": [
+        "FA Cup",
+        "Engleska - FA Cup",
+        "FA Kup"
+    ],
+    "efl_cup": [
+        "EFL Cup",
+        "Engleska - Liga Kup",
+        "ENGLESKA  -  LIGA  KUP",
+        "Engleska EFL kup",
+        "england efl cup",
+        "Engleska Liga Kup",
+        "EFL Kup",
+        "League Cup"
+    ],
+    "la_liga": [
+        "Spanija 1",
+        "Spanija - La Liga",
+        "Spain - La Liga",
+        "La Liga Santander",
+        "Španija 1.Liga",
+        "Španija 1",
+        "LaLiga",
+        "ŠPANIJA 1",
+        "La Liga",
+        "Španija - La Liga",
+        "Španija Primera Liga",
+        "ŠPANJOLSKA 1.LIGA",
+        "Španjolska 1.Liga",
+        "Spain 1",
+        "ŠPANJOLSKA - 1.LIGA",
+        "Španija - LaLiga"
+    ],
+    "laliga_2": [
+        "LaLiga 2",
+        "La Liga 2",
+        "Laliga 2",
+        "Španija 2",
+        "Spanija 2",
+        "ŠPANIJA 2",
+        "Spanija - La Liga 2",
+        "Spain - LaLiga 2",
+        "Spain LaLiga2",
+        "Španija 2.Liga",
+        "Spanija 2.Liga",
+        "ŠPANJOLSKA 2.LIGA",
+        "Španjolska 2.Liga",
+        "Spain 2",
+        "ŠPANJOLSKA - 2.LIGA",
+        "Španija - LaLiga 2"
+    ],
+    "serie_a": [
+        "Italy - Serie A",
+        "Italija Serie A",
+        "Italija - Seria A",
+        "Seria A",
+        "Italija - Serie A",
+        "Italija 1",
+        "Italija 1.Liga",
+        "ITALIJA 1",
+        "Serie A",
+        "TALIJANSKA 1.LIGA",
+        "Talijanska 1.Liga",
+        "ITALIJA - 1.LIGA",
+        "ITALY 1",
+        "Italija - Serija A"
+    ],
+    "serie_b": [
+        "Italija - Serie B",
+        "Serie B",
+        "Italy - Serie B",
+        "TALIJANSKA 2.LIGA",
+        "Talijanska 2.Liga",
+        "ITALIJA - 2.LIGA",
+        "ITALY 2",
+        "Italija - Serija B",
+        "Italija 2"
+    ],
+    "bundesliga": [
+        "1. Bundesliga",
+        "Njemacka 1",
+        "Njemačka 1",
+        "Bundesliga",
+        "Njemačka - Bundesliga",
+        "Njemacka - Bundesliga",
+        "Njemačka 1.Liga",
+        "Germany - Bundesliga",
+        "NJEMAČKA 1",
+        "Njemačka Bundesliga",
+        "Njemacka Bundesliga",
+        "NEMAČKA  1",
+        "Germany 1",
+        "NJEMAČKA - 1.LIGA"
+    ],
+    "bundesliga_2": [
+        "Bundesliga 2",
+        "2. Bundesliga",
+        "Germany 2",
+        "Njemacka 2",
+        "Njemačka 2",
+        "Nemacka 2",
+        "Njemacka - 2. Bundesliga",
+        "Njemačka - 2. Bundesliga",
+        "NJEmačka 2.Liga",
+        "Njemacka 2.Liga",
+        "NJEMAČKA - 2.LIGA"
+    ],
+    "ligue_1": [
+        "Ligue1",
+        "Francuska 1.Liga",
+        "France - Ligue 1",
+        "FRANCUSKA 1",
+        "Francuska 1",
+        "Francuska - Liga 1",
+        "Liga 1",
+        "Ligue 1",
+        "Francuska - Ligue 1",
+        "France 1",
+        "FRANCUSKA - 1.LIGA"
+    ],
+    "eliteserien": [
+        "NORVEŠKA 1",
+        "NORWAY 1",
+        "Norway - Eliteserien",
+        "Eliteserien",
+        "Norveška 1.Liga",
+        "Norveška - 1. Liga",
+        "Norveška 1",
+        "Norveška - Eliteserien",
+        "NORVEŠKA - 1.LIGA"
+    ],
+    "champions_league": [
+        "UEFA Liga Šampiona",
+        "Liga sampiona - Grupna faza",
+        "Lige Šampiona",
+        "UEFA Champions League",
+        "Champions League",
+        "Liga Šampiona - Grupna faza",
+        "UCL",
+        "Liga Šampiona",
+        "Liga šampiona - Play-off",
+        "Liga šampiona",
+        "Liga Sampiona",
+        "LIGA PRVAKA",
+        "LIGA PRVAKA (M)",
+        "Međunarodne - Liga Šampiona",
+        "Međunarodne Klubovi - Liga Šampiona",
+        "International Clubs - UEFA Champions League"
+    ],
+    "europa_league": [
+        "Europa League",
+        "UEFA Liga Evrope",
+        "Liga Evrope",
+        "Liga evrope",
+        "UEL",
+        "UEFA Europa League",
+        "UEFA Europa League - Qualification",
+        "Evropska Liga",
+        "EUROPSKA LIGA",
+        "EUROPSKA LIGA - KVALIFIKACIJE",
+        "Kvalifikacije za LE",
+        "KVALIFIKACIJE ZA LE",
+        "KVALIFIKACIJE  ZA  LE",
+        "PLAY OFF - KVALIFIKACIJE - FINALE",
+        "Play Off - Kvalifikacije - Finale",
+        "Liga Evrope - Kvalifikacije",
+        "UEFA Europa League - Qualification Play Off",
+        "Medjunarodne klupske - Evropska liga - Kvalifikacije",
+        "Međunarodne klupske - Evropska liga - Kvalifikacije",
+        "Medjunarodne klupske - Evropska liga",
+        "Međunarodne klupske - Evropska liga",
+        "EUROPSKA LIGA (M)",
+        "Međunarodne - Evropska Liga",
+        "Međunarodne Klubovi - Liga Evrope",
+        "International Clubs - UEFA Europa League"
+    ],
+    "conference_league": [
+        "UECL",
+        "UEFA Konferencijska Liga",
+        "UEFA Conference League",
+        "Liga konferencija",
+        "UEFA Conference League - Qualification",
+        "Konferencijska Liga",
+        "Conference League",
+        "Medjunarodne klupske - Konferencijska liga - Kvalifikacije",
+        "Međunarodne klupske - Konferencijska liga - Kvalifikacije",
+        "Medjunarodne klupske - Konferencijska liga",
+        "Međunarodne klupske - Konferencijska liga",
+        "EUROPSKA KONFERENCIJSKA LIGA",
+        "LIGA  KONFERENCIJE",
+        "Međunarodne - Konferencijska Liga",
+        "Međunarodne Klubovi - Konferencijska Liga",
+        "International Clubs - UEFA Europa Conference League"
+    ],
+    "super_liga_srbija": [
+        "Srpska Super Liga",
+        "SrbijaSuper liga",
+        "Serbia - Super Liga",
+        "Srbija - Super Liga",
+        "Super Liga",
+        "Superliga Srbije",
+        "Srbija Superliga",
+        "Srbija 1",
+        "SRBIJA 1",
+        "srbija 1",
+        "Srbija 1 Mozzartbet SuperLiga",
+        "Mozzartbet SuperLiga",
+        "Mozzart Bet Super Liga",
+        "Serbia 1",
+        "Srbija - 1. Liga",
+        "Srbija - Superliga",
+        "SRBIJA - 1.LIGA",
+        "SRBIJANSKA 1.LIGA"
+    ],
+    "prva_liga_srbija": [
+        "Srbija - Prva Liga",
+        "Prva Liga Srbije",
+        "Serbia - First League"
+    ],
+    "hnl": [
+        "Croatia - HNL",
+        "Hrvatska - 1. HNL",
+        "HNL",
+        "SuperSport HNL",
+        "CROATIA 1",
+        "1. HNL",
+        "Hrvatska 1",
+        "Hrvatska - HNL",
+        "Hrvatska Nogometna Liga",
+        "HRVATSKA - 1.LIGA",
+        "HRVATSKA 1.LIGA",
+        "Hrvatska - SHNL"
+    ],
+    "super_lig_turkey": [
+        "Turska - Super Lig",
+        "Turkey - Super Lig",
+        "Turska 1",
+        "TURKEY 1",
+        "Turska - Süper Lig",
+        "Süper Lig",
+        "Turska Super Lig",
+        "Super Lig",
+        "TURSKA - 1.LIGA",
+        "Turska - Super Liga",
+        "TURSKA 1.LIGA"
+    ],
+    "eredivisie": [
+        "Holandija - Eredivisie",
+        "Holandija Eredivisie",
+        "Netherlands - Eredivisie",
+        "Eredivisie",
+        "Holandija 1",
+        "NETHERLANDS 1",
+        "NIZOZEMSKA 1.LIGA",
+        "Nizozemska 1.Liga",
+        "NIZOZEMSKA - 1.LIGA"
+    ],
+    "primeira_liga": [
+        "Portugal - Primeira Liga",
+        "Liga Portugal",
+        "Primeira Liga",
+        "Portugalija - Primeira Liga",
+        "Portugal Primeira Liga",
+        "Portugalija 1",
+        "PORTUGALIJA 1",
+        "Portugal 1",
+        "Portugal 1 Liga",
+        "PORTUGALSKA 1.LIGA",
+        "Portugalska 1.Liga",
+        "PORTUGAL - 1.LIGA"
+    ],
+    "scottish_premiership": [
+        "Scotland - Premiership",
+        "skotska 1",
+        "Škotska - Premiership",
+        "scotland 1",
+        "Scottish Premiership",
+        "Skotska Premier Liga",
+        "Škotska 1",
+        "ŠKOTSKA - PREMIER LIGA"
+    ],
+    "jupiler_pro_league": [
+        "BELGIUM 1",
+        "Belgijska liga",
+        "Belgija - Pro Liga",
+        "Jupiler Pro League",
+        "Belgija 1",
+        "Belgium - Pro League",
+        "belgijska 1.liga",
+        "belgija 1",
+        "jupiler liga",
+        "belgium 1",
+        "BELGIJA - 1.LIGA",
+        "Belgija - Jupiler Liga"
+    ],
+    "ligue_1_france": [
+        "Ligue 1 Uber Eats",
+        "Ligue 1 McDonald's"
+    ],
+    "nations_league": [
+        "UEFA Liga Nacija",
+        "Liga Nacija",
+        "Nations League",
+        "UEFA Nations League"
+    ],
+    "world_cup_qual": [
+        "SP Kvalifikacije",
+        "World Cup Qualification",
+        "WC Kvalifikacije",
+        "Kvalifikacije za SP"
+    ],
+    "euro_qual": [
+        "EURO Kvalifikacije",
+        "Kvalifikacije za EP",
+        "Euro Qualification",
+        "EP Kvalifikacije"
+    ],
+    "obos_ligaen": [
+        "Norveška 2",
+        "NORWAY 2",
+        "NORVEŠKA - 2.LIGA",
+        "NORVEŠKA 2.LIGA",
+        "Norveška - 1. Division",
+        "Norveška - OBOS Liga"
+    ],
+    "allsvenskan": [
+        "SWEDEN 1",
+        "Švedska 1",
+        "ŠVEDSKA 1.LIGA",
+        "Svedska 1.Liga",
+        "ŠVEDSKA - 1.LIGA",
+        "Švedska - Allsvenskan"
+    ],
+    "superettan": [
+        "Švedska 2",
+        "Svedska 2",
+        "SWEDEN 2",
+        "ŠVEDSKA 2.LIGA",
+        "Svedska 2.Liga",
+        "ŠVEDSKA - 2.LIGA",
+        "Švedska - Superettan"
+    ],
+    "danish_1st_div": [
+        "DENMARK 2",
+        "Danska 2",
+        "DANSKA - 2.LIGA",
+        "DANSKA 2.LIGA",
+        "Danska - 1. Division",
+        "Danska - 1. Divizija"
+    ],
+    "danish_2nd_div": [
+        "Danska 3",
+        "DENMARK 3"
+    ],
+    "danish_3rd_div": [
+        "Danska 4",
+        "DENMARK 4",
+        "DANSKA 4.LIGA",
+        "Danska 4.Liga"
+    ],
+    "mls": [
+        "MLS",
+        "USA MLS",
+        "SAD 1",
+        "SAD - SAD 1",
+        "SAD - SAD 1 - MLS",
+        "USA - MLS",
+        "MLS NEXT PRO",
+        "SAD - MLS Next Pro",
+        "USA MLS Next Pro",
+        "SAD 1 MLS Next Pro",
+        "SAD 3 MLS NP",
+        "SAD - SAD 3 MLS NP",
+        "S A D  -  M L S",
+        "SAD - MLS"
+    ],
+    "usl_championship": [
+        "USL CHAMPIONSHIP",
+        "SAD 2",
+        "USA USL",
+        "SAD - SAD 2",
+        "USA - USL",
+        "SAD - SAD 3",
+        "SAD 3",
+        "USA USL Championship",
+        "S A D  -  U S L",
+        "SAD - USL CHAMPIONSHIP",
+        "USA - USL Championship",
+        "S A D  -  U S L  -  PLAY  OFF",
+        "SAD - USL - CHAMPIONSHIP - PLAY OFF - 1/8 FINALA",
+        "USL CHAMPIONSHIP PLAY OFF"
+    ],
+    "liga_mx": [
+        "Meksiko 1",
+        "MEXICO 1",
+        "Liga MX",
+        "MEKSIČKA 1.LIGA",
+        "Meksička 1.Liga",
+        "MEKSIKO  1  -  APERTURA",
+        "Meksiko 1 - Apertura",
+        "MEKSIKO - 1.LIGA",
+        "Meksiko - Liga MX",
+        "Meksiko - Primera Division, Apertura"
+    ],
+    "liga_betplay": [
+        "COLOMBIA 1",
+        "Kolumbija 1",
+        "KOLUMBIJA  1  -  KLAUSURA",
+        "Kolumbija 1 - Klausura",
+        "KOLUMBIJSKA 1.LIGA",
+        "Kolumbijska 1.Liga",
+        "Primera A",
+        "Primera A, Apertura",
+        "KOLUMBIJA - 1.LIGA",
+        "Kolumbija - Primera A",
+        "Kolumbija - Primera A, Apertura"
+    ],
+    "czech_first_league": [
+        "CZECH REP. 1",
+        "Češka 1",
+        "ČEŠKA - 1.LIGA",
+        "ČEŠKA 1.LIGA",
+        "Češka - 1. Liga",
+        "Czech Republic - Czech Rep. 1"
+    ],
+    "austrian_2_liga": [
+        "Austrija 2",
+        "AUSTRIA 2",
+        "AUSTRIJSKA 2.LIGA",
+        "Austrijska 2.Liga",
+        "AUSTRIJA - 2.LIGA",
+        "Austrija - 2. Liga"
+    ],
+    "argentine_primera": [
+        "Liga Profesional - Clausura",
+        "Liga Profesional",
+        "Argentina 1",
+        "ARGENTINSKA 1.LIGA",
+        "Argentina - Argentina 1",
+        "Primera Division, Apertura",
+        "ARGENTINA 1",
+        "Argentina Primera",
+        "ARGENTINA - 1.LIGA",
+        "Argentina - Liga Profesional",
+        "Argentina - Superliga",
+        "ARGENTINA  1  -  KLAUSURA"
+    ],
+    "argentine_primera_b_nacional": [
+        "Argentina 2",
+        "ARGENTINA 2",
+        "Primera B Nacional",
+        "Primera Nacional",
+        "ARGENTINSKA 2.LIGA GRUPA A",
+        "Argentinska 2.Liga Grupa A",
+        "ARGENTINSKA 2.LIGA GRUPA B",
+        "Argentinska 2.Liga Grupa B",
+        "ARGENTINA - 2.LIGA",
+        "Argentina - Primera B Nacional",
+        "Argentina - Primera Nacional"
+    ],
+    "copa_do_brasil": [
+        "BRAZIL Copa do Brasil",
+        "Brazil kup"
+    ],
+    "chile_primera": [
+        "Čile 1",
+        "CHILE 1",
+        "ČILE - 1.LIGA",
+        "ČILEANSKA 1.LIGA",
+        "Čile - Primera Division",
+        "Čile - Primera Divizija"
+    ],
+    "chile_primera_b": [
+        "Čile 2",
+        "Cile 2",
+        "Chile 2",
+        "CHILE 2",
+        "Primera B",
+        "Chile - Primera B",
+        "ČILEANSKA 2.LIGA",
+        "Cileanska 2.Liga"
+    ],
+    "ecuador_serie_a": [
+        "ECUADOR 1",
+        "Ekvador 1"
+    ],
+    "finland_veikkausliiga": [
+        "Finska 1",
+        "FINLAND 1",
+        "Veikkausliiga",
+        "Veikkausliiga - Regular Season",
+        "Finska - Veikkausliiga",
+        "FINLAND 1 - Conference League - Play Offs",
+        "FINSKA - 1. LIGA - ZA PRVAKA",
+        "FINSKA  1  -  PLAY  OFF",
+        "FINSKA 1.LIGA - ZA PRVAKA"
+    ],
+    "finland_kolmonen": [
+        "Finska 3",
+        "FINLAND Kolmonen",
+        "Ykkonen",
+        "Ykkönen"
+    ],
+    "mlb": [
+        "MLB"
+    ],
+    "hungarian_liga_1": [
+        "hungary 1",
+        "madjarska 1",
+        "Mađarska 1",
+        "MAĐARSKA - 1.LIGA",
+        "MAĐARSKA 1.LIGA",
+        "Mađarska - NB I",
+        "Mađarska - OTP Bank Liga"
+    ],
+    "mexico_liga_expansion": [
+        "mexico liga de expansion mx - apertura",
+        "mexico 2",
+        "Liga de Expansion MX",
+        "meksiko 2",
+        "Liga de Expansion MX, Apertura",
+        "MEKSIČKA 2.LIGA",
+        "Meksička 2.Liga",
+        "MEKSIKO  2  -  APERTURA",
+        "Meksiko 2 - Apertura",
+        "MEKSIKO - 2.LIGA",
+        "Meksiko - Liga De Expansion",
+        "Meksiko - Liga de Expansion MX, Apertura"
+    ],
+    "brazil_goiano_2": [
+        "brazil goiano 2",
+        "brazil campeonato goiano 2"
+    ],
+    "czech_2nd_div": [
+        "czech.rep 2",
+        "ceska 2",
+        "Češka 2",
+        "ČEŠKA 2.LIGA"
+    ],
+    "finland_2nd_div": [
+        "Finska 2",
+        "finland 2",
+        "finska 2",
+        "FINSKA 2.LIGA",
+        "Finska 2.Liga",
+        "Ykkosiliga",
+        "Ykkosliiga"
+    ],
+    "russian_premier": [
+        "Rusija 1",
+        "rusija 1",
+        "russia 1",
+        "Rusija - Rusija 1",
+        "RUSKA 1.LIGA",
+        "Rusija - Russian Cup - Group Stage",
+        "RUSIJA - 1.LIGA",
+        "Rusija - Premier Liga",
+        "Rusija - Premijer Liga"
+    ],
+    "scottish_championship": [
+        "Škotska 2",
+        "skotska 2",
+        "scotland 2",
+        "ŠKOTSKA CHAMPIONSHIP FL",
+        "Škotska - Championship"
+    ],
+    "swiss_super_league": [
+        "Švajcarska 1",
+        "switzerland 1",
+        "svajcarska 1",
+        "ŠVICARSKA - 1.LIGA",
+        "ŠVICARSKA 1.LIGA",
+        "Švajcarska - Super Liga",
+        "Švajcarska - Superliga"
+    ],
+    "usl_league_one": [
+        "usa usl league one",
+        "sad 3 usl",
+        "USL League One",
+        "USL Liga 1",
+        "S A D  -  U S L  1",
+        "SAD - USL League One",
+        "USA - USL Liga 1",
+        "USL - LEAGUE ONE"
+    ],
+    "australia_npl_vic": [
+        "australia npl victoria",
+        "australija 2 viktorija"
+    ],
+    "australia_cup": [
+        "australia cup",
+        "australija kup"
+    ],
+    "netherlands_super_cup": [
+        "holandija superkup",
+        "netherland johan cruyff shield"
+    ],
+    "portugal_super_cup": [
+        "portugalija superkup",
+        "portugal super cup"
+    ],
+    "polish_ekstraklasa": [
+        "poland 1",
+        "Poljska 1",
+        "poljska 1",
+        "Ekstraklasa",
+        "POLJSKA 1.LIGA",
+        "POLJSKA - 1.LIGA",
+        "Poljska - Ekstraklasa"
+    ],
+    "irish_first_div": [
+        "Irska 2",
+        "irska 2",
+        "ireland 2",
+        "IRSKA - KVAL. ZA 1. LIGU - 1/2 FINALE",
+        "Irska - 1. Divizija"
+    ],
+    "uruguay_primera": [
+        "Urugvaj 1",
+        "urugvaj 1",
+        "uruguay 1 - torneo intermedio",
+        "URUGUAY 1",
+        "Uruguay 1",
+        "URUGVAJSKA 1.LIGA",
+        "Urugvajska 1.Liga",
+        "URUGVAJ  1  -  KLAUSURA",
+        "Urugvaj 1 - Klausura",
+        "Primera Division",
+        "Primera Divizija",
+        "PRIMERA DIVIZIJA",
+        "URUGVAJ - 1.LIGA",
+        "Urugvaj - Primera Division",
+        "Urugvaj - Primera Divizija"
+    ],
+    "israel_toto_cup": [
+        "israel league cup",
+        "israel toto cup"
+    ],
+    "romanian_liga_1": [
+        "Rumunija 1",
+        "rumunija 1",
+        "romania 1",
+        "RUMUNJSKA - 1.LIGA",
+        "RUMUNJSKA 1.LIGA",
+        "Rumunija - Superliga",
+        "Rumunija - Liga 1"
+    ],
+    "bugarian_first_league": [
+        "bulgaria 1",
+        "Bugarska 1",
+        "bugarska 1",
+        "BUGARSKA - 1.LIGA",
+        "BUGARSKA 1.LIGA",
+        "Bugarska - 1. Liga",
+        "Bugarska - Parva Liga"
+    ],
+    "bugarian_second_league": [
+        "Bugarska 2",
+        "BULGARIA 2",
+        "bulgaria 2",
+        "Vtora Liga",
+        "vtora liga"
+    ],
+    "chinese_super_league": [
+        "kina 1",
+        "Kina 1",
+        "china 1",
+        "KINA - 1.LIGA",
+        "KINESKA 1.LIGA",
+        "Kina - Super Liga"
+    ],
+    "brazil_serie_a": [
+        "brazil 1",
+        "brazil - brazil 1",
+        "brazilska 1.liga",
+        "brasileiro, serie a",
+        "BRAZIL - 1.LIGA",
+        "Brazil - Brasileiro, Serie A",
+        "Brazil - Serija A"
+    ],
+    "danish_superliga": [
+        "danska 1.liga",
+        "danska 1",
+        "denmark 1",
+        "superligaen",
+        "DANSKA - 1.LIGA",
+        "Danska - Superliga",
+        "Danska - Superligaen"
+    ],
+    "eerste_divisie": [
+        "Eerste Divisie",
+        "Eerste Divisie ",
+        "Holandija 2",
+        "NETHERLANDS 2",
+        "Netherlands 2",
+        "Holandija 2 ",
+        "NIZOZEMSKA 2.LIGA",
+        "Nizozemska 2.Liga",
+        "Holandija - Eerste Divisie",
+        "NIZOZEMSKA - 2.LIGA"
+    ],
+    "slovenia_prva_liga": [
+        "Slovenija 1",
+        "Slovenia 1",
+        "Prva Liga",
+        "prva liga",
+        "1. SNL",
+        "SLOVENIJA 1",
+        "SLOVENIJA - 1.LIGA",
+        "Slovenija - Prva Liga",
+        "SLOVENSKA 1.LIGA"
+    ],
+    "j_league_2": [
+        "Japan 2",
+        "JAPAN 2",
+        "J.Liga 2",
+        "J League 2",
+        "japan 2",
+        "j liga 2",
+        "JAPANSKA 2.LIGA",
+        "Japanska 2.Liga",
+        "JAPAN - 2.LIGA",
+        "Japan - J.Liga 2"
+    ],
+    "j_league_3": [
+        "Japan 3",
+        "JAPAN 3",
+        "J.Liga 3",
+        "J League 3",
+        "japan 3",
+        "j liga 3",
+        "JAPANSKA 3.LIGA",
+        "Japanska 3.Liga",
+        "JAPAN - 3.LIGA",
+        "Japan - J.Liga 3"
+    ],
+    "k_league_1": [
+        "Juzna Koreja 1",
+        "Južna Koreja 1",
+        "K-Liga 1",
+        "K League 1",
+        "k-liga 1",
+        "juzna koreja 1",
+        "J.KOREJA - 1.LIGA",
+        "JUŽNOKOREJSKA 1.LIGA",
+        "Južna Koreja - K-Liga 1",
+        "SOUTH KOREA 1",
+        "J.KOREJA - 1.LIGA - RAZ. ZA OSTANAK",
+        "JUŽNOKOREJSKA 1.LIGA - ZA OSTANAK",
+        "JUŽNOKOREJSKA 1.LIGA - ZA PRVAKA"
+    ],
+    "k_league_2": [
+        "Juzna Koreja 2",
+        "Južna Koreja 2",
+        "K-Liga 2",
+        "K League 2",
+        "k-liga 2",
+        "juzna koreja 2",
+        "J.KOREJA - 2.LIGA",
+        "JUŽNOKOREJSKA 2.LIGA",
+        "Južna Koreja - K-Liga 2",
+        "SOUTH KOREA 2"
+    ],
+    "austrian_bundesliga": [
+        "Austrija 1",
+        "AUSTRIA 1",
+        "Austria 1",
+        "Austrija - Bundesliga",
+        "Austrian Bundesliga",
+        "Austrija 1. Liga",
+        "AUSTRIJSKA 1.LIGA",
+        "Austrijska 1.Liga",
+        "AUSTRIJA - 1.LIGA"
+    ],
+    "_audit_note": "Every id below was added or split from scripts/audit_league_pairs.py, which lists the league-label pairs the certainty gate refused on the real 5,373-match feed. Two rules governed every decision. (1) A label is only mapped when the feed's own fixtures show what competition it denotes; a bare root word shared by several countries is left unmapped rather than guessed. (2) A competition that is really several groups under one root word gets one id per group, never one id for the family - see nations_league_a..d, spain_primera_federacion_1..5, spain_segunda_federacion_1..5, italy_serie_c_a..c. The pooled labels that publish those groups together ('Liga Nacija', 'Primera Federacion', 'Segunda Federacion', 'Ettan') deliberately keep their own id and do not match any single group.",
+    "league_two": [
+        "League Two",
+        "EFL League Two",
+        "ENGLAND 4",
+        "England 4",
+        "Engleska 4",
+        "ENGLESKA  4",
+        "ENGLESKA FL 2",
+        "ENGLESKA - 2.LIGA",
+        "Engleska - Liga 2",
+        "Engleska - Liga Two"
+    ],
+    "england_national_league": [
+        "ENGLESKA  5",
+        "Engleska 5",
+        "ENGLAND 5 Conference",
+        "England 5 Conference",
+        "National League",
+        "ENGLESKA NL PREMIER",
+        "Engleska NL Premier",
+        "ENGLESKA - KONFERENCIJA",
+        "Engleska - Nacionalna Liga",
+        "Engleska - National League",
+        "England 5"
+    ],
+    "england_national_league_north": [
+        "ENGLAND 6 North",
+        "England 6 North",
+        "ENGLESKA  6  SEVER",
+        "Engleska 6 sever",
+        "ENGLESKA NL SJEVER",
+        "Engleska NL Sjever",
+        "Nacionalna Liga Sjever",
+        "National League, Sjever",
+        "ENGLESKA - NL SJEVER",
+        "Engleska Amateri - Nacionalna Liga Sjever"
+    ],
+    "england_national_league_south": [
+        "ENGLAND 6 South",
+        "England 6 South",
+        "ENGLESKA  6  JUG",
+        "Engleska 6 jug",
+        "ENGLESKA NL JUG",
+        "Engleska NL Jug",
+        "Nacionalna Liga Jug",
+        "National League, Jug",
+        "ENGLESKA - NL JUG",
+        "Engleska (Am.) - National League, Jug",
+        "Engleska Amateri - Nacionalna Liga Jug"
+    ],
+    "england_fa_trophy": [
+        "ENGLAND FA Trophy",
+        "England FA Trophy",
+        "FA Trophy",
+        "FA TROPHY -  FINALE",
+        "FA Trophy - Finale",
+        "ENGLESKA  -  FA  TROFEJ",
+        "Engleska - FA Trofej",
+        "ENGLESKI FA TROPHY KUP",
+        "Engleski FA Trophy Kup",
+        "ENGLESKA - FA TROPHY",
+        "Engleska Amateri - FA Trofej",
+        "Engleska FA trofej"
+    ],
+    "scottish_challenge_cup": [
+        "Challenge kup",
+        "ŠKOTSKI CHALLENGE KUP",
+        "Skotski Challenge Kup"
+    ],
+    "wales_cymru_premier": [
+        "WALES 1",
+        "Wales 1",
+        "WALES 1.LIGA",
+        "Wales 1.Liga",
+        "Vels 1",
+        "VELS  1",
+        "Cymru Premier"
+    ],
+    "wales_cymru_championship_south": [
+        "WALES 2 South",
+        "Wales 2 South",
+        "Cymru Championship South",
+        "WALES FAW CHAMPIONSHIP - JUG",
+        "Wales FAW Championship - Jug"
+    ],
+    "northern_ireland_premier": [
+        "Northern Ireland 1",
+        "SEVERNA  IRSKA  1",
+        "Severna Irska 1",
+        "SJ.IRSKA PREMIER LIGA",
+        "Sj Irska Premier Liga",
+        "SJ.IRSKA - 1.LIGA",
+        "Sjeverna Irska - Premiership",
+        "Northern Ireland - N.Ireland 1"
+    ],
+    "northern_ireland_championship": [
+        "NORTHERN IRELAND 2",
+        "Northern Ireland 2",
+        "SEVERNA  IRSKA  2",
+        "Severna Irska 2",
+        "SJ.IRSKA CHAMPIONSHIP 1",
+        "Sj Irska Championship 1"
+    ],
+    "nwsl": [
+        "NWSL (Ž)",
+        "SAD - NWSL (Ž)",
+        "SAD 1 Ž",
+        "USA NWSL Women",
+        "S A D  -  N W S L"
+    ],
+    "_nations_league_note": "admiralbet, wwin and mdshop publish 'Liga Nacija' with leagues A, B, C and D pooled into one list, so 'nations_league' is that union and must not be merged with any single league. mbet and mozzartbet publish the leagues separately; each gets its own id. premier_kladionica publishes the sub-groups; the group number carries no separate competition identity here, so a sub-group label resolves to its league.",
+    "nations_league_a": [
+        "UEFA Nations League - League A",
+        "LIGA NACIJA A",
+        "Liga Nacija A",
+        "LIGA  NACIJA  A",
+        "LIGA NACIJA LIGA A - Grupa 1",
+        "Liga Nacija Liga A - Grupa 2",
+        "Liga Nacija Liga A - Grupa 3",
+        "Liga Nacija Liga A - Grupa 4",
+        "International - UEFA Nations League A",
+        "LIGA NACIJA - LIGA A - GRUPA 2",
+        "LIGA NACIJA - LIGA A - GRUPA 3"
+    ],
+    "nations_league_b": [
+        "UEFA Nations League - League B",
+        "LIGA NACIJA LIGA B - Grupa 1",
+        "Liga Nacija Liga B - Grupa 2",
+        "Liga Nacija Liga B - Grupa 3",
+        "Liga Nacija Liga B - Grupa 4",
+        "LIGA NACIJA - LIGA B - GRUPA 1",
+        "LIGA NACIJA - LIGA B - GRUPA 2"
+    ],
+    "nations_league_c": [
+        "UEFA Nations League - League C",
+        "LIGA NACIJA LIGA C - Grupa 1",
+        "Liga Nacija Liga C - Grupa 2",
+        "Liga Nacija Liga C - Grupa 3",
+        "Liga Nacija Liga C - Grupa 4"
+    ],
+    "nations_league_d": [
+        "UEFA Nations League - League D",
+        "LIGA NACIJA LIGA D - Grupa 1",
+        "Liga Nacija Liga D - Grupa 2"
+    ],
+    "_spain_pyramid_note": "Primera/Segunda/Tercera Federación are each split into groups and two teams can be in different groups of the same tier on the same day, so every group is its own id. wwin's unqualified 'Primera Federacion' and 'Segunda Federacion' pool every group and therefore stay unmapped rather than joining any one group.",
+    "spain_primera_federacion_1": [
+        "Primera RFEF Grupa 1",
+        "Primera RFER Grupa 1",
+        "SPAIN 3 - Group 1",
+        "Spain 3 - Group 1",
+        "Španija 3 Grupa 1",
+        "Španija 3 - Grupa 1",
+        "ŠPANJOLSKA 3.LIGA GRUPA 1",
+        "Spanjolska 3.liga Grupa 1",
+        "Španija - Primera RFER Grupa 1"
+    ],
+    "spain_primera_federacion_2": [
+        "Primera RFEF Grupa 2",
+        "Primera RFER Grupa 2",
+        "SPAIN 3 - Group 2",
+        "Spain 3 - Group 2",
+        "Španija 3 Grupa 2",
+        "Španija 3 - Grupa 2",
+        "ŠPANJOLSKA 3.LIGA GRUPA 2",
+        "Spanjolska 3.liga Grupa 2",
+        "ŠPANJOLSKA - 3.LIGA - GRUPA 2",
+        "Španija - Primera RFEF Grupa 2"
+    ],
+    "spain_segunda_federacion_1": [
+        "Segunda PFEF plej of",
+        "SPAIN 4 - Group 1",
+        "Spain 4 - Group 1",
+        "Španija 4 Grupa 1",
+        "ŠPANJOLSKA 4.LIGA GRUPA 1",
+        "Spanjolska 4.liga Grupa 1"
+    ],
+    "spain_segunda_federacion_2": [
+        "Segunda RFEF Grupa 2",
+        "SPAIN 4 - Group 2",
+        "Spain 4 - Group 2",
+        "Španija 4 Grupa 2",
+        "ŠPANJOLSKA 4.LIGA GRUPA 2",
+        "Spanjolska 4.liga Grupa 2"
+    ],
+    "spain_segunda_federacion_3": [
+        "Segunda RFEF Grupa 3",
+        "SPAIN 4 - Group 3",
+        "Spain 4 - Group 3",
+        "Španija 4 Grupa 3",
+        "ŠPANJOLSKA 4.LIGA GRUPA 3",
+        "Spanjolska 4.liga Grupa 3"
+    ],
+    "spain_segunda_federacion_4": [
+        "Segunda RFEF Grupa 4",
+        "SPAIN 4 - Group 4",
+        "Spain 4 - Group 4",
+        "Španija 4 Grupa 4",
+        "ŠPANJOLSKA 4.LIGA GRUPA 4",
+        "Spanjolska 4.liga Grupa 4"
+    ],
+    "spain_segunda_federacion_5": [
+        "Segunda RFEF Grupa 5",
+        "SPAIN 4 - Group 5",
+        "Spain 4 - Group 5",
+        "Španija 4 Grupa 5",
+        "ŠPANJOLSKA 4.LIGA GRUPA 5",
+        "Spanjolska 4.liga Grupa 5"
+    ],
+    "spain_tercera_federacion_1": [
+        "Tercera RFEF, Sk.1",
+        "SPAIN 5 - Group 1"
+    ],
+    "spain_tercera_federacion_2": [
+        "Tercera RFEF, Sk.2",
+        "SPAIN 5 - Group 2"
+    ],
+    "spain_tercera_federacion_3": [
+        "Tercera RFEF, Sk.3",
+        "SPAIN 5 - Group 3"
+    ],
+    "spain_tercera_federacion_4": [
+        "Tercera RFEF, Sk.4",
+        "SPAIN 5 - Group 4"
+    ],
+    "spain_tercera_federacion_5": [
+        "Tercera RFEF, Sk.5",
+        "SPAIN 5 - Group 5"
+    ],
+    "spain_tercera_federacion_6": [
+        "Tercera RFEF, Sk.6",
+        "SPAIN 5 - Group 6"
+    ],
+    "spain_tercera_federacion_7": [
+        "Tercera RFEF, Sk.7",
+        "SPAIN 5 - Group 7"
+    ],
+    "spain_tercera_federacion_10": [
+        "Tercera RFEF, Sk.10",
+        "SPAIN 5 - Group 10"
+    ],
+    "spain_tercera_federacion_11": [
+        "Tercera RFEF, Sk.11",
+        "SPAIN 5 - Group 11"
+    ],
+    "spain_tercera_federacion_12": [
+        "Tercera RFEF, Sk.12",
+        "SPAIN 5 - Group 12"
+    ],
+    "spain_tercera_federacion_13": [
+        "Tercera RFEF, Sk.13",
+        "SPAIN 5 - Group 13"
+    ],
+    "spain_tercera_federacion_15": [
+        "Tercera RFEF, Sk.15",
+        "SPAIN 5 - Group 15"
+    ],
+    "spain_tercera_federacion_16": [
+        "Tercera RFEF, Sk.16",
+        "SPAIN 5 - Group 16"
+    ],
+    "spain_tercera_federacion_17": [
+        "Tercera RFEF, Sk.17"
+    ],
+    "spain_tercera_federacion_18": [
+        "Tercera RFEF, Sk.18"
+    ],
+    "_italy_serie_c_note": "Serie C is three separate groups; the group letter is part of the competition's identity, so Serie C Group A must never match Serie C Group B.",
+    "italy_serie_c_a": [
+        "ITALY 3 - Group A",
+        "Italy 3 - Group A",
+        "ITALIA 3 GRUPA A",
+        "Italia 3 Grupa A",
+        "ITALIJA 3 GRUPA A",
+        "Italija 3 Grupa A",
+        "ITALIA 3 A",
+        "Italia 3 A",
+        "ITALIJA 3 A",
+        "Italija 3 A",
+        "SERIJA C GRUPA A",
+        "Serija C Grupa A",
+        "Serie C, Grupa A",
+        "TALIJANSKA 3.LIGA GRUPA A",
+        "Talijanska 3.Liga Grupa A",
+        "ITALIJA - 3.LIGA - GRUPA A",
+        "Italija - Serie C, Grupa A",
+        "Italija - Serija C Grupa A"
+    ],
+    "italy_serie_c_b": [
+        "ITALY 3 - Group B",
+        "Italy 3 - Group B",
+        "ITALIA 3 GRUPA B",
+        "Italia 3 Grupa B",
+        "ITALIJA 3 GRUPA B",
+        "Italija 3 Grupa B",
+        "ITALIA 3 B",
+        "Italia 3 B",
+        "ITALIJA 3 B",
+        "Italija 3 B",
+        "SERIJA C GRUPA B",
+        "Serija C Grupa B",
+        "Serie C, Grupa B",
+        "TALIJANSKA 3.LIGA GRUPA B",
+        "Talijanska 3.Liga Grupa B"
+    ],
+    "italy_serie_c_c": [
+        "ITALY 3 - Group C",
+        "Italy 3 - Group C",
+        "ITALIA 3 GRUPA C",
+        "Italia 3 Grupa C",
+        "ITALIJA 3 GRUPA C",
+        "Italija 3 Grupa C",
+        "ITALIA 3 C",
+        "Italia 3 C",
+        "ITALIJA 3 C",
+        "Italija 3 C",
+        "SERIJA C GRUPA C",
+        "Serija C Grupa C",
+        "Serie C, Grupa C",
+        "TALIJANSKA 3.LIGA GRUPA C",
+        "Talijanska 3.Liga Grupa C",
+        "ITALIJA - 3.LIGA - GRUPA C",
+        "Italija - Serie C, Grupa C",
+        "Italija - Serija C Grupa C"
+    ],
+    "_argentina_note": "Argentina's tiers 2, 3 and 4 are three different competitions (Primera B Nacional, Primera B Metropolitana, Primera C) and must not be merged. Within Primera B Nacional, mbet/mdshop/admiralbet publish both groups as one 'Argentina 2' list while premier_kladionica splits them into grupa a / grupa b - same fixtures, so both group labels resolve to the tier's single id.",
+    "argentine_primera_b_metropolitana": [
+        "Argentina 3 B",
+        "ARGENTINA 3 Primera B",
+        "Argentina 3 Primera B",
+        "Primera B Metropilitana",
+        "Primera B Metropolitana",
+        "ARGENTINSKA PRIMERA B METROPOLITANA",
+        "Argentina Primera B Metropolitana",
+        "Argentinska Primera B Metropolitana",
+        "ARGENTINA  3",
+        "ARGENTINA - 3.LIGA",
+        "Argentina - Primera B",
+        "Argentina Primera B"
+    ],
+    "argentine_primera_c": [
+        "Argentina 4 A",
+        "Argentina 4 Primera C",
+        "Primera C",
+        "PRIMERA C",
+        "ARGENTINSKA PRIMERA C",
+        "Argentinska Primera C",
+        "ARGENTINA - PRIMERA C - PLAY OFF - 1/4 FINALA",
+        "Argentina - Primera C",
+        "Argentina Primera C"
+    ],
+    "_nordic_note": "Sweden's Ettan and Norway's 3. Divisjon are each split into a north and a south / group 1 and group 2 division. wwin's unqualified 'Ettan' pools both, so it keeps its own ungrouped id and matches neither.",
+    "sweden_division_1_north": [
+        "Sweden 3 North",
+        "SWEDEN 3 North",
+        "Svedska 3 Sever",
+        "ŠVEDSKA  3  SEVER",
+        "Svedska 3.Liga Sjever",
+        "ŠVEDSKA 3.LIGA SJEVER",
+        "Divizija 1. Norra"
+    ],
+    "sweden_division_1_south": [
+        "Sweden 3 South",
+        "SWEDEN 3 South",
+        "Svedska 3 Jug",
+        "ŠVEDSKA  3  JUG",
+        "Svedska 3.Liga Jug",
+        "ŠVEDSKA 3.LIGA JUG",
+        "Divizija 1. Sorda"
+    ],
+    "sweden_division_2_sodra_gotaland": [
+        "Svedska 4.Liga Sodra Gotaland",
+        "Svedska 4 Juzni Gotaland",
+        "Sweden 4 - South Gotaland"
+    ],
+    "sweden_division_2_norra_svealand": [
+        "Svedska 4.Liga Norra Svealand",
+        "Sweden 4 - North Svealand"
+    ],
+    "sweden_division_2_vast_gotaland": [
+        "Sweden 4 - West Gotaland"
+    ],
+    "norway_3_division_group_1": [
+        "Norway 3 - Group 1",
+        "NORWAY 3 - Group 1",
+        "Norveska 3 Grupa 1",
+        "NORVESKA 3.LIGA GRUPA 1",
+        "Norveska 3.Liga Grupa 1",
+        "2. Divizija Grupa 1",
+        "2. divizija Grupa 1",
+        "NORVEŠKA  3  A",
+        "Norveška 3 A"
+    ],
+    "norway_3_division_group_2": [
+        "Norway 3 - Group 2",
+        "NORWAY 3 - Group 2",
+        "Norveska 3 Grupa 2",
+        "NORVESKA 3.LIGA GRUPA 2",
+        "Norveska 3.Liga Grupa 2",
+        "2. Divizija Grupa 2",
+        "2. divizija Grupa 2",
+        "NORVEŠKA  3  B",
+        "Norveška 3 B"
+    ],
+    "norway_4_division_group_1": [
+        "Norway 4 - Group 1",
+        "NORWAY 4 - Group 1",
+        "Norveška 4.Liga - Grupa 1",
+        "NORVEŠKA 4.LIGA - GRUPA 1",
+        "Norveška 4 - Grupa 1",
+        "NORVEŠKA  4  -  GRUPA 1"
+    ],
+    "netherlands_tweede_divisie": [
+        "Tweede Divisie",
+        "NIZOZEMSKA 3.LIGA",
+        "Nizozemska 3.Liga",
+        "Holandija 3"
+    ],
+    "germany_regionalliga_nord": [
+        "Regionalliga Sjever",
+        "NEMACKA 4 SEVER",
+        "Nemacka 4 sever",
+        "Germany 4 North"
+    ],
+    "germany_regionalliga_west": [
+        "Regionalliga Zapad",
+        "NEMACKA 4 ZAPAD",
+        "Nemacka 4 zapad",
+        "Germany 4 West"
+    ],
+    "germany_regionalliga_nordost": [
+        "Regionalliga Sjeveroistok",
+        "NEMACKA 4 SEVEROISTOK",
+        "Nemacka 4 severoistok"
+    ],
+    "france_ligue_2": [
+        "Ligue 2",
+        "FRANCUSKA 2.LIGA",
+        "Francuska 2.Liga",
+        "FRANCE 2",
+        "FRANCUSKA - 2.LIGA",
+        "Francuska - Liga 2",
+        "Francuska - Ligue 2",
+        "Francuska 2"
+    ],
+    "france_championnat_national": [
+        "Francuska 3",
+        "FRANCUSKA  3",
+        "Francuska 3.Liga",
+        "France 3",
+        "FRANCUSKA - 3.LIGA",
+        "Francuska - Nacionalna Liga",
+        "Francuska - National"
+    ],
+    "swiss_1_liga": [
+        "Switzerland 3",
+        "SWITZERLAND 3",
+        "ŠVAJCARSKA  3",
+        "Svajcarska 3",
+        "ŠVICARSKA 3.LIGA",
+        "Svicarska 3.Liga"
+    ],
+    "greece_superleague_2": [
+        "Greece 2",
+        "GRČKA 2.LIGA",
+        "Grčka 2.Liga",
+        "GRČKA - 2.LIGA"
+    ],
+    "j_fl": [
+        "Japan 4",
+        "JAPAN 4",
+        "Japan Football League"
+    ],
+    "chinese_champions_league": [
+        "China 2",
+        "CHINA 2",
+        "KINA  2",
+        "Kina 2"
+    ],
+    "russian_first_league": [
+        "Rusija 2",
+        "RUSIJA  2",
+        "FNL",
+        "Russia 2",
+        "RUSSIA 2",
+        "1. Liga",
+        "1. liga"
+    ],
+    "austria_regionalliga_west": [
+        "Regionalna Liga Zapad",
+        "AUSTRIA 3 West",
+        "Austria 3 West",
+        "AUSTRIJA  3  ZAPAD",
+        "Austrija 3 Zapad"
+    ],
+    "croatian_prva_nl": [
+        "Croatia 2",
+        "HRVATSKA  2",
+        "Hrvatska 2",
+        "HRVATSKA 2.LIGA",
+        "Hrvatska 2.Liga",
+        "Prva NL"
+    ],
+    "slovenian_second_league": [
+        "2. SNL",
+        "Slovenia 2",
+        "SLOVENIA 2",
+        "SLOVENIJA  2",
+        "Slovenija 2"
+    ],
+    "slovak_second_league": [
+        "Slovakia 2",
+        "SLOVAKIA 2",
+        "SLOVAČKA  2",
+        "Slovačka 2"
+    ],
+    "_latam_note": "Klausura / Apertura are the opening and closing phases of one season of one competition, not separate competitions, so each country's phase labels fold into that country's single id.",
+    "colombia_second_division": [
+        "Colombia 2",
+        "COLOMBIA 2",
+        "Kolumbija 2",
+        "KOLUMBIJSKA 2.LIGA",
+        "Kolumbijska 2.Liga",
+        "KOLUMBIJA - 2.LIGA",
+        "Kolumbija - Primera B",
+        "KOLUMBIJA  2  -  KLAUSURA  PLAY  OFF",
+        "KOLUMBIJA - 2. LIGA - GRUPA A"
+    ],
+    "uruguay_second_division": [
+        "Uruguay 2",
+        "URUGUAY 2",
+        "URUGVAJSKA 2.LIGA",
+        "Urugvajska 2.Liga",
+        "URUGVAJ  2",
+        "Urugvaj 2"
+    ],
+    "canadian_premier_league": [
+        "Canada 1",
+        "CANADA 1",
+        "Kanada 1",
+        "KANADA  1",
+        "Kanadska Premier Liga",
+        "Kanada - Premier Liga",
+        "Kanada - Premijer Liga"
+    ],
+    "guatemala_liga_nacional": [
+        "Guatemala 1",
+        "GUATEMALA 1",
+        "Guatemala 1.Liga",
+        "GVATEMALA 1.LIGA",
+        "Gvatemala 1",
+        "GVATEMALA  1",
+        "Gvatemala 1.Liga",
+        "Gvatemala 1 - Apertura",
+        "Guatemala 1 - Apertura",
+        "GVATEMALA  1  -  APERTURA",
+        "Liga Nacional, Apertura",
+        "GVATEMALA - 1.LIGA",
+        "Gvatemala - Liga Nacional, Apertura",
+        "Gvatemala - Nacionalna Liga"
+    ],
+    "paraguay_primera": [
+        "Paraguay 1",
+        "PARAGUAY 1",
+        "Paragvaj 1",
+        "PARAGVAJSKA 1.LIGA",
+        "Paragvajska 1.Liga",
+        "Division de Honor, Apertura",
+        "PARAGVAJ  1  -  KLAUSURA",
+        "Paragvaj 1 - Klausura",
+        "Paragvaj - 3. Divizija",
+        "Paragvaj - Division de Honor, Apertura"
+    ],
+    "paraguay_second_division": [
+        "Paraguay 2",
+        "PARAGUAY 2",
+        "Paragvajska 2.Liga",
+        "PARAGVAJ  2",
+        "PARAGVAJ - 2.LIGA",
+        "Paragvaj - 2. Divizija",
+        "Paragvaj - Segunda Division"
+    ],
+    "peru_second_division": [
+        "Peru 2",
+        "PERU 2",
+        "PERUANSKA 2.LIGA - GRUPA A",
+        "Peruanska 2.Liga - Grupa A"
+    ],
+    "morocco_botola": [
+        "Maroko 1",
+        "MAROKO  1",
+        "Morocco 1",
+        "MOROCCO 1",
+        "MAROKANSKA 1.LIGA",
+        "Marokanska 1.Liga",
+        "Botola",
+        " Botola Pro D1",
+        "Botola Pro D1",
+        "Maroko - Botola",
+        "Maroko - Botola Pro D1"
+    ],
+    "panama_liga_panameña": [
+        "Panama 1",
+        "PANAMA  1  -  APERTURA",
+        "Panama 1 - Apertura",
+        "Liga Panamena de Futbol, Apertura",
+        "PANAMSKA 1.LIGA ISTOK",
+        "Panamska 1.Liga Istok",
+        "PANAMA - 1.LIGA",
+        "Panama - LPF",
+        "PANAMSKA 1.LIGA ZAPAD",
+        "Panama - Liga Panamena de Futbol, Apertura",
+        "Panama 1 Apertura"
+    ],
+    "afcon_qualification": [
+        "Africa Cup of Nations - Qualification",
+        "AFRICA Cup of Nations - Qualification",
+        "Afrički Kup Nacija Kval.",
+        "Afrički Kup Nacija Kval",
+        "Afrički Kup Nacija Kvalifikacije",
+        "Kvalifikacije za Afrički Kup Nacija",
+        "KVALIFIKACIJE  ZA  AFRIČKI  KUP  NACIJA"
+    ],
+    "international_friendly": [
+        "Friendly International",
+        "MEĐUNARODNE  PRIJATELJSKE",
+        "Međunarodne Prijateljske",
+        "Prijateljske Utakmice Reprezentacije",
+        "PRIJATELJSKE UTAKMICE REPREZENTACIJE",
+        "Prijateljske Utakmice Reprezentacije (Ž)"
+    ],
+    "euro_u21_qualification": [
+        "Euro U21 - Qualification",
+        "EURO U21 kval.",
+        "EURO U21 Kval.",
+        "Euro U21 Kval"
+    ],
+    "asean_cup": [
+        "ASEAN Cup",
+        "FIFA ASEAN Kup"
+    ],
+    "asian_games_football": [
+        "Asian Games",
+        "Azijske Igre"
+    ],
+    "gulf_cup": [
+        "Gulf Kup",
+        "GULF  KUP",
+        "Gulf Cup Grupa A",
+        "Gulf Cup Grupa B",
+        "Zalivski Kup",
+        "Arabian Gulf Cup"
+    ],
+    "copa_santa_catarina": [
+        "Brazil - Copa Santa Catarina",
+        "BRAZIL - COPA SANTA CATARINA",
+        "Copa Santa Catarina"
+    ],
+    "copa_argentina": [
+        "Argentina - Kup",
+        "ARGENTINA  -  KUP",
+        "Argentina Kup",
+        "Argentina Cup",
+        "ARGENTINA Cup",
+        "Copa Argentina",
+        "ARGENTINA - KUP - 1/2 FINALA",
+        "ARGENTINSKI KUP"
+    ],
+    "argentina_supercopa": [
+        "Argentina superkup",
+        "Superkup"
+    ],
+    "supercopa_internacional": [
+        "Argentina - Supercopa Internacional",
+        "ARGENTINA - SUPERCOPA INTERNACIONAL",
+        "Supercopa Internacional"
+    ],
+    "belgian_cup": [
+        "Belgija - Kup",
+        "BELGIJA  -  KUP",
+        "Belgijski Kup",
+        "Belgium Cup"
+    ],
+    "chile_cup": [
+        "Chile Cup",
+        "CHILE Cup",
+        "ČILE  -  KUP",
+        "Čile - Kup",
+        "ČILE - KUP - 1/4 FINALA",
+        "ČILEANSKI KUP",
+        "Čile - Copa Chile",
+        "Čile kup"
+    ],
+    "_womens_note": "The women's competitions carry their own ids, never the men's. 'Super Liga (Ž)' and 'Super League (Ž)' are the English Womens Super League as admiralbet and wwin label it, not the Norwegian one; Norwegian women are 'Norveška 1 Ž' / 'Toppserien (Ž)'.",
+    "womens_super_league_england": [
+        "Engleska 1 Ž",
+        "ENGLESKA  1  W",
+        "Super Liga (Ž)",
+        "SUPER LIGA (Ž)",
+        "Super League (Ž)",
+        "ENGLESKA SUPER LIGA (Ž)",
+        "Engleska Super Liga (Ž)",
+        "ENGLESKA - SUPER LIGA (Ž)",
+        "England 1 Women",
+        "Engleska (Am.) - Super League (Ž)"
+    ],
+    "norwegian_women_eliteserien": [
+        "Norveška 1 Ž",
+        "NORVEŠKA  1  W",
+        "Norveška 1 W",
+        "NORVEŠKA 1.LIGA (Ž)",
+        "Toppserien (Ž)",
+        "NORVEŠKA - 1.LIGA (Ž)",
+        "Norveška - Toppserien (Ž)",
+        "Norway 1 Women"
+    ],
+    "swedish_women_allsvenskan": [
+        "Švedska 1 Ž",
+        "ŠVEDSKA  1  W",
+        "ŠVEDSKA 1.LIGA (Ž)",
+        "Damallsvenskan (Ž)",
+        "Sweden 1 Women",
+        "ŠVEDSKA - 1.LIGA (Ž)",
+        "Švedska - Damallsvenskan (Ž)"
+    ],
+    "spain_women_liga_f": [
+        "Španija 1 Ž",
+        "ŠPANIJA  1  W",
+        "Spain 1 - Women",
+        "ŠPANJOLSKA - 1.LIGA (Ž)",
+        "ŠPANJOLSKA 1.LIGA (Ž)",
+        "Španija - Primera Division (Ž)"
+    ],
+    "italy_women_serie_a": [
+        "Italija 1 Ž",
+        "Serija A (Ž)",
+        "Serie A (Ž)"
+    ],
+    "belgium_women_first_division": [
+        "Belgija 1 Ž",
+        "BELGIJA  1  W",
+        "Superliga (Ž)"
+    ],
+    "netherlands_women_eredivisie": [
+        "Holandija 1 Ž",
+        "HOLANDIJA  1  W",
+        "Eredivisie (Ž)"
+    ],
+    "mexico_women_liga_mx_f": [
+        "Liga MX (Ž)",
+        "Liga MX (Ž), Apertura",
+        "Meksiko 1 Ž",
+        "MEKSIKO  1  W  -  APERTURA"
+    ],
+    "_primera_division_note": "'Primera Division' was listed under la_liga. It is not a Spanish name for La Liga - La Liga is never called that - and on the real feed admiralbet's 'Primera Divizija' is the Uruguayan Primera (progreso, racing montevideo, wanderers, penarol). It now resolves to uruguay_primera, which is what its fixtures are. Measured on the feed this costs no verified group: 252 groups before and after the move.",
+    "auto_argentina_liga_mladi": [
+        "Argentina - Liga Mladi",
+        "Argentina Mladi"
+    ],
+    "auto_argentina_pro_liga_rezerve": [
+        "ARGENTINA - 1.LIGA - REZERVE",
+        "Argentina - Pro. Liga Rezerve",
+        "Argentina Rezerve",
+        "ARGENTINSKA 1.LIGA REZERVE - GRUPA A"
+    ],
+    "auto_armenija_1_liga": [
+        "ARMENIJA - 1.LIGA",
+        "ARMENSKA 1.LIGA"
+    ],
+    "auto_australija_1_liga": [
+        "AUSTRALIA 1",
+        "AUSTRALIJA - 1.LIGA",
+        "Australija - A-Liga",
+        "Australija 1",
+        "AUSTRALSKA 1.LIGA"
+    ],
+    "auto_australija_a_league_z": [
+        "AUSTRALIJA - 1.LIGA (Ž)",
+        "Australija - A-League (Ž)",
+        "Australija 1 Ž",
+        "AUSTRALSKA 1.LIGA (Ž)",
+        "Australia 1 Women",
+        "Australija - W-Liga"
+    ],
+    "auto_bahrein_2_divizija": [
+        "Bahrein - 2. Divizija",
+        "BAHREIN - 2.LIGA",
+        "Bahrein 2"
+    ],
+    "auto_banglades_kup_federacije": [
+        "Bangladeš - Kup Federacije",
+        "Bangladeš Kup"
+    ],
+    "auto_belgija_challenger_pro_league": [
+        "Belgija - 18 Pro Liga",
+        "BELGIJA - 2.LIGA",
+        "Belgija - Challenger Pro League",
+        "Belgija 2",
+        "BELGIJSKA 2.LIGA",
+        "BELGIUM 2"
+    ],
+    "auto_bolivija_copa_division_profesional": [
+        "Bolivija - Copa Division Profesional",
+        "Bolivija - Kup Divizija Pro",
+        "BOLIVIJA  -  LIGA  KUP",
+        "BOLIVIJA - PLAY OFF - 1/4 FINALA",
+        "Pacena kup"
+    ],
+    "auto_brazil_brasileiro_serie_b": [
+        "BRAZIL - 2.LIGA",
+        "Brazil - Brasileiro, Serie B",
+        "Brazil - Serija B",
+        "BRAZIL  2",
+        "BRAZILSKA 2.LIGA",
+        "brazil - brazil 2",
+        "brasileiro, serie b"
+    ],
+    "auto_brazil_carioca_serie_b1": [
+        "Brazil - Carioca Serija B",
+        "Brazil - Carioca, Serie B1",
+        "Brazil Karioka 2"
+    ],
+    "auto_brazil_kup_u20_1_8_finala": [
+        "BRAZIL - KUP U20 - 1/8 FINALA",
+        "Brazil kup U20",
+        "Brazil - Copa do Brasil do 20 god."
+    ],
+    "auto_brazil_kup_z_1_4_finala": [
+        "Brazil - Copa do Brasil (Ž)",
+        "Brazil - Kup (Ž)",
+        "BRAZIL - KUP (Ž) - 1/4 FINALA",
+        "BRAZIL  W  -  KUP",
+        "BRAZILSKI KUP (Ž)",
+        "Copa do Brasil Women"
+    ],
+    "auto_brazil_mineiro_u20_div_1": [
+        "BRAZIL - MINEIRO U20 - DIV. 1",
+        "Brazil - Minerio U20",
+        "Brazil Mineiro U20",
+        "Brazil - Mineiro do 20 god., 1. Divisao"
+    ],
+    "auto_brazilski_kup": [
+        "Brazil - Kup",
+        "BRAZILSKI KUP",
+        "Brazil Cup"
+    ],
+    "auto_bugarska_2_liga": [
+        "BUGARSKA - 2.LIGA",
+        "BUGARSKA 2.LIGA"
+    ],
+    "auto_ceska_2_liga": [
+        "ČEŠKA - 2.LIGA",
+        "Češka - FNL",
+        "Czech Republic - Czech Rep. 2",
+        "Češka - 2. Divizija"
+    ],
+    "auto_copa_libertadores_play_off_1_2_finale": [
+        "Copa Libertadores",
+        "COPA LIBERTADORES - PLAY OFF - 1/2 FINALE",
+        "KUP  LIBERTADORES",
+        "Međunarodne - Copa Libertadores",
+        "Međunarodne Klubovi - Kup Libertadores"
+    ],
+    "auto_danska_elitedivisionen_z": [
+        "DANSKA - 1.LIGA (Ž)",
+        "Danska - Elitedivisionen (Ž)",
+        "Danska 1 Ž",
+        "DANSKA 1.LIGA (Ž)",
+        "DANSKA  1  W"
+    ],
+    "auto_danska_kup_z": [
+        "Danksa kup Ž",
+        "Danska - Kup (Ž)"
+    ],
+    "auto_egipat_premijer_liga": [
+        "EGIPAT - 1.LIGA",
+        "Egipat - Premier Liga",
+        "Egipat - Premijer Liga",
+        "EGIPAT  1",
+        "EGIPATSKA 1.LIGA",
+        "EGYPT 1"
+    ],
+    "auto_ekvador_1_liga_za_prvaka": [
+        "EKVADOR - 1.LIGA - ZA PRVAKA",
+        "Ekvador - LigaPro Primera A",
+        "EKVADORSKA 1.LIGA - PLAYOFF",
+        "EKVADOR - 1.LIGA - ZA PLASMAN",
+        "EKVADORSKA 1.LIGA - ZA PLASMAN",
+        "Ekvador - Liga Pro",
+        "EKVADOR  1  -  PLAY  OUT"
+    ],
+    "auto_ekvadorska_1_liga_za_ostanak": [
+        "EKVADOR - 1.LIGA - ZA OSTANAK",
+        "EKVADORSKA 1.LIGA - ZA OSTANAK"
+    ],
+    "auto_engleska_am_isthmian_league_premier_division": [
+        "ENGLAND 7 Isthmian",
+        "Engleska (Am.) - Isthmian League, Premier Division",
+        "ENGLESKA  7  ISTOK",
+        "Engleska Amateri - Isthmian Premijer Divizija"
+    ],
+    "auto_engleska_am_southern_league_premier_div_central": [
+        "ENGLAND 7 Central",
+        "Engleska (Am.) - Southern League, Premier Div., Central",
+        "Engleska 7 centar",
+        "ENGLESKA  7  CENTRAL",
+        "Engleska Amateri - Southern Liga Centar"
+    ],
+    "auto_engleska_am_southern_league_premier_div_jug": [
+        "ENGLAND 7 Southern",
+        "Engleska (Am.) - Southern League, Premier Div., Jug",
+        "ENGLESKA  7  JUG",
+        "Engleska Amateri - Southern Liga Jug"
+    ],
+    "auto_engleska_amateri_isthmian_liga_divizija_1_sjever": [
+        "Engleska 8 Istmian sever",
+        "Engleska Amateri - Isthmian Liga, Divizija 1 Sjever"
+    ],
+    "auto_engleska_amateri_northern_liga_divizija_1": [
+        "Engleska 8 sever",
+        "Engleska Amateri - Northern Liga Divizija 1"
+    ],
+    "auto_engleska_amateri_npl_premijer_divizija": [
+        "ENGLAND 7 Northern",
+        "Engleska (Am.) - NPL, Premier Div.",
+        "Engleska 7 sever",
+        "Engleska Amateri - NPL Premijer Divizija",
+        "England 7 North"
+    ],
+    "auto_engleska_amateri_profesionalna_razvojna_liga": [
+        "ENGLAND Development League",
+        "Engleska (Am.) - Profesionalna Razvojna Liga",
+        "ENGLESKA - PROFESSIONAL DEVELOPMENT",
+        "Engleska 2 U21",
+        "Engleska Amateri - Profesionalna Razvojna Liga",
+        "ENGLESKA  RAZVOJNA  LIGA",
+        "ENGLESKA PROF. DEVELOPMENT"
+    ],
+    "auto_engleska_fa_kup_kvalifikacije_finale": [
+        "ENGLAND FA Cup",
+        "ENGLESKA  -  FA  KUP",
+        "ENGLESKA - FA KUP - KVALIFIKACIJE - FINALE",
+        "Engleska FA kup",
+        "ENGLESKI FA KUP"
+    ],
+    "auto_engleska_liga_kup_1_8_finala": [
+        "Engleska - EFL Cup",
+        "ENGLESKA - LIGA KUP - 1/8 FINALA",
+        "ENGLESKI LIGA KUP",
+        "England League Cup",
+        "Engleska - EFL Kup"
+    ],
+    "auto_engleska_national_league_cup_grupa_c": [
+        "ENGLAND National League Cup",
+        "ENGLESKA - NATIONAL LEAGUE CUP - GRUPA C"
+    ],
+    "auto_engleska_premier_liga_kup_u21_grupa_f": [
+        "ENGLESKA - PREMIER LIGA KUP U21 - GRUPA F",
+        "Engleska Amateri - Premijer Liga Kup U21",
+        "Engleska liga kup U21",
+        "ENGLAND Premier League Cup U21",
+        "ENGLESKA  -  LIGA  KUP  M21",
+        "Engleska (Am.) - Premier Liga Kup",
+        "ENGLESKA - PREMIER LIGA KUP U21 - GRUPA A",
+        "ENGLESKA - PREMIER LIGA KUP U21 - GRUPA B",
+        "ENGLESKA - PREMIER LIGA KUP U21 - GRUPA E",
+        "ENGLESKA - PREMIER LIGA KUP U21 - GRUPA G",
+        "ENGLESKI PREMIER LIGA KUP U21 - GRUPA A",
+        "ENGLESKI PREMIER LIGA KUP U21 - GRUPA B",
+        "ENGLESKI PREMIER LIGA KUP U21 - GRUPA E",
+        "ENGLESKI PREMIER LIGA KUP U21 - GRUPA G",
+        "ENGLESKI PREMIER LIGA KUP U21 - GRUPA J",
+        "England Premier League Cup"
+    ],
+    "auto_etiopija_premijer_liga": [
+        "ETHIOPIA 1",
+        "ETIOPIJA - 1.LIGA",
+        "Etiopija - Premier liga",
+        "Etiopija - Premijer Liga",
+        "ETIOPIJA  1",
+        "ETIOPIJSKA 1.LIGA"
+    ],
+    "auto_grcka_kup": [
+        "Grčka - Kup",
+        "GRČKI KUP",
+        "GREECE Cup",
+        "Grčka kup"
+    ],
+    "auto_grcka_super_league": [
+        "GRČKA - 1.LIGA",
+        "Grčka - Super League",
+        "Grčka - Super Liga",
+        "Grčka 1",
+        "GRČKA 1.LIGA",
+        "GREECE 1"
+    ],
+    "auto_hrvatska_kup_1_8_finala": [
+        "Hrvatska - Kup",
+        "HRVATSKA - KUP - 1/8 FINALA",
+        "Hrvatska kup",
+        "HRVATSKI KUP",
+        "CROATIA Cup"
+    ],
+    "auto_iceland_1_championship_group": [
+        "ICELAND 1 - Championship Group",
+        "ISLAND - 1.LIGA - ZA PRVAKA",
+        "ICELAND 1 - Relegation Group",
+        "ISLAND - 1.LIGA - ZA OSTANAK",
+        "Island - Besta deild",
+        "Island - Urvalsdeild",
+        "Island 1"
+    ],
+    "auto_indonezija_1_liga": [
+        "INDONESIA 1",
+        "INDONEZIJA - 1.LIGA",
+        "Indonezija - Liga 1",
+        "INDONEZIJA  1",
+        "INDONEZIJSKA 1.LIGA"
+    ],
+    "auto_iran_azadegan_liga": [
+        "IRAN - 2.LIGA",
+        "Iran - Azadegan Liga",
+        "Iran - Divizija 1",
+        "Iran 2"
+    ],
+    "auto_irska_premier_division": [
+        "IRSKA - 1.LIGA",
+        "Irska - Premier Division",
+        "IRSKA PREMIER LIGA",
+        "IRELAND 1",
+        "Irska - Premijer Divizija",
+        "Irska 1"
+    ],
+    "auto_izrael_premier_liga": [
+        "IZRAEL - 1.LIGA",
+        "Izrael - Premier Liga",
+        "IZRAELSKA 1.LIGA",
+        "Israel 1",
+        "Izrael - Premijer Liga",
+        "Izrael 1"
+    ],
+    "auto_jamajka_1_liga": [
+        "JAMAICA 1",
+        "JAMAJKA  1",
+        "JAMAJKA 1.LIGA",
+        "JAMAJKA - 1.LIGA",
+        "Jamajka - Premijer Liga",
+        "Jamajka - Premier Liga"
+    ],
+    "auto_japanska_1_liga": [
+        "JAPAN - 1.LIGA",
+        "Japan - J.Liga",
+        "JAPAN  1",
+        "JAPANSKA 1.LIGA"
+    ],
+    "auto_katar_premijer_liga": [
+        "KATAR - 1.LIGA",
+        "Katar - Premijer Liga",
+        "Katar - Stars Liga",
+        "Katar 1",
+        "KATARSKA 1.LIGA",
+        "QATAR 1"
+    ],
+    "auto_kipar_1_division": [
+        "CIPAR - 1.LIGA",
+        "CIPARSKA 1.LIGA",
+        "Kipar - 1. Division"
+    ],
+    "auto_kostarika_1_apertura": [
+        "COSTA RICA 1",
+        "KOSTARIKA - 1.LIGA",
+        "Kostarika 1",
+        "KOSTARIKA  1  -  APERTURA",
+        "KOSTARIKANSKA 1.LIGA",
+        "Kostarika - Primera Divizija"
+    ],
+    "auto_kostarika_primera_division_z": [
+        "KOSTARIKA - 1.LIGA (Ž)",
+        "Kostarika - Primera Division (Ž)"
+    ],
+    "auto_kostarikanska_2_liga_grupa_a": [
+        "COSTA RICA 2",
+        "KOSTARIKANSKA 2.LIGA - GRUPA A",
+        "KOSTARIKA - 2.LIGA - GRUPA B",
+        "Kostarika - Liga Ascenso",
+        "Kostarika 2"
+    ],
+    "auto_malta_premier_liga": [
+        "MALTA - PREMIER LIGA",
+        "MALTA  1",
+        "MALTA PREMIER LIGA"
+    ],
+    "auto_mauritanija_super_d1": [
+        "Mauritanija - Super D1",
+        "Super D1"
+    ],
+    "auto_medjunarodne_klubovi_concacaf_centralna_amerika_kup": [
+        "CENTRAL AMERICAN CUP - PLAY IN",
+        "CENTRAL AMERICAN CUP PLAY-IN",
+        "Centralna Amerika kup",
+        "Međunarodne - CONCACAF Kup Centralne Amerike",
+        "Međunarodne Klubovi - CONCACAF Centralna Amerika Kup"
+    ],
+    "auto_medjunarodne_klubovi_kup_sudamerikana": [
+        "Copa Sudamericana",
+        "COPA SUDAMERICANA - 1/2 FINALE",
+        "KUP  JUŽNE  AMERIKE",
+        "Kup Sudamerikana",
+        "Međunarodne - Copa Sudamericana",
+        "Međunarodne Klubovi - Kup Sudamerikana"
+    ],
+    "auto_medjunarodne_mladi_uefa_liga_mladi": [
+        "Liga šampiona mladi",
+        "Međunarodne Mladi - UEFA Liga Mladi",
+        "UEFA Youth League - League phase"
+    ],
+    "auto_medunarodne_mladi_uefa_omladinska_liga": [
+        "Medunarodne - Mladi - UEFA Omladinska liga",
+        "UEFA - LIGA MLADIH",
+        "UEFA LIGA MLADI"
+    ],
+    "auto_meksiko_liga_mx_z_apertura": [
+        "MEKSIČKA 1.LIGA (Ž)",
+        "MEKSIKO - 1.LIGA (Ž)",
+        "Meksiko - Liga MX (Ž), Apertura",
+        "Meksiko - Liga MX (Ž)",
+        "Mexico 1 Women"
+    ],
+    "auto_njemacka_3_liga": [
+        "GERMANY 3",
+        "Nemačka 3",
+        "Njemačka - 3. Liga",
+        "NJEMAČKA - 3.LIGA",
+        "NJEMAČKA 3.LIGA"
+    ],
+    "auto_njemacka_dfb_kup": [
+        "GERMANY DFB Pokal",
+        "Njemačka - DFB Kup",
+        "NJEMAČKI KUP",
+        "Nemačka kup"
+    ],
+    "auto_obala_bjelokosti_1_liga": [
+        "OBALA BJELOKOSTI - 1.LIGA",
+        "Obala Slonovače - Ligue 1",
+        "Obala Slonovače 1",
+        "Obala Slonovače Liga 1"
+    ],
+    "auto_peru_1_liga": [
+        "PERU - 1.LIGA",
+        "PERU 1",
+        "Peru - Liga 1",
+        "PERU  1  -  KLAUSURA",
+        "PERUANSKA 1.LIGA",
+        "Peru - Primera Division"
+    ],
+    "auto_poljska_1_liga": [
+        "POLAND 2",
+        "Poljska - 1. Liga",
+        "POLJSKA - 2.LIGA",
+        "Poljska - I Liga",
+        "Poljska 2",
+        "POLJSKA 2.LIGA"
+    ],
+    "auto_portugal_liga_u23": [
+        "Portugal - Liga U23",
+        "PORTUGAL - U23 LIGA",
+        "PORTUGAL U23 League",
+        "Portugalija U23",
+        "PORTUGALIJA  M23",
+        "PORTUGALSKA U23 LIGA",
+        "Portugal - Prvenstvo do 23 god.",
+        "Portugal Liga Revelacao U23"
+    ],
+    "auto_portugal_pro_liga": [
+        "Liga Portugal 2",
+        "PORTUGAL - 2.LIGA",
+        "Portugal - Pro Liga",
+        "PORTUGAL 2",
+        "Portugalija 2",
+        "PORTUGALSKA 2.LIGA"
+    ],
+    "auto_rumunjska_2_liga": [
+        "Rumunija - Liga 2",
+        "RUMUNIJA  2",
+        "RUMUNJSKA - 2.LIGA",
+        "RUMUNJSKA 2.LIGA",
+        "Romania 2"
+    ],
+    "auto_rusija_1_liga": [
+        "Rusija - 1. Liga",
+        "RUSIJA - 2.LIGA",
+        "RUSKA 2.LIGA"
+    ],
+    "auto_sad_us_open_cup_finale": [
+        "SAD - US OPEN CUP - FINALE",
+        "SAD open kup",
+        "USA - US Open Kup"
+    ],
+    "auto_saudijska_arabija_division_1": [
+        "S.ARABIJA - 2.LIGA",
+        "SAUDI ARABIA 2",
+        "Saudijska Arabija - Division 1",
+        "Saudijska Arabija - Divizija 1",
+        "SAUDIJSKA  ARABIJA  2",
+        "SAUDIJSKA ARABIJA 2.LIGA"
+    ],
+    "auto_saudijska_arabija_saudi_professional_liga": [
+        "S.ARABIJA - 1.LIGA",
+        "SAUDI ARABIA 1",
+        "Saudijska Arabija - Pro Liga",
+        "Saudijska Arabija - Saudi Professional Liga",
+        "SAUDIJSKA  ARABIJA  1",
+        "SAUDIJSKA ARABIJA 1.LIGA"
+    ],
+    "auto_singapur_premijer_liga_2": [
+        "Singapur - Premijer Liga 2",
+        "Singapur 2"
+    ],
+    "auto_sj_irska_liga_kup_1_16_finala": [
+        "Northern Ireland League Cup",
+        "SEVERNA  IRSKA  -  LIGA  KUP",
+        "Severna Irska liga kup",
+        "SJ.IRSKA - LIGA KUP -  1/16 FINALA",
+        "SJ.IRSKI LIGA KUP",
+        "Sjeverna Irska - Liga Kup"
+    ],
+    "auto_skotska_liga_one": [
+        "SCOTLAND 3",
+        "ŠKOTSKA - 1.LIGA",
+        "Škotska - Liga 1",
+        "Škotska - Liga One",
+        "Škotska 3",
+        "ŠKOTSKA FL 1"
+    ],
+    "auto_slovacka_kup_1_16_finala": [
+        "Slovačka - Kup",
+        "SLOVAČKA - KUP - 1/16 FINALA",
+        "Slovačka kup"
+    ],
+    "auto_slovacka_superliga": [
+        "SLOVAČKA - 1.LIGA",
+        "Slovačka - Superliga",
+        "Slovačka 1",
+        "SLOVAKIA 1",
+        "SLOVAČKA 1.LIGA"
+    ],
+    "auto_svajcarska_challenge_liga": [
+        "Švajcarska - Čelendž Liga",
+        "Švajcarska - Challenge Liga",
+        "Švajcarska 2",
+        "ŠVICARSKA - 2.LIGA",
+        "ŠVICARSKA 2.LIGA",
+        "SWITZERLAND 2"
+    ],
+    "auto_tajland_fa_kup": [
+        "Tajland - FA Kup",
+        "Tajland FA kup"
+    ],
+    "auto_tajlandski_fa_kup": [
+        "TAJLANDSKI FA KUP",
+        "THAILAND Cup"
+    ],
+    "auto_turska_1_lig": [
+        "Turska - 1. Lig",
+        "TURSKA - 2.LIGA",
+        "TURKEY 2",
+        "TURSKA 2.LIGA",
+        "Turska - 1. Liga",
+        "Turska 2"
+    ],
+    "auto_uganda_premijer_liga": [
+        "UGANDA - 1.LIGA",
+        "Uganda - Premier Liga",
+        "Uganda - Premijer Liga",
+        "UGANDA  1"
+    ],
+    "auto_ukrajina_premier_liga": [
+        "UKRAJINA - 1.LIGA",
+        "Ukrajina - Premier Liga",
+        "UKRAJINSKA 1.LIGA",
+        "UKRAJINA  1",
+        "Ukraine 1",
+        "Ukrajina - Premijer Liga"
+    ],
+    "auto_urugvaj_tercera_division_rezerve": [
+        "URUGVAJ - 1.LIGA - REZERVE",
+        "Urugvaj - Primera Rezerve",
+        "Urugvaj - Tercera Division, Rezerve",
+        "Urugvaj rezerve",
+        "URUGVAJ - REZERVE"
+    ],
+    "auto_uzbekistan_kup_1_4_finala": [
+        "UZBEKISTAN  -  KUP",
+        "UZBEKISTAN - KUP - 1/4 FINALA",
+        "UZBEKISTAN Cup",
+        "Uzbekistan kup",
+        "UZBEKISTANSKI KUP"
+    ],
+    "brazil_serie_c": [
+        "brazil - brazil 3",
+        "brasileiro, serie c",
+        "brazilska 3.liga",
+        "Brazil 3",
+        "BRAZIL 3",
+        "brazil 3"
+    ],
+    "auto_afc_champions_league_2": [
+        "AFC Champions League 2",
+        "AFC KUP - GRUPA D"
+    ],
+    "auto_alzir_1_liga": [
+        "ALGERIA 1",
+        "ALŽIR - 1.LIGA",
+        "ALŽIR  1",
+        "ALŽIRSKA 1.LIGA",
+        "Alžir - Liga 1"
+    ],
+    "auto_austrija_kup_1_8_finala": [
+        "Austria Cup",
+        "AUSTRIA OFB Cup",
+        "AUSTRIJA - KUP - 1/8 FINALA",
+        "Austrija - OFB Kup",
+        "Austrija kup"
+    ],
+    "auto_azerbajdzan_kup_1_16_finala": [
+        "AZERBAIJAN Cup",
+        "AZERBAJDŽAN - KUP - 1/16 FINALA"
+    ],
+    "auto_bosnia_and_herzegovina_bosnia_herz_cup": [
+        "BiH - KUP - 1/16 FINALA",
+        "BOSNIA & HERZ. Cup",
+        "Bosnia and Herzegovina - Bosnia & Herz.Cup"
+    ],
+    "auto_crna_gora_1_liga": [
+        "CRNA GORA - 1.LIGA",
+        "MONTENEGRO 1",
+        "CRNA  GORA  1",
+        "Crna Gora - 1. CFL",
+        "Crna Gora - Prva Crnogorska Liga"
+    ],
+    "auto_czech_republic_czech_rep_cup": [
+        "ČEŠKA - KUP - 1/8 FINALA",
+        "CZECH REP. MOL Cup",
+        "Czech Republic - Czech Rep. Cup"
+    ],
+    "auto_danska_kup_1_8_finala": [
+        "Danska - Kup",
+        "DANSKA - KUP - 1/8 FINALA",
+        "Danska kup",
+        "DENMARK Cup",
+        "DANSKI KUP"
+    ],
+    "auto_engleska_national_league_cup_grupa_a": [
+        "ENGLESKA  -  NACIONALNI  LIGA  KUP",
+        "ENGLESKA - NATIONAL LEAGUE CUP - GRUPA A",
+        "ENGLESKA - NATIONAL LEAGUE CUP GRUPA C",
+        "Engleska - National League Cup",
+        "Engleska Amateri - Nacionalna Liga Kup",
+        "Nacionalna liga kup"
+    ],
+    "auto_estonija_meistriliiga": [
+        "ESTONIA 1",
+        "ESTONIJA - 1.LIGA",
+        "Estonija - Meistriliiga",
+        "Estonija 1"
+    ],
+    "auto_indija_super_liga": [
+        "INDIA ISL",
+        "Indija - Super Liga",
+        "INDIJA - SUPERLIGA",
+        "Indija 1",
+        "INDIJSKA SUPERLIGA"
+    ],
+    "auto_international_clubs_concacaf_central_american_cup": [
+        "CONCACAF Central American Cup",
+        "International Clubs - CONCACAF Central American Cup"
+    ],
+    "auto_international_clubs_uefa_champions_league_women": [
+        "International Clubs - UEFA Champions League Women",
+        "LIGA PRVAKA (Ž)",
+        "Liga šampiona Ž",
+        "Međunarodne Klubovi - UEFA Liga Šampiona (Ž)"
+    ],
+    "auto_italija_kup_lega_pro_1_8_finala": [
+        "Coppa Italy Serie C",
+        "ITALIJA - KUP LEGA PRO - 1/8 FINALA",
+        "ITALY 3 Cup"
+    ],
+    "auto_japan_we_league_z": [
+        "JAPAN - WE LEAGUE (Ž)",
+        "Japan - WE Liga (Ž)"
+    ],
+    "auto_juzna_afrika_carling_knockout": [
+        "JAR - LIGA KUP - 1/8 FINALA",
+        "Južna Afrika - Carling Knockout",
+        "Južna Afrika kup",
+        "SOUTH AFRICA Carling Knockout",
+        "South Africa Nedbank Cup"
+    ],
+    "auto_madjarska_kup_1_16_finala": [
+        "HUNGARY Cup",
+        "MAĐARSKA - KUP - 1/16 FINALA"
+    ],
+    "auto_meksiko_liga_mx_do_21_god": [
+        "MEKSIČKA U21 LIGA",
+        "Meksiko - Liga MX do 21 god.",
+        "MEKSIKO - LIGA U21"
+    ],
+    "auto_meksiko_premijer_liga": [
+        "Meksiko - Premijer Liga",
+        "Meksiko 3"
+    ],
+    "auto_moldavija_kup_1_8_finala": [
+        "MOLDAVIJA - KUP - 1/8 FINALA",
+        "Moldova Cup"
+    ],
+    "auto_nizozemska_kup_1_32_finala": [
+        "NETHERLANDS Cup",
+        "NIZOZEMSKA - KUP - 1/32 FINALA"
+    ],
+    "auto_norveska_kup_1_16_finala": [
+        "NORVEŠKA - KUP - 1/16 FINALA",
+        "Norveška - NM Kup",
+        "Norveška kup",
+        "NORWAY Cup"
+    ],
+    "auto_poljska_kup_1_16_finala": [
+        "POLAND Cup",
+        "POLJSKA - KUP - 1/16 FINALA"
+    ],
+    "auto_portugal_kup_1_4_finala": [
+        "PORTUGAL - KUP - 1/4 FINALA",
+        "Portugal - Liga Kup",
+        "Portugal League Cup",
+        "Portugalija liga kup"
+    ],
+    "auto_ruanda_1_liga": [
+        "RUANDA - 1.LIGA",
+        "Rwanda 1"
+    ],
+    "auto_rusija_kup_grupa_1": [
+        "RUSIJA - KUP - GRUPA 1",
+        "RUSKI KUP - GRUPA A",
+        "RUSIJA - KUP - GRUPA 2",
+        "Rusija - Kup",
+        "Rusija kup"
+    ],
+    "auto_rusija_kup_grupa_4": [
+        "RUSIJA - KUP - GRUPA 4",
+        "RUSKI KUP - GRUPA D"
+    ],
+    "auto_russia_cup_group_stage": [
+        "RUSIJA - KUP - GRUPA 3",
+        "RUSSIA Cup",
+        "Russia Cup - Group Stage"
+    ],
+    "auto_skotska_2_liga": [
+        "SCOTLAND 4",
+        "ŠKOTSKA - 2.LIGA",
+        "Škotska - Liga 2",
+        "Škotska 4"
+    ],
+    "auto_skotska_kup_1_64_finala": [
+        "Scotland Cup",
+        "Škotska - FA Kup",
+        "ŠKOTSKA - KUP - 1/64 FINALA",
+        "Škotska FA kup"
+    ],
+    "auto_spanjolska_kup_1_64_finala": [
+        "SPAIN Cup",
+        "ŠPANJOLSKA - KUP - 1/64 FINALA"
+    ],
+    "auto_srbija_kup_1_16_finala": [
+        "SERBIA Cup",
+        "SRBIJA - KUP - 1/16 FINALA"
+    ],
+    "auto_ukrajina_kup_1_8_finala": [
+        "UKRAINE Cup",
+        "UKRAJINA - KUP - 1/8 FINALA"
+    ],
+    "auto_united_arab_emirates_uae_1": [
+        "UAE - 1.LIGA",
+        "United Arab Emirates - UAE 1"
+    ],
+    "auto_urugvaj_kup_1_16_finala": [
+        "URUGVAJ - KUP - 1/16 FINALA",
+        "Urugvaj kup"
+    ],
+    "auto_venezuela_1_liga_grupa_b": [
+        "VENEZUELA - 1.LIGA - GRUPA B",
+        "VENEZUELA 1",
+        "VENECUELA  1  -  KLAUSURA  PLAY  OFF",
+        "VENEZUELA - 1.LIGA - GRUPA A",
+        "VENEZUELA 1.LIGA",
+        "VENEZUELA 1.LIGA - GRUPA B",
+        "Venecuela - Primera Division",
+        "Venecuela - Primera Divizija",
+        "Venecuela 1"
+    ],
+    "auto_international_clubs_asia_afc_champions_league": [
+        "AFC liga šampiona",
+        "International Clubs - Asia AFC Champions League",
+        "LIGA PRVAKA AZIJA - ISTOK",
+        "LIGA PRVAKA AZIJA - ZAPAD",
+        "Međunarodne Klubovi - AFC Liga Šampiona",
+        "AFC Champions League",
+        "Međunarodne - AFC Liga Prvaka"
+    ],
+    "auto_medjunarodne_klubovi_afc_celendz_liga": [
+        "AFC  ČELENDŽ  LIGA",
+        "AFC CHALLENGE CUP - GRUPA A",
+        "AFC CHALLENGE CUP - GRUPA B",
+        "AFC CHALLENGE CUP - GRUPA C",
+        "AFC CHALLENGE LEAGUE - GRUPA E",
+        "Međunarodne - AFC Challenge League",
+        "Međunarodne Klubovi - AFC Čelendž Liga"
+    ],
+    "auto_rumunjska_kup_grupa_1": [
+        "ROMANIA Cup",
+        "Rumunija - Kup",
+        "Rumunija kup",
+        "RUMUNJSKA - KUP - GRUPA 1",
+        "RUMUNJSKA - KUP - GRUPA 2",
+        "RUMUNJSKA - KUP - GRUPA 3",
+        "RUMUNJSKA - KUP - GRUPA 4"
+    ],
+    "auto_albanija_kategoria_superiore": [
+        "ALBANIA 1",
+        "ALBANIJA - 1. LIGA",
+        "Albanija - Kategoria Superiore",
+        "ALBANIJA  1"
+    ],
+    "auto_argentina_torneo_federal_a_play_off_1_8_finala": [
+        "Argentina - Torneo Federal A",
+        "ARGENTINA - TORNEO FEDERAL A - PLAY OFF - 1/8 FINALA",
+        "Argentina 3 A",
+        "Argentina Torneo Federal"
+    ],
+    "auto_azerbejdzan_premijer_liga": [
+        "AZERBAIJAN 1",
+        "AZERBAJDŽAN - 1.LIGA",
+        "AZERBAJDŽANSKA 1.LIGA",
+        "Azerbejdžan - Premier Liga",
+        "Azerbejdžan - Premijer Liga",
+        "Azerbejdžan 1"
+    ],
+    "auto_bahrain_kings_cup": [
+        "Bahrain King's Cup",
+        "BAHREIN KING'S CUP"
+    ],
+    "auto_bolivija_division_profesional": [
+        "BOLIVIA 1",
+        "BOLIVIJA - 1.LIGA",
+        "Bolivija - Division Profesional",
+        "Bolivija - Divizija Pro",
+        "BOLIVIJA  1"
+    ],
+    "auto_egipat_liga_kup_grupa_c": [
+        "EGIPAT - LIGA KUP - GRUPA C",
+        "EGYPT League Cup"
+    ],
+    "auto_el_salvador_primera_division_apertura": [
+        "EL SALVADOR - 1.LIGA",
+        "El Salvador - Primera Division, Apertura",
+        "El Salvador - Primera Divizija",
+        "El Salvador - Primera Divizija Apertura",
+        "EL SALVADOR Primera Division - Apertura"
+    ],
+    "auto_gruzija_erovnuli_liga": [
+        "GEORGIA 1",
+        "Gruzija - Erovnuli Liga"
+    ],
+    "auto_honduras_liga_nacional_apertura": [
+        "HONDURAS - 1.LIGA",
+        "Honduras - Liga Nacional, Apertura",
+        "Honduras - Nacionalna Liga",
+        "HONDURAS 1",
+        "HONDURAS  1  -  APERTURA"
+    ],
+    "auto_israel_liga_alef": [
+        "ISRAEL 3 North",
+        "Israel Liga Alef"
+    ],
+    "auto_italija_serie_a_z": [
+        "ITALIJA - 1.LIGA (Ž)",
+        "Italija - Serie A (Ž)",
+        "ITALIJA  1  W",
+        "Italy 1 Women",
+        "TALIJANSKA 1.LIGA (Ž)"
+    ],
+    "auto_izrael_liga_alef_jug": [
+        "ISRAEL 3 South",
+        "IZRAEL - LIGA ALEF - JUG",
+        "IZRAEL  3  JUG"
+    ],
+    "auto_izrael_national_liga": [
+        "ISRAEL 2",
+        "IZRAEL - 2.LIGA",
+        "Izrael - National Liga",
+        "IZRAEL  2",
+        "IZRAELSKA 2.LIGA"
+    ],
+    "auto_kolumbija_kup_druga_faza_play_off_1_4_finala": [
+        "Colombia Cup",
+        "Kolumbija - Copa Colombia",
+        "KOLUMBIJA  -  KUP",
+        "KOLUMBIJA - KUP - DRUGA FAZA - PLAY OFF - 1/4 FINALA",
+        "Kolumbija kup"
+    ],
+    "auto_kolumbija_primera_a_clausura": [
+        "Kolumbija - Primera A Clausura",
+        "Primera A - Clausura"
+    ],
+    "auto_kuvajt_1_liga": [
+        "KUVAJT - 1.LIGA",
+        "Kuwait 1"
+    ],
+    "auto_kuvajtska_1_liga": [
+        "KUVAJT  1",
+        "KUVAJTSKA 1.LIGA"
+    ],
+    "auto_litva_2_liga": [
+        "LITHUANIA 2",
+        "LITVA - 2.LIGA"
+    ],
+    "auto_madjarska_merkantil_bank_liga": [
+        "Hungary 2",
+        "Mađarska - Merkantil Bank Liga",
+        "Mađarska - NB II",
+        "Mađarska 2"
+    ],
+    "auto_nikaragva_primera_divizija_apertura": [
+        "NICARAGUA 1",
+        "NIKARAGVA - 1.LIGA",
+        "Nikaragva - Primera",
+        "Nikaragva - Primera Divizija Apertura",
+        "Nikaragva 1",
+        "NIKARAGVA  1  -  APERTURA",
+        "NIKARAGVA 1.LIGA"
+    ],
+    "auto_poljska_ii_liga": [
+        "POLAND 3",
+        "Poljska - II Liga",
+        "POLJSKA  3",
+        "POLJSKA 3.LIGA"
+    ],
+    "auto_portugalska_3_liga_grupa_a": [
+        "Liga Portugal 3",
+        "Portugal - Liga 3",
+        "PORTUGAL 3",
+        "Portugalija 3",
+        "PORTUGALSKA 3.LIGA - GRUPA A"
+    ],
+    "auto_rusija_kup_region_path_finale": [
+        "RUSIJA - KUP - REGION PATH - FINALE",
+        "Russia Cup - Regions Path"
+    ],
+    "auto_sad_united_premier_soccer_league": [
+        "SAD - UNITED PREMIER SOCCER LEAGUE",
+        "SAD - UPSL",
+        "United Premier Soccer League",
+        "USA - United Premijer Soccer Liga"
+    ],
+    "auto_sjeverna_makedonija_1_mfl": [
+        "SJ. MAKEDONIJA - 1.LIGA",
+        "Sjeverna Makedonija - 1. MFL"
+    ],
+    "auto_skotska_challenge_cup_1_16_finala": [
+        "Scotland Challenge Cup",
+        "ŠKOTSKA  -  ČELENDŽ  KUP",
+        "ŠKOTSKA - CHALLENGE CUP - 1/16 FINALA",
+        "Škotska - Challenge kup"
+    ],
+    "auto_south_africa_2": [
+        "JAR 2. LIGA",
+        "SOUTH AFRICA 2"
+    ],
+    "auto_srbija_2_mozzartbet_prva_liga": [
+        "Serbia 2",
+        "SRBIJA 2 MozzartBet Prva Liga"
+    ],
+    "auto_tajland_thai_league_1": [
+        "TAJLAND - 1.LIGA",
+        "Tajland - Thai League 1",
+        "TAJLAND  1",
+        "THAILAND 1"
+    ],
+    "auto_tanzanija_1_liga": [
+        "TANZANIA 1",
+        "TANZANIJA - 1.LIGA",
+        "TANZANIJA  1",
+        "TANZANIJSKA 1.LIGA"
+    ],
+    "auto_united_arab_emirates_uae_u23": [
+        "UAE - PRO LEAGUE U23",
+        "United Arab Emirates - UAE U23"
+    ]
+}

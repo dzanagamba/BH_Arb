@@ -1,0 +1,160 @@
+{
+  "bookmaker": "sportplus",
+  "mode": "live",
+  "captured_at": "2026-10-20",
+  "endpoint": "https://www.sportplus.ba/api/v1/live/offer",
+  "source": "live_api_response",
+  "payload_kind": "sportplus_match_markets",
+  "provenance": "markets[] of one football match (id 73577166) from the live SportPlus live offer response, filtered to the blocks the registry maps plus one block the parser must ignore.",
+  "dropped_market_fields": [
+    "competitors",
+    "description",
+    "forbiddenToCombine",
+    "code",
+    "isMain",
+    "order",
+    "maxPayin",
+    "minCombinations",
+    "validations",
+    "sbv",
+    "type",
+    "subtype",
+    "short",
+    "special",
+    "balanced",
+    "tags"
+  ],
+  "dropped_odd_fields": [
+    "marketId",
+    "field",
+    "order",
+    "description",
+    "values",
+    "changed",
+    "type",
+    "id"
+  ],
+  "excluded_ids_present": [
+    {
+      "id": 5,
+      "context": "Azijski hendikep"
+    }
+  ],
+  "bets": [
+    {
+      "id": 1,
+      "name": "Pobjednik",
+      "odds": [
+        {
+          "alias": "1",
+          "value": 5.5
+        },
+        {
+          "alias": "X",
+          "value": 3.1
+        },
+        {
+          "alias": "2",
+          "value": 1.75
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "name": "Dvostruka Prilika (1X - 12 - X2)",
+      "odds": [
+        {
+          "alias": "1X",
+          "value": 2.0
+        },
+        {
+          "alias": "X2",
+          "value": 1.12
+        },
+        {
+          "alias": "12",
+          "value": 1.32
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "name": "Oba daju gol",
+      "odds": [
+        {
+          "alias": "1(D)",
+          "value": 2.75
+        },
+        {
+          "alias": "2(N)",
+          "value": 1.4
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Zbroj golova 1.5",
+      "odds": [
+        {
+          "alias": "1(M)",
+          "value": 2.1
+        },
+        {
+          "alias": "2(V)",
+          "value": 1.65
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Zbroj golova 2.5",
+      "odds": [
+        {
+          "alias": "1(M)",
+          "value": 1.35
+        },
+        {
+          "alias": "2(V)",
+          "value": 3.0
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Zbroj golova 3.5",
+      "odds": [
+        {
+          "alias": "1(M)",
+          "value": 1.1
+        },
+        {
+          "alias": "2(V)",
+          "value": 6.0
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "name": "Azijski hendikep",
+      "odds": [
+        {
+          "alias": "1",
+          "value": 2.0
+        },
+        {
+          "alias": "2",
+          "value": 1.7
+        }
+      ]
+    }
+  ],
+  "expected_markets": [
+    "1x2",
+    "btts",
+    "double_chance",
+    "over_under_1_5",
+    "over_under_2_5",
+    "over_under_3_5"
+  ],
+  "uncovered_registry_rows": []
+}
