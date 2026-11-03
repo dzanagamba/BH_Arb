@@ -26,6 +26,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import tempfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -36,6 +37,8 @@ if str(REPO_ROOT) not in sys.path:
 
 from engine.arbitrage import ArbitrageEngine  # noqa: E402
 from engine.certainty import CertaintyGate  # noqa: E402
+from engine.mapping_evidence import MappingLedger  # noqa: E402
+from engine.mapping_learner import learn  # noqa: E402
 from engine.matcher import MatchMatcher  # noqa: E402
 from models.schemas import Match  # noqa: E402
 
@@ -136,11 +139,39 @@ def _group_member_pairs(groups: list) -> list[tuple[Match, Match]]:
     return pairs
 
 
-def replay(paths: list[str], mode: str, no_learn: bool) -> dict[str, Any]:
+def replay(
+    paths: list[str],
+    mode: str,
+    no_learn: bool,
+    iterations: int = 5,
+) -> dict[str, Any]:
     matches = load_matches(paths)
     shift_kickoffs(matches)
 
-    matcher = MatchMatcher()
+    fixed_point = True
+    learned = 0
+    used_iterations = 0
+    evidence_path: str | None = None
+    if not no_learn:
+        ledger = MappingLedger(
+            Path(tempfile.mkdtemp(prefix="replay-evidence-")) / "evidence.json"
+        ).load()
+        if mode == "seeded":
+            ledger = MappingLedger().load()
+        for used_iterations in range(1, iterations + 1):
+            ledger, report = learn(matches, ledger, scan=f"replay-{used_iterations}")
+            if not report.diff["added"] and not report.diff["changed"]:
+                fixed_point = True
+                break
+            fixed_point = False
+        learned = len(ledger.claims)
+        evidence_path = str(
+            Path(tempfile.mkdtemp(prefix="replay-evidence-")) / "evidence.json"
+        )
+        ledger.path = Path(evidence_path)
+        ledger.save()
+
+    matcher = MatchMatcher(evidence_path=evidence_path)
     matcher.normalize_matches(matches)
     gate = matcher.gate
 
@@ -173,6 +204,9 @@ def replay(paths: list[str], mode: str, no_learn: bool) -> dict[str, Any]:
         "generated_at": datetime.now(UTC).replace(tzinfo=None).isoformat() + "Z",
         "mode": mode,
         "no_learn": no_learn,
+        "fixed_point": fixed_point,
+        "iterations": used_iterations,
+        "ledger_claims": learned,
         "corpus": [str(p) for p in _corpus_files(paths)],
         "matches_total": len(matches),
         "books": books,
@@ -208,7 +242,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--no-learn",
         action="store_true",
-        help="do not require every evidence-backed pair to be terminal",
+        help="do not run the learner or require every evidence-backed pair to be terminal",
+    )
+    parser.add_argument(
+        "--iterations",
+        type=int,
+        default=5,
+        help="maximum learner passes before reporting a non-fixed point",
     )
     parser.add_argument(
         "--check",
@@ -218,7 +258,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     mode = "cold" if args.cold else "seeded"
-    report = replay(args.paths, mode, args.no_learn)
+    report = replay(args.paths, mode, args.no_learn, args.iterations)
     print(json.dumps(report, indent=2, sort_keys=True))
 
     if not args.check:
@@ -228,6 +268,8 @@ def main(argv: list[str] | None = None) -> int:
         failures.append(f"false_merges={report['false_merges']}")
     if not args.no_learn and report["pairs_unresolved"] > 0:
         failures.append(f"pairs_unresolved={report['pairs_unresolved']}")
+    if not args.no_learn and not report["fixed_point"]:
+        failures.append("cold_start_not_at_a_fixed_point")
     if report["market_rows_unmapped"] > 0:
         failures.append(f"market_rows_unmapped={report['market_rows_unmapped']}")
     if failures:

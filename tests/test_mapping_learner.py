@@ -166,3 +166,46 @@ def test_a_kickoff_outside_the_window_learns_nothing(tmp_path):
     )
     ledger, _ = learn([a, b], _ledger(tmp_path), scan="s1")
     assert not ledger.claims
+
+
+def test_a_six_minute_gap_is_too_wide_for_an_alias(tmp_path):
+    a = _m("mdshop", "Alpha", "Beta United", "Test League")
+    b = _m(
+        "mbet", "Alpha", "Beta Utd", "Test League",
+        kickoff=K + timedelta(minutes=6),
+    )
+    ledger, _ = learn([a, b], _ledger(tmp_path), scan="s1")
+    assert not [claim for claim in ledger.claims.values() if claim.kind == "team_alias"]
+
+
+def test_an_ambiguous_one_sided_alias_needs_corroboration(tmp_path):
+    a = _m("mdshop", "Alpha", "Yokohama", "Test League")
+    b = _m("mbet", "Alpha", "Yokohama FC", "Test League")
+    ledger, _ = learn([a, b], _ledger(tmp_path), scan="s1")
+    claim = ledger.get("team_alias", team_alias_key("Yokohama", "Yokohama FC"))
+    assert claim is not None
+    assert claim.status == "quarantined"
+    assert claim.reason == "needs_corroboration"
+
+    # A second independent book pair in a later scan corroborates it.
+    c = _m("wwin", "Alpha", "Yokohama FC", "Test League", event_id="3")
+    learn([a, c], ledger, scan="s2")
+    assert ledger.get("team_alias", team_alias_key("Yokohama", "Yokohama FC")).status == "accepted"
+
+
+def test_a_shared_betradar_id_skips_corroboration(tmp_path):
+    a = _m("mdshop", "Alpha", "Yokohama", "Test League", betradar_id="111")
+    b = _m("mbet", "Alpha", "Yokohama FC", "Test League", betradar_id="111")
+    ledger, _ = learn([a, b], _ledger(tmp_path), scan="s1")
+    claim = ledger.get("team_alias", team_alias_key("Yokohama", "Yokohama FC"))
+    assert claim is not None
+    assert claim.status == "accepted"
+
+
+def test_a_normal_spelling_variation_needs_only_one_observation(tmp_path):
+    a = _m("mdshop", "Alpha", "Manchester United", "Test League")
+    b = _m("mbet", "Alpha", "Man United", "Test League")
+    ledger, _ = learn([a, b], _ledger(tmp_path), scan="s1")
+    claim = ledger.get("team_alias", team_alias_key("Manchester United", "Man United"))
+    assert claim is not None
+    assert claim.status == "accepted"

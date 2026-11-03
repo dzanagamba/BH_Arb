@@ -7,8 +7,7 @@
 > entry, manual gate exception or manual CAPTCHA step** anywhere between scrape
 > and a shown surebet.
 >
-> **Baseline (2026-11-03, this worktree).** `python -m pytest` → **1114 passed,
-> 1 skipped** in 35 s; `ruff check .` clean; `mypy .` clean on 99 source files;
+> **Baseline (2026-11-03, this worktree).** `python -m pytest` → **1130 passed** in 47 s; `ruff check .` clean; `mypy .` clean on 103 source files;
 > `scripts/generate_market_mapping_doc.py --check` in sync. Environment is
 > `.venv` on CPython 3.11.18, installed with `uv`. The 953-passed figure in the
 > superseded plan was a 2026-10-20 measurement and is stale.
@@ -25,9 +24,18 @@
 > (A3-1). The evidence ledger, learner, gate integration, contradiction resolver,
 > league fingerprints, legacy migration, read-only coverage endpoint, classifier,
 > consensus, registry merge, discovery CLI and raw-offer resolver are shipped.
-> 1114 tests pass. **Next cards: A2-5** (first-half/AH rows), **A2-6** (market
-> absence proofs), then Wave 4 (delete the approval path) and Wave 5 (cold-start
-> replay).
+> 1130 tests pass. **Real scan evidence (2026-11-03):** a headless prematch
+> scan returned 5,285 matches from all 8 enabled books, 811 verified groups,
+> 3,526 price comparisons and 0 outliers; a second scan with a learned ledger
+> (1,795 accepted claims) returned 797 groups, 3,645 grouped listings, 3,704
+> comparisons, 0 outliers and 0 groups with conflicting Betradar ids. Best
+> margin was 1.0021, so 0 surebets was correct. The remaining coverage lever is
+> the 1,221 listings whose MaxBet/Mozzartbet per-event link is unproven; both
+> routes verified on samples and a full sweep is running.
+> **Next cards: A4-1** (delete the approval path), **A2-5** (first-half/AH
+> rows), **A2-6** (market absence proofs), then Wave 6 (final real scan). The
+> production verdict and the research behind it are in
+> `docs/PRODUCTION_READINESS.md`.
 
 ---
 
@@ -395,6 +403,7 @@ coverage number is a finding to investigate, not a threshold to lower.
 | 5 | A5-1 | offline | Cold-start replay and fixed point |
 | 5 | A5-2 | offline | False-merge and coverage gap fixes |
 | 5 | A5-3 | offline | Learner performance and scan budget |
+| 5 | A5-4 | offline | Production identity rules and shared-opponent blocking |
 | 6 | A6-1 | network, browser | Real prematch scan, all publishing books |
 | 6 | A6-2 | network | EVLBet and Betole: capture or prove absence |
 | 6 | A6-3 | browser | Prove MaxBet links |
@@ -403,6 +412,9 @@ coverage number is a finding to investigate, not a threshold to lower.
 | 7 | A7-2 | offline | Scheduler, back-off, notifications (old M4) |
 | 7 | A7-3 | offline | Re-apply security hardening (old M4-3) |
 | 7 | A7-4 | offline | README, MARKET_MAPPING and claim tests |
+| 7 | A7-5 | offline | Freshness and last-known-value policy |
+| 7 | A7-6 | offline | Execution risk: limits, partial acceptance, balance |
+| 7 | A7-7 | offline | Monitoring, CLV and backtest |
 
 Wave 6 needs real football on the books' prematch feeds. Run it on a weekday
 afternoon or a weekend, not at 03:00 UTC, and record the UTC time with the
@@ -1011,7 +1023,7 @@ counts.
 
 #### A5-1 · Cold-start replay and fixed point
 
-- [ ] **Status:** TODO
+- [x] **Status:** DONE 2026-11-03
 - **Needs:** offline.
 - **Depends on:** A4-3.
 - **Files:** `scripts/replay_mappings.py`, `tests/test_replay.py`,
@@ -1027,7 +1039,7 @@ counts.
 - **Verify:** `python scripts/replay_mappings.py --cold --check`;
   `pytest tests/test_replay.py -q`; S1.
 - **Done when:** the cold run reaches a fixed point with zero false merges.
-- **Log:** —
+- **Log:** `scripts/replay_mappings.py` now runs the learner before the pipeline. `--cold` starts from an empty ledger, repeats until a pass adds no claim and changes no verdict, and writes the learned ledger to a temp file for the matcher. On the frozen corpus: 2 iterations, 2 claims, `fixed_point=true`, 0 false merges, 0 unresolved pairs. `--check` fails on a non-fixed point. 5 replay tests.
 
 #### A5-2 · False-merge and coverage gap fixes
 
@@ -1057,6 +1069,38 @@ counts.
 - **Verify:** replay runtime logged; S1.
 - **Done when:** the learner does not dominate the scan.
 - **Log:** —
+
+#### A5-4 · Production identity rules and shared-opponent blocking
+
+- [x] **Status:** DONE 2026-11-03
+- **Needs:** offline.
+- **Depends on:** A5-1.
+- **Files:** new `engine/name_identity.py`, `engine/matcher.py`,
+  `engine/mapping_learner.py`, `tests/test_name_identity.py`,
+  `tests/test_mapping_learner.py`, `docs/PRODUCTION_READINESS.md`.
+- **Facts:** Production entity-resolution practice (Dozor, 27 books) finds
+  splits by a **shared opponent**, not by similar names: "NAVI" vs "Natus
+  Vincere" is 18% similar but the same team, while "Evil Geniuses" vs "Evil
+  Geniuses GC" is 81% similar and a different roster. A false merge is worse
+  than a split.
+- **Steps:**
+  1. Normalize team names with NFKD, case-folding, punctuation folding, and
+     removal of organisation noise (`fc`, `club`, `gaming`, `team`); keep
+     `academy`, `junior`, `youth`, `women` and digits.
+  2. Veto a pair when the roster markers differ, when a one-sided addition is a
+     marker or colour, or when an initialism is not the initials of every token
+     on the other side.
+  3. Score with token-set and ratio, not partial ratio (partial turns
+     "Arsenal"/"Chelsea" into 0.6).
+  4. Index groups by exact team key and offer shared-opponent groups to a match
+     before the league bucket; the gate still decides.
+  5. Tighten durable-alias auto-acceptance to a 5-minute window.
+- **Tests:** initialism match; marker/colour veto; org-noise removal; unrelated
+  names below 0.5; 6-minute gap learns no alias. Full suite green.
+- **Done when:** S1 green and the replay still has 0 false merges.
+- **Log:** Added `engine/name_identity.py`; matcher uses it for candidate
+  scoring and indexes groups by team key; learner window is 5 minutes. 6
+  identity tests + 1 learner test. 1121 passed.
 
 ---
 
@@ -1188,6 +1232,57 @@ counts.
 - **Log:** —
 
 ---
+
+#### A7-5 · Freshness and last-known-value policy
+
+- [ ] **Status:** TODO
+- **Needs:** offline.
+- **Depends on:** A6-1.
+- **Files:** `config/settings.py`, `engine/arbitrage.py`, `server/api.py`,
+  `server/mapping_coverage.py`, tests.
+- **Facts:** Research puts pre-match polling at 30–60 s and live at sub-10 s;
+  OddsJam/OpticOdds use push feeds because a one-minute poll mostly surfaces
+  gone prices. The engine has a TTL, but no per-book freshness budget and no
+  explicit last-known-value policy.
+- **Steps:** record each book's fetch age and whether the price is fresh, stale
+  or last-known; skip stale legs for a shown surebet; show the age on the card;
+  add a per-book freshness budget to `/api/health` and coverage; document the
+  polling baseline and the push/live gap.
+- **Done when:** a stale leg cannot reach a shown surebet and the age is visible.
+- **Log:** —
+
+#### A7-6 · Execution risk: limits, partial acceptance, balance
+
+- [ ] **Status:** TODO
+- **Needs:** offline.
+- **Depends on:** A6-4, M3-1 (journal), M3-3 (bankroll).
+- **Files:** `frontend/js/app.js`, `server/journal.py`, `server/bankroll.py`,
+  tests.
+- **Facts:** Research and the existing slip agree: price movement, partial
+  acceptance, stake limits and rounding can remove the edge. The slip re-checks
+  and re-plans, but does not model a book accepting only part of a stake.
+- **Steps:** add a per-leg accepted stake, a partial-acceptance state, a
+  "price moved" state, and a final re-check before placement. Flag a slip whose
+  rounded profit is non-positive. Use the journal to learn per-book limits.
+- **Done when:** a slip cannot show a positive profit after a partial acceptance
+  or a moved price without re-planning.
+- **Log:** —
+
+#### A7-7 · Monitoring, CLV and backtest
+
+- [ ] **Status:** TODO
+- **Needs:** offline; real scans for the baseline.
+- **Depends on:** A6-4, M3-1.
+- **Files:** `server/mapping_coverage.py`, `server/journal.py`,
+  `scripts/replay_mappings.py`, new `docs/QUALITY.md`.
+- **Facts:** The current metrics prove correctness on a tiny corpus, not
+  production quality. Mature products track closing-line value and calibration.
+- **Steps:** record mapping coverage, false merges, price-check outliers and
+  stale-book counts per scan; compute CLV from settled journal entries; publish
+  a dated quality report; add a large multi-scan replay corpus.
+- **Done when:** a 7-day quality report exists with the counts and no invented
+  thresholds.
+- **Log:** —
 
 ## 5. Working rules and procedures
 

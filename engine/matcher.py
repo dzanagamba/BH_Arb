@@ -32,8 +32,6 @@ import os
 import re
 from datetime import UTC
 
-from rapidfuzz import fuzz
-
 from config.settings import (
     BOOKMAKERS,
     FUZZY_MATCH_THRESHOLD,
@@ -41,8 +39,9 @@ from config.settings import (
     TEAM_MATCH_MIN_PERCENT,
     price_source,
 )
+from engine import name_identity
 from engine.certainty import CertaintyGate, GateResult
-from engine.mapping_evidence import MappingLedger, team_alias_key
+from engine.mapping_evidence import MappingLedger, league_equivalence_key, team_alias_key
 from engine.normalizer import TeamNormalizer, canonical_team_name, canonicalize_fixture
 from models.schemas import Market, MarketType, Match, MatchEvidence, MatchGroup, OddsValue
 from scrapers.common import flip_ah_label
@@ -259,6 +258,10 @@ class MatchMatcher:
         # League index: normalized league → groups in it. Generic leagues keyed under "".
         # Cuts the candidate list per match from O(all groups) to O(same-league groups).
         groups_by_league: dict[str, list[MatchGroup]] = {}
+        # Exact team key → groups that already hold that team. This is the
+        # shared-opponent lookup: a listing whose league name differs can still
+        # be offered to the group of the team it is playing, and the gate decides.
+        groups_by_team: dict[str, list[MatchGroup]] = {}
         # Betradar id → the group that already holds it. A shared provider id is
         # proof of identity even when the books name the teams and league
         # differently, so this group is offered to the match before the scored
@@ -283,6 +286,13 @@ class MatchMatcher:
                 candidate_groups = []
                 for league_key in league_keys:
                     candidate_groups.extend(groups_by_league.get(league_key, []))
+
+            # Shared-opponent candidates, independent of the league bucket.
+            for team_name in (match.home_team, match.away_team):
+                for team_key in _team_index_keys(team_name):
+                    for group in groups_by_team.get(team_key, []):
+                        if group not in candidate_groups:
+                            candidate_groups.append(group)
 
             scored: list[tuple[float, int, MatchGroup]] = []
             for group in candidate_groups:
@@ -327,6 +337,11 @@ class MatchMatcher:
                     best_group.evidence.extend(gate_result.evidence)
                     if match.betradar_id:
                         groups_by_betradar.setdefault(match.betradar_id, best_group)
+                    for team_name in (match.home_team, match.away_team):
+                        for team_key in _team_index_keys(team_name):
+                            bucket = groups_by_team.setdefault(team_key, [])
+                            if best_group not in bucket:
+                                bucket.append(best_group)
                     if len({m.bookmaker for m in best_group.matches}) >= 2:
                         best_group.status = "verified"
 
@@ -382,6 +397,11 @@ class MatchMatcher:
                 groups.append(new_group)
                 if match.betradar_id:
                     groups_by_betradar.setdefault(match.betradar_id, new_group)
+                for team_name in (match.home_team, match.away_team):
+                    for team_key in _team_index_keys(team_name):
+                        bucket = groups_by_team.setdefault(team_key, [])
+                        if new_group not in bucket:
+                            bucket.append(new_group)
                 bucket_key = "" if is_open(match) else new_group.league
                 groups_by_league.setdefault(bucket_key, []).append(new_group)
 
@@ -440,6 +460,9 @@ class MatchMatcher:
             and m_league != g_league
             and (m_league, g_league) not in self._equivalences
             and (g_league, m_league) not in self._equivalences
+            and not self._ledger.is_accepted(
+                "league_equivalence", league_equivalence_key(m_league, g_league)
+            )
         ):
             return 0.0, False
 
@@ -495,7 +518,10 @@ class MatchMatcher:
                 or self._ledger.is_accepted("team_alias", team_alias_key(raw, group_raw))
             ):
                 return 1.0
-            return fuzz.token_set_ratio(normalized, group_normalized) / 100.0
+            # Identity rules, not raw token-set alone: an initialism can match
+            # ("LAL" / "Los Angeles Lakers") and a differing academy/youth
+            # marker is vetoed even at high string similarity.
+            return name_identity.similarity(raw or normalized, group_raw or group_normalized)
 
         anchor_home = anchor.home_team if anchor else ""
         anchor_away = anchor.away_team if anchor else ""
@@ -568,6 +594,13 @@ class MatchMatcher:
                 })
             report.append(entry)
         return report
+
+
+def _team_index_keys(name: str) -> set[str]:
+    """Keys under which a team is indexed for shared-opponent lookup."""
+    raw = CertaintyGate._raw_team_key(name)
+    normalized = name_identity.normalize(name)
+    return {key for key in (raw, normalized) if key}
 
 
 def _processing_order_key(match: Match) -> tuple[object, ...]:

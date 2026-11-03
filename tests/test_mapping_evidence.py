@@ -193,3 +193,23 @@ def test_accept_rejects_an_unknown_kind(tmp_path):
 def test_from_dict_rejects_a_malformed_claim():
     assert MappingClaim.from_dict({"kind": "team_alias", "key": ""}) is None
     assert MappingClaim.from_dict({"kind": "team_alias", "key": "x", "status": "maybe"}) is None
+
+
+def test_a_weak_observation_does_not_downgrade_an_accepted_claim(tmp_path):
+    ledger = _ledger(tmp_path)
+    key = team_alias_key("A", "B")
+    ledger.accept("team_alias", key, [_evidence("betradar_shared_id")], "proven")
+    ledger.quarantine("team_alias", key, [_evidence("similarity", scan="s2")], "similarity_only")
+    claim = ledger.get("team_alias", key)
+    assert claim.status == "accepted"
+    assert claim.confidence == 1.0
+
+
+def test_force_quarantine_overrides_an_accepted_claim(tmp_path):
+    ledger = _ledger(tmp_path)
+    key = team_alias_key("A", "B")
+    ledger.accept("team_alias", key, [_evidence("betradar_shared_id")], "proven")
+    ledger.quarantine(
+        "team_alias", key, [_evidence("similarity", scan="s2")], "ambiguous", force=True
+    )
+    assert ledger.get("team_alias", key).status == "quarantined"

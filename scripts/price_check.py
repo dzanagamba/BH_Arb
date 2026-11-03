@@ -104,6 +104,10 @@ def main() -> int:
     ap.add_argument("--file", help="scan file to read (overrides --live)")
     ap.add_argument("--threshold", type=float, default=0.10, help="absolute probability gap")
     ap.add_argument("--status", default="verified", help="comma-separated group statuses")
+    ap.add_argument(
+        "--evidence",
+        help="mapping evidence ledger to use (default: the shipped generated ledger)",
+    )
     args = ap.parse_args()
 
     path = args.file or os.path.join(
@@ -112,7 +116,7 @@ def main() -> int:
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
     matches = [Match(**m) for m in data.get("matches", [])]
-    groups = MatchMatcher().group_matches(matches)
+    groups = MatchMatcher(evidence_path=args.evidence).group_matches(matches)
     wanted = set(args.status.split(","))
     groups = [g for g in groups if g.status in wanted]
     outliers, compared = find_outliers(groups, args.threshold)

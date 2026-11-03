@@ -396,13 +396,27 @@ class MappingLedger:
             return claim
 
     def quarantine(
-        self, kind: str, key: str, evidence: list[Evidence], reason: str
+        self,
+        kind: str,
+        key: str,
+        evidence: list[Evidence],
+        reason: str,
+        *,
+        force: bool = False,
     ) -> MappingClaim:
+        """Record insufficient evidence without downgrading a proven claim.
+
+        A weak observation must not erase a claim that already carries strong
+        evidence. ``force=True`` is for a contradiction policy that really does
+        override the claim (an ambiguous league name, for example).
+        """
         if kind not in CLAIM_KINDS:
             raise ValueError(f"unknown claim kind: {kind}")
         with self._lock:
             claim = self._upsert(kind, key)
             self._add_evidence(claim, evidence)
+            if claim.status == "accepted" and not force:
+                return claim
             claim.status = "quarantined"
             claim.reason = reason
             claim.decided_at = _iso()

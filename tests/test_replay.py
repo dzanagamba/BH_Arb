@@ -72,3 +72,14 @@ def test_cold_mode_is_a_different_label_and_same_measurement():
     seeded.pop("mode")
     cold.pop("mode")
     assert seeded == cold
+
+
+def test_cold_start_learns_to_a_fixed_point():
+    result = _run("--cold", "--check")
+    assert result.returncode == 0, result.stderr
+    report = json.loads(result.stdout)
+    assert report["fixed_point"] is True
+    assert report["iterations"] >= 1
+    assert report["ledger_claims"] >= 1
+    assert report["false_merges"] == 0
+    assert report["pairs_unresolved"] == 0

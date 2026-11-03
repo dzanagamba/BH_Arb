@@ -26,6 +26,7 @@ from typing import Any
 
 from rapidfuzz import fuzz
 
+from engine import name_identity
 from engine.certainty import CertaintyGate
 from engine.mapping_evidence import (
     Evidence,
@@ -37,7 +38,10 @@ from engine.matcher import GENERIC_LEAGUES, MatchMatcher
 from engine.team_resolver import revoke_contradictions
 from models.schemas import Match
 
-VERIFIED_WINDOW_MINUTES = 15
+# Auto-accept window for a durable alias. Production measurements put 90% of
+# real cross-book matches within five minutes; repeated games of one pairing are
+# about fifteen minutes apart, so a wider window starts merging the wrong game.
+ALIAS_WINDOW_MINUTES = 5
 SIMILARITY_FLOOR = 90
 
 
@@ -133,6 +137,35 @@ def _fixture_detail(a: Match, b: Match, **extra: Any) -> dict[str, Any]:
     }
 
 
+def _needs_corroboration(left: str, right: str) -> bool:
+    """Whether one shared fixture is too weak to accept this alias.
+
+    A single-token name against a longer name is the dangerous shape:
+    "Yokohama" and "Yokohama FC" are different clubs, but one book may use the
+    bare city for either. A low-similarity pair is equally unsafe. Both need a
+    second independent observation (or a Betradar id) before they authorize a
+    pairing.
+    """
+    left_tokens = name_identity.tokens(left)
+    right_tokens = name_identity.tokens(right)
+    if not left_tokens or not right_tokens:
+        return True
+    if (len(left_tokens) == 1) != (len(right_tokens) == 1):
+        return True
+    return name_identity.similarity(left, right) < 0.7
+
+
+def _observation_count(ledger: MappingLedger, key: str, scan: str, books: tuple[str, str]) -> int:
+    claim = ledger.get("team_alias", key)
+    seen: set[tuple[str, tuple[str, ...]]] = set()
+    if claim is not None:
+        for evidence in claim.evidence:
+            if evidence.type in ("exact_shared_fixture", "betradar_shared_id"):
+                seen.add((evidence.scan, tuple(sorted(evidence.books))))
+    seen.add((scan, tuple(sorted(books))))
+    return len(seen)
+
+
 def _learn_pair(
     a: Match,
     b: Match,
@@ -147,7 +180,7 @@ def _learn_pair(
     if a.bookmaker == b.bookmaker:
         return
     delta = _delta_minutes(a, b)
-    if delta is None or delta > VERIFIED_WINDOW_MINUTES:
+    if delta is None or delta > ALIAS_WINDOW_MINUTES:
         return
     if set(a.category_tags or []) != set(b.category_tags or []):
         return
@@ -192,7 +225,7 @@ def _learn_pair(
             if left == right:
                 continue
             key = team_alias_key(left, right)
-            ledger.quarantine(
+            claim = ledger.quarantine(
                 "team_alias",
                 key,
                 [
@@ -205,7 +238,8 @@ def _learn_pair(
                 ],
                 "similarity_only",
             )
-            report.quarantined.append(f"team_alias:{key}")
+            if claim.status == "quarantined":
+                report.quarantined.append(f"team_alias:{key}")
         return
 
     # One exact slot plus one differing slot proves the differing slot's alias.
@@ -255,10 +289,27 @@ def _learn_pair(
                 other_slot_exact=True,
                 orientation="swapped" if orientation_swapped else "direct",
             )
+        evidence = _observation(
+            evidence_type,
+            scan=scan,
+            books=(a.bookmaker, b.bookmaker),
+            detail=detail,
+        )
+        if not same_id and _needs_corroboration(left, right) and _observation_count(
+            ledger, key, scan, (a.bookmaker, b.bookmaker)
+        ) < 2:
+            ledger.quarantine(
+                "team_alias",
+                key,
+                [evidence],
+                "needs_corroboration",
+            )
+            report.quarantined.append(f"team_alias:{key}")
+            continue
         claim = ledger.accept(
             "team_alias",
             key,
-            [_observation(evidence_type, scan=scan, books=(a.bookmaker, b.bookmaker), detail=detail)],
+            [evidence],
             "same Betradar id" if same_id else "one exact slot and one differing slot",
         )
         (report.accepted if claim.status == "accepted" else report.quarantined).append(
@@ -385,6 +436,7 @@ def learn(
                     key,
                     list(league_claim.evidence),
                     "ambiguous_league_name",
+                    force=True,
                 )
                 report.quarantined.append(f"league_equivalence:{key}")
 

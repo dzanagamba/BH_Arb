@@ -106,10 +106,10 @@ def test_unverified_link_yields_suggested_or_dropped_not_verified():
     assert groups == []
 
 
-def test_unreviewed_mapping_variation_is_not_verified():
+def test_unreviewed_mapping_variation_is_not_verified(tmp_path):
     a = _m("mdshop", "Sporting", "Alverca", "Primeira Liga", event_id="1")
     b = _m("mbet", "Sporting CP", "Alverca", "Liga Portugal", event_id="2")
-    matcher = MatchMatcher()
+    matcher = MatchMatcher(evidence_path=tmp_path / "empty.json")
     # The shipped allowlist may hold this pair (derived from shared fixtures);
     # the rule under test is about a pair nobody has reviewed.
     matcher.gate.alias_allowlist = set()

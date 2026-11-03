@@ -132,8 +132,8 @@ def test_allowlisted_alias_below_the_surface_floor_still_groups():
     assert {m.bookmaker for m in groups[0].matches} == {"mbet", "wwin"}
 
 
-def test_without_the_allowlist_the_surface_floor_still_applies():
-    matcher = MatchMatcher()
+def test_without_the_allowlist_the_surface_floor_still_applies(tmp_path):
+    matcher = MatchMatcher(evidence_path=tmp_path / "empty.json")
     matcher._alias_allowlist.clear()
     matcher.gate.alias_allowlist = set()
 
