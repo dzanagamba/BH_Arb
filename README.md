@@ -32,7 +32,7 @@ A web-based arbitrage betting detection tool for the Bosnian market.
 >   like the other route-less books.
 >
 > So what blocks `verified` today is identity, not links: league names the
-> mappings do not equate, team spellings no one has approved, and kickoff
+> mappings do not equate, team spellings the ledger has not proven, and kickoff
 > deltas. Read [Match & mapping certainty](#match--mapping-certainty) before
 > concluding anything about yield from a scan.
 >
@@ -63,7 +63,7 @@ A web-based arbitrage betting detection tool for the Bosnian market.
 3. Groups the same real-world event across bookmakers, and only a group the certainty gate *proves* is the same event is ever priced
 4. Detects arbitrage (surebet) opportunities where odds guarantee a profit regardless of match outcome (enforcing strict 1-bet-per-bookmaker rule)
 5. Helps place one: the bet slip re-checks the odds, orders the legs, rounds the stakes and re-plans the rest when a price moves (see *Using the dashboard*)
-6. Supports two feeds — **Upcoming** (prematch) and **Live** (in-play) — each with its own cache, review queue and history
+6. Supports two feeds — **Upcoming** (prematch) and **Live** (in-play) — each with its own cache, diagnostics queue and history
 
 ## Project layout
 
@@ -251,26 +251,22 @@ Five rules inside stage 1 matter more than the rest:
 
 **Stage 2 — AI proposals (`engine/ai.py`, used by `server/api.py`).** The AI is
 consulted only about pairings the rules could not settle, and only to **rank**
-them for a human. It cannot create a pairing, cannot approve one, and its
+them for diagnostics. It cannot create a pairing, cannot approve one, and its
 verdict is never a confidence: a "same event" answer raises a queue entry's
 position and nothing else. A negative verdict sets the confidence to 0 and says
 "AI says not the same event".
 
-### The review queue
+### Diagnostics queue
 
 Pairings the gate refused are collected every scan into a per-feed queue
 (`pending_candidates` for prematch, `pending_live_candidates` for live, so one
-feed's scan never wipes the other's) and shown in the dashboard's **Review** tab
-for the feed on screen. There is no dedicated URL: the Review
-tab is the second tab of the dashboard, so open `http://localhost:8000` and click
-**Review**. It is populated by `GET /api/candidates?mode=prematch|live`, and deciding an entry is
-`POST /api/candidates/{candidate_id}/approve` or
-`POST /api/candidates/{candidate_id}/reject`.
-
-Approval grants a **team alias** and nothing else — one cross-bookmaker spelling
-pair per team slot, written to `config/team_alias_allowlist.json` — so the next
-scan's rules can verify the identity half of the claim. The link half stays
-closed, and a decided candidate never re-enters the queue.
+feed's scan never wipes the other's) and shown in the dashboard's **Diagnostics**
+tab for the feed on screen. There is no dedicated URL: Diagnostics is the second
+tab of the dashboard, so open `http://localhost:8000` and click **Diagnostics**.
+It is populated by `GET /api/candidates?mode=prematch|live` and is **read-only**:
+there is no approve or reject endpoint. The evidence ledger learns team, league
+and market spellings automatically on every scan; the tab exists so an operator
+can inspect what the gate refused and why.
 
 ### Environment variables
 

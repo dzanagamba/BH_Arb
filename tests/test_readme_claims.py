@@ -650,10 +650,10 @@ def _approval_problems(text: str) -> list[str]:
             "no claim in the certainty section states that `deep_link_verified` is "
             "never set by a human approval"
         )
-    if "team alias" not in section:
-        problems.append("the section never says an approval grants a team alias")
-    if "team_alias_allowlist.json" not in section:
-        problems.append("the section never names config/team_alias_allowlist.json")
+    if "evidence ledger" not in section:
+        problems.append("the section never names the evidence ledger as the trust source")
+    if "read-only" not in section:
+        problems.append("the section never says the diagnostics queue is read-only")
     return problems
 
 
@@ -727,8 +727,6 @@ def test_review_tab_check_fails_when_the_readme_claim_is_dropped():
 
 _CANDIDATE_ENDPOINTS = (
     ("GET", "/candidates"),
-    ("POST", "/candidates/{candidate_id}/approve"),
-    ("POST", "/candidates/{candidate_id}/reject"),
     ("POST", "/verify-links"),
 )
 
@@ -765,13 +763,11 @@ def test_documented_endpoints_exist_in_the_router():
 
 def test_endpoint_check_fails_when_the_readme_names_a_route_that_does_not_exist():
     """Proves the previous test reads the endpoint strings out of the document."""
-    broken = README.replace(
-        "/api/candidates/{candidate_id}/approve", "/api/candidates/{id}/ok"
-    )
+    broken = README.replace("/api/candidates?mode=prematch|live", "/api/queue")
     assert broken != README, "the mutation did not apply; the check is untested"
     problems = _endpoint_problems(broken)
     assert problems, "a README naming a non-existent route passed"
-    assert any("approve" in problem for problem in problems)
+    assert any("candidates" in problem for problem in problems)
 
 
 # ===========================================================================

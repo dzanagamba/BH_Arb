@@ -2,7 +2,6 @@
 
 import asyncio
 import json
-import os
 import threading
 from datetime import datetime
 
@@ -10,7 +9,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 from config.settings import BOOKMAKERS
-from engine import matcher as matcher_module
 from engine.matcher import MatchMatcher
 from models.schemas import CandidateReview, Match
 from scrapers import common
@@ -288,58 +286,8 @@ def test_reject_unknown_candidate_returns_404():
     assert r.status_code == 404
 
 
-def test_approve_candidate_writes_reviewed_alias_and_resolves_it():
-    candidate = _candidate()
-    api.pending_candidates[candidate.id] = candidate
-
-    r = client.post(f"/api/candidates/{candidate.id}/approve")
-
-    assert r.status_code == 200
-    body = r.json()
-    # One entry per team slot the two books spell differently — never a pair of
-    # the two halves of one fixture, which would alias a club to its opponent.
-    assert body["status"] == "approved"
-    assert body["allowlist_entries"] == ["FC Thun|Thun", "Lech P.|Lech Poznan"]
-    assert body["link_state"] == "verified"
-    with open(api.ALLOWLIST_FILE, encoding="utf-8") as file:
-        saved = json.load(file)
-    assert saved == {"aliases": ["FC Thun|Thun", "Lech P.|Lech Poznan"]}
-    assert candidate.status == "approved"
-    assert candidate.resolved_by == "human"
-    assert candidate.resolved_at is not None
-    assert candidate.resolved_at.tzinfo is None
-    assert candidate.id not in api.pending_candidates
-    assert api.candidate_reviews[0].id == candidate.id
-    # A decided pair is not re-queued on the next scan.
-    assert api._suppressed_candidates == {candidate.id: "approved"}
 
 
-def test_bulk_approve_grants_each_candidate_and_reports_the_rest():
-    first = _candidate("c-1")
-    second = _candidate("c-2", "Slavia Prague", "Fenerbahce", "Slavia P.", "Fenerbahce")
-    unclosable = _candidate("c-3").model_copy(
-        update={
-            "alias_actionable": False,
-            "rule_rejections": ["league_mismatch", "team_unresolved"],
-        }
-    )
-    api.pending_candidates[first.id] = first
-    api.pending_candidates[second.id] = second
-    api.pending_candidates[unclosable.id] = unclosable
-
-    r = client.post(
-        "/api/candidates/approve-bulk", json={"ids": ["c-1", "c-2", "gone", "c-3"]}
-    )
-
-    assert r.status_code == 200
-    assert r.json() == {"approved": ["c-1", "c-2"], "skipped": ["gone", "c-3"]}
-    with open(api.ALLOWLIST_FILE, encoding="utf-8") as file:
-        saved = set(json.load(file)["aliases"])
-    assert {"FC Thun|Thun", "Lech P.|Lech Poznan", "Slavia P.|Slavia Prague"} <= saved
-    assert unclosable.id in api.pending_candidates, (
-        "a pair an approval cannot clear must stay in the queue, not be suppressed as if "
-        "the decision had changed its verdict"
-    )
 
 
 def test_candidates_carry_a_name_score_for_ranking():
@@ -348,33 +296,8 @@ def test_candidates_carry_a_name_score_for_ranking():
     assert 0 < body["candidates"][0]["name_score"] <= 100
 
 
-def test_approved_alias_is_loaded_by_real_matcher(monkeypatch):
-    candidate = _candidate()
-    api.pending_candidates[candidate.id] = candidate
-    monkeypatch.setattr(matcher_module, "_TEAM_ALIAS_FILE", api.ALLOWLIST_FILE)
-
-    response = client.post(f"/api/candidates/{candidate.id}/approve")
-    groups = MatchMatcher().group_matches(
-        [
-            _mapping_match("mdshop", "Lech Poznan", "Thun", "mdshop-1"),
-            _mapping_match("mbet", "Lech P.", "FC Thun", "mbet-1"),
-        ]
-    )
-
-    assert response.status_code == 200
-    assert len(groups) == 1
-    assert groups[0].status == "verified"
 
 
-def test_duplicate_approval_returns_404():
-    candidate = _candidate()
-    api.pending_candidates[candidate.id] = candidate
-
-    first = client.post(f"/api/candidates/{candidate.id}/approve")
-    second = client.post(f"/api/candidates/{candidate.id}/approve")
-
-    assert first.status_code == 200
-    assert second.status_code == 404
 
 
 def test_allowlist_replace_is_atomic_for_concurrent_reader(monkeypatch):
@@ -465,31 +388,14 @@ def test_concurrent_approvals_preserve_both_aliases(monkeypatch):
     assert aliases == {"Alpha|Alpha Town", "Gamma|Gamma Town"}
 
 
-def test_reject_candidate_records_human_rejection():
+
+
+def test_legacy_candidate_mutation_routes_are_gone():
     candidate = _candidate()
     api.pending_candidates[candidate.id] = candidate
-
-    r = client.post(f"/api/candidates/{candidate.id}/reject")
-
-    assert r.status_code == 200
-    assert r.json() == {"status": "rejected"}
-    assert candidate.status == "rejected"
-    assert candidate.resolved_by == "human"
-    assert candidate.resolved_at is not None
-    assert candidate.resolved_at.tzinfo is None
-    assert candidate.id not in api.pending_candidates
-    assert api.candidate_reviews[0].id == candidate.id
-
-
-def test_candidate_mutations_require_api_key_when_configured(monkeypatch):
-    candidate = _candidate()
-    api.pending_candidates[candidate.id] = candidate
-    monkeypatch.setattr(api, "API_KEY", "secret")
-
-    assert client.post(f"/api/candidates/{candidate.id}/approve").status_code == 401
-    assert client.post(
-        f"/api/candidates/{candidate.id}/approve", headers={"X-API-Key": "secret"}
-    ).status_code == 200
+    assert client.post(f"/api/candidates/{candidate.id}/approve").status_code == 404
+    assert client.post(f"/api/candidates/{candidate.id}/reject").status_code == 404
+    assert client.post("/api/candidates/approve-bulk", json={"ids": []}).status_code == 404
 
 
 def test_candidate_queue_read_requires_api_key_when_configured(monkeypatch):
@@ -553,35 +459,6 @@ def test_candidate_queue_can_be_filtered_to_pairs_an_approval_clears():
     assert filtered["actionable_only"] is True
 
 
-def test_approve_refuses_a_pair_an_approval_cannot_clear():
-    """An approval that cannot change the verdict must not pretend it did.
-
-    `alias_actionable` is answered by the gate itself with only the candidate's
-    aliases granted. When it is false, the written allowlist entry cannot carry
-    the pair (the gate needs 90 similarity, or the refusal is a league/kickoff/
-    category fact no team alias can move). The endpoint used to write the entry
-    and resolve the candidate anyway, so the pair left the queue forever while
-    the next scan still refused it — the spelling was never taught.
-    """
-    candidate = _candidate().model_copy(
-        update={
-            "id": "cannot-clear",
-            "alias_actionable": False,
-            "rule_rejections": ["league_mismatch", "kickoff_delta", "team_unresolved"],
-        }
-    )
-    api.pending_candidates[candidate.id] = candidate
-
-    r = client.post(f"/api/candidates/{candidate.id}/approve")
-
-    assert r.status_code == 409
-    detail = r.json()["detail"]
-    assert "league_mismatch" in detail and "kickoff_delta" in detail
-    assert candidate.id in api.pending_candidates, "the reviewer must still see the pair"
-    assert candidate.status == "pending"
-    assert candidate.resolved_at is None
-    assert candidate.id not in api._suppressed_candidates
-    assert not os.path.exists(api.ALLOWLIST_FILE), "no ineffective alias is written"
 
 
 def test_candidate_payload_carries_both_sides_and_the_link_state():
@@ -611,9 +488,6 @@ def test_live_and_prematch_queues_are_separate():
         assert prematch.id in prematch_ids and live.id not in prematch_ids
         assert live_body["mode"] == "live"
         assert [c["id"] for c in live_body["candidates"]] == [live.id]
-        # A live candidate is decided through the same endpoint and leaves its queue.
-        assert client.post(f"/api/candidates/{live.id}/reject").status_code == 200
-        assert live.id not in api.pending_live_candidates
         assert prematch.id in api.pending_candidates
     finally:
         api.pending_live_candidates.pop(live.id, None)
@@ -621,8 +495,7 @@ def test_live_and_prematch_queues_are_separate():
         api._suppressed_premises.pop(live.id, None)
 
 
-def test_human_mapping_is_disabled_by_default(monkeypatch):
-    monkeypatch.setattr(api, "HUMAN_MAPPING_ENABLED", False)
-    assert client.post("/api/candidates/does-not-exist/approve").status_code == 403
-    assert client.post("/api/candidates/does-not-exist/reject").status_code == 403
-    assert client.post("/api/candidates/approve-bulk", json={"ids": []}).status_code == 403
+def test_legacy_approval_routes_are_absent():
+    assert client.post("/api/candidates/does-not-exist/approve").status_code == 404
+    assert client.post("/api/candidates/does-not-exist/reject").status_code == 404
+    assert client.post("/api/candidates/approve-bulk", json={"ids": []}).status_code == 404

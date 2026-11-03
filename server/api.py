@@ -2200,7 +2200,6 @@ def _approve(candidate: CandidateReview) -> list[str]:
     return entries
 
 
-@router.post("/candidates/{candidate_id}/approve")
 async def approve_candidate(
     candidate_id: str,
     _auth: None = Depends(_require_api_key),
@@ -2271,7 +2270,6 @@ class BulkDecision(BaseModel):
     ids: list[str]
 
 
-@router.post("/candidates/approve-bulk")
 async def approve_candidates_bulk(
     body: BulkDecision,
     _auth: None = Depends(_require_api_key),
@@ -2306,7 +2304,6 @@ async def approve_candidates_bulk(
     return {"approved": approved, "skipped": skipped}
 
 
-@router.post("/candidates/{candidate_id}/reject")
 async def reject_candidate(
     candidate_id: str,
     _auth: None = Depends(_require_api_key),

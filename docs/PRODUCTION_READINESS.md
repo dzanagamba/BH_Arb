@@ -14,7 +14,7 @@ This is an evidence-based verdict, not a score:
 |---|---|---|
 | Event identity | Good and improving | Ledger, Betradar ids, shared-fixture learning, league fingerprints and shared-opponent blocking exist. No real-scan precision/recall measurement yet. |
 | Market identity | Good | Label classifier + cross-book consensus + generated registry + raw-offer resolver exist. Eight of nine markets are enabled; first-half 1X2 and AH were proven on a real scan with 0 outliers. Only the NSoft parser publishes `source_id`; the other scrapers still use the hand-written registry. First-half O/U has no captured offer. |
-| Human input | Disabled by default | The three write routes return 403 unless `HUMAN_MAPPING_ENABLED=true`; the Review UI hides its actions. The ledger is the only default trust source. Full route deletion remains A4-1. |
+| Human input | Removed | The three write routes are gone; the Diagnostics tab is read-only. The evidence ledger is the only trust source. |
 | Freshness | Partial | The engine has odds TTL and every shown surebet is re-verified; there is still no per-book freshness budget, no last-known-value policy, and no push/streaming path. |
 | Execution | Partial | Stakes are rounded, legs are ordered, the slip re-plans, and every shown surebet is re-checked before placement. Book limits, partial acceptance, balance, and the "price moved between legs" workflow are not complete. |
 | Operations | Missing | No scheduler/back-off, no alerting, no 24 h soak, no deployment, no health budget for mapping coverage. |
@@ -152,10 +152,8 @@ read before 2026-11-03.
 
 ## Production blockers, in priority order
 
-1. **Remove the human write path.** The routes are disabled by default now;
-   delete them and the Review actions, and keep a read-only Diagnostics view.
-   A route that can still write `team_alias_allowlist.json` is a trust path,
-   even if the ledger is preferred.
+1. **Human write path.** Removed: the routes are gone and the Diagnostics view
+   is read-only. The direct migration functions remain only for legacy tests.
 2. **Prove coverage on real data.** Run a headless prematch scan on a day with
    real fixtures, record per-book counts, verified groups, mapping coverage and
    `price_check.py` outliers, and add the scan to the replay corpus. The current

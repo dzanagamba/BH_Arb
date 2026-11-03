@@ -7,7 +7,7 @@
 > entry, manual gate exception or manual CAPTCHA step** anywhere between scrape
 > and a shown surebet.
 >
-> **Baseline (2026-11-03, this worktree).** `python -m pytest` → **1150 passed** in 38 s; `ruff check .` clean; `mypy .` clean on 109 source files;
+> **Baseline (2026-11-03, this worktree).** `python -m pytest` → **1145 passed** in 90 s; `ruff check .` clean; `mypy .` clean on 109 source files;
 > `scripts/generate_market_mapping_doc.py --check` in sync. Environment is
 > `.venv` on CPython 3.11.18, installed with `uv`. The 953-passed figure in the
 > superseded plan was a 2026-10-20 measurement and is stale.
@@ -26,13 +26,13 @@
 > consensus, registry merge, discovery CLI and raw-offer resolver are shipped.
 > Betole is now the ninth enabled book after fixing its kickoff and Betradar id;
 > the 9-book scan found 6,503 matches, 1,039 verified groups and **8 surebets**,
-> all re-verified by `POST /api/verify`; two price-outlier surebets were dropped. **1150 tests pass.** The acceptance
+> all re-verified by `POST /api/verify`; two price-outlier surebets were dropped. **1145 tests pass.** The acceptance
 > record is `docs/ACCEPTANCE.md`; the production verdict and research are in
 > `docs/PRODUCTION_READINESS.md`.
 >
-> **Next cards:** A4-1 delete the legacy approval routes; A2-6 market absence
-> proofs; A7-5 freshness policy; A7-6 execution limits/partial acceptance;
-> A7-7 monitoring/CLV; then a 24-hour soak and the security stash.
+> **Next cards:** A2-6 market absence proofs; A7-5 freshness policy; A7-6
+> execution limits/partial acceptance; A7-7 monitoring/CLV; then a 24-hour soak
+> and the security stash.
 
 ---
 
@@ -954,7 +954,7 @@ counts.
 
 #### A4-1 · Delete approval endpoints and Review actions
 
-- [~] **Status:** PARTIAL 2026-11-03 (write routes return 403 unless HUMAN_MAPPING_ENABLED=true; Review actions hidden; full deletion remains)
+- [x] **Status:** DONE 2026-11-03
 - **Needs:** offline.
 - **Depends on:** A1-6, A3-1.
 - **Files:** `server/api.py`, `frontend/js/app.js`, `frontend/index.html`,
@@ -974,11 +974,11 @@ counts.
 - **Verify:** `pytest tests/test_candidates_api.py tests/test_frontend_review.py
   -q`; `grep -rn "approve" server frontend` shows only read-only text; S1.
 - **Done when:** no endpoint or UI action changes trust.
-- **Log:** Added `HUMAN_MAPPING_ENABLED` (default false). `approve`, `approve-bulk` and `reject` return 403 before any write; `/api/config` exposes the flag and the Review UI hides its actions. Existing review tests opt in explicitly, and one test proves the default closure. Full route deletion and the Diagnostics rename remain.
+- **Log:** Removed the three HTTP routes. The direct migration functions remain for legacy tests but are not reachable from the API. The dashboard has no approval/reject controls. Tests assert the routes return 404 and the queue is read-only.
 
 #### A4-2 · Read-only Diagnostics tab
 
-- [ ] **Status:** TODO
+- [x] **Status:** DONE 2026-11-03
 - **Needs:** offline.
 - **Depends on:** A4-1, A1-7.
 - **Files:** `frontend/index.html`, `frontend/js/app.js`,
@@ -988,11 +988,11 @@ counts.
   that explains the ledger is learning.
 - **Verify:** frontend tests; manual load; S1.
 - **Done when:** the tab is read-only and renders the coverage JSON.
-- **Log:** —
+- **Log:** Renamed the tab to Diagnostics, removed the bulk threshold/approve controls and per-card approve/reject buttons, and replaced the copy with a read-only explanation of the ledger. The card still shows both spellings, the gate reasons and a web-check link.
 
 #### A4-3 · Remove human files from runtime and docs
 
-- [ ] **Status:** TODO
+- [x] **Status:** DONE 2026-11-03
 - **Needs:** offline.
 - **Depends on:** A4-2.
 - **Files:** `engine/matcher.py`, `engine/certainty.py`, `README.md`,
@@ -1012,7 +1012,7 @@ counts.
 - **Verify:** `grep -rn "reviewed_aliases\|team_alias_reviewed" engine server`
   shows only the legacy migration; S1.
 - **Done when:** no runtime trust path reads a human file.
-- **Log:** —
+- **Log:** The matcher no longer loads `team_alias_reviewed.json`; the reviewed file is migration input only. README now describes the evidence ledger, the read-only Diagnostics queue and the `route_pattern_verified` link policy. The legacy allowlist is still loaded as generated seed data until the ledger covers it.
 
 ---
 

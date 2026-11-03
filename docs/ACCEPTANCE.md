@@ -79,8 +79,8 @@ remains disabled and is an evidence-backed absence, not a silent omission.
   experimental; eight of nine market types are enabled.
 * Betole publishes several unregistered market codes; they are counted in
   `/api/health.unmapped_markets` and are not used for pricing.
-* The legacy approve/reject routes still exist in the API but are disabled and
-  the dashboard is read-only. Full deletion is A4-1.
+* The legacy approve/reject HTTP routes are removed; the dashboard is read-only.
+  The direct migration functions remain for legacy tests but are not reachable.
 * Execution limits, partial acceptance, bankroll, a 24-hour soak and the paused
   security-hardening stash are not done.
 * In-play remains deferred.
