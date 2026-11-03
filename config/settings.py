@@ -91,9 +91,12 @@ ENABLED_MARKETS = [
     "over_under_3_5",
     "btts",
     "double_chance",
-    # Proven on the 2026-11-03 real scan: 1,875 first-half 1X2 rows and 1,368
-    # Asian-handicap rows, 0 price outliers across 4,374 comparisons.
+    # First-half 1X2 and Asian handicap were proven on the 2026-11-03 real
+    # scan (1,875 and 1,368 rows, 0 outliers across 4,374 comparisons).
+    # First-half O/U is enabled but had no offer in that scan; the price guard
+    # still applies if a book starts publishing it.
     "first_half_1x2",
+    "first_half_ou",
     "asian_handicap",
 ]
 
@@ -101,9 +104,7 @@ ENABLED_MARKETS = [
 # They are parsed and detected only while enabled (persisted per-scan via the
 # server's market_state.json toggle). Add new markets here instead of
 # ENABLED_MARKETS until they have proven live against real payloads.
-EXPERIMENTAL_MARKETS = [
-    "first_half_ou",
-]
+EXPERIMENTAL_MARKETS: list[str] = []
 
 # --- Arbitrage Settings ---
 MIN_PROFIT_PERCENT = 0.5       # Minimum profit % to show as surebet

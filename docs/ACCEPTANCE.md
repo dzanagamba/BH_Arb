@@ -87,8 +87,8 @@ remains disabled and is an evidence-backed absence, not a silent omission.
 
 ## Known gaps
 
-* First-half over/under (`first_half_ou`) has no captured offer and remains
-  experimental; eight of nine market types are enabled.
+* First-half over/under (`first_half_ou`) is enabled but had no offer in the
+  scan; the price guard applies if a book starts publishing it.
 * Betole publishes several unregistered market codes; they are counted in
   `/api/health.unmapped_markets` and are not used for pricing.
 * The legacy approve/reject HTTP routes are removed; the dashboard is read-only.
