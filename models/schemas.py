@@ -27,6 +27,9 @@ class Market(BaseModel):
     """A single betting market with its odds."""
     market_type: MarketType
     odds: list[OddsValue]
+    # The book's own source id when the parser knows it. Additive: the registry
+    # and the generated-market path use it to attribute a discovered mapping.
+    source_id: str = ""
 
 
 class RawOffer(BaseModel):

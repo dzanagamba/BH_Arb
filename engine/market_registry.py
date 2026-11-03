@@ -14,6 +14,9 @@ from models.schemas import MarketType
 REGISTRY_PATH = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "config", "bookmaker_markets.json")
 )
+GENERATED_REGISTRY_PATH = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "config", "generated", "bookmaker_markets.json")
+)
 
 # Unknown source IDs are process-wide diagnostics.  Keeping this at module scope
 # lets scrapers loaded independently by the API and worker processes publish the
@@ -83,13 +86,23 @@ class MarketSpec:
     # "rest of match" markets (1X2 id 6, BTTS id 995) carry the current score as
     # their specifier, and settle like the full-time market only from 0-0.
     requires_sbv: str | None = None
+    # Machine-written rows carry the evidence that proved them. Hand-written
+    # rows have an empty provenance.
+    provenance: dict[str, Any] = field(default_factory=dict)
+    generated: bool = False
 
 
 class MarketRegistry:
     """Load market IDs and resolve them without embedding bookmaker constants."""
 
-    def __init__(self, path: str = REGISTRY_PATH) -> None:
+    def __init__(
+        self,
+        path: str = REGISTRY_PATH,
+        generated_path: str | None = None,
+    ) -> None:
         self.path = path
+        self.generated_path = generated_path or GENERATED_REGISTRY_PATH
+        self.generated_rows: set[str] = set()
         # A source ID can legitimately identify more than one market (for
         # example, NSoft's 137/138 total-goals IDs are shared by all lines and
         # MBet/SportPlus may use one block for several outcome families).  Keep
@@ -161,6 +174,70 @@ class MarketRegistry:
                     for source_id in spec.ids:
                         key = (str(bookmaker), str(mode), str(source_id))
                         self._index.setdefault(key, []).append(spec)
+                    type_key = (str(bookmaker), str(mode), market_type.value)
+                    self._by_type.setdefault(type_key, set()).update(spec.ids)
+
+        self._load_generated()
+
+    def _load_generated(self) -> None:
+        """Merge machine-written rows, but only rows that carry provenance."""
+        if not os.path.exists(self.generated_path):
+            return
+        try:
+            with open(self.generated_path, encoding="utf-8") as file:
+                data: Any = json.load(file)
+        except (OSError, ValueError):
+            return
+        if not isinstance(data, dict):
+            return
+        for bookmaker, modes in data.items():
+            if str(bookmaker).startswith("_") or not isinstance(modes, dict):
+                continue
+            for mode, markets in modes.items():
+                if not isinstance(markets, dict):
+                    continue
+                self._modes.add((str(bookmaker), str(mode)))
+                for market_type_value, raw_spec in markets.items():
+                    if not isinstance(raw_spec, dict):
+                        continue
+                    provenance = raw_spec.get("_provenance")
+                    if not isinstance(provenance, dict) or not provenance:
+                        continue
+                    try:
+                        market_type = MarketType(market_type_value)
+                    except ValueError:
+                        continue
+                    raw_line = raw_spec.get("line")
+                    try:
+                        line = None if raw_line is None else float(raw_line)
+                    except (TypeError, ValueError):
+                        line = None
+                    labels = {
+                        str(label) for label in raw_spec.get("labels", [])
+                    } or set(_DEFAULT_LABELS.get(market_type, set()))
+                    spec = MarketSpec(
+                        bookmaker=str(bookmaker),
+                        mode=str(mode),
+                        market_type=market_type,
+                        ids=set(raw_spec.get("ids", [])),
+                        labels=labels,
+                        min_legs=int(raw_spec.get("min_legs", 3)),
+                        line=line,
+                        settlement=str(raw_spec.get("settlement", "full_time")),
+                        requires_sbv=(
+                            None
+                            if raw_spec.get("requires_sbv") is None
+                            else str(raw_spec["requires_sbv"])
+                        ),
+                        provenance=provenance,
+                        generated=True,
+                    )
+                    for source_id in spec.ids:
+                        key = (str(bookmaker), str(mode), str(source_id))
+                        # A generated row is inserted first so `lookup` prefers
+                        # the machine-proven mapping over the hand-written one.
+                        self._index.setdefault(key, []).insert(0, spec)
+                        self.generated_rows.add(f"{bookmaker}/{mode}/{source_id}")
                     type_key = (str(bookmaker), str(mode), market_type.value)
                     self._by_type.setdefault(type_key, set()).update(spec.ids)
 

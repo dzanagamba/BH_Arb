@@ -502,7 +502,13 @@ def parse_nsoft_bets(
         actual = {o.label for o in odds_values}
         valid = len(actual) >= required_legs and actual.issubset(expected_labels)
         if valid:
-            markets.append(Market(market_type=market_type, odds=odds_values))
+            markets.append(
+                Market(
+                    market_type=market_type,
+                    odds=odds_values,
+                    source_id=str(btid),
+                )
+            )
     return markets
 
 

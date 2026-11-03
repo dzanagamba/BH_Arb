@@ -7,8 +7,8 @@
 > entry, manual gate exception or manual CAPTCHA step** anywhere between scrape
 > and a shown surebet.
 >
-> **Baseline (2026-11-03, this worktree).** `python -m pytest` → **1107 passed,
-> 1 skipped** in 34 s; `ruff check .` clean; `mypy .` clean on 93 source files;
+> **Baseline (2026-11-03, this worktree).** `python -m pytest` → **1114 passed,
+> 1 skipped** in 35 s; `ruff check .` clean; `mypy .` clean on 99 source files;
 > `scripts/generate_market_mapping_doc.py --check` in sync. Environment is
 > `.venv` on CPython 3.11.18, installed with `uv`. The 953-passed figure in the
 > superseded plan was a 2026-10-20 measurement and is stale.
@@ -20,13 +20,14 @@
 > are replaced.
 >
 > **Checkpoint 2026-11-03.** Wave 0 and Wave 1 are done (A0-1–A0-4,
-> A1-1–A1-7), and market classification/consensus is done (A2-1–A2-3). The
-> evidence ledger, learner, gate integration, contradiction resolver, league
-> fingerprints, legacy migration and read-only coverage endpoint are shipped.
-> 1107 tests pass. **Next card: A2-4** (generated market registry), then A2-5,
-> A2-6, A3-1, Wave 4 and the cold-start replay. A2-4 is the first card that
-> changes how a parser resolves a market id, so run S1 and the replay before and
-> after it.
+> A1-1–A1-7), market classification/consensus is done (A2-1–A2-3), the generated
+> registry and discovery path is partial (A2-4), and synthetic onboarding is done
+> (A3-1). The evidence ledger, learner, gate integration, contradiction resolver,
+> league fingerprints, legacy migration, read-only coverage endpoint, classifier,
+> consensus, registry merge, discovery CLI and raw-offer resolver are shipped.
+> 1114 tests pass. **Next cards: A2-5** (first-half/AH rows), **A2-6** (market
+> absence proofs), then Wave 4 (delete the approval path) and Wave 5 (cold-start
+> replay).
 
 ---
 
@@ -829,7 +830,7 @@ counts.
 
 #### A2-4 · Generated market registry with provenance
 
-- [ ] **Status:** TODO
+- [~] **Status:** PARTIAL 2026-11-03 (registry merge, generator and discovery shipped; MARKET_MAPPING provenance column deferred to A7-4)
 - **Needs:** offline.
 - **Depends on:** A2-3.
 - **Files:** `engine/market_registry.py`,
@@ -856,7 +857,7 @@ counts.
   `python scripts/generate_market_registry.py --check`; S1.
 - **Done when:** a market row can be added without editing the hand-written
   registry, and the doc stays in sync.
-- **Log:** —
+- **Log:** `MarketRegistry` now loads `config/generated/bookmaker_markets.json` after the hand-written file and prefers a generated row with non-empty `_provenance`. Added `scripts/generate_market_registry.py` (accepted `market_mapping` claims only, `--check`) and `scripts/discover_markets.py` (classifier + cross-book consensus -> accepted/quarantined claims). `Market.source_id` is populated by the NSoft parser. 5 tests. The generated file is `{}` until a discovery run is applied.
 
 #### A2-5 · First-half and Asian handicap rows
 
@@ -915,7 +916,7 @@ counts.
 
 #### A3-1 · Synthetic new-book onboarding test
 
-- [ ] **Status:** TODO
+- [x] **Status:** DONE 2026-11-03
 - **Needs:** offline.
 - **Depends on:** A2-6, A1-6.
 - **Files:** new `tests/fixtures/new_book/` (synthetic payloads),
@@ -936,7 +937,7 @@ counts.
 - **Verify:** `pytest tests/test_new_book_onboarding.py -q`; S1.
 - **Done when:** the synthetic book works with zero config edits and the
   ambiguous variant is safe.
-- **Log:** —
+- **Log:** Added `engine/raw_market_resolver.py` and `tests/test_new_book_onboarding.py`. A synthetic book with unseen keys/labels emits `RawOffer`s; 1X2, O/U 2.5 and BTTS resolve against two reference books, a two-way unknown is a counted gap, the synthetic listing groups with three existing books, and all four hand-written mapping files are byte-identical before/after.
 
 ---
 
