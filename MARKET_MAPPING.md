@@ -2,11 +2,11 @@
 
 This is the canonical market audit for the ten configured bookmakers in
 `config/settings.BOOKMAKERS`. The scanner enables eight of the nine
-`MarketType` values in `models/schemas.py`. First-half 1X2 and Asian handicap are
+`MarketType` values in `models/schemas.py`. First-half 1X2 (`first_half_1x2`) and Asian handicap (`asian_handicap`) are
 parsed directly by individual scrapers and were proven on the 2026-11-03 real
 scan (1,875 and 1,368 rows, 0 price outliers across 4,374 comparisons).
-First-half over/under remains experimental because no captured offer exists for
-it. Any offer with a similar-looking outcome label is ignored unless its
+First-half over/under (`first_half_ou`) remains experimental because no captured
+offer exists for it. Any offer with a similar-looking outcome label is ignored unless its
 settlement meaning and complete outcome set are known.
 
 Audit date: 2026-08-14; prematch and live captures re-taken 2026-10-20 (EVLBet has no
