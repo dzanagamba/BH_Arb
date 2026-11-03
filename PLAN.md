@@ -7,7 +7,7 @@
 > entry, manual gate exception or manual CAPTCHA step** anywhere between scrape
 > and a shown surebet.
 >
-> **Baseline (2026-11-03, this worktree).** `python -m pytest` → **1167 passed** in 149 s; `ruff check .` clean; `mypy .` clean on 119 source files;
+> **Baseline (2026-11-03, this worktree).** `python -m pytest` → **1168 passed** in 149 s; `ruff check .` clean; `mypy .` clean on 119 source files;
 > `scripts/generate_market_mapping_doc.py --check` in sync. Environment is
 > `.venv` on CPython 3.11.18, installed with `uv`. The 953-passed figure in the
 > superseded plan was a 2026-10-20 measurement and is stale.
@@ -25,13 +25,13 @@
 > league fingerprints, legacy migration, read-only coverage endpoint, classifier,
 > consensus, registry merge, discovery CLI and raw-offer resolver are shipped.
 > Betole is now the ninth enabled book after fixing its kickoff and Betradar id;
-> the latest 9-book scan found 6,492 matches, 1,043 verified groups, 126 groups
-> carrying all nine books and **9 surebets**. Seven re-verified at a fresh price;
-> two disappeared before the re-check and are reported as gone; three
-> price-outlier legs were dropped. `scripts/pairing_audit.py --check` measures
-> **39 strict misses in 6,492 offers (0.6%)** and zero groups repeating a
-> bookmaker. The anchor-only gate defect, generic-league fingerprints and
-> club-designator rule are fixed and covered by regression tests. **1167 tests
+> the latest 9-book scan found 6,377 matches, 1,030 verified groups, 127 groups
+> carrying all nine books and **6 surebets**. The 04:39 verified sample had 9;
+> seven re-verified at a fresh price, two disappeared before the re-check and
+> are reported as gone, and three price-outlier legs were dropped.
+> `scripts/pairing_audit.py --check` measures **31 strict misses in 6,377 offers
+> (0.49%)** and zero groups repeating a bookmaker. The anchor-only gate defect, generic-league fingerprints and
+> club-designator rule are fixed and covered by regression tests. **1168 tests
 > pass.** The acceptance record is `docs/ACCEPTANCE.md`; the production verdict
 > and research are in `docs/PRODUCTION_READINESS.md`.
 >

@@ -8,7 +8,7 @@ named next to it.
 
 | Check | Command | Result |
 |---|---|---|
-| Tests | `python -m pytest` | **1,167 passed** |
+| Tests | `python -m pytest` | **1,168 passed** |
 | Lint | `python -m ruff check .` | clean |
 | Types | `python -m mypy .` | clean on 119 source files |
 | Market doc | `python scripts/generate_market_mapping_doc.py --check` | in sync |
@@ -86,10 +86,12 @@ re-checked with `POST /api/verify`:
 Seven of nine re-verified at a fresh price; two disappeared before the re-check
 and are reported as gone rather than as confirmed arbs.
 
-The final-gate soak scan at **04:54 UTC** (after the pairing and CSP changes)
-found **6,500 matches, 1,044 verified groups and 12 surebets**, including
-`mainz – bayern munich` 1X2 at 0.27%, a fixture that only paired after the
-anchor fix. Those 12 are scan-level counts and were not individually re-verified.
+The final-gate soak scan at **04:54 UTC** found **6,500 matches, 1,044 verified
+groups and 12 surebets**, including `mainz – bayern munich` 1X2 at 0.27%, a
+fixture that only paired after the anchor fix. A later scan at **05:08 UTC**,
+after the abbreviation and punctuation rules, found **6,377 matches, 1,030
+verified groups and 6 surebets** as the feed shrank toward kickoff. These later
+counts are scan-level measurements and were not individually re-verified.
 
 ## Pairing coverage
 
@@ -99,31 +101,31 @@ repeats a bookmaker.
 
 | Metric | Value |
 |---|---:|
-| Matches | 6,500 |
-| Verified multi-book groups | 1,044 |
-| Listings in groups | 5,815 |
-| Ungrouped listings | 685 |
-| Duplicate listings from a book already in the group | 333 |
-| Strict misses (same league, ±15 min, both teams ≥80% alike) | 40 |
-| Strict miss rate | **0.62%** |
+| Matches | 6,377 |
+| Verified multi-book groups | 1,030 |
+| Listings in groups | 5,712 |
+| Ungrouped listings | 665 |
+| Duplicate listings from a book already in the group | 312 |
+| Strict misses (same league, ±15 min, both teams ≥80% alike) | 31 |
+| Strict miss rate | **0.49%** |
 | Groups repeating a bookmaker | 0 |
 
 Per-book grouping, including duplicate listings:
 
 | Book | Grouped / matches | Rate |
 |---|---:|---:|
-| MDShop | 536 / 538 | 99.6% |
-| Admiralbet | 536 / 538 | 99.6% |
-| MBet | 602 / 618 | 97.4% |
-| WWIN | 727 / 756 | 96.2% |
-| SportPlus | 729 / 762 | 95.7% |
-| MaxBet | 746 / 841 | 88.7% |
-| Premier Kladionica | 740 / 846 | 87.5% |
-| Betole | 931 / 1,239 | 75.1% |
-| Mozzartbet | 268 / 362 | 74.0% |
+| MDShop | 523 / 525 | 99.6% |
+| Admiralbet | 523 / 525 | 99.6% |
+| MBet | 585 / 601 | 97.3% |
+| WWIN | 711 / 740 | 96.1% |
+| SportPlus | 717 / 750 | 95.6% |
+| MaxBet | 734 / 826 | 88.9% |
+| Premier Kladionica | 734 / 831 | 88.3% |
+| Betole | 930 / 1,239 | 75.1% |
+| Mozzartbet | 255 / 340 | 75.0% |
 
 The low Betole/Mozzartbet rates are mostly duplicate listings and leagues no
-other book carries, not same-fixture misses: only 40 offers in the whole scan
+other book carries, not same-fixture misses: only 31 offers in the whole scan
 have a strict counterpart in another book that the matcher failed to pair. The
 remaining examples are abbreviations and city-qualified spellings such as
 `Qingdao H` / `Qingdao Hainiu`, `Dynamo D` / `Dynamo Dresden`, and

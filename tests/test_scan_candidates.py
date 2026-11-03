@@ -86,7 +86,7 @@ def _ambiguous_pair() -> tuple[Match, Match]:
     """
     return (
         _match("mdshop", "Lech Poznan", "Thun", "Liga Evrope", "1"),
-        _match("mbet", "Lech P.", "FC Thun", "Liga Konferencija", "2"),
+        _match("mbet", "Lech Pznan", "FC Thun", "Liga Konferencija", "2"),
     )
 
 
@@ -372,7 +372,7 @@ def test_candidate_records_both_sides_of_the_claim(monkeypatch):
     )
     assert candidate.side_b == PairSide(
         bookmaker="mbet", event_ref="2",
-        home_team="Lech P.", away_team="FC Thun", link_verified=False,
+        home_team="Lech Pznan", away_team="FC Thun", link_verified=False,
     )
 
 
@@ -380,12 +380,12 @@ def test_team_positions_pair_the_two_books_by_orientation(monkeypatch):
     """A bookmaker that publishes the fixture flipped is recorded swapped."""
     _fake_ai(monkeypatch, [], available=False)
     left = _match("mdshop", "Lech Poznan", "Thun", "Liga Evrope", "1")
-    flipped = _match("mbet", "FC Thun", "Lech P.", "Liga Konferencija", "2")
+    flipped = _match("mbet", "FC Thun", "Lech Pznan", "Liga Konferencija", "2")
 
     candidate = _one_candidate([left, flipped])
 
     assert candidate.team_positions == [
-        TeamPositionPair(position="home", team_a="Lech Poznan", team_b="Lech P."),
+        TeamPositionPair(position="home", team_a="Lech Poznan", team_b="Lech Pznan"),
         TeamPositionPair(position="away", team_a="Thun", team_b="FC Thun"),
     ]
 
@@ -402,8 +402,8 @@ def test_approval_writes_the_cross_bookmaker_team_alias(monkeypatch):
 
     assert body["status"] == "approved"
     # Entries keep the two spellings the reviewer saw, one per team slot.
-    assert body["allowlist_entries"] == ["FC Thun|Thun", "Lech P.|Lech Poznan"]
-    assert _aliases_on_disk() == {"FC Thun|Thun", "Lech P.|Lech Poznan"}
+    assert set(body["allowlist_entries"]) == {"FC Thun|Thun", "Lech Poznan|Lech Pznan"}
+    assert _aliases_on_disk() == {"FC Thun|Thun", "Lech Poznan|Lech Pznan"}
     # The two halves of ONE fixture are different clubs, never an alias pair.
     assert "Lech Poznan|Thun" not in _aliases_on_disk()
 
@@ -426,13 +426,13 @@ def test_approval_writes_one_entry_per_differing_team(monkeypatch):
 def test_approval_skips_a_position_whose_two_spellings_already_agree(monkeypatch):
     _fake_ai(monkeypatch, [], available=False)
     left = _match("mdshop", "Lech Poznan", "Thun", "Liga Evrope", "1")
-    right = _match("mbet", "Lech P.", "Thun", "Liga Konferencija", "2")
+    right = _match("mbet", "Lech Pznan", "Thun", "Liga Konferencija", "2")
     candidate = _one_candidate([left, right])
     api.pending_candidates[candidate.id] = candidate
 
     run(api.approve_candidate(candidate.id, _auth=None))
 
-    assert _aliases_on_disk() == {"Lech P.|Lech Poznan"}
+    assert _aliases_on_disk() == {"Lech Poznan|Lech Pznan"}
 
 
 def test_written_alias_is_honoured_by_the_real_certainty_gate(monkeypatch):
@@ -949,7 +949,7 @@ def test_typo_pair_from_the_review_reaches_the_queue(monkeypatch):
     ("left_home", "left_away", "right_home", "right_away"),
     [
         ("Aguilas", "Millionarios", "Rionegro", "Millonarios"),
-        ("Lech Poznan", "Thun", "Lech P.", "FC Thun"),
+        ("Lech Poznan", "Thun", "Lech Pznan", "FC Thun"),
         ("Bury Town", "Leamington", "Leicester", "Burton"),
         ("Real Madrid", "Barcelona", "Aguilas", "Millonarios"),
     ],

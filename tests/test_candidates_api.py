@@ -65,7 +65,7 @@ def _candidate(
     candidate_id: str = "candidate-1",
     left_home: str = "Lech Poznan",
     left_away: str = "Thun",
-    right_home: str = "Lech P.",
+    right_home: str = "Lech Pznan",
     right_away: str = "FC Thun",
 ) -> CandidateReview:
     """A candidate exactly as `run_scan` produces it: both sides, both spellings."""
@@ -468,9 +468,9 @@ def test_candidate_payload_carries_both_sides_and_the_link_state():
     body = client.get("/api/candidates").json()["candidates"][0]
 
     assert body["side_a"]["home_team"] == "Lech Poznan"
-    assert body["side_b"]["home_team"] == "Lech P."
+    assert body["side_b"]["home_team"] == "Lech Pznan"
     assert body["team_positions"] == [
-        {"position": "home", "team_a": "Lech Poznan", "team_b": "Lech P."},
+        {"position": "home", "team_a": "Lech Poznan", "team_b": "Lech Pznan"},
         {"position": "away", "team_a": "Thun", "team_b": "FC Thun"},
     ]
     assert body["link_blocked"] is False  # _mapping_match sets deep_link_verified

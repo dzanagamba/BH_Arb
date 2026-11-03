@@ -315,8 +315,12 @@ def test_allowlisted_alias_is_accepted_but_unlisted_fuzzy_is_not():
     assert r.status == "verified"
     assert any(e.rule == "team_identity" and e.source == "allowlist" for e in r.evidence)
 
+    # A genuine misspelling, not an abbreviation: no allowlist, no merge.
+    typo = _m("mbet", "Lech Pznan", "Thun", "Liga Evrope", event_id="3")
     gate2 = CertaintyGate()  # no allowlist
-    r2 = gate2.evaluate_pair(a, b)
+    gate2.normalize([a, typo])
+    typo.home_team_normalized = "lech pznan"
+    r2 = gate2.evaluate_pair(a, typo)
     assert r2.status == "suggested"
     assert r2.reasons == ["team_unresolved"]
 
@@ -567,6 +571,36 @@ def test_a_club_designator_alone_is_not_an_identity_difference():
     )
     # Words that belong to a club's name are not designators.
     assert gate._team_pair_details("Atletico Madrid", "madrid", "Madrid", "madrid") == (False, "")
+
+
+def test_token_abbreviations_are_not_different_clubs():
+    gate = CertaintyGate()
+    assert gate._team_pair_details(
+        "Man Utd", "man_utd", "Manchester Utd", "manchester_utd"
+    ) == (True, "abbreviation")
+    assert gate._team_pair_details(
+        "Dynamo D", "dynamo_d", "Dynamo Dresden", "dynamo_dresden"
+    ) == (True, "abbreviation")
+    assert gate._team_pair_details(
+        "Qingdao H", "qingdao_h", "Qingdao Hainiu", "qingdao_hainiu"
+    ) == (True, "abbreviation")
+    assert gate._team_pair_details(
+        "Cambridge United", "cambridge_united", "Cambridge Utd", "cambridge_utd"
+    ) == (True, "abbreviation")
+    assert gate._team_pair_details(
+        "St Mirren", "st_mirren", "Saint Mirren", "saint_mirren"
+    ) == (True, "abbreviation")
+    assert gate._raw_team_key("Wingate&Finchley") == gate._raw_team_key("Wingate & Finchley")
+    # A shared first token is not enough: the differing token must abbreviate.
+    assert gate._team_pair_details(
+        "Manchester Utd", "manchester_utd", "Manchester City", "manchester_city"
+    ) == (False, "")
+    assert gate._team_pair_details(
+        "Central Coast (W)",
+        "central_coast_w",
+        "Central Coast Mariners (W)",
+        "central_coast_mariners_w",
+    ) == (False, "")
 
 
 def test_group_member_proves_a_team_the_anchor_cannot():

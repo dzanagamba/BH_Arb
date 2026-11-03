@@ -20,7 +20,7 @@ from models.schemas import Market, MarketType, Match, OddsValue
 
 REVIEWED_FILE = Path(__file__).parents[1] / "config" / "team_alias_reviewed.json"
 K = datetime(2026, 10, 21, 16, 45)
-PAIR = "Man.Utd|Manchester United"
+PAIR = "Red Devils|Manchester United"
 
 
 def _m(book, home, away, league="Engleska 1", kickoff=K, tags=None, event_id="1"):
@@ -50,7 +50,7 @@ def _gate(reviewed=frozenset({PAIR}), allowlist=frozenset()):
 def test_the_deprecated_parameter_still_verifies_when_explicitly_injected():
     """Kept only so the migration can prove what the old path did."""
     gate = _gate()
-    a, b = _m("mbet", "Como", "Manchester United"), _m("wwin", "Como", "Man.Utd")
+    a, b = _m("mbet", "Como", "Manchester United"), _m("wwin", "Como", "Red Devils")
     gate.normalize([a, b])
     result = gate.evaluate_pair(a, b)
     assert result.status == "verified", result.reasons
@@ -60,7 +60,7 @@ def test_the_deprecated_parameter_still_verifies_when_explicitly_injected():
 
 def test_the_same_pair_only_in_the_allowlist_still_needs_the_floor():
     gate = _gate(reviewed=frozenset(), allowlist={PAIR})
-    a, b = _m("mbet", "Como", "Manchester United"), _m("wwin", "Como", "Man.Utd")
+    a, b = _m("mbet", "Como", "Manchester United"), _m("wwin", "Como", "Red Devils")
     gate.normalize([a, b])
     assert "team_unresolved" in gate.evaluate_pair(a, b).reasons
 
@@ -73,7 +73,7 @@ def test_the_matcher_does_not_load_the_reviewed_file():
 
 def test_the_file_alone_does_not_grant_trust():
     gate = CertaintyGate()
-    a, b = _m("mbet", "Como", "Manchester United"), _m("wwin", "Como", "Man.Utd")
+    a, b = _m("mbet", "Como", "Manchester United"), _m("wwin", "Como", "Red Devils")
     gate.normalize([a, b])
     assert "team_unresolved" in gate.evaluate_pair(a, b).reasons
 
@@ -91,7 +91,7 @@ def test_a_reviewed_pair_still_needs_the_kickoff():
 def test_a_reviewed_pair_still_needs_the_category():
     gate = _gate()
     a = _m("mbet", "Como", "Manchester United", tags=["U21"])
-    b = _m("wwin", "Como", "Man.Utd")
+    b = _m("wwin", "Como", "Red Devils")
     gate.normalize([a, b])
     assert gate.evaluate_pair(a, b).status == "rejected"
 

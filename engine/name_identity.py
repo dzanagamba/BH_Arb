@@ -34,6 +34,7 @@ _ORG_TOKENS = {
     "gaming",
     "esports",
     "esport",
+    "and",
 }
 
 # Tokens that DO identify a different side. A differing one is a veto.
@@ -60,7 +61,7 @@ _MARKER_TOKENS = {
 
 _COLOUR_TOKENS = {"blue", "white", "red", "black", "green", "yellow", "orange"}
 
-_PUNCT = re.compile(r"[./\\\-'’`,()]+")
+_PUNCT = re.compile(r"[./\\\-\&'’`,()]+")
 _DIGITS = re.compile(r"\d+")
 
 

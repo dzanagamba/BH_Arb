@@ -22,6 +22,7 @@ from typing import Literal
 from rapidfuzz import fuzz
 
 from config.settings import VERIFIED_KICKOFF_WINDOW_MINUTES
+from engine import name_identity
 from engine.league_resolver import LeagueResolver
 from engine.mapping_evidence import (
     MappingLedger,
@@ -38,7 +39,7 @@ from scrapers.common import (
 
 # Characters a bookmaker uses as separators in a team name ("Bodo/Glimt",
 # "St. Mirren", "Paris-SG"); they never distinguish two clubs.
-_TEAM_PUNCTUATION = re.compile(r"[./\\\-'’`,()]+")
+_TEAM_PUNCTUATION = re.compile(r"[./\\\-\&'’`,()]+")
 # Letters NFKD does not decompose.
 _LETTER_FOLDS = str.maketrans({"đ": "dj", "ø": "o", "æ": "ae", "ß": "ss", "ł": "l"})
 
@@ -49,6 +50,9 @@ LEAGUE_UNMAPPED_TEAMS_EXACT = "league_unmapped_teams_exact"
 # denotes. Words such as "atletico" and "deportivo" are excluded: they are part
 # of a club's identity, not a designator.
 _DESIGNATOR_TOKENS = frozenset(CLUB_DESIGNATORS - {"atletico", "deportivo"})
+
+# Whole-token abbreviations that are not prefixes of the word they stand for.
+_TOKEN_SYNONYMS = {"utd": "united", "st": "saint"}
 
 HARD_REJECT_REASONS = frozenset(
     {"league_mismatch", "category_mismatch", "betradar_mismatch", "orientation_unresolved"}
@@ -212,6 +216,31 @@ class CertaintyGate:
         return " ".join(words)
 
     @staticmethod
+    def _token_abbreviation_match(left_raw: str, right_raw: str) -> bool:
+        """Same tokens, each differing token an initial or ≥3-char prefix.
+
+        ``Man Utd`` / ``Manchester Utd`` and ``Dynamo D`` / ``Dynamo Dresden``
+        pass. ``Manchester Utd`` / ``Manchester City`` do not: the second
+        token is neither an initial nor a prefix. A different token count is
+        never accepted here (``Central Coast`` / ``Central Coast Mariners``).
+        """
+        left = name_identity.tokens(left_raw)
+        right = name_identity.tokens(right_raw)
+        if not left or len(left) != len(right):
+            return False
+        for a, b in zip(left, right, strict=True):
+            a = _TOKEN_SYNONYMS.get(a, a)
+            b = _TOKEN_SYNONYMS.get(b, b)
+            if a == b:
+                continue
+            shorter = min(len(a), len(b))
+            if not (a.startswith(b) or b.startswith(a)):
+                return False
+            if shorter != 1 and shorter < 3:
+                return False
+        return True
+
+    @staticmethod
     def _surface_team_key(name: str) -> str:
         """Normalize lossless spelling differences for an allowlisted score."""
         key = " ".join(name.strip().casefold().split()).rstrip(".")
@@ -273,6 +302,14 @@ class CertaintyGate:
             and self._club_designator_key(left_raw) == self._club_designator_key(right_raw)
         ):
             return True, "designator"
+
+        # A token that is only an initial or a long prefix is an abbreviation,
+        # not a different club: "Man Utd" / "Manchester Utd", "Dynamo D" /
+        # "Dynamo Dresden". The same-token-count requirement is what keeps
+        # "Manchester Utd" / "Manchester City" and "Central Coast" /
+        # "Central Coast Mariners" out.
+        if self._token_abbreviation_match(left_raw, right_raw):
+            return True, "abbreviation"
         return False, ""
 
     def _teams_match_details(self, a: Match, b: Match) -> tuple[bool, bool, str]:
@@ -587,6 +624,10 @@ class CertaintyGate:
             team_source = "rule"
             team_confidence = 1.0
             team_evidence_reason = "swapped" if is_swapped else "club_designator"
+        elif alias_source == "abbreviation":
+            team_source = "rule"
+            team_confidence = 1.0
+            team_evidence_reason = "swapped" if is_swapped else "token_abbreviation"
         elif alias_source:
             team_source = "allowlist"
             team_confidence = 1.0

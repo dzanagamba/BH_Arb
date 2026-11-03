@@ -14,7 +14,7 @@ This is an evidence-based verdict, not a score:
 
 | Area | State | Why it is not production-ready |
 |---|---|---|
-| Event identity | Good and measured | Ledger, Betradar ids, shared-fixture learning, league fingerprints and shared-opponent blocking exist. `scripts/pairing_audit.py` measures a 0.62% strict miss rate (40 of 6,500 offers) and zero groups repeating a bookmaker. |
+| Event identity | Good and measured | Ledger, Betradar ids, shared-fixture learning, league fingerprints and shared-opponent blocking exist. `scripts/pairing_audit.py` measures a 0.49% strict miss rate (31 of 6,377 offers) and zero groups repeating a bookmaker. |
 | Market identity | Good | Label classifier + cross-book consensus + generated registry + raw-offer resolver exist. All nine markets are enabled; first-half 1X2 and AH were proven on a real scan with 0 outliers, and first-half O/U is enabled with no current offer and the price guard active. Only the NSoft parser publishes `source_id`; the other scrapers still use the hand-written registry. |
 | Human input | Removed | The three write routes are gone; the Diagnostics tab is read-only. The evidence ledger is the only trust source. |
 | Freshness | Partial | The engine has odds TTL and every shown surebet is re-verified; there is still no per-book freshness budget, no last-known-value policy, and no push/streaming path. |
@@ -37,7 +37,7 @@ Two headless prematch scans were run against the live books, not fixtures.
 | With learned ledger | 5,287 | 8/8 enabled | 797 | 3,645 | 3,704 | 0 | 0 | 0 |
 | With in-scan learning | 5,276 | 8/8 enabled | 796 | 3,644 | 3,698 | 0 | 0 | 0 |
 | With Betole enabled | 6,503 | 9/9 enabled | 1,039 | 5,754 | 4,481 | 3 | 0 | 8 |
-| Latest gate + pairing audit | 6,500 | 9/9 enabled | 1,044 | 5,815 | — | 3 | 0 | 12 |
+| Latest gate + pairing audit | 6,377 | 9/9 enabled | 1,030 | 5,712 | — | 3 | 0 | 6 |
 
 The learned ledger was produced by `scripts/learn_mappings.py` from the first
 scan: 1,795 accepted claims and 866 quarantined. The second scan grouped 109
@@ -63,13 +63,13 @@ within 15 minutes, and both team names at least 80% alike.
 
 | Metric | Value |
 |---|---:|
-| Matches | 6,500 |
-| Verified multi-book groups | 1,044 |
-| Listings in groups | 5,815 |
-| Ungrouped listings | 685 |
-| Duplicate listings from a book already in the group | 333 |
-| Strict misses | 40 |
-| Strict miss rate | **0.62%** |
+| Matches | 6,377 |
+| Verified multi-book groups | 1,030 |
+| Listings in groups | 5,712 |
+| Ungrouped listings | 665 |
+| Duplicate listings from a book already in the group | 312 |
+| Strict misses | 31 |
+| Strict miss rate | **0.49%** |
 | Groups repeating a bookmaker | 0 |
 
 The 348 duplicate listings are the main reason Betole (75.1%) and Mozzartbet
@@ -104,9 +104,9 @@ listings, 0 false merges and 3 price-outlier legs. The price guard dropped the
 Kitakyushu–Reilac Shiga (MaxBet X2, SportPlus 1) and Kanazawa–Parceiro N
 (SportPlus 1) legs instead of showing those arbs. Seven of the nine shown
 re-verified with `still_profitable: true`; the two that disappeared before the
-re-check are reported as gone. The final-gate soak scan at 04:54 found 6,500
-matches, 1,044 groups and 12 surebets (scan-level counts, not individually
-re-verified).
+re-check are reported as gone. The latest 05:08 scan, after the abbreviation
+and punctuation rules, found 6,377 matches, 1,030 groups and 6 surebets as the
+feed shrank toward kickoff (scan-level counts, not individually re-verified).
 
 The route-pattern proof for MaxBet/Mozzartbet and enabling Betole were the
 coverage unlocks: grouped listings rose from 3,645 to 5,805. Betole also carries
@@ -176,9 +176,9 @@ read before 2026-11-03.
 
 1. **Human write path.** Removed: the routes are gone and the Diagnostics view
    is read-only. The direct migration functions remain only for legacy tests.
-2. **Prove coverage over time.** One scan now has a measured 0.62% strict miss
+2. **Prove coverage over time.** One scan now has a measured 0.49% strict miss
    rate and zero duplicate-book groups. Add several days of scans to the replay
-   corpus so the number is not one feed snapshot, and track the 40 remaining
+   corpus so the number is not one feed snapshot, and track the 31 remaining
    abbreviation/city-qualified pairs until they are learned or explained.
 3. **Finish market coverage.** Publish `source_id` from every parser, run
    discovery on captured payloads, and generate the registry. Prove first-half
