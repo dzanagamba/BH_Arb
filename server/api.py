@@ -31,6 +31,7 @@ from rapidfuzz import fuzz
 
 from config.settings import (
     API_KEY,
+    AUTO_LEARN_MAPPINGS,
     AUTO_SCAN_LIVE_MINUTES,
     AUTO_SCAN_PREMATCH_MINUTES,
     BOOKMAKERS,
@@ -41,6 +42,7 @@ from config.settings import (
     DUST_PROFIT_PERCENT,
     ENABLED_MARKETS,
     EXPERIMENTAL_MARKETS,
+    MIN_LEARN_MATCHES,
     MIN_PROFIT_PERCENT,
     ODDS_TTL_SECONDS,
     RATE_LIMIT_WINDOW_SECONDS,
@@ -51,6 +53,7 @@ from engine.ai import MatchAI, PairProposal
 from engine.arbitrage import ArbitrageEngine
 from engine.certainty import CertaintyGate
 from engine.mapping_evidence import MappingLedger
+from engine.mapping_learner import learn
 from engine.market_registry import unmapped_markets
 from engine.matcher import MatchMatcher, swap_match_teams_and_odds
 from models.schemas import (
@@ -208,6 +211,7 @@ def _find_pending_candidate(candidate_id: str) -> dict[str, CandidateReview] | N
             return queue
     return None
 candidate_reviews: list[CandidateReview] = []
+last_learning_report: dict[str, Any] = {}
 ALLOWLIST_FILE = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "config",
@@ -1273,6 +1277,24 @@ async def _collect_candidates(
 # Background scan task
 # ---------------------------------------------------------------------------
 
+def learn_scan_mappings(
+    matches: list[Match],
+    scan: str,
+    ledger_path: str | None = None,
+) -> dict[str, Any]:
+    """Learn from one real scan and persist the ledger before matching.
+
+    The matcher is constructed after this call, so the aliases learned from this
+    very scan are available to it. A failure is reported to the caller and never
+    stops the scan.
+    """
+    ledger = MappingLedger(ledger_path).load() if ledger_path else MappingLedger().load()
+    ledger, report = learn(matches, ledger, scan=scan)
+    ledger.prune()
+    ledger.save()
+    return report.to_dict()
+
+
 async def run_scan(mode: str = "prematch"):
     """Execute a full scan of all enabled bookmakers concurrently.
 
@@ -1396,6 +1418,37 @@ async def run_scan(mode: str = "prematch"):
         proven = _apply_deep_link_verifications(all_matches, mode)
         if proven:
             logger.info(f"Applied {proven} stored deep-link verification(s) to {mode} matches")
+
+        # Learn from this scan before grouping, so the aliases and league
+        # equivalences it proves are available to the matcher in the same pass.
+        # Tiny scans are ignored so a test or a smoke run cannot rewrite the
+        # shipped ledger.
+        if AUTO_LEARN_MAPPINGS and len(all_matches) >= MIN_LEARN_MATCHES:
+            global last_learning_report
+            try:
+                learned = learn_scan_mappings(
+                    all_matches, scan_started_at.isoformat(timespec="seconds")
+                )
+                diff = learned.get("diff", {})
+                last_learning_report = {
+                    "scan": learned.get("scan", ""),
+                    "matches": learned.get("matches", 0),
+                    "pairs_considered": learned.get("pairs_considered", 0),
+                    "counts": learned.get("counts", {}),
+                    "diff": {
+                        "counts": diff.get("counts", {}),
+                        "added": len(diff.get("added", [])),
+                        "changed": len(diff.get("changed", [])),
+                    },
+                }
+                logger.info(
+                    "Mapping learning: %s accepted, %s quarantined",
+                    last_learning_report["counts"].get("accepted", 0),
+                    last_learning_report["counts"].get("quarantined", 0),
+                )
+            except Exception as exc:
+                logger.error("Mapping learning failed: %s", exc, exc_info=True)
+                status.errors.append(f"Mapping learning failed: {str(exc)[:200]}")
 
         matcher = MatchMatcher()
         groups = matcher.group_matches(all_matches)
@@ -1648,7 +1701,6 @@ def _enforce_sliding_window(
     bucket[client_ip] = window
 
 
-@router.post("/scan")
 async def start_scan_if_idle(mode: str) -> bool:
     """Mark a feed as scanning if no scan or verify already holds it.
 
@@ -1667,6 +1719,7 @@ async def start_scan_if_idle(mode: str) -> bool:
     return True
 
 
+@router.post("/scan")
 async def trigger_scan(
     request: Request,
     background_tasks: BackgroundTasks,
@@ -1778,6 +1831,7 @@ async def health():
             "prematch_minutes": AUTO_SCAN_PREMATCH_MINUTES,
             "live_minutes": AUTO_SCAN_LIVE_MINUTES,
         },
+        "mapping_learning": last_learning_report,
         "ai_available": MatchAI().available,
         "prematch": {
             "last_scan_age_sec": age_sec(scan_status.last_scan_time),

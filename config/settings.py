@@ -157,6 +157,15 @@ SCAN_RATE_LIMIT = int(os.getenv("SCAN_RATE_LIMIT", "3"))
 # Scheduled scans (0 = off). Prematch is the production feed; live is deferred.
 AUTO_SCAN_PREMATCH_MINUTES = int(os.getenv("AUTO_SCAN_PREMATCH_MINUTES", "0"))
 AUTO_SCAN_LIVE_MINUTES = int(os.getenv("AUTO_SCAN_LIVE_MINUTES", "0"))
+# Learn team/league/market claims from each real scan before matching. Tiny
+# scans (tests, a two-book smoke run) are ignored so they cannot rewrite the
+# shipped ledger.
+AUTO_LEARN_MAPPINGS = os.getenv("AUTO_LEARN_MAPPINGS", "true").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+)
+MIN_LEARN_MATCHES = int(os.getenv("MIN_LEARN_MATCHES", "50"))
 # Max on-demand deep-link checks per minute per client IP (0 disables the limit).
 # A check drives a real browser against a bookmaker's site for seconds per event,
 # and API_KEY is empty by default, so the endpoint throttles itself: a lock only

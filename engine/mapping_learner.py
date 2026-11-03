@@ -90,17 +90,20 @@ class LearningReport:
     diff: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
+        accepted = sorted(set(self.accepted))
+        rejected = sorted(set(self.rejected))
+        quarantined = sorted(set(self.quarantined))
         return {
             "scan": self.scan,
             "matches": self.matches,
             "pairs_considered": self.pairs_considered,
-            "accepted": sorted(self.accepted),
-            "rejected": sorted(self.rejected),
-            "quarantined": sorted(self.quarantined),
+            "accepted": accepted,
+            "rejected": rejected,
+            "quarantined": quarantined,
             "counts": {
-                "accepted": len(self.accepted),
-                "rejected": len(self.rejected),
-                "quarantined": len(self.quarantined),
+                "accepted": len(accepted),
+                "rejected": len(rejected),
+                "quarantined": len(quarantined),
             },
             "diff": self.diff,
         }

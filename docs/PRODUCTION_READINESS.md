@@ -31,12 +31,16 @@ Two headless prematch scans were run against the live books, not fixtures.
 |---|---|---|---|---|---|---|---|---|
 | Baseline (legacy mappings) | 5,285 | 8/8 enabled | 811 | 3,536 | 3,526 | 0 | 0 | 0 |
 | With learned ledger | 5,287 | 8/8 enabled | 797 | 3,645 | 3,704 | 0 | 0 | 0 |
+| With in-scan learning | 5,276 | 8/8 enabled | 796 | 3,644 | 3,698 | 0 | 0 | 0 |
 
 The learned ledger was produced by `scripts/learn_mappings.py` from the first
 scan: 1,795 accepted claims and 866 quarantined. The second scan grouped 109
 more listings into 14 fewer groups, with zero groups holding two different
-Betradar ids and zero price outliers. The best available margin was 1.0021
-(0.21% loss), so zero surebets was the correct answer, not a failure.
+Betradar ids and zero price outliers. The third scan ran the learner **inside**
+the scan: 1,851 unique accepted claims, 815 quarantined, 796 groups, 3,644
+grouped listings, 3,698 comparisons, 0 outliers and 0 false merges. The best
+available margin was 1.0021 (0.21% loss), so zero surebets was the correct
+answer, not a failure.
 
 This is meaningful evidence for correctness. It is **not** evidence of coverage:
 1,221 listings still had an unproven per-event link (MaxBet and Mozzartbet), and
@@ -114,6 +118,9 @@ the ledger, shared-opponent blocking and league fingerprints are doing the job.
 * `scripts/replay_mappings.py --cold` learns from an empty ledger and reaches a
   fixed point; `--check` fails on a false merge or an unresolved evidence-backed
   pair.
+* The learner now runs **inside a real scan**, before the matcher, so the
+  aliases proved by that scan's own fixtures are available in the same pass.
+  `MIN_LEARN_MATCHES` keeps test/smoke scans from rewriting the shipped ledger.
 
 ## Production blockers, in priority order
 

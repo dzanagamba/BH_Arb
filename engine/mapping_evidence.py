@@ -459,6 +459,45 @@ class MappingLedger:
             claim.decided_at = _iso()
             return claim
 
+    def prune(self, max_evidence: int = 8) -> int:
+        """Keep the strongest, newest evidence per claim so the file stays bounded.
+
+        A league fingerprint needs its whole team set, so those claims keep the
+        union in one record instead of many. Returns the number of records
+        dropped.
+        """
+        dropped = 0
+        with self._lock:
+            for claim in self.claims.values():
+                if claim.kind == "league_fingerprint":
+                    teams: set[str] = set()
+                    for evidence in claim.evidence:
+                        raw = evidence.detail.get("teams")
+                        if isinstance(raw, list):
+                            teams.update(str(team) for team in raw)
+                    if claim.evidence:
+                        latest = claim.evidence[-1]
+                        claim.evidence = [
+                            Evidence(
+                                type=latest.type,
+                                detail={"teams": sorted(teams)},
+                                scan=latest.scan,
+                                books=latest.books,
+                                observed_at=latest.observed_at,
+                            )
+                        ]
+                    continue
+                if len(claim.evidence) <= max_evidence:
+                    continue
+                keep = sorted(
+                    claim.evidence,
+                    key=lambda item: (item.weight, item.observed_at),
+                    reverse=True,
+                )[:max_evidence]
+                dropped += len(claim.evidence) - len(keep)
+                claim.evidence = sorted(keep, key=lambda item: item.observed_at)
+            return dropped
+
     # -- reporting ---------------------------------------------------------
 
     def diff(self, previous: MappingLedger | None) -> dict[str, Any]:

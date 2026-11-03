@@ -7,7 +7,7 @@
 > entry, manual gate exception or manual CAPTCHA step** anywhere between scrape
 > and a shown surebet.
 >
-> **Baseline (2026-11-03, this worktree).** `python -m pytest` → **1135 passed** in 44 s; `ruff check .` clean; `mypy .` clean on 105 source files;
+> **Baseline (2026-11-03, this worktree).** `python -m pytest` → **1138 passed** in 37 s; `ruff check .` clean; `mypy .` clean on 106 source files;
 > `scripts/generate_market_mapping_doc.py --check` in sync. Environment is
 > `.venv` on CPython 3.11.18, installed with `uv`. The 953-passed figure in the
 > superseded plan was a 2026-10-20 measurement and is stale.
@@ -24,7 +24,7 @@
 > (A3-1). The evidence ledger, learner, gate integration, contradiction resolver,
 > league fingerprints, legacy migration, read-only coverage endpoint, classifier,
 > consensus, registry merge, discovery CLI and raw-offer resolver are shipped.
-> 1135 tests pass. **Real scan evidence (2026-11-03):** a headless prematch
+> 1138 tests pass. **Real scan evidence (2026-11-03):** a headless prematch
 > scan returned 5,285 matches from all 8 enabled books, 811 verified groups,
 > 3,526 price comparisons and 0 outliers; a second scan with a learned ledger
 > (1,795 accepted claims) returned 797 groups, 3,645 grouped listings, 3,704
@@ -1283,6 +1283,28 @@ counts.
 - **Done when:** a 7-day quality report exists with the counts and no invented
   thresholds.
 - **Log:** —
+
+#### A5-5 · Learn inside the scan
+
+- [x] **Status:** DONE 2026-11-03
+- **Needs:** offline.
+- **Depends on:** A1-3, A5-1.
+- **Files:** `server/api.py`, `config/settings.py`,
+  `engine/mapping_evidence.py`, `tests/test_auto_learning.py`.
+- **Facts:** Learning was a CLI step, so a fresh install still matched with the
+  legacy files and a person had to run `scripts/learn_mappings.py`.
+- **Steps:** after scraping and before constructing the matcher, call
+  `learn_scan_mappings`; it loads the ledger, learns, prunes evidence to a
+  bounded size and saves atomically. The matcher then reads the updated file in
+  the same scan. `AUTO_LEARN_MAPPINGS` defaults true; `MIN_LEARN_MATCHES`
+  (default 50) keeps test/smoke scans from rewriting the shipped ledger.
+- **Tests:** the helper persists a claim; prune keeps the strongest evidence and
+  the league-fingerprint union. Full suite green.
+- **Done when:** a real scan logs accepted/quarantined counts and groups with
+  the learned ledger in the same pass.
+- **Log:** Added the in-scan learner and `GET /api/health.mapping_learning`.
+  Real-scan validation is recorded under the checkpoint; the ledger is generated
+  and intentionally not committed (it is 9.8 MB after one 5k-match scan).
 
 ## 5. Working rules and procedures
 
