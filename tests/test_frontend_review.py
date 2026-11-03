@@ -205,3 +205,9 @@ def test_partial_acceptance_can_be_recorded():
     assert "data-placed-stake" in JS
     assert "Stake accepted" in JS
     assert "state.placed[label] = { odds, stake }" in JS
+
+
+def test_rendered_links_are_scheme_checked():
+    assert "function safeUrl" in JS
+    assert "parsed.protocol === 'http:'" in JS
+    assert "escapeHtml(safeUrl(url))" in JS

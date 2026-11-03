@@ -3,6 +3,7 @@ import os
 import sys
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
+from urllib.parse import urlsplit
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -76,6 +77,21 @@ if _cors_origins:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+@app.middleware("http")
+async def same_origin_guard(request, call_next):
+    """Refuse a cross-origin browser write even when no API key is configured.
+
+    A form POST is not subject to CORS, so the key guard alone does not stop a
+    malicious page from triggering a scan or a toggle. Requests without an
+    Origin header (curl, a scheduled task) are unchanged.
+    """
+    if request.method in {"POST", "PUT", "PATCH", "DELETE"} and request.url.path.startswith("/api"):
+        origin = request.headers.get("origin")
+        if origin and urlsplit(origin).netloc != request.url.netloc:
+            return JSONResponse({"detail": "Cross-origin request refused"}, status_code=403)
+    return await call_next(request)
+
 
 @app.middleware("http")
 async def api_key_guard(request, call_next):

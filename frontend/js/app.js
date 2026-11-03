@@ -809,7 +809,7 @@ function renderSlip() {
             <div class="leg-body">
                 <div class="leg-head">
                     <span class="leg-book">${escapeHtml(name)}</span>
-                    ${url ? `<a class="btn btn-small" href="${escapeHtml(url)}" target="_blank" rel="noopener" onclick="copyText(${escapeHtml(JSON.stringify(listedAs))}, 'Match name copied — paste it into the site search')">Open ${escapeHtml(name)} ↗</a>` : ''}
+                    ${url ? `<a class="btn btn-small" href="${escapeHtml(safeUrl(url))}" target="_blank" rel="noopener" onclick="copyText(${escapeHtml(JSON.stringify(listedAs))}, 'Match name copied — paste it into the site search')">Open ${escapeHtml(name)} ↗</a>` : ''}
                 </div>
                 <div class="leg-listing">
                     <span title="How ${escapeHtml(name)} lists this match">${escapeHtml(listedAs)}</span>
@@ -1322,6 +1322,16 @@ function escapeHtml(value) {
     })[character]);
 }
 
+function safeUrl(value) {
+    if (!value) return '';
+    try {
+        const parsed = new URL(String(value), window.location.href);
+        return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.href : '';
+    } catch (e) {
+        return '';
+    }
+}
+
 function candidateConfidence(value) {
     const numeric = Number(value);
     if (!Number.isFinite(numeric)) return 0;
@@ -1509,7 +1519,7 @@ function renderCandidates(candidates, total, actionableTotal) {
                     <p class="candidate-approval-note">${escapeHtml(readOnlyNote)}</p>
                 </div>
                 <div class="candidate-actions">
-                    <a class="btn btn-secondary btn-small" href="${escapeHtml(searchUrl)}" target="_blank" rel="noopener noreferrer"
+                    <a class="btn btn-secondary btn-small" href="${escapeHtml(safeUrl(searchUrl))}" target="_blank" rel="noopener noreferrer"
                        title="Search the web for this fixture">Check on the web ↗</a>
                 </div>
             </article>
