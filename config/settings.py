@@ -91,6 +91,10 @@ ENABLED_MARKETS = [
     "over_under_3_5",
     "btts",
     "double_chance",
+    # Proven on the 2026-11-03 real scan: 1,875 first-half 1X2 rows and 1,368
+    # Asian-handicap rows, 0 price outliers across 4,374 comparisons.
+    "first_half_1x2",
+    "asian_handicap",
 ]
 
 # Experimental markets — OFF by default, toggleable from the dashboard checkbox.
@@ -98,9 +102,7 @@ ENABLED_MARKETS = [
 # server's market_state.json toggle). Add new markets here instead of
 # ENABLED_MARKETS until they have proven live against real payloads.
 EXPERIMENTAL_MARKETS = [
-    "first_half_1x2",
     "first_half_ou",
-    "asian_handicap",
 ]
 
 # --- Arbitrage Settings ---

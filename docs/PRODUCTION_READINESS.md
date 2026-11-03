@@ -13,7 +13,7 @@ This is an evidence-based verdict, not a score:
 | Area | State | Why it is not production-ready |
 |---|---|---|
 | Event identity | Good and improving | Ledger, Betradar ids, shared-fixture learning, league fingerprints and shared-opponent blocking exist. No real-scan precision/recall measurement yet. |
-| Market identity | Partial | Label classifier + cross-book consensus + generated registry + raw-offer resolver exist. Only the NSoft parser publishes `source_id`; the other scrapers still use the hand-written registry. First-half and AH rows are not proven. |
+| Market identity | Good | Label classifier + cross-book consensus + generated registry + raw-offer resolver exist. Eight of nine markets are enabled; first-half 1X2 and AH were proven on a real scan with 0 outliers. Only the NSoft parser publishes `source_id`; the other scrapers still use the hand-written registry. First-half O/U has no captured offer. |
 | Human input | Disabled by default | The three write routes return 403 unless `HUMAN_MAPPING_ENABLED=true`; the Review UI hides its actions. The ledger is the only default trust source. Full route deletion remains A4-1. |
 | Freshness | Partial | The engine has odds TTL and every shown surebet is re-verified; there is still no per-book freshness budget, no last-known-value policy, and no push/streaming path. |
 | Execution | Partial | Stakes are rounded, legs are ordered, the slip re-plans, and every shown surebet is re-checked before placement. Book limits, partial acceptance, balance, and the "price moved between legs" workflow are not complete. |

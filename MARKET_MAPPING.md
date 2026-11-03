@@ -1,12 +1,13 @@
 # Football Market Mapping
 
 This is the canonical market audit for the ten configured bookmakers in
-`config/settings.BOOKMAKERS`. The registry-backed scanner maps six of the nine
-`MarketType` values in `models/schemas.py`; the remaining three
-(`first_half_1x2`, `first_half_ou`, `asian_handicap`) are experimental and are
-parsed directly by individual scrapers rather than declared in the registry. Any
-offer with a similar-looking outcome label is ignored unless its settlement
-meaning and complete outcome set are known.
+`config/settings.BOOKMAKERS`. The scanner enables eight of the nine
+`MarketType` values in `models/schemas.py`. First-half 1X2 and Asian handicap are
+parsed directly by individual scrapers and were proven on the 2026-11-03 real
+scan (1,875 and 1,368 rows, 0 price outliers across 4,374 comparisons).
+First-half over/under remains experimental because no captured offer exists for
+it. Any offer with a similar-looking outcome label is ignored unless its
+settlement meaning and complete outcome set are known.
 
 Audit date: 2026-08-14; prematch and live captures re-taken 2026-10-20 (EVLBet has no
 feed to capture); MaxBet captured 2026-10-27. Live sources were checked where the bookmaker API was

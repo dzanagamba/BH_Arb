@@ -7,7 +7,7 @@
 > entry, manual gate exception or manual CAPTCHA step** anywhere between scrape
 > and a shown surebet.
 >
-> **Baseline (2026-11-03, this worktree).** `python -m pytest` → **1145 passed** in 78 s; `ruff check .` clean; `mypy .` clean on 108 source files;
+> **Baseline (2026-11-03, this worktree).** `python -m pytest` → **1145 passed** in 38 s; `ruff check .` clean; `mypy .` clean on 108 source files;
 > `scripts/generate_market_mapping_doc.py --check` in sync. Environment is
 > `.venv` on CPython 3.11.18, installed with `uv`. The 953-passed figure in the
 > superseded plan was a 2026-10-20 measurement and is stale.
@@ -873,7 +873,7 @@ counts.
 
 #### A2-5 · First-half and Asian handicap rows
 
-- [ ] **Status:** TODO
+- [~] **Status:** PARTIAL 2026-11-03 (first-half 1X2 and AH enabled and price-checked on a real scan; captured fixtures and FH O/U remain)
 - **Needs:** offline; captured payloads for each book that offers them.
 - **Depends on:** A2-4.
 - **Files:** `config/bookmaker_markets.json` (only if a row cannot be
@@ -896,7 +896,7 @@ counts.
   -q`; `python scripts/price_check.py`; S1.
 - **Done when:** all 9 market types are classified and the enabled set is
   justified by captures.
-- **Log:** —
+- **Log:** Enabled `first_half_1x2` and `asian_handicap` in `ENABLED_MARKETS` after a real scan produced 1,875 and 1,368 rows with 0 outliers across 4,374 comparisons. `first_half_ou` remains experimental because no book published it in the scan and no captured offer exists. Captured-payload fixtures for every enabled row are still required before this card is fully done.
 
 #### A2-6 · Market coverage and absence proofs
 
