@@ -391,6 +391,7 @@ def parse_nsoft_bets(
     bookmaker: str = "mdshop",
     mode: str = "prematch",
     base_required_sbv: dict[int, str] | None = None,
+    source_context: dict[str, str] | None = None,
 ) -> list[Market]:
     """
     Parse an NSoft ``bets[]`` array into Market objects.
@@ -482,6 +483,7 @@ def parse_nsoft_bets(
         if not outcomes:
             continue
         odds_values: list[OddsValue] = []
+        outcome_ids: dict[str, str] = {}
         for outcome in outcomes:
             if not isinstance(outcome, dict) or not nsoft_offered(outcome):
                 continue
@@ -498,15 +500,24 @@ def parse_nsoft_bets(
             norm_label = normalize_outcome(lbl, market_type)
             if norm_label in expected_labels:
                 odds_values.append(OddsValue(label=norm_label, value=odd_val))
+                raw_outcome_id = outcome.get("id")
+                if raw_outcome_id is not None:
+                    outcome_ids[norm_label] = str(raw_outcome_id)
 
         actual = {o.label for o in odds_values}
         valid = len(actual) >= required_legs and actual.issubset(expected_labels)
         if valid:
+            context = dict(source_context or {})
+            raw_bet_id = bet.get("id")
+            if raw_bet_id is not None:
+                context["bet_id"] = str(raw_bet_id)
             markets.append(
                 Market(
                     market_type=market_type,
                     odds=odds_values,
                     source_id=str(btid),
+                    source_context=context,
+                    outcome_ids=outcome_ids,
                 )
             )
     return markets
@@ -515,6 +526,7 @@ def parse_nsoft_bets(
 def parse_nsoft_live_bets(
     bets: list,
     bookmaker: str = "mdshop",
+    source_context: dict[str, str] | None = None,
 ) -> list[Market]:
     """
     Parse an in-play NSoft ``bets[]`` array (live ID space).
@@ -530,6 +542,7 @@ def parse_nsoft_live_bets(
         base_required_sbv=NSOFT_LIVE_REQUIRED_SBV,
         bookmaker=bookmaker,
         mode="live",
+        source_context=source_context,
     )
 
 

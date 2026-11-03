@@ -67,12 +67,23 @@ def _league_name(event: dict) -> str:
     return qualify_league(competition, str(event.get("regionName") or ""))
 
 
-def _parse_bets(bets: list, live: bool = False) -> list[Market]:
+def _parse_bets(
+    bets: list,
+    live: bool = False,
+    source_context: dict[str, str] | None = None,
+) -> list[Market]:
     if live:
         # Live feed uses the NSoft live bet type ID space (6/18/42/995/22/28).
-        return parse_nsoft_live_bets(bets, bookmaker=BOOKMAKER_ID)
+        return parse_nsoft_live_bets(
+            bets, bookmaker=BOOKMAKER_ID, source_context=source_context
+        )
     # The registry carries Admiralbet's bookmaker-specific prematch IDs.
-    return parse_nsoft_bets(bets, bookmaker=BOOKMAKER_ID, mode="prematch")
+    return parse_nsoft_bets(
+        bets,
+        bookmaker=BOOKMAKER_ID,
+        mode="prematch",
+        source_context=source_context,
+    )
 
 
 class AdmiralbetScraper:
@@ -154,14 +165,25 @@ class AdmiralbetScraper:
             seen.add(code)
             league = _league_name(ev)
             kickoff = _parse_dt(ev.get("dateTime") or ev.get("dateFrom") or ev.get("kickoff"))
-            markets = _parse_bets(ev.get("bets", []), live=live)
+            source_context = {
+                "sport_id": str(ev.get("sportId") or ""),
+                "region_id": str(ev.get("regionId") or ""),
+                "region_name": str(ev.get("regionName") or ""),
+                "competition_id": str(ev.get("competitionId") or ""),
+                "competition_name": str(ev.get("competitionName") or ""),
+                "event_id": mid,
+                "event_name": str(ev.get("name") or ""),
+            }
+            markets = _parse_bets(
+                ev.get("bets", []), live=live, source_context=source_context
+            )
             if not markets:
                 continue
             matches.append(Match(
                 bookmaker=BOOKMAKER_ID, home_team=home, away_team=away,
                 league=league, kickoff=kickoff, markets=markets,
                 url=build_event_url("admiralbet", mid, BASE_URL, live=live), match_code=mid,
-                event_id=mid, deep_link_verified=False,
+                event_id=mid, source_context=source_context, deep_link_verified=False,
                 betradar_id=betradar_id(ev.get("betRadarEventId"), ev.get("externalEventId")),
                 is_live=live,
                 fetched_at=datetime.now(UTC).replace(tzinfo=None),

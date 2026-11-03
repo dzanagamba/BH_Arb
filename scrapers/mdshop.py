@@ -165,7 +165,18 @@ class MDShopScraper:
 
         kickoff = _parse_dt(ev.get("dateTime"))
 
-        markets = self._parse_bets(ev.get("bets", []), live=live)
+        source_context = {
+            "sport_id": str(ev.get("sportId") or ""),
+            "region_id": str(ev.get("regionId") or ""),
+            "region_name": str(ev.get("regionName") or ""),
+            "competition_id": str(ev.get("competitionId") or ""),
+            "competition_name": str(ev.get("competitionName") or ""),
+            "event_id": event_id,
+            "event_name": event_name,
+        }
+        markets = self._parse_bets(
+            ev.get("bets", []), live=live, source_context=source_context
+        )
         if not markets:
             return None
 
@@ -184,16 +195,29 @@ class MDShopScraper:
             match_code=event_id,
             event_id=event_id,
             betradar_id=betradar_id(ev.get("betRadarEventId"), ev.get("externalEventId")),
+            source_context=source_context,
             deep_link_verified=False,
             is_live=live,
             fetched_at=datetime.now(UTC).replace(tzinfo=None),
         )
 
-    def _parse_bets(self, bets: list, live: bool = False) -> list[Market]:
+    def _parse_bets(
+        self,
+        bets: list,
+        live: bool = False,
+        source_context: dict[str, str] | None = None,
+    ) -> list[Market]:
         """Parse bet objects into Market list (validated NSoft parser)."""
         if live:
-            return parse_nsoft_live_bets(bets, bookmaker=BOOKMAKER_ID)
-        return parse_nsoft_bets(bets, bookmaker=BOOKMAKER_ID, mode="prematch")
+            return parse_nsoft_live_bets(
+                bets, bookmaker=BOOKMAKER_ID, source_context=source_context
+            )
+        return parse_nsoft_bets(
+            bets,
+            bookmaker=BOOKMAKER_ID,
+            mode="prematch",
+            source_context=source_context,
+        )
 
     async def scrape(self, live: bool = False, scan_time: datetime | None = None) -> list[Match]:
         """

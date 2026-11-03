@@ -878,6 +878,24 @@ def test_scan_applies_stored_link_proofs_and_serves_the_surebet(
         for stake in served[0]["stakes"]
     } == EXPECTED_LEGS
 
+    # Every served leg carries a destination, and the label is the one the
+    # recorded coverage supports. These three books have no ticket route, so a
+    # served leg may be a match page or a competition fallback — never a ticket.
+    for stake in served[0]["stakes"]:
+        destination = stake.get("destination")
+        assert destination, f"{stake['bookmaker']} leg has no destination"
+        assert destination["kind"] in {"ticket_filled", "match_page", "search", "competition"}
+        assert destination["label"]
+        assert destination["kind"] != "ticket_filled", (
+            f"{stake['bookmaker']} has no recorded ticket proof, so its label must not be a ticket"
+        )
+        if destination["kind"] == "match_page":
+            assert destination["url"], "a match-page label needs a URL"
+            assert destination["proof_checked_at"] == "2026-11-03"
+        if destination["kind"] in {"search", "competition"}:
+            assert destination["search_text"], "a fallback needs the book's own spelling"
+            assert "ticket" not in destination["label"].lower()
+
 
 def test_scan_verifies_a_declared_no_link_book_with_no_stored_proof_at_all(
     isolated_server_state, stubbed_scrapers

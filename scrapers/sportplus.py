@@ -343,6 +343,13 @@ class SportPlusScraper:
         markets = self._parse_markets(m.get("markets", []))
         if not markets:
             return None
+        for market in markets:
+            market.source_context.update({
+                "sportplus_match_id": match_id,
+                "sportplus_sport_id": str(m.get("sportId") or ""),
+                "sportplus_match_date": str(m.get("matchDate") or ""),
+                "sportplus_competitors": competitors_str,
+            })
 
         return Match(
             bookmaker=BOOKMAKER_ID,
@@ -368,12 +375,41 @@ class SportPlusScraper:
         # are present.
         markets_by_type: dict[MarketType, dict[str, OddsValue]] = {}
 
-        def add_market(market_type: MarketType, odds: list[OddsValue]) -> None:
+        market_context: dict[MarketType, dict[str, object]] = {}
+
+        def _raw_alias(label: str, market_type: MarketType) -> str:
+            """The SportPlus ``alias`` for a canonical label, for a ticket prefill."""
+            if label in {"1", "X", "2", "1X", "12", "X2"}:
+                return label
+            if label == "GG":
+                return "Da"
+            if label == "NG":
+                return "Ne"
+            if label.startswith("Over "):
+                return "Više"
+            if label.startswith("Under "):
+                return "Manje"
+            if label.startswith("1 "):
+                return "1"
+            if label.startswith("2 "):
+                return "2"
+            return label
+
+        def add_market(
+            market_type: MarketType, odds: list[OddsValue], raw_market: dict
+        ) -> None:
             by_label = markets_by_type.setdefault(market_type, {})
             for odd in odds:
                 current = by_label.get(odd.label)
                 if current is None or odd.value > current.value:
                     by_label[odd.label] = odd
+            context = market_context.setdefault(market_type, {})
+            context["market_code"] = str(raw_market.get("code") or "")
+            context["market_id"] = str(raw_market.get("id") or "")
+            aliases = context.setdefault("aliases", {})
+            if isinstance(aliases, dict):
+                for odd in odds:
+                    aliases[odd.label] = _raw_alias(odd.label, market_type)
 
         goal_range_odds: dict[str, OddsValue] = {}
         range_labels = {
@@ -438,13 +474,13 @@ class SportPlusScraper:
                     and len({o.label for o in match_result_odds}) >= mr_spec.min_legs
                     and {o.label for o in match_result_odds}.issubset(mr_spec.labels)
                 ):
-                    add_market(MarketType.MATCH_RESULT, match_result_odds)
+                    add_market(MarketType.MATCH_RESULT, match_result_odds, market)
                 if (
                     dc_spec is not None
                     and len({o.label for o in dc_odds}) >= dc_spec.min_legs
                     and {o.label for o in dc_odds}.issubset(dc_spec.labels)
                 ):
-                    add_market(MarketType.DOUBLE_CHANCE, dc_odds)
+                    add_market(MarketType.DOUBLE_CHANCE, dc_odds, market)
 
             # Over/Under 2.5
             elif market_name == "ZBROJ GOLOVA 2,5" or market_id == 768:
@@ -454,7 +490,7 @@ class SportPlusScraper:
                 )
                 odds_list = self._parse_ou_odds(odds_raw, "2.5")
                 if spec is not None and odds_list and len(odds_list) >= spec.min_legs:
-                    add_market(MarketType.OVER_UNDER_2_5, odds_list)
+                    add_market(MarketType.OVER_UNDER_2_5, odds_list, market)
 
             # First Half 1X2 (id=4 "PRVO POLUVRIJEME")
             elif market_name == "PRVO POLUVRIJEME" or market_id == 4:
@@ -471,7 +507,7 @@ class SportPlusScraper:
                             OddsValue(label=normalize_outcome(alias, MarketType.FIRST_HALF_1X2), value=odd_val)
                         )
                 if {o.label for o in fh_odds} == {"1", "X", "2"}:
-                    add_market(MarketType.FIRST_HALF_1X2, fh_odds)
+                    add_market(MarketType.FIRST_HALF_1X2, fh_odds, market)
 
             # Asian Handicap (id=25 "AZIJSKI HENDIKEP") — level-ball (0-line):
             # both sides refund at 1.00 on a draw ("neriješeno kvota 1,00").
@@ -486,7 +522,7 @@ class SportPlusScraper:
                     add_market(MarketType.ASIAN_HANDICAP, [
                         OddsValue(label="1 0", value=home_val),
                         OddsValue(label="2 0", value=away_val),
-                    ])
+                    ], market)
 
             # Both Teams to Score
             elif market_name == "OBA TIMA DAJU GOL" or market_id == 6:
@@ -494,7 +530,7 @@ class SportPlusScraper:
                 spec = _registered_spec("prematch", source_id, MarketType.BTTS)
                 btts_odds = self._parse_btts_odds(odds_raw)
                 if spec is not None and btts_odds and len(btts_odds) >= spec.min_legs:
-                    add_market(MarketType.BTTS, btts_odds)
+                    add_market(MarketType.BTTS, btts_odds, market)
 
             # Goal Range — maps to O/U 1.5, O/U 2.5, O/U 3.5
             elif market_name == "RASPON GOLOVA" or market_id in (800, 802):
@@ -555,12 +591,24 @@ class SportPlusScraper:
                 and len(actual) >= spec.min_legs
                 and actual.issubset(spec.labels)
             ):
-                add_market(market_type, [over, under])
+                add_market(market_type, [over, under], market)
 
-        return [
-            Market(market_type=market_type, odds=list(odds_by_label.values()))
-            for market_type, odds_by_label in markets_by_type.items()
-        ]
+        result: list[Market] = []
+        for market_type, odds_by_label in markets_by_type.items():
+            context = market_context.get(market_type, {})
+            aliases = context.get("aliases") or {}
+            result.append(
+                Market(
+                    market_type=market_type,
+                    odds=list(odds_by_label.values()),
+                    source_context={
+                        "sportplus_market_code": str(context.get("market_code") or ""),
+                        "sportplus_market_id": str(context.get("market_id") or ""),
+                        "sportplus_odd_aliases": json.dumps(aliases),
+                    },
+                )
+            )
+        return result
 
     def _parse_ou_odds(self, odds_raw: list, threshold: str) -> list[OddsValue]:
         """Parse Over/Under odds from a market block."""

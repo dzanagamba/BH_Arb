@@ -32,6 +32,7 @@ from config.settings import (
     PREMATCH_EXPIRY_BUFFER_MINUTES,
     price_source,
 )
+from engine.destinations import attach_destinations
 from models.schemas import Market, MarketType, Match, MatchGroup, Surebet, SurebetStake
 from scrapers.common import parse_ah_label
 
@@ -197,6 +198,7 @@ class ArbitrageEngine:
         investment: float = DEFAULT_INVESTMENT,
         allow_past_kickoffs: bool = False,
         enabled_markets: set[str] | None = None,
+        mode: str = "prematch",
     ) -> list[Surebet]:
         """
         Scan all match groups for arbitrage opportunities.
@@ -271,6 +273,7 @@ class ArbitrageEngine:
                     result.listings = _collect_listings(group)
                     result.evidence = _evidence_summary(group)
                     result.odds_fetched_at = _oldest_fetch(group)
+                    attach_destinations(result, group, mode=mode)
                     surebets.append(result)
                     logger.info(
                         f"🎯 SUREBET: {group.canonical_home} vs {group.canonical_away} | "

@@ -30,6 +30,13 @@ class Market(BaseModel):
     # The book's own source id when the parser knows it. Additive: the registry
     # and the generated-market path use it to attribute a discovered mapping.
     source_id: str = ""
+    # Book-specific identifiers needed to build a ticket-prefill URL without a
+    # second request. NSoft (MDShop/Admiralbet) needs sport/region/competition
+    # and bet ids; other books leave this empty.
+    source_context: dict[str, str] = {}
+    # Canonical outcome label -> the book's own outcome id. Only a parser that
+    # read the id from the payload fills this; it is never guessed.
+    outcome_ids: dict[str, str] = {}
 
 
 class RawOffer(BaseModel):
@@ -77,6 +84,9 @@ class Match(BaseModel):
     # Betradar match id, when the book's feed carries one. Books on the same id
     # list the same real match, whatever they call the teams.
     betradar_id: str = ""
+    # Book-specific event context used only to build a destination URL (region,
+    # competition and the book's own event name). Never used for identity.
+    source_context: dict[str, str] = {}
     deep_link_verified: bool = False
     category_tags: list[str] = []
     is_swapped: bool = False
@@ -174,6 +184,34 @@ class MatchGroup(BaseModel):
     evidence: list[MatchEvidence] = []
 
 
+class LegDestination(BaseModel):
+    """Where a surebet leg can actually be reached, and what the link really does.
+
+    ``kind`` is the honest rung of the ladder: a populated ticket, a match page,
+    a search, or a competition page. It is never inferred from the presence of a
+    URL; ``engine.destinations`` only returns ``ticket_filled`` or ``match_page``
+    when the dated spot check in ``config/bookmaker_destinations.json`` proves
+    the fixture (and, for a ticket, the populated selection).
+    """
+    kind: Literal["ticket_filled", "match_page", "search", "competition"]
+    label: str
+    url: str = ""
+    search_text: str = ""
+    identifier: str = ""
+    identifier_source: str = ""
+    selection: str = ""
+    line: str = ""
+    market: str = ""
+    proof_checked_at: str = ""
+    proof_summary: str = ""
+    fallback_reason: str = ""
+    ticket_stake_supported: bool = False
+    # SportPlus keeps its ticket in localStorage, not in a URL. This is a
+    # copyable, manual prefill script (not a link) and is labelled as such.
+    ticket_script: str = ""
+    ticket_script_label: str = ""
+
+
 class SurebetStake(BaseModel):
     """Optimal stake for one outcome of a surebet."""
     bookmaker: str
@@ -181,6 +219,10 @@ class SurebetStake(BaseModel):
     odds: float
     stake: float
     potential_return: float
+    market_type: str = ""
+    selection: str = ""
+    line: str = ""
+    destination: LegDestination | None = None
 
 
 class Surebet(BaseModel):

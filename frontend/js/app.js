@@ -793,7 +793,20 @@ function renderSlip() {
         const name = bookName(leg.bookmaker);
         const listing = listings[leg.bookmaker];
         const listedAs = listing ? `${listing.home} – ${listing.away}` : `${formatTeamName(sb.home_team)} – ${formatTeamName(sb.away_team)}`;
-        const url = (sb.bet_urls && sb.bet_urls[leg.bookmaker]) || (sb.match_urls && sb.match_urls[leg.bookmaker]) || '';
+        // The destination is the only thing that may label a link. A fallback is
+        // never presented as a filled ticket, and a plain match page is never
+        // called a ticket.
+        const dest = leg.destination || {};
+        const destKind = dest.kind || '';
+        const url = dest.url || '';
+        const destLabel = dest.label || (url ? `Open ${name}` : '');
+        const searchText = dest.search_text || listedAs;
+        const pickText = dest.selection || leg.selection || leg.outcome_label;
+        const pickLine = dest.line || leg.line || '';
+        const lineText = pickLine && !String(pickText).includes(pickLine) ? ` · line ${pickLine}` : '';
+        const copyLabel = destKind === 'search' ? 'copy search' : destKind === 'competition' ? 'copy fixture' : 'copy name';
+        const stakeNote = destKind === 'ticket_filled' && !dest.ticket_stake_supported
+            ? '<span class="leg-sub">stake not prefilled</span>' : '';
         const drift = check?.data?.drift?.[leg.outcome_label];
         let driftNote = '';
         if (leg.scannedOdds != null && !leg.placed) {
@@ -809,15 +822,18 @@ function renderSlip() {
             <div class="leg-body">
                 <div class="leg-head">
                     <span class="leg-book">${escapeHtml(name)}</span>
-                    ${url ? `<a class="btn btn-small" href="${escapeHtml(safeUrl(url))}" target="_blank" rel="noopener" onclick="copyText(${escapeHtml(JSON.stringify(listedAs))}, 'Match name copied — paste it into the site search')">Open ${escapeHtml(name)} ↗</a>` : ''}
+                    ${url ? `<a class="btn btn-small dest-link" data-dest-kind="${escapeHtml(destKind)}" href="${escapeHtml(safeUrl(url))}" target="_blank" rel="noopener" title="${escapeHtml(dest.proof_summary || destKind || '')}">${escapeHtml(destLabel)} ↗</a>` : ''}
+                    ${destKind === 'search' && !url ? `<button type="button" class="btn btn-small btn-secondary" onclick="copyText(${escapeHtml(JSON.stringify(searchText))}, 'Search text copied')">Copy search text</button>` : ''}
+                    ${dest.ticket_script ? `<button type="button" class="btn btn-small btn-secondary" title="Paste this in the SportPlus page console; it only fills the slip" onclick="copyText(${escapeHtml(JSON.stringify(dest.ticket_script))}, 'SportPlus prefill script copied — paste it into the SportPlus page console')">${escapeHtml(dest.ticket_script_label || 'Copy prefill script')}</button>` : ''}
                 </div>
                 <div class="leg-listing">
                     <span title="How ${escapeHtml(name)} lists this match">${escapeHtml(listedAs)}</span>
-                    <button type="button" class="link-btn" onclick="copyText(${escapeHtml(JSON.stringify(listedAs))}, 'Match name copied')">copy name</button>
+                    <button type="button" class="link-btn" onclick="copyText(${escapeHtml(JSON.stringify(searchText))}, '${copyLabel === 'copy search' ? 'Search text copied' : 'Match name copied'}')">${copyLabel}</button>
                     ${listing?.league ? `<span class="leg-league">${escapeHtml(listing.league)}</span>` : ''}
+                    ${destKind ? `<span class="leg-league">${escapeHtml(destKind === 'ticket_filled' ? 'ticket' : destKind === 'match_page' ? 'match page' : destKind)}</span>` : ''}
                 </div>
                 <div class="leg-bet">
-                    <div><span class="leg-k">Pick</span><span class="leg-v">${label}</span><span class="leg-sub">${escapeHtml(outcomeDescription(leg.outcome_label, sb.market_type))}</span></div>
+                    <div><span class="leg-k">Pick</span><span class="leg-v">${escapeHtml(pickText)}${escapeHtml(lineText)}</span><span class="leg-sub">${escapeHtml(outcomeDescription(leg.outcome_label, sb.market_type))}</span>${stakeNote}</div>
                     <div><span class="leg-k">Odds</span><span class="leg-v mono">${leg.takenOdds.toFixed(2)}</span>${driftNote}</div>
                     <div><span class="leg-k">Stake</span>
                         <button type="button" class="leg-v mono stake-copy" title="Copy stake" onclick="copyText('${stakeText}', 'Stake copied')">${stakeText} KM</button>
@@ -1085,10 +1101,12 @@ function copySurebetDetails(id) {
         `${MARKET_LABELS[sb.market_type] || sb.market_type} · profit ${plan.profitPercent.toFixed(2)}% (${money(plan.profit)} KM on ${money(plan.total)} KM)`,
         '',
         ...plan.legs.map((leg, index) => {
-            const link = (sb.bet_urls && sb.bet_urls[leg.bookmaker]) || (sb.match_urls && sb.match_urls[leg.bookmaker]) || '';
+            const dest = leg.destination || {};
+            const link = dest.url || '';
             const listing = sb.listings?.[leg.bookmaker];
             const listed = listing ? ` [${listing.home} – ${listing.away}]` : '';
-            return `${index + 1}. ${bookName(leg.bookmaker)}${listed}: ${leg.outcome_label} @ ${leg.takenOdds.toFixed(2)} → ${leg.plannedStake.toFixed(stakeRounding === 'exact' ? 2 : 0)} KM${link ? ' ' + link : ''}`;
+            const where = dest.kind ? ` {${dest.kind}}` : '';
+            return `${index + 1}. ${bookName(leg.bookmaker)}${listed}: ${leg.outcome_label} @ ${leg.takenOdds.toFixed(2)} → ${leg.plannedStake.toFixed(stakeRounding === 'exact' ? 2 : 0)} KM${where}${link ? ' ' + link : ''}`;
         }),
     ];
     copyText(lines.join('\n'), 'Slip copied');

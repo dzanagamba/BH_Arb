@@ -1528,6 +1528,7 @@ async def run_scan(mode: str = "prematch", scheduled: bool = False):
             investment=DEFAULT_INVESTMENT,
             allow_past_kickoffs=is_live,
             enabled_markets=_enabled_markets(),
+            mode=mode,
         )
         price_dropped = []
         if PRICE_GUARD_ENABLED:
