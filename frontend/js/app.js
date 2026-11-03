@@ -18,7 +18,8 @@
 let currentMode = 'prematch';       // 'prematch' (upcoming) | 'live' (in-play)
 let activeScanMode = null;          // mode of the currently running scan
 let activeTab = 'surebets';         // 'surebets' | 'review' | 'history'
-let candidateApiKey = '';           // in-memory key for configured review mutations
+let candidateApiKey = (() => { try { return sessionStorage.getItem('apiKey') || ''; } catch (e) { return ''; } })();
+let candidateApiKeyDeclined = false; // a cancelled prompt stops background re-asks
 let allSurebets = [];               // full list from the server
 let filteredSurebets = [];          // after client-side filtering
 let selectedSurebetId = null;       // the surebet open in the bet slip
@@ -153,7 +154,7 @@ function restorePreferences() {
 
 async function loadConfig() {
     try {
-        const res = await fetch('/api/config');
+        const res = await apiFetch('/api/config');
         const data = await res.json();
         bookmakersConfig = data.bookmakers || {};
         const minInput = document.getElementById('filter-profit');
@@ -304,7 +305,7 @@ function initBookmakerChips() {
 
 async function toggleBookmakerAPI(chip, id) {
     try {
-        const res = await fetch(`/api/config/toggle/${id}`, { method: 'POST', headers: candidateActionHeaders() });
+        const res = await apiFetch(`/api/config/toggle/${encodeURIComponent(id)}`, { method: 'POST', headers: candidateActionHeaders() });
         const data = await res.json();
         if (data.status === 'ok') {
             chip.classList.toggle('active', data.enabled);
@@ -320,7 +321,7 @@ async function toggleBookmakerAPI(chip, id) {
 
 async function toggleExperimentalMarket(box) {
     try {
-        const res = await fetch(`/api/config/toggle_market/${box.value}`, { method: 'POST', headers: candidateActionHeaders() });
+        const res = await apiFetch(`/api/config/toggle_market/${encodeURIComponent(box.value)}`, { method: 'POST', headers: candidateActionHeaders() });
         const data = await res.json();
         if (data.status === 'ok') {
             box.checked = data.enabled;
@@ -354,7 +355,7 @@ async function scanNow() {
     const btn = document.getElementById('scan-btn');
     if (btn.disabled) return;
     try {
-        const res = await fetch(`/api/scan?mode=${currentMode}`, { method: 'POST', headers: candidateActionHeaders() });
+        const res = await apiFetch(`/api/scan?mode=${currentMode}`, { method: 'POST', headers: candidateActionHeaders() });
         const data = await res.json();
         if (res.status === 429) {
             showError(data.detail || 'Too many scans — wait a moment.');
@@ -419,7 +420,7 @@ function setAutoRescan(minutes) {
 async function pollStatus() {
     const pollMode = activeScanMode || currentMode;
     try {
-        const res = await fetch(`/api/status?mode=${pollMode}`);
+        const res = await apiFetch(`/api/status?mode=${pollMode}`);
         const status = await res.json();
         updateScanProgress(status);
         if (!status.is_scanning) {
@@ -471,7 +472,7 @@ async function onScanComplete(status) {
 // ─── Results ──────────────────────────────────────────────────────────────────
 async function loadResults(silent = false) {
     try {
-        const res = await fetch(`/api/results?mode=${currentMode}`);
+        const res = await apiFetch(`/api/results?mode=${currentMode}`);
         const data = await res.json();
         allSurebets = data.surebets || [];
         // `match_groups` is the mode-correct count of groups the certainty gate
@@ -1012,7 +1013,7 @@ async function verifySurebet(id) {
     if (id === selectedSurebetId) renderSlip();
     let result;
     try {
-        const res = await fetch('/api/verify', {
+        const res = await apiFetch('/api/verify', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', ...candidateActionHeaders() },
             body: JSON.stringify({ surebet_id: id, mode: currentMode }),
@@ -1357,6 +1358,26 @@ function candidateActionHeaders() {
     return candidateApiKey ? { 'X-API-Key': candidateApiKey } : {};
 }
 
+async function apiFetch(url, options = {}, promptText = 'This SureBet deployment requires an API key.') {
+    const send = () => fetch(url, { ...options, headers: candidateActionHeaders(options.headers || {}) });
+    const keyUsed = candidateApiKey;
+    let response = await send();
+    if (response.status !== 401) return response;
+    if (candidateApiKey && candidateApiKey !== keyUsed) return send();
+    // A background poll does not re-ask after a cancel; a click (a POST) does.
+    if (candidateApiKeyDeclined && !options.method) return response;
+    const entered = window.prompt(promptText);
+    if (entered && entered.trim()) {
+        candidateApiKey = entered.trim();
+        candidateApiKeyDeclined = false;
+        try { sessionStorage.setItem('apiKey', candidateApiKey); } catch (e) { /* storage unavailable */ }
+        response = await send();
+    } else {
+        candidateApiKeyDeclined = true;
+    }
+    return response;
+}
+
 async function candidateListFetch(url) {
     const send = () => fetch(url, { headers: candidateActionHeaders() });
     let response = await send();
@@ -1501,7 +1522,7 @@ async function loadHistory() {
     const body = document.getElementById('history-body');
     if (!body) return;
     try {
-        const res = await fetch('/api/history', { headers: candidateActionHeaders() });
+        const res = await apiFetch('/api/history', { headers: candidateActionHeaders() });
         const data = await res.json();
         const entries = data.entries || [];
         if (entries.length === 0) {
@@ -1556,7 +1577,7 @@ async function shutdownServer() {
     const btn = document.getElementById('shutdown-btn');
     btn.disabled = true;
     try {
-        const res = await fetch('/api/shutdown', { method: 'POST', headers: candidateActionHeaders() });
+        const res = await apiFetch('/api/shutdown', { method: 'POST', headers: candidateActionHeaders() });
         if (!res.ok) {
             const data = await res.json().catch(() => ({}));
             throw new Error(data.detail || `HTTP ${res.status}`);

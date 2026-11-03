@@ -6,10 +6,15 @@ from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from config.settings import AUTO_SCAN_LIVE_MINUTES, AUTO_SCAN_PREMATCH_MINUTES, CORS_ORIGINS
+from config.settings import (
+    API_KEY,
+    AUTO_SCAN_LIVE_MINUTES,
+    AUTO_SCAN_PREMATCH_MINUTES,
+    CORS_ORIGINS,
+)
 from server.api import (
     _deep_link_decisions,
     _deep_link_verifications,
@@ -71,6 +76,24 @@ if _cors_origins:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+@app.middleware("http")
+async def api_key_guard(request, call_next):
+    """Require the configured API key on every /api route except health.
+
+    State-changing routes also check the key through their dependency; this
+    guard closes the read routes too, so an exposed deployment does not leak
+    results, candidates or history.
+    """
+    if (
+        API_KEY
+        and request.url.path.startswith("/api")
+        and request.url.path != "/api/health"
+        and request.headers.get("X-API-Key") != API_KEY
+    ):
+        return JSONResponse({"detail": "Invalid or missing API key"}, status_code=401)
+    return await call_next(request)
+
 
 # Include API routes
 app.include_router(router, prefix="/api")

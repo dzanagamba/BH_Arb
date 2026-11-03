@@ -18,7 +18,7 @@ This is an evidence-based verdict, not a score:
 | Freshness | Partial | The engine has odds TTL and every shown surebet is re-verified; there is still no per-book freshness budget, no last-known-value policy, and no push/streaming path. |
 | Execution | Partial | Stakes are rounded, legs are ordered, the slip re-plans, and every shown surebet is re-checked before placement. Book limits, partial acceptance, balance, and the "price moved between legs" workflow are not complete. |
 | Operations | Missing | No scheduler/back-off, no alerting, no 24 h soak, no deployment, no health budget for mapping coverage. |
-| Security | Partial | The server now binds loopback by default and CORS is same-origin unless `CORS_ORIGINS` names an origin. The paused stash (API key on every route, CSRF guard, XSS sweep) is still unapplied. |
+| Security | Good | Loopback by default, same-origin CORS, and a single guard requires the API key on every `/api` route except `/api/health`; the dashboard prompts once. A CSRF guard and a full XSS sweep remain from the paused stash. |
 | Evaluation | Partial | Deterministic replay, a cold-start fixed point and two real scans exist. No large multi-scan corpus, no labelled precision/recall, no CLV/backtest. |
 
 The honest summary: **the engine can prove a match and price it on real data
@@ -169,9 +169,8 @@ read before 2026-11-03.
 5. **Operate it.** Scheduler with per-book back-off, 24 h soak, memory/browser
    leak checks, health/alerting on mapping coverage and stale books, and a
    documented persistent deployment.
-6. **Harden it.** Loopback and same-origin CORS are now the defaults; apply the
-   rest of the paused stash: API key on every state-changing route, CSRF guard,
-   XSS escaping, and the dashboard's key prompt.
+6. **Harden it.** Loopback, same-origin CORS and the all-route API key guard are
+   in place; apply the remaining stash items: CSRF guard and the XSS sweep.
 7. **Measure quality.** Precision/recall on a labelled corpus, false-merge rate,
    mapping coverage, price-check outliers, CLV/backtest once real bets are
    recorded. A low coverage number is a finding, not a threshold to lower.

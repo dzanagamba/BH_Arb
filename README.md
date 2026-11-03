@@ -162,7 +162,7 @@ three minutes).
 Set these in `.env` (copy `.env.example`):
 - `HOST` / `PORT` — bind address and port (default `127.0.0.1` / `8000`; set `HOST=0.0.0.0` only behind a firewall and an API key)
 - `CORS_ORIGINS` — comma-separated origins for a separate frontend; empty means same-origin only
-- `API_KEY` — when set, every state-changing endpoint (scan, toggles, recalculate, verify, verify-links, candidate decisions) and `GET /api/history` require an `X-API-Key` header. Unset by default, so set it before exposing the server beyond localhost
+- `API_KEY` — when set, every `/api` route except `/api/health` requires an `X-API-Key` header; the dashboard asks for it once per tab. Unset by default, so set it before exposing the server beyond localhost
 - `SCAN_RATE_LIMIT` — max scans a client may trigger per minute (default `3`)
 - `HEADLESS` — `true` for background browser execution (default), or `false` to view browser windows (useful if CAPTCHA solving is required)
 - `LOG_LEVEL` — `DEBUG`, `INFO` (default), `WARNING` or `ERROR`
