@@ -828,6 +828,7 @@ function renderSlip() {
                         ? `<span class="placed-tag">Placed at ${leg.takenOdds.toFixed(2)} for ${stakeText} KM</span>
                            <button type="button" class="link-btn" onclick="unmarkPlaced('${escapeHtml(sb.id)}', ${escapeHtml(JSON.stringify(leg.outcome_label))})">undo</button>`
                         : `<label class="placed-odds">Odds taken <input class="input input-narrow mono" type="number" step="0.01" min="1.01" value="${leg.odds.toFixed(2)}" data-placed-odds></label>
+                           <label class="placed-odds">Stake accepted <input class="input input-narrow mono" type="number" step="1" min="0.01" value="${leg.plannedStake}" data-placed-stake></label>
                            <button type="button" class="btn btn-secondary btn-small" onclick="markPlaced('${escapeHtml(sb.id)}', ${escapeHtml(JSON.stringify(leg.outcome_label))}, this)">Mark placed</button>`}
                 </div>
             </div>
@@ -887,7 +888,7 @@ function renderSlip() {
             <summary>How to place this</summary>
             <ol>
                 <li>Place the legs top to bottom. The first has the longest odds — the price most likely to move or be limited.</li>
-                <li>On the bookmaker's site, check the odds match before you confirm. If they dropped, type the odds you got into <em>Odds taken</em> and press <em>Mark placed</em>: the stakes below are re-planned to cover it.</li>
+                <li>On the bookmaker's site, check the odds match before you confirm. If they dropped or the book accepted only part of the stake, type what you actually got into <em>Odds taken</em> and <em>Stake accepted</em>, then press <em>Mark placed</em>: the remaining stakes are re-planned to cover it.</li>
                 <li>If a later leg is gone or the profit turns red, stop. Either hedge the placed leg at the best price available or accept the single bet — do not chase.</li>
             </ol>
         </details>
@@ -976,13 +977,22 @@ function markPlaced(id, label, button) {
     const state = slipFor(sb);
     const plan = planStakes(placementOrder(currentStakes(sb, verifyState[sb.id])), state.investment, state.placed);
     const leg = plan.legs.find(l => l.outcome_label === label);
-    const input = button.closest('.leg').querySelector('[data-placed-odds]');
+    const row = button.closest('.leg');
+    const input = row.querySelector('[data-placed-odds]');
+    const stakeInput = row.querySelector('[data-placed-stake]');
     const odds = parseFloat(input?.value);
+    const stake = parseFloat(stakeInput?.value);
     if (!leg || !odds || odds < 1.01) {
         showToast('Enter the odds you actually got');
         return;
     }
-    state.placed[label] = { odds, stake: leg.plannedStake };
+    if (!stake || stake <= 0) {
+        showToast('Enter the stake the bookmaker accepted');
+        return;
+    }
+    // Partial acceptance is a real outcome: the remaining legs are re-planned
+    // around the amount the book actually took, not the amount we asked for.
+    state.placed[label] = { odds, stake };
     renderSlip();
 }
 

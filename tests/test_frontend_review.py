@@ -198,3 +198,10 @@ def test_reason_labels_cover_source_derived_reason_codes():
     assert _missing_reason_labels({"intentional_missing_reason"}, labels) == [
         "intentional_missing_reason"
     ]
+
+
+def test_partial_acceptance_can_be_recorded():
+    """A book that takes only part of a stake must feed the real amount back."""
+    assert "data-placed-stake" in JS
+    assert "Stake accepted" in JS
+    assert "state.placed[label] = { odds, stake }" in JS
