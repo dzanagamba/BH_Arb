@@ -50,7 +50,19 @@ on the final gate (including the pairing and CSP changes):
 | 3 | 6,500 | 1,044 | 12 | 888.7 MB | 0 | 1 |
 
 Memory grew **13.95%**, no browser process survived, and the run passed
-`--check`. The 24-hour run is still open.
+`--check`.
+
+`python scripts/soak.py --cycles 6 --interval 5 --pid <server-pid> --check`
+on the final code (punctuation, expiry and CSP included):
+
+| Sample | Matches | Groups | Surebets | RSS | Browsers | Errors |
+|---|---:|---:|---:|---:|---:|---:|
+| 1 | 6,397 | 1,037 | 9 | 755.2 MB | 0 | 0 |
+| 6 | 6,397 | 1,037 | 9 | 870.5 MB | 0 | 0 |
+
+Memory grew **15.27%**, no browser process survived, all six scans returned the
+same 1,037 groups and 9 surebets, and the run passed `--check`. The 24-hour run
+is still open.
 
 ## Real prematch scan (verified sample)
 
@@ -88,11 +100,11 @@ and are reported as gone rather than as confirmed arbs.
 
 The final-gate soak scan at **04:54 UTC** found **6,500 matches, 1,044 verified
 groups and 12 surebets**, including `mainz – bayern munich` 1X2 at 0.27%, a
-fixture that only paired after the anchor fix. The latest scan at **05:25 UTC**,
-after the abbreviation, punctuation and prematch-expiry rules, found **6,394
-matches, 1,032 verified groups and 7 surebets**. Five of those seven re-verified
-at a fresh price; the two Boston United–Leicester U21 legs were gone on
-re-check and are reported as gone.
+fixture that only paired after the anchor fix. The latest scan at **05:36 UTC**,
+after the abbreviation, punctuation, canonical-punctuation and prematch-expiry
+rules, found **6,397 matches, 1,036 verified groups and 8 surebets**. The
+Boston United–Leicester U21 pair from the earlier sample was gone on re-check
+and is reported as gone.
 
 ## Pairing coverage
 
@@ -102,13 +114,13 @@ repeats a bookmaker.
 
 | Metric | Value |
 |---|---:|
-| Matches | 6,394 |
-| Verified multi-book groups | 1,032 |
-| Listings in groups | 5,723 |
-| Ungrouped listings | 671 |
+| Matches | 6,397 |
+| Verified multi-book groups | 1,036 |
+| Listings in groups | 5,743 |
+| Ungrouped listings | 654 |
 | Duplicate listings from a book already in the group | 299 |
-| Strict misses (same league, ±15 min, both teams ≥80% alike) | 31 |
-| Strict miss rate | **0.48%** |
+| Strict misses (same league, ±15 min, both teams ≥80% alike) | 25 |
+| Strict miss rate | **0.39%** |
 | Groups repeating a bookmaker | 0 |
 
 Per-book grouping, including duplicate listings:
@@ -117,16 +129,16 @@ Per-book grouping, including duplicate listings:
 |---|---:|---:|
 | MDShop | 525 / 527 | 99.6% |
 | Admiralbet | 525 / 527 | 99.6% |
-| MBet | 585 / 601 | 97.3% |
-| WWIN | 712 / 741 | 96.1% |
-| SportPlus | 717 / 750 | 95.6% |
-| Premier Kladionica | 736 / 834 | 88.2% |
-| MaxBet | 736 / 838 | 87.8% |
-| Betole | 930 / 1,239 | 75.1% |
-| Mozzartbet | 257 / 337 | 76.3% |
+| MBet | 593 / 601 | 98.7% |
+| WWIN | 713 / 742 | 96.1% |
+| SportPlus | 718 / 750 | 95.7% |
+| Premier Kladionica | 738 / 834 | 88.5% |
+| MaxBet | 738 / 837 | 88.2% |
+| Betole | 935 / 1,243 | 75.2% |
+| Mozzartbet | 258 / 336 | 76.8% |
 
 The low Betole/Mozzartbet rates are mostly duplicate listings and leagues no
-other book carries, not same-fixture misses: only 31 offers in the whole scan
+other book carries, not same-fixture misses: only 25 offers in the whole scan
 have a strict counterpart in another book that the matcher failed to pair. The
 remaining examples are abbreviations and city-qualified spellings such as
 `Qingdao H` / `Qingdao Hainiu`, `Dynamo D` / `Dynamo Dresden`, and
@@ -153,7 +165,12 @@ remaining examples are abbreviations and city-qualified spellings such as
    `germany, bundesliga`. The learner now records generic fingerprints and the
    resolver compares canonical team ids, so `Mainz – Bayern` pairs across all
    nine books.
-5. **Prematch expiry is real.** A group is dropped once the latest kickoff any
+5. **Canonical punctuation is lossless.** `shimizu s-pulse` and
+   `shimizu s pulse` were different canonical ids even though their raw names
+   were equal. Comparing canonical ids with the same punctuation folding fixed
+   MBet/Admiralbet fixtures in Japan, Korea, Norway and Saudi Arabia; MBet's
+   grouping rate rose from 97.3% to 98.7%.
+6. **Prematch expiry is real.** A group is dropped once the latest kickoff any
    book claims is more than two minutes past. Live mode still prices started
    matches; the old 15-minute prematch grace kept pricing fixtures that had
    already begun.

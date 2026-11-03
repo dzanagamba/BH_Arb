@@ -206,6 +206,11 @@ class CertaintyGate:
         return " ".join(_TEAM_PUNCTUATION.sub(" ", plain).split())
 
     @classmethod
+    def _canonical_team_key(cls, name: str) -> str:
+        """Canonical ids compared losslessly, including underscores."""
+        return cls._raw_team_key(name.replace("_", " "))
+
+    @classmethod
     def _club_designator_key(cls, name: str) -> str:
         """Drop leading/trailing club-type tokens, keeping the club name."""
         words = cls._raw_team_key(name).split()
@@ -266,7 +271,14 @@ class CertaintyGate:
         left_key = self._raw_team_key(left_raw)
         right_key = self._raw_team_key(right_raw)
         if left_key and left_key == right_key:
-            return left_normalized == right_normalized, ""
+            # Raw equality is lossless. Canonical ids may still differ only by
+            # punctuation the normalizer kept ("shimizu s-pulse" vs
+            # "shimizu s pulse"); that is not an identity difference.
+            return (
+                self._canonical_team_key(left_normalized)
+                == self._canonical_team_key(right_normalized),
+                "",
+            )
 
         if self.evidence is not None and self.evidence.is_accepted(
             "team_alias", team_alias_key(left_raw, right_raw)

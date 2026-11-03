@@ -591,6 +591,12 @@ def test_token_abbreviations_are_not_different_clubs():
         "St Mirren", "st_mirren", "Saint Mirren", "saint_mirren"
     ) == (True, "abbreviation")
     assert gate._raw_team_key("Wingate&Finchley") == gate._raw_team_key("Wingate & Finchley")
+    assert gate._team_pair_details(
+        "Shimizu S-Pulse",
+        "shimizu s-pulse",
+        "Shimizu S Pulse",
+        "shimizu s pulse",
+    ) == (True, "")
     # A shared first token is not enough: the differing token must abbreviate.
     assert gate._team_pair_details(
         "Manchester Utd", "manchester_utd", "Manchester City", "manchester_city"

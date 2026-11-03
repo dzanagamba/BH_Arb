@@ -204,7 +204,7 @@ follows from the reasons left over:
 | Status | Meaning | Reason vocabulary |
 |---|---|---|
 | `verified` | **Zero** reasons. Every part of the claim is proven, links included. These are the only groups that reach arbitrage. | — |
-| `suggested` | At least one reason is outstanding — the identity is plausible but incomplete. Not priced; queued for review. | `kickoff_missing`, `kickoff_delta`, `team_unresolved`, `link_unverified`, `no_event_link` |
+| `suggested` | At least one reason is outstanding — the identity is plausible but incomplete. Not priced; shown in the read-only Diagnostics queue. | `kickoff_missing`, `kickoff_delta`, `team_unresolved`, `link_unverified`, `no_event_link` |
 | `rejected` | A hard gate contradicts the claim. | `league_mismatch`, `category_mismatch`, `betradar_mismatch` |
 
 The reason strings above are the vocabulary the gate actually emits, and
@@ -217,15 +217,25 @@ line number here is stale the moment the module's imports change — also lists
 case is reported as `team_unresolved`. Until that entry is either produced or
 deleted, treat `rejected` as the reasons above except `orientation_unresolved`.
 
-Five rules inside stage 1 matter more than the rest:
+Six rules inside stage 1 matter more than the rest:
 
-* **The reviewed alias allowlist is the only auto-accepted fuzzy path.** A pair
-  whose raw team names differ is refused unless the pair appears in
-  `config/team_alias_allowlist.json` (and scores at least 90 similarity) or in
-  `config/team_alias_reviewed.json`, the pairs a person reviewed from fixture
-  evidence, which carry no similarity floor ("Man.Utd" / "Manchester United").
-  Either way league, kickoff and category must still agree. A canonical-name
-  collision on its own is never enough.
+* **The evidence ledger is the trust source.** Team aliases and league
+  equivalences are learned from shared fixtures and Betradar ids, then persisted
+  in `config/generated/mapping_evidence.json`. The reviewed allowlist and
+  `config/team_alias_reviewed.json` are migration input only; nothing in the
+  default pipeline asks a person to approve a pair. A raw-name difference can
+  also be settled by the deterministic rules below, with league, kickoff and
+  category still required.
+* **Lossless name rules are deterministic, not fuzzy guesses.** A leading or
+  trailing club designator (`FC Liefering` / `Liefering`), a token abbreviation
+  (`Man Utd` / `Manchester Utd`, `Dynamo D` / `Dynamo Dresden`), or a
+  punctuation-only difference (`Shimizu S-Pulse` / `Shimizu S Pulse`) is
+  accepted. A shared city token is not enough: `Manchester Utd` /
+  `Manchester City` is rejected.
+* **The group, not its first member, proves identity.** A candidate can be
+  proved by the group's canonical league or by any supporting member, and a
+  generic league name (`bundesliga`) is fingerprinted by its team set and
+  resolved per fixture against a country-qualified spelling.
 * **Links are a machine fact, not a human one.** `deep_link_verified` may only be
   set by an actual browser check (`scripts/verify_deeplinks.py`), never by a
   human approval.

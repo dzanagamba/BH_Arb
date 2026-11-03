@@ -25,11 +25,11 @@
 > league fingerprints, legacy migration, read-only coverage endpoint, classifier,
 > consensus, registry merge, discovery CLI and raw-offer resolver are shipped.
 > Betole is now the ninth enabled book after fixing its kickoff and Betradar id;
-> the latest 9-book scan found 6,394 matches, 1,032 verified groups, 129 groups
-> carrying all nine books and **7 surebets**. Five re-verified at a fresh price;
-> the two Boston United–Leicester U21 legs disappeared before the re-check and
-> are reported as gone. `scripts/pairing_audit.py --check` measures **31 strict
-> misses in 6,394 offers (0.48%)** and zero groups repeating a bookmaker. The anchor-only gate defect, generic-league fingerprints and
+> the latest 9-book scan found 6,397 matches, 1,036 verified groups, 130 groups
+> carrying all nine books and **8 surebets**. The earlier Boston
+> United–Leicester U21 pair disappeared before the re-check and is reported as
+> gone. `scripts/pairing_audit.py --check` measures **25 strict misses in 6,397
+> offers (0.39%)** and zero groups repeating a bookmaker. The anchor-only gate defect, generic-league fingerprints and
 > club-designator rule are fixed and covered by regression tests. **1171 tests
 > pass.** The acceptance record is `docs/ACCEPTANCE.md`; the production verdict
 > and research are in `docs/PRODUCTION_READINESS.md`.
@@ -1201,7 +1201,7 @@ counts.
 - **Verify:** the old cards' tests; a 24 h run for M4-1; a token check for
   M4-2.
 - **Done when:** the old M4-1/M4-2 done conditions are met.
-- **Log:** Added `AUTO_SCAN_PREMATCH_MINUTES`/`AUTO_SCAN_LIVE_MINUTES` (0 = off), `server/scheduler.py`, `start_scan_if_idle`, lifespan task start/stop, and `scheduler` in `/api/health`. The loop never overlaps a manual scan or a verify lock; exceptions are logged and the loop continues. Per-book backoff now skips a book after 3 empty/error scheduled runs, doubles the wait to a 60-minute cap, resets on a non-empty run, and is ignored by manual scans; `/api/health` exposes the counters. 6 scheduler tests. Added `scripts/soak.py`; a 10-cycle run passed at 23.6% RSS growth and 0 surviving browsers, and a final-gate 3-cycle run is recorded in `docs/ACCEPTANCE.md`. The 24-hour run is still open. Notifications remain.
+- **Log:** Added `AUTO_SCAN_PREMATCH_MINUTES`/`AUTO_SCAN_LIVE_MINUTES` (0 = off), `server/scheduler.py`, `start_scan_if_idle`, lifespan task start/stop, and `scheduler` in `/api/health`. The loop never overlaps a manual scan or a verify lock; exceptions are logged and the loop continues. Per-book backoff now skips a book after 3 empty/error scheduled runs, doubles the wait to a 60-minute cap, resets on a non-empty run, and is ignored by manual scans; `/api/health` exposes the counters. 6 scheduler tests. Added `scripts/soak.py`; a 10-cycle run passed at 23.6% RSS growth and 0 surviving browsers, a final-gate 3-cycle run passed at 13.95%, and a 6-cycle run on the final code passed at 15.27% with 9 surebets each cycle. All are recorded in `docs/ACCEPTANCE.md`. The 24-hour run is still open. Notifications remain.
 
 #### A7-3 · Re-apply security hardening
 
