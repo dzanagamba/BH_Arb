@@ -106,8 +106,9 @@ Kitakyushu–Reilac Shiga (MaxBet X2, SportPlus 1) and Kanazawa–Parceiro N
 re-verified with `still_profitable: true`; the two that disappeared before the
 re-check are reported as gone. The latest 05:36 scan, after the abbreviation,
 canonical-punctuation and prematch-expiry rules, found 6,397 matches, 1,036
-groups and 8 surebets. The earlier Boston United–Leicester U21 pair was gone on
-re-check and is reported as gone.
+groups and 8 surebets. The six-cycle soak on the same code returned 9 surebets
+each cycle; seven re-verified at a fresh price and the two Boston
+United–Leicester U21 legs were gone and are reported as gone.
 
 The route-pattern proof for MaxBet/Mozzartbet and enabling Betole were the
 coverage unlocks: grouped listings rose from 3,645 to 5,805. Betole also carries

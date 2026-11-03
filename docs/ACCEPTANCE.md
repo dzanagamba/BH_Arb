@@ -61,8 +61,11 @@ on the final code (punctuation, expiry and CSP included):
 | 6 | 6,397 | 1,037 | 9 | 870.5 MB | 0 | 0 |
 
 Memory grew **15.27%**, no browser process survived, all six scans returned the
-same 1,037 groups and 9 surebets, and the run passed `--check`. The 24-hour run
-is still open.
+same 1,037 groups and 9 surebets, and the run passed `--check`. On the soak's
+nine surebets, seven re-verified at a fresh price (Najran–Jubbah, Anaitasuna–Alaves,
+Zakynthos–Niki Volou, Manchester United–Roma, Roma–Sassuolo, Villarreal–PSG and
+Mainz–Bayern); the two Boston United–Leicester U21 legs were gone on re-check and
+are reported as gone. The 24-hour run is still open.
 
 ## Real prematch scan (verified sample)
 
