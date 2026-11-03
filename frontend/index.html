@@ -67,7 +67,7 @@
                 onclick="switchTab('surebets')">Surebets <span id="surebets-count" class="tab-count">0</span></button>
         <button class="tab-btn" id="review-tab" data-tab="review" role="tab"
                 aria-selected="false" aria-controls="review-panel" tabindex="-1"
-                onclick="switchTab('review')">Review <span id="review-count" class="tab-count">0</span></button>
+                onclick="switchTab('review')">Diagnostics <span id="review-count" class="tab-count">0</span></button>
         <button class="tab-btn" id="history-tab" data-tab="history" role="tab"
                 aria-selected="false" aria-controls="history-panel" tabindex="-1"
                 onclick="switchTab('history')">History</button>
@@ -159,24 +159,16 @@
         </div>
     </section>
 
-    <!-- Review -->
+    <!-- Diagnostics (read-only) -->
     <section id="review-panel" class="tab-panel" role="tabpanel" aria-labelledby="review-tab"
              aria-hidden="true" data-tab-panel="review" hidden>
         <div class="review-toolbar">
-            <p class="review-intro">Pairings the scanner could not prove because two bookmakers spell a team differently. Check the fixture on the web, then approve — that teaches the scanner the spelling for future scans; nothing is bet. Only pairings an approval can clear are listed.</p>
-            <div class="review-bulk">
-                <label class="inline-field" title="Select every candidate whose weakest name pair is at least this alike and whose approval clears every blocker">
-                    <span>Name match ≥</span>
-                    <input class="input input-narrow" type="number" id="review-threshold" value="85" min="50" max="100" step="5">
-                </label>
-                <button class="btn btn-secondary" onclick="selectStrongCandidates()">Select strong</button>
-                <button class="btn btn-primary" id="review-approve-selected" onclick="approveSelectedCandidates()" disabled>Approve selected</button>
-            </div>
+            <p class="review-intro">Pairings the scanner could not prove, with the evidence it used. This view is read-only: the evidence ledger learns team, league and market spellings automatically on every scan; nothing here changes a mapping.</p>
         </div>
         <div id="candidates-list" class="candidates-list">
             <div class="empty-state">
-                <h2 class="empty-state-title">Nothing to review yet.</h2>
-                <p class="empty-state-desc">No pairing candidates are queued for human review.</p>
+                <h2 class="empty-state-title">No unresolved pairings.</h2>
+                <p class="empty-state-desc">The ledger has not left any pairing without a terminal decision.</p>
             </div>
         </div>
     </section>

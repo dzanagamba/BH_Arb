@@ -25,7 +25,6 @@ let selectedSurebetId = null;       // the surebet open in the bet slip
 let pollingInterval = null;
 let activeBookmakers = new Set(['mozzartbet', 'mdshop', 'admiralbet', 'betole', 'mbet', 'sportplus', 'evlbet', 'premier_kladionica', 'wwin']);
 let bookmakersConfig = {};
-let humanMappingEnabled = false;
 let globalInvestment = 100;
 let stakeRounding = '1';            // 'exact' | '1' | '5' — whole KM by default
 let soundMuted = true;
@@ -36,7 +35,6 @@ let healthSnapshot = null;          // last /api/health payload, kept for the no
 let resultsSnapshot = null;         // last /api/results payload, same reason
 let noSurebetReasons = null;        // the diagnostic copy table, fetched once at start-up
 let currentCandidates = [];         // the review page on screen
-const selectedCandidates = new Set();
 const verifyState = {};             // surebet id -> {state, at, data}
 const slipState = {};               // surebet id -> {investment, placed: {label: {odds, stake}}}
 
@@ -158,7 +156,6 @@ async function loadConfig() {
         const res = await fetch('/api/config');
         const data = await res.json();
         bookmakersConfig = data.bookmakers || {};
-        humanMappingEnabled = !!data.human_mapping_enabled;
         const minInput = document.getElementById('filter-profit');
         if (data.min_profit_percent && minInput) minInput.value = data.min_profit_percent;
         const investInput = document.getElementById('filter-investment');
@@ -1346,6 +1343,10 @@ function renderCandidatesMessage(message) {
 // figures, and this tab re-renders every poll.
 const CANDIDATE_PAGE_SIZE = 100;
 
+function candidateActionHeaders() {
+    return candidateApiKey ? { 'X-API-Key': candidateApiKey } : {};
+}
+
 async function candidateListFetch(url) {
     const send = () => fetch(url, { headers: candidateActionHeaders() });
     let response = await send();
@@ -1391,8 +1392,6 @@ function renderCandidates(candidates, total, actionableTotal) {
     if (count) count.textContent = actionableTotal;
     currentCandidates = queue;
     // Keep only selections that are still on the page.
-    [...selectedCandidates].forEach(id => { if (!queue.some(c => c.id === id)) selectedCandidates.delete(id); });
-    updateBulkButton();
 
     if (!queue.length) {
         // Two different nothings: an empty filtered page can still sit on top
@@ -1400,10 +1399,10 @@ function renderCandidates(candidates, total, actionableTotal) {
         const nothingQueued = total === 0;
         list.innerHTML = `
             <div class="empty-state">
-                <h2 class="empty-state-title">${nothingQueued ? 'Nothing to review yet.' : 'Nothing an approval can clear.'}</h2>
+                <h2 class="empty-state-title">${nothingQueued ? 'No unresolved pairings.' : 'No actionable pairings.'}</h2>
                 <p class="empty-state-desc">${nothingQueued
-                    ? 'No pairing candidates are queued for human review.'
-                    : `${total} pairing${total === 1 ? '' : 's'} are queued, but no human decision changes their verdict.`}</p>
+                    ? 'The ledger has not left any pairing without a terminal decision.'
+                    : `${total} pairing${total === 1 ? '' : 's'} are informational; the ledger learns them automatically.`}</p>
             </div>
         `;
         return;
@@ -1453,26 +1452,10 @@ function renderCandidates(candidates, total, actionableTotal) {
                 </li>
             `).join('')
             : '<li class="candidate-position candidate-position-none">No cross-bookmaker names recorded — run a scan to regenerate this candidate</li>';
-        const approvalNote = candidate.link_blocked
-            ? 'Approving writes the reviewed team alias for each name the two books spell differently. The deep-link check is a separate system verification, so this pair stays unverified until that check runs.'
-            : 'Approving writes the reviewed team alias for each name the two books spell differently.';
-        // Nothing to alias means nothing to approve, and a pair no approval can
-        // clear means the same thing: the endpoint refuses both rather than
-        // write an ineffective alias and suppress the pair. The button says so
-        // instead of failing.
-        const writesAlias = positions.some(position => position.team_a !== position.team_b);
-        const canApprove = humanMappingEnabled && writesAlias && candidate.alias_actionable;
-        const approveButton = canApprove
-            ? `<button type="button" class="btn btn-primary btn-small" aria-label="Approve pairing ${homeTeam} versus ${awayTeam}"
-                            onclick="approveCandidate(this.closest('.candidate-card').dataset.id)">Same match</button>`
-            : `<button type="button" class="btn btn-primary btn-small" disabled
-                            title="${writesAlias
-                                ? 'Approving cannot clear this pairing’s remaining blockers, so no alias would change its verdict'
-                                : 'Both books already spell these teams identically, so there is no alias to write — reject this pairing instead'}">${writesAlias ? 'Cannot clear' : 'Nothing to alias'}</button>`;
         const searchUrl = fixtureSearchUrl(candidate);
-        const actionability = candidate.alias_actionable
-            ? '<span class="candidate-actionable">Approving clears every blocker.</span>'
-            : '<span class="candidate-blocked">Approving alone will not clear every blocker.</span>';
+        const readOnlyNote = candidate.link_blocked
+            ? 'The ledger learns this pairing automatically; the link half is a separate machine check.'
+            : 'The ledger learns this pairing automatically; this card is informational.';
         const reasons = Array.isArray(candidate.rule_rejections) ? candidate.rule_rejections : [];
         const reasonItems = reasons.length
             ? reasons.map(reason => {
@@ -1481,14 +1464,8 @@ function renderCandidates(candidates, total, actionableTotal) {
                 return `<li class="candidate-reason" title="${escapeHtml(rawCode)}">${escapeHtml(label)}</li>`;
             }).join('')
             : '<li class="candidate-reason candidate-reason-none">No reason recorded</li>';
-        const checked = selectedCandidates.has(candidate.id) ? ' checked' : '';
-        const selectable = writesAlias ? '' : ' disabled';
-
         return `
             <article class="candidate-card" data-id="${id}" data-confidence="${confidence}"${aiNegative ? ' data-ai-verdict="negative"' : ''}>
-                <label class="candidate-select" title="Select for bulk approval">
-                    <input type="checkbox" data-candidate-select${checked}${selectable} onchange="toggleCandidateSelection(this)">
-                </label>
                 <div class="candidate-body">
                     <div class="candidate-card-header">
                         <div class="candidate-teams"><span>${homeTeam}</span> <span class="candidate-vs">vs</span> <span>${awayTeam}</span></div>
@@ -1498,137 +1475,15 @@ function renderCandidates(candidates, total, actionableTotal) {
                     <ul class="candidate-positions" aria-label="How the two bookmakers spell each team">${positionItems}</ul>
                     <ul class="candidate-reasons" aria-label="Why the certainty gate refused">${reasonItems}</ul>
                     ${aiVerdict}
-                    <p class="candidate-approval-note">${escapeHtml(approvalNote)} ${actionability}</p>
+                    <p class="candidate-approval-note">${escapeHtml(readOnlyNote)}</p>
                 </div>
                 <div class="candidate-actions">
                     <a class="btn btn-secondary btn-small" href="${escapeHtml(searchUrl)}" target="_blank" rel="noopener noreferrer"
-                       title="Search the web for this fixture before approving">Check on the web ↗</a>
-                    ${humanMappingEnabled ? approveButton : ''}
-                    ${humanMappingEnabled ? `<button type="button" class="btn btn-secondary btn-small" aria-label="Reject pairing ${homeTeam} versus ${awayTeam}"
-                            onclick="rejectCandidate(this.closest('.candidate-card').dataset.id)">Different</button>` : ''}
+                       title="Search the web for this fixture">Check on the web ↗</a>
                 </div>
             </article>
         `;
     }).join('');
-}
-
-function toggleCandidateSelection(box) {
-    const id = box.closest('.candidate-card')?.dataset.id;
-    if (!id) return;
-    if (box.checked) selectedCandidates.add(id); else selectedCandidates.delete(id);
-    updateBulkButton();
-}
-
-// Selects, never approves: the reviewer still presses the button and confirms.
-function selectStrongCandidates() {
-    const threshold = Number(document.getElementById('review-threshold')?.value) || 85;
-    currentCandidates.forEach(candidate => {
-        const positions = Array.isArray(candidate.team_positions) ? candidate.team_positions : [];
-        const writes = positions.some(position => position.team_a !== position.team_b);
-        if (writes && candidate.alias_actionable && candidate.ai_same_event !== false
-            && (Number(candidate.name_score) || 0) >= threshold) {
-            selectedCandidates.add(candidate.id);
-        }
-    });
-    document.querySelectorAll('.candidate-card').forEach(card => {
-        const box = card.querySelector('[data-candidate-select]');
-        if (box) box.checked = selectedCandidates.has(card.dataset.id);
-    });
-    updateBulkButton();
-    showToast(`${selectedCandidates.size} selected — check them, then approve`);
-}
-
-function updateBulkButton() {
-    const button = document.getElementById('review-approve-selected');
-    if (!button) return;
-    button.disabled = selectedCandidates.size === 0;
-    button.textContent = selectedCandidates.size ? `Approve ${selectedCandidates.size} selected` : 'Approve selected';
-}
-
-async function approveSelectedCandidates() {
-    const ids = [...selectedCandidates];
-    if (!ids.length) return;
-    const confirmed = window.confirm(
-        `Approve ${ids.length} pairing${ids.length > 1 ? 's' : ''}? Each writes reviewed team aliases to the allowlist.`,
-    );
-    if (!confirmed) return;
-    const send = () => fetch('/api/candidates/approve-bulk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...candidateActionHeaders() },
-        body: JSON.stringify({ ids }),
-    });
-    try {
-        let response = await send();
-        if (response.status === 401 && !candidateApiKey) {
-            const entered = window.prompt('This SureBet deployment requires an API key for review actions.');
-            if (entered && entered.trim()) {
-                candidateApiKey = entered.trim();
-                response = await send();
-            }
-        }
-        if (!response.ok) throw new Error(`bulk approve failed (${response.status})`);
-        const data = await response.json();
-        selectedCandidates.clear();
-        showToast(`Approved ${data.approved.length}${data.skipped.length ? `, skipped ${data.skipped.length}` : ''}. Scan again to use them.`);
-        await loadCandidates();
-    } catch (error) {
-        showError(`Could not approve: ${error.message}`);
-    }
-}
-
-function candidateActionHeaders() {
-    return candidateApiKey ? { 'X-API-Key': candidateApiKey } : {};
-}
-
-async function candidateActionFetch(url) {
-    const send = () => fetch(url, { method: 'POST', headers: candidateActionHeaders() });
-    let response = await send();
-    if (response.status === 401 && !candidateApiKey) {
-        const entered = window.prompt('This SureBet deployment requires an API key for review actions.');
-        if (entered && entered.trim()) {
-            candidateApiKey = entered.trim();
-            response = await send();
-        }
-    }
-    return response;
-}
-
-async function submitCandidateDecision(id, action, card) {
-    const buttons = card ? [...card.querySelectorAll('button')] : [];
-    buttons.forEach(button => { button.disabled = true; });
-    try {
-        const response = await candidateActionFetch(`/api/candidates/${encodeURIComponent(id)}/${action}`);
-        if (response.ok === false) throw new Error(`Candidate ${action} failed (${response.status})`);
-        selectedCandidates.delete(id);
-        await loadCandidates();
-    } catch (error) {
-        console.error(`Candidate ${action} failed:`, error);
-        if (card) {
-            const message = document.createElement('div');
-            message.className = 'candidate-action-error';
-            message.setAttribute('role', 'alert');
-            message.textContent = `Could not ${action} this candidate. Try again.`;
-            card.appendChild(message);
-        }
-        buttons.forEach(button => { button.disabled = false; });
-    }
-}
-
-async function approveCandidate(id) {
-    const card = [...document.querySelectorAll('.candidate-card')]
-        .find(item => item.dataset.id === String(id));
-    const teams = card?.querySelector('.candidate-teams')?.textContent?.trim() || 'this pairing';
-    const confirmed = window.confirm(
-        `Approve ${teams}? This writes a reviewed team alias to the trading allowlist.`,
-    );
-    if (!confirmed) return;
-    await submitCandidateDecision(id, 'approve', card);
-}
-
-async function rejectCandidate(id) {
-    const card = [...document.querySelectorAll('.candidate-card')]
-        .find(item => item.dataset.id === String(id));
-    await submitCandidateDecision(id, 'reject', card);
 }
 
 // ─── History ──────────────────────────────────────────────────────────────────

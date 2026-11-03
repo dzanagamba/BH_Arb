@@ -98,12 +98,13 @@ def test_index_has_review_tab():
     assert 'id="candidates-list"' in HTML
 
 
-def test_js_has_candidate_hooks():
+def test_js_has_read_only_candidate_hooks():
     assert "loadCandidates" in JS
     assert "renderCandidates" in JS
     assert "/api/candidates" in JS
-    assert "approveCandidate" in JS
-    assert "rejectCandidate" in JS
+    assert "readOnlyNote" in JS
+    assert "approveCandidate" not in JS
+    assert "rejectCandidate" not in JS
 
 
 def test_status_badge_never_claims_verified_without_backend_status():
@@ -113,10 +114,10 @@ def test_status_badge_never_claims_verified_without_backend_status():
     assert "statusEl.hidden = false" in JS
 
 
-def test_candidate_actions_use_the_existing_api_key_header():
+def test_candidate_reads_use_the_existing_api_key_header():
     assert "'X-API-Key'" in JS
     assert "window.prompt" in JS
-    assert "candidateActionFetch" in JS
+    assert "candidateActionHeaders" in JS
 
 
 def test_candidate_queue_is_read_as_a_bounded_page():
@@ -130,7 +131,7 @@ def test_candidate_queue_is_read_as_a_bounded_page():
     )
     assert "data.total" in JS
     assert "actionable_total" in JS
-    assert "pairings an approval can clear" in JS
+    assert "readOnlyNote" in JS
 
 
 def test_candidate_queue_read_requires_the_api_key_when_configured():
@@ -140,24 +141,23 @@ def test_candidate_queue_read_requires_the_api_key_when_configured():
     assert "401" in read_call
 
 
-def test_candidate_card_shows_both_spellings_and_what_approval_does():
+def test_candidate_card_shows_both_spellings_and_is_read_only():
     assert "candidate.team_positions" in JS
     assert "position.team_a" in JS and "position.team_b" in JS
     assert "candidate.link_blocked" in JS
-    assert "candidate.alias_actionable" in JS
-    assert "deep-link check is a separate system verification" in JS
+    assert "readOnlyNote" in JS
+    assert "ledger learns this pairing automatically" in JS
 
 
-def test_candidate_card_disables_approval_when_there_is_no_alias_to_write():
-    assert "writesAlias" in JS
-    assert "Nothing to alias" in JS
-    assert "position.team_a !== position.team_b" in JS
+def test_candidate_card_has_no_approval_controls():
+    assert "Approve pairing" not in JS
+    assert "Reject pairing" not in JS
+    assert "data-candidate-select" not in JS
 
 
-def test_candidate_card_disables_approval_when_it_would_not_clear_the_pair():
-    """A card past the actionable head must not offer a fix that does not exist."""
-    assert "candidate.alias_actionable" in JS
-    assert "Approving cannot clear this pairing" in JS
+def test_candidate_card_offers_only_a_web_check():
+    assert "Check on the web" in JS
+    assert "candidate.alias_actionable" not in JS
 
 
 def test_candidate_card_links_to_a_web_check_before_approval():
@@ -169,15 +169,14 @@ def test_candidate_card_links_to_a_web_check_before_approval():
     assert "rel=\"noopener noreferrer\"" in JS
 
 
-def test_review_intro_names_the_web_check_and_the_filter():
-    assert "Check the fixture on the web" in HTML
-    assert "Only pairings an approval can clear" in HTML
+def test_review_intro_says_the_view_is_read_only():
+    assert "This view is read-only" in HTML
+    assert "the evidence ledger learns" in HTML
 
 
-def test_empty_review_explains_a_queue_no_decision_can_clear():
-    """An empty filtered page must not claim the queue itself is empty."""
-    assert "Nothing an approval can clear." in JS
-    assert "no human decision changes their verdict" in JS
+def test_empty_review_is_read_only():
+    assert "No actionable pairings." in JS
+    assert "the ledger learns them automatically" in JS
 
 
 def test_negative_ai_verdict_sorts_last_regardless_of_confidence():
