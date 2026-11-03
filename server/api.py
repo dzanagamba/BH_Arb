@@ -1555,28 +1555,7 @@ async def run_scan(mode: str = "prematch", scheduled: bool = False):
         _save_cache(mode)
         _append_history(len(groups), mode)
 
-        # Pairing quality is a health metric, not a separate script only. The
-        # audit reads the same cached rows the dashboard serves, so the number
-        # cannot drift from the list it describes.
-        try:
-            pairing = audit_pairing(
-                {"matches": matches_cache, "match_groups": report_cache}
-            )
-            _pairing_summary[mode] = {
-                key: pairing.get(key)
-                for key in (
-                    "matches",
-                    "groups",
-                    "ungrouped",
-                    "duplicate_listings",
-                    "strict_misses",
-                    "strict_miss_rate",
-                    "duplicate_book_groups",
-                )
-            }
-        except Exception as exc:  # a metric must never stop a scan
-            logger.warning("Pairing audit failed: %s", exc)
-            _pairing_summary[mode] = {"error": str(exc)[:200]}
+        _refresh_pairing_summary(mode, matches_cache, report_cache)
 
         logger.info(
             f"🎯 {'Live' if is_live else 'Prematch'} scan complete: {len(all_matches)} matches scraped, "
@@ -1588,6 +1567,34 @@ async def run_scan(mode: str = "prematch", scheduled: bool = False):
     finally:
         status.is_scanning = False
         status.current_bookmaker = ""
+
+
+def _refresh_pairing_summary(
+    mode: str, matches: list[dict], groups: list[dict]
+) -> None:
+    """Recompute the pairing health metric from the rows being served.
+
+    Called after a scan and after a cache restore. The audit reads the same
+    rows the dashboard serves, so the number cannot drift from the list it
+    describes; a restart recomputes it after stale groups are dropped.
+    """
+    try:
+        pairing = audit_pairing({"matches": matches, "match_groups": groups})
+        _pairing_summary[mode] = {
+            key: pairing.get(key)
+            for key in (
+                "matches",
+                "groups",
+                "ungrouped",
+                "duplicate_listings",
+                "strict_misses",
+                "strict_miss_rate",
+                "duplicate_book_groups",
+            )
+        }
+    except Exception as exc:  # a metric must never stop a scan
+        logger.warning("Pairing audit failed: %s", exc)
+        _pairing_summary[mode] = {"error": str(exc)[:200]}
 
 
 def _save_cache(mode: str = "prematch"):
@@ -1740,6 +1747,7 @@ def _load_cache():
             # see `_restorable_match_groups` for why a stored `verified` row can
             # be older than the proofs it was decided on.
             report_cache[:] = _restorable_match_groups(data.get("match_groups"), mode)
+            _refresh_pairing_summary(mode, matches_cache, report_cache)
             status.total_matches = len(matches_cache)
             status.surebets_found = len(surebets_cache)
             logger.info(

@@ -8,7 +8,7 @@ named next to it.
 
 | Check | Command | Result |
 |---|---|---|
-| Tests | `python -m pytest` | **1,176 passed** |
+| Tests | `python -m pytest` | **1,177 passed** |
 | Lint | `python -m ruff check .` | clean |
 | Types | `python -m mypy .` | clean on 121 source files |
 | Market doc | `python scripts/generate_market_mapping_doc.py --check` | in sync |
@@ -200,7 +200,8 @@ the veto correctly keeps apart, such as `Hamburger` / `Hamburger SV`,
 8. **Pairing quality is a health metric.** Every scan stores the audit result in
    `_pairing_summary`; `/api/health` exposes `pairing`/`live_pairing` and
    `/api/results` exposes `pairing`. The number cannot drift from the cached
-   rows because it is computed from them.
+   rows because it is computed from them, and it is recomputed after a cache
+   restore so a restart does not lose it.
 9. **Prematch expiry is real.** A group is dropped once the latest kickoff any
    book claims is more than two minutes past. Live mode still prices started
    matches; the old 15-minute prematch grace kept pricing fixtures that had

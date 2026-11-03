@@ -1707,7 +1707,11 @@ async function loadHealth() {
         const fmtAge = (sec) => sec == null ? '—' : sec < 60 ? `${Math.round(sec)}s ago` : `${Math.round(sec/60)}m ago`;
         const fmtPer = (obj) => obj && Object.keys(obj).length ? Object.entries(obj).map(([k,v]) => `${k}:${v}`).join(' ') : '—';
         bar.style.display = '';
-        bar.innerHTML = `Health — Prematch ${fmtAge(data.prematch?.last_scan_age_sec)} [${fmtPer(data.prematch?.per_bookie)}] | Live ${fmtAge(data.live?.last_scan_age_sec)} [${fmtPer(data.live?.per_bookie)}] | TTL ${data.odds_ttl_sec}s`;
+        const missRate = Number(data.pairing?.strict_miss_rate);
+        const pairing = Number.isFinite(missRate)
+            ? `Pairing ${(missRate * 100).toFixed(2)}% miss`
+            : 'Pairing —';
+        bar.innerHTML = `Health — Prematch ${fmtAge(data.prematch?.last_scan_age_sec)} [${fmtPer(data.prematch?.per_bookie)}] | Live ${fmtAge(data.live?.last_scan_age_sec)} [${fmtPer(data.live?.per_bookie)}] | TTL ${data.odds_ttl_sec}s | ${pairing}`;
         if (data.prematch?.errors?.length || data.live?.errors?.length) {
             bar.title = [...(data.prematch?.errors||[]), ...(data.live?.errors||[])].join(' | ');
         }

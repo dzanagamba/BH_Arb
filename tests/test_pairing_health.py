@@ -35,3 +35,16 @@ def test_results_expose_the_pairing_summary(monkeypatch):
 
     assert body["pairing"]["strict_miss_rate"] == 0.0027
     assert body["pairing"]["duplicate_book_groups"] == []
+
+
+def test_pairing_summary_is_recomputed_from_the_served_rows():
+    api._pairing_summary.pop("prematch", None)
+
+    api._refresh_pairing_summary("prematch", [], [])
+
+    summary = api._pairing_summary["prematch"]
+    assert summary["matches"] == 0
+    assert summary["groups"] == 0
+    assert summary["strict_misses"] == 0
+    assert summary["strict_miss_rate"] == 0.0
+    assert summary["duplicate_book_groups"] == []

@@ -110,7 +110,7 @@ ALLOWED_TAGS = {"strong", "em", "br"}
 HEALTH_BAR_LINE = (
     "bar.innerHTML = `Health — Prematch ${fmtAge(data.prematch?.last_scan_age_sec)}"
     " [${fmtPer(data.prematch?.per_bookie)}] | Live ${fmtAge(data.live?.last_scan_age_sec)}"
-    " [${fmtPer(data.live?.per_bookie)}] | TTL ${data.odds_ttl_sec}s`;"
+    " [${fmtPer(data.live?.per_bookie)}] | TTL ${data.odds_ttl_sec}s | ${pairing}`;"
 )
 
 client = TestClient(app)
@@ -922,7 +922,7 @@ def test_the_health_bar_is_untouched_and_the_payload_is_retained_separately():
 
 
 def test_health_bar_check_fails_when_the_bar_line_changes():
-    drifted = JS.replace("| TTL ${data.odds_ttl_sec}s`", "| TTL ${data.odds_ttl_sec} sec`")
+    drifted = JS.replace("| TTL ${data.odds_ttl_sec}s |", "| TTL ${data.odds_ttl_sec} sec |")
     assert drifted != JS, "the mutation did not apply; the companion is untested"
     problems = _health_bar_problems(drifted)
     assert any("rendered line changed" in problem for problem in problems), problems
