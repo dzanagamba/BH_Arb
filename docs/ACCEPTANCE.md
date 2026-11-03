@@ -8,7 +8,7 @@ named next to it.
 
 | Check | Command | Result |
 |---|---|---|
-| Tests | `python -m pytest` | **1,154 passed** |
+| Tests | `python -m pytest` | **1,156 passed** |
 | Lint | `python -m ruff check .` | clean |
 | Types | `python -m mypy .` | clean on 111 source files |
 | Market doc | `python scripts/generate_market_mapping_doc.py --check` | in sync |
@@ -82,8 +82,9 @@ fixed to read `kickOffTime` and to keep `brMatchId` as a Betradar id. Betole is
 now enabled; its first verified surebet was `anaitasuna ft – alaves` BTTS at
 1.69%.
 
-`EvlbetScraper().scrape(live=False)` returns **0** matches on the same date; EVLBet
-remains disabled and is an evidence-backed absence, not a silent omission.
+`python scripts/probe_feeds.py --books evlbet,betole` returns **0** matches for
+EVLBet and **1,239** for Betole; the dated report is `docs/FEED_STATUS.md`.
+EVLBet remains disabled and is an evidence-backed absence, not a silent omission.
 
 ## Known gaps
 

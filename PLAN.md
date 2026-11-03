@@ -26,7 +26,7 @@
 > consensus, registry merge, discovery CLI and raw-offer resolver are shipped.
 > Betole is now the ninth enabled book after fixing its kickoff and Betradar id;
 > the 9-book scan found 6,503 matches, 1,039 verified groups and **8 surebets**,
-> all re-verified by `POST /api/verify`; two price-outlier surebets were dropped. **1154 tests pass.** The acceptance
+> all re-verified by `POST /api/verify`; two price-outlier surebets were dropped. **1156 tests pass.** The acceptance
 > record is `docs/ACCEPTANCE.md`; the production verdict and research are in
 > `docs/PRODUCTION_READINESS.md`.
 >
@@ -1136,7 +1136,7 @@ counts.
 - **Verify:** capture hashes and counts; S1.
 - **Done when:** each book is either working or has a dated absence proof and a
   recheck date.
-- **Log:** Betole's scraper was fixed to read `kickOffTime` and keep `brMatchId` as a Betradar id; it returns 1,239 timestamped matches and is enabled. `EvlbetScraper().scrape(live=False)` returned 0 on 2026-11-03; EVLBet remains disabled with that dated absence evidence. A captured Betole market fixture is still required.
+- **Log:** Betole's scraper was fixed to read `kickOffTime` and keep `brMatchId` as a Betradar id; it returns 1,239 timestamped matches and is enabled. Added `scripts/probe_feeds.py`; its 2026-11-03 run reports EVLBet 0 matches (dated absence evidence) and Betole 1,239 with 1X2/BTTS/FH 1X2/O-U 2.5. Evidence in `docs/FEED_STATUS.md`. A captured Betole market fixture is still required.
 
 #### A6-3 · Prove MaxBet links
 
