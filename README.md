@@ -197,6 +197,10 @@ Copy `.env.example` to `.env` and set only what you need:
 | `AUTO_SCAN_LIVE_MINUTES` | `0` | Scheduled live scans; `0` disables them. |
 | `AUTO_LEARN_MAPPINGS` | `true` | Learn team, league and market claims from real scans. |
 | `PRICE_GUARD_ENABLED` | `true` | Drop a surebet whose leg is a price outlier. |
+| `ALERT_WEBHOOK_URL` | *(empty)* | Generic webhook for operator alerts; empty means no transport. See [`docs/ALERTING.md`](docs/ALERTING.md). |
+| `ALERT_TELEGRAM_BOT_TOKEN` / `ALERT_TELEGRAM_CHAT_ID` | *(empty)* | Telegram alert transport; both are required. |
+| `ALERT_MIN_PROFIT_PERCENT` / `ALERT_DEDUPE_MINUTES` | `3.0` / `60` | Minimum profit and per-signature dedupe window. |
+| `RSS_BUDGET_MB` | `1024` | Soft memory budget reported by `/api/health`. |
 
 Optional AI ranking uses an OpenAI-compatible endpoint. It can only order the
 Diagnostics queue; it cannot create or approve a pairing.

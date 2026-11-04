@@ -65,13 +65,14 @@ scripts. They are accepted, not hidden.
 ### Allowlist
 
 The allowlist is inline `# nosec` with a short reason, so it is visible at the
-call site and in review. There are three accepted entries:
+call site and in review. There are four accepted entries:
 
 | Location | Rule | Why it is accepted |
 |---|---|---|
 | `scripts/capture_market_fixtures.py` (`main`) | `B501` (`verify=False`) | Capture-only developer tool. Some bookmaker hosts present an invalid chain from a developer machine; it reads public pages and never sends credentials. |
 | `scripts/docker_smoke.py` (`_health`) | `B310` (`urlopen`) | Fixed `http://127.0.0.1:<port>/api/health` loopback probe. |
 | `scripts/soak.py` (`_get_json`, `_post`) | `B310` (`urlopen`) | Operator-supplied scanner endpoint, normally loopback HTTP. |
+| `server/alerts.py` (webhook/Telegram `send`) | `B310` (`urlopen`) | Operator-configured HTTPS webhook or the fixed Telegram Bot API endpoint; URL/token are never logged. |
 
 `server/api.py`'s SHA-1 pair id was not allowlisted: it is a stable queue key,
 not a security primitive, and now passes `usedforsecurity=False` to make that

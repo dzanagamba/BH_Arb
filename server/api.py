@@ -54,6 +54,7 @@ from config.settings import (
     ODDS_TTL_SECONDS,
     PRICE_GUARD_ENABLED,
     RATE_LIMIT_WINDOW_SECONDS,
+    RSS_BUDGET_MB,
     SCAN_RATE_LIMIT,
     VERIFIED_KICKOFF_WINDOW_MINUTES,
 )
@@ -102,6 +103,16 @@ from scrapers.premier_kladionica import PremierKladionicaScraper
 from scrapers.sportplus import SportPlusScraper
 from scrapers.wwin import WWINScraper
 from scripts.pairing_audit import audit as audit_pairing
+from server.alerts import (
+    AlertManager,
+    book_failure_alert,
+    configured_alert_manager,
+    current_rss_mb,
+    feed_alerts,
+    quarantine_alerts,
+    resource_alerts,
+    surebet_alert,
+)
 from server.mapping_coverage import build_coverage
 from server.observability import (
     metrics,
@@ -112,6 +123,7 @@ from server.observability import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+alert_manager: AlertManager = configured_alert_manager()
 
 # The evidence ledger is the only trust source. The old review endpoints remain
 # for migration/diagnostics but are disabled unless an operator explicitly
@@ -1757,6 +1769,15 @@ async def run_scan(mode: str = "prematch", scheduled: bool = False):
                 "cache_bytes": cache_bytes,
             },
         )
+        # P1-5: decide what is worth saying, then queue it. Delivery is off the
+        # scan path; an alert failure must never fail the scan that found it.
+        _notify_scan_alerts(
+            mode,
+            surebets,
+            status,
+            matches_cache,
+            cache_bytes=cache_bytes,
+        )
     except Exception as e:
         metrics.inc("bh_scans_failed_total", mode=mode)
         logger.error(
@@ -1774,6 +1795,69 @@ async def run_scan(mode: str = "prematch", scheduled: bool = False):
         status.is_scanning = False
         status.current_bookmaker = ""
         reset_scan_id(scan_token)
+
+
+def _notify_scan_alerts(
+    mode: str,
+    surebets: list[Any],
+    status: ScanStatus,
+    matches_cache: list[dict],
+    *,
+    cache_bytes: int,
+) -> None:
+    """Queue operator alerts for one completed scan.
+
+    Every builder is pure and every transport runs on the alert worker, so this
+    function only decides. It also swallows its own errors: alert evaluation is
+    diagnostics and must not change a scan's outcome.
+    """
+    if not alert_manager.enabled:
+        return
+    try:
+        for surebet in surebets:
+            payload = (
+                surebet.model_dump(mode="json")
+                if hasattr(surebet, "model_dump")
+                else surebet
+            )
+            alert = surebet_alert(
+                payload,
+                mode=mode,
+                min_profit_percent=alert_manager.min_profit_percent,
+            )
+            if alert is not None:
+                alert_manager.notify(alert)
+
+        freshness = _freshness_block(mode, status, matches_cache)
+        alert_manager.notify_many(feed_alerts(mode, freshness))
+        alert_manager.notify_many(
+            quarantine_alerts(mode, _feed_integrity.get(mode) or {})
+        )
+
+        with _BOOK_BACKOFF_LOCK:
+            failures = {
+                book: count
+                for (failure_mode, book), count in _book_failures.items()
+                if failure_mode == mode
+            }
+        for book, count in failures.items():
+            alert = book_failure_alert(
+                mode, book, count, BOOK_BACKOFF_AFTER_FAILURES
+            )
+            if alert is not None:
+                alert_manager.notify(alert)
+
+        alert_manager.notify_many(
+            resource_alerts(
+                mode,
+                cache_bytes=cache_bytes,
+                cache_budget_bytes=CACHE_SIZE_BUDGET_BYTES,
+                rss_mb=current_rss_mb(),
+                rss_budget_mb=RSS_BUDGET_MB,
+            )
+        )
+    except Exception:  # noqa: BLE001 - alert evaluation is best effort
+        logger.warning("alert evaluation failed", exc_info=True)
 
 
 def _refresh_pairing_summary(
@@ -2389,6 +2473,8 @@ async def health():
             return (datetime.now(UTC) - dt).total_seconds()
         except Exception:
             return None
+
+    rss_mb = current_rss_mb()
     return {
         "status": "ok",
         "scanning": scan_status.is_scanning or live_status.is_scanning,
@@ -2476,6 +2562,14 @@ async def health():
             "over_budget": max(
                 _cache_size(_PREMATCH_CACHE_FILE), _cache_size(_LIVE_CACHE_FILE)
             ) > CACHE_SIZE_BUDGET_BYTES,
+        },
+        # P1-5/P1-6: delivery counters and the soft resource budget. The
+        # snapshot names transports, never their URLs or tokens.
+        "alerts": alert_manager.snapshot(),
+        "memory": {
+            "rss_mb": rss_mb,
+            "budget_mb": RSS_BUDGET_MB,
+            "over_budget": rss_mb is not None and rss_mb > RSS_BUDGET_MB,
         },
     }
 

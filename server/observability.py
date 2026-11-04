@@ -308,6 +308,11 @@ def _rss_bytes() -> float | None:
         return None
 
 
+def current_rss_bytes() -> float | None:
+    """Public RSS probe for health reporting and the resource-budget alert."""
+    return _rss_bytes()
+
+
 def _rss_samples() -> list[tuple[dict[str, object], float]]:
     value = _rss_bytes()
     return [] if value is None else [({}, value)]

@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-11-04
 **Repository:** `dzanagamba/BH_Arb` (`main`)
-**Status of this document:** audit complete; P0-1 through P0-7, P1-1 through P1-4 done, implementation continuing
+**Status of this document:** audit complete; P0-1 through P0-7, P1-1 through P1-5 done, implementation continuing
 **Purpose:** a durable, session-by-session plan so work can resume without re-reading the whole repository.
 
 > **How to use this document**
@@ -262,7 +262,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 | P1-2 | Structured logs, request IDs, metrics endpoint | P1 | M | — | Done |
 | P1-3 | Reproducible deployment (Docker/systemd) | P1 | M | — | Done |
 | P1-4 | CI hardening: coverage, dependency and security scans | P1 | S | — | Done |
-| P1-5 | Alerting with dedupe and retry | P1 | M | P1-2 | Not started |
+| P1-5 | Alerting with dedupe and retry | P1 | M | P1-2 | Done |
 | P1-6 | 24-hour soak and resource budget | P1 | M | P0-1, P1-2 | Not started |
 | P1-7 | Raw-price invariant and rounding audit | P1 | S | P0-4 | Not started |
 | P2-1 | Convergent deep-link sweep automation and UI | P2 | M | P1-1 | Not started |
@@ -688,7 +688,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 
 ### P1-5 — Alerting with dedupe and retry
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P1
 **Effort:** M
 **Depends on:** P1-2
@@ -708,9 +708,9 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 
 **Acceptance criteria:**
 
-- [ ] A repeated scan does not re-alert the same event inside the dedupe window.
-- [ ] A failed alert is logged and counted, and does not fail the scan.
-- [ ] Secrets are read from env only, never logged.
+- [x] A repeated scan does not re-alert the same event inside the dedupe window.
+- [x] A failed alert is logged and counted, and does not fail the scan.
+- [x] Secrets are read from env only, never logged.
 
 **Tests:**
 
@@ -1421,6 +1421,35 @@ Before writing a claim about behavior, run the command that proves it and paste 
 ## 6. Execution log
 
 Newest first. Each entry: date, task, status, commands, measured result, files changed, follow-ups.
+
+### 2026-11-04 — P1-5: Alerting with dedupe and retry
+
+**Task:** P1-5 (depends on P1-2, complete).
+**Status:** Done.
+
+**Commands and results:**
+
+- `python -m pytest` → full suite passed, **1,349 tests collected** (was 1,335; +14 alert tests).
+- `python -m pytest tests/test_alerts.py -q` → 14 passed.
+- `python -m ruff check .` → clean.
+- `python -m mypy .` → clean on 153 source files.
+- `python -m pip_audit` / Bandit → unchanged and clean.
+
+**What changed:**
+
+- `server/alerts.py` (new): `Alert`, a transport protocol, `NullTransport` default, webhook and Telegram transports, pure alert builders, and `AlertManager` with a stable signature (match + market + legs + one-point profit bucket), in-memory dedupe window, single daemon delivery worker, exponential-backoff retries and sent/failed/suppressed counters.
+- `config/settings.py` and `.env.example`: `ALERT_WEBHOOK_URL`, `ALERT_TELEGRAM_BOT_TOKEN`, `ALERT_TELEGRAM_CHAT_ID`, `ALERT_MIN_PROFIT_PERCENT`, `ALERT_DEDUPE_MINUTES`, plus retry controls and `RSS_BUDGET_MB`.
+- `server/api.py`: one `alert_manager` built from env, `_notify_scan_alerts` called after a completed scan, health `alerts` and `memory` blocks, and a public RSS probe. Alert evaluation is wrapped so it cannot fail the scan.
+- Alert kinds: new surebet above threshold, stale feed per book, book quarantine, book backoff failure, cache budget and RSS budget.
+- `server/observability.py`: public `current_rss_bytes()`.
+- `docs/ALERTING.md` (new), README configuration rows, and the CI allowlist updated for the two alert transport `urlopen` calls.
+- `tests/test_alerts.py` (new): dedupe window, retry/failure accounting, secret-free logs, signature stability, threshold and builder coverage, scan integration, and health snapshot.
+
+**Trust rules:** unchanged. Alert bodies use dashboard labels, not full payloads or API keys. Delivery is off the scan path; a transport failure cannot change scan state.
+
+**Follow-ups:** P1-6 (24-hour soak) and P1-7 (raw-price invariant) remain.
+
+---
 
 ### 2026-11-04 — P1-4: CI hardening (coverage, dependency and security scans)
 

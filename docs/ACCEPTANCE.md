@@ -259,6 +259,38 @@ id on a refused request, context filter, JSON formatter allowlist, traceback,
 a server, API-key protection, one structured scan-completion record, counters,
 per-book empty/error outcomes, failed-scan counter).
 
+## Operator alerts (P1-5, 2026-11-04)
+
+An unattended scanner had no way to say that a new edge appeared, a feed went
+stale or a book kept failing. The new `server/alerts.py` decides what to say;
+delivery is separate from the scan.
+
+**Transports.** The default is `NullTransport`, so a checkout that configures
+nothing sends nothing. `WebhookTransport` POSTs one JSON object;
+`TelegramTransport` uses the Bot API. Both are built from environment values in
+`configured_alert_manager()`. URLs and tokens are absent from `repr()`, logs and
+`/api/health`; even a transport exception is logged by type only, because a
+Telegram URL contains the bot token.
+
+**Dedupe.** The signature is a hash of match, market, leg identities and a
+one-point profit bucket. The odds are excluded so a tick inside the same bucket
+does not re-alert. One window is `ALERT_DEDUPE_MINUTES` (default 60), held in
+memory and reset on restart.
+
+**Delivery.** A single daemon worker sends queued alerts with exponential
+backoff (`ALERT_RETRY_ATTEMPTS`, default 3). A failure increments
+`bh_alerts_failed_total` and the health counter; it cannot propagate into the
+scan. `_notify_scan_alerts` is also wrapped as a second boundary.
+
+**Triggers.** Surebets at or above `ALERT_MIN_PROFIT_PERCENT`, stale feed per
+book, quarantine with its reasons, the scheduled-scan backoff threshold, cache
+budget and RSS budget.
+
+**Secrets.** `.env` / systemd environment only. `tests/test_alerts.py` uses a
+fake transport that raises `RuntimeError("token=SUPERSECRET")` and asserts the
+secret never reaches the log. A health test configures a webhook URL containing
+`SECRET` and asserts it is not in the response.
+
 ## CI hardening (P1-4, 2026-11-04)
 
 The unit-test job proved correctness but published no coverage number, and

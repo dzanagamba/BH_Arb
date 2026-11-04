@@ -229,6 +229,24 @@ FEED_INTEGRITY_MISSING_DEGRADED_RATE = 0.35
 FEED_INTEGRITY_OUTLIER_DEGRADED_RATE = 0.10
 FEED_INTEGRITY_OUTLIER_QUARANTINE_RATE = 0.25
 
+# --- Alerts (P1-5) ---
+# Empty URLs mean no transport: the manager stays a null transport, so a fresh
+# checkout never tries to send anything. Secrets are read here from the
+# environment and are never logged or exposed by /api/health.
+ALERT_WEBHOOK_URL = os.getenv("ALERT_WEBHOOK_URL", "").strip()
+ALERT_TELEGRAM_BOT_TOKEN = os.getenv("ALERT_TELEGRAM_BOT_TOKEN", "").strip()
+ALERT_TELEGRAM_CHAT_ID = os.getenv("ALERT_TELEGRAM_CHAT_ID", "").strip()
+ALERT_MIN_PROFIT_PERCENT = float(os.getenv("ALERT_MIN_PROFIT_PERCENT", "3.0"))
+ALERT_DEDUPE_MINUTES = int(os.getenv("ALERT_DEDUPE_MINUTES", "60"))
+# Delivery is retried off the scan path. Tests set these to zero.
+ALERT_RETRY_ATTEMPTS = int(os.getenv("ALERT_RETRY_ATTEMPTS", "3"))
+ALERT_RETRY_BASE_SECONDS = float(os.getenv("ALERT_RETRY_BASE_SECONDS", "1.0"))
+
+# --- Resource budgets (P1-6) ---
+# The measured soak plateau is ~767 MB; 1 GB leaves headroom while still
+# catching a leak. Cache size is guarded by CACHE_SIZE_BUDGET_BYTES below.
+RSS_BUDGET_MB = int(os.getenv("RSS_BUDGET_MB", "1024"))
+
 # --- Cache ---
 CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "cache")
 # P0-1 guard: a nine-book scan cache was 218 MB because every allowlisted team
