@@ -279,7 +279,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 | P3-2 | Bet log, bankroll, and CLV analytics | P3 | L | P3-1 | Done |
 | P3-3 | Advisory execution workflow and limits | P3 | M | P3-2 | Done |
 | P3-4 | Alerts, PWA, accessibility, and Bosnian UI | P3 | M | P1-5 | Done |
-| P3-5 | Authentication and key management hardening | P3 | M | P1-3 | Not started |
+| P3-5 | Authentication and key management hardening | P3 | M | P1-3 | Done |
 | P3-6 | Book risk profiles and advisory pacing | P3 | M | P1-7 | Not started |
 | P3-7 | Record-only / paper-trading mode | P3 | M | P3-1 | Not started |
 
@@ -1288,7 +1288,7 @@ no adapter is enabled.
 
 ### P3-5 — Authentication and key management hardening
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P3
 **Effort:** M
 **Depends on:** P1-3
@@ -1307,10 +1307,10 @@ no adapter is enabled.
 
 **Acceptance criteria:**
 
-- [ ] A revoked key fails immediately.
-- [ ] Keys are never stored or logged in plaintext.
-- [ ] Privileged actions are attributable.
-- [ ] The default remains loopback-only.
+- [x] A revoked key fails immediately.
+- [x] Keys are never stored or logged in plaintext.
+- [x] Privileged actions are attributable.
+- [x] The default remains loopback-only.
 
 **Tests:**
 
@@ -1424,6 +1424,29 @@ Before writing a claim about behavior, run the command that proves it and paste 
 ## 6. Execution log
 
 Newest first. Each entry: date, task, status, commands, measured result, files changed, follow-ups.
+
+### 2026-11-04 — P3-5: Authentication and key management hardening
+
+**Task:** P3-5 (depends on P1-3, complete).
+**Status:** Done.
+
+**Commands and results:**
+
+- `python -m pytest tests/test_auth_keys.py tests/test_api_key.py tests/test_csrf.py tests/test_security_headers.py -q` → passed.
+- `python -m ruff check .`, `python -m mypy .` → clean.
+
+**What changed:**
+
+- `server/auth.py` (new): named-key store with PBKDF2-HMAC-SHA256 hashes, salts, labels, scopes, immediate revocation, last-used timestamps and a bounded audit log; env `API_KEY` remains the bootstrap/admin key.
+- `server/api.py`: `_require_api_key` resolves env, named or open-local mode; `_require_scope` protects scan/sweep (`scan`) and toggles/shutdown/key management (`admin`); rate-limit buckets use the key id; `/api/keys` create/list/revoke and `/api/audit`; toggle/shutdown audit entries.
+- `.gitignore`: `config/generated/api_keys.json`.
+- `tests/test_auth_keys.py` (new) and `docs/AUTH.md`.
+
+**Trust rules:** no public signup and no plaintext keys. The default remains loopback-only. A store that has ever held a key cannot silently reopen when all keys are revoked.
+
+**Follow-ups:** P3-6 (book risk profiles) and P3-7 (paper-trading mode) remain; the requested 15-task batch is complete.
+
+---
 
 ### 2026-11-04 — P3-4: PWA, accessibility and Bosnian UI
 

@@ -138,6 +138,7 @@ from server.alerts import (
     resource_alerts,
     surebet_alert,
 )
+from server.auth import SCOPES, api_key_store
 from server.bets import BetStore
 from server.mapping_coverage import build_coverage
 from server.observability import (
@@ -166,10 +167,45 @@ HUMAN_MAPPING_ENABLED = os.getenv("HUMAN_MAPPING_ENABLED", "false").strip().lowe
 ScanMode = Literal["prematch", "live"]
 
 
-def _require_api_key(x_api_key: str = Header(default="")) -> None:
-    """Optional API key auth — enforced when API_KEY is configured."""
-    if API_KEY and x_api_key != API_KEY:
+def _require_api_key(
+    request: Request,
+    x_api_key: str = Header(default=""),
+) -> None:
+    """Resolve the env bootstrap key or a named hashed key into request state.
+
+    With neither configured the historical local-only behavior remains: the
+    route is open and gets all scopes, which is safe only because the default
+    bind is loopback. A revoked named key fails on its next request.
+    """
+    request.state.api_key_id = ""
+    request.state.api_key_scopes = set(SCOPES)
+    if not API_KEY and not api_key_store.has_any_keys():
+        return
+    if API_KEY and x_api_key == API_KEY:
+        request.state.api_key_id = "env"
+        request.state.api_key_scopes = set(SCOPES)
+        return
+    record = api_key_store.verify(x_api_key)
+    if record is None:
         raise HTTPException(status_code=401, detail="Invalid or missing X-API-Key header")
+    request.state.api_key_id = str(record["id"])
+    request.state.api_key_scopes = set(record.get("scopes") or [])
+
+
+def _require_scope(scope: str):
+    """FastAPI dependency factory for a named-key/admin scope."""
+
+    def dependency(
+        request: Request,
+        _auth: None = Depends(_require_api_key),
+    ) -> None:
+        if scope not in getattr(request.state, "api_key_scopes", set()):
+            raise HTTPException(
+                status_code=403,
+                detail=f"This API key lacks the {scope!r} scope",
+            )
+
+    return dependency
 
 # ─── In-memory bookmaker enabled overrides ──────────────────────────────
 # Start with settings.py defaults, modifiable via /api/config/toggle/<id>
@@ -2501,9 +2537,12 @@ def _enforce_sliding_window(
     """
     if limit <= 0:
         return
-    client_ip = request.client.host if request.client else "unknown"
+    # A named key gets its own bucket; open/local mode still keys on the client.
+    client = getattr(request.state, "api_key_id", "") or (
+        request.client.host if request.client else "unknown"
+    )
     now_ts = time.time()
-    window = [t for t in bucket.get(client_ip, []) if now_ts - t < RATE_LIMIT_WINDOW_SECONDS]
+    window = [t for t in bucket.get(client, []) if now_ts - t < RATE_LIMIT_WINDOW_SECONDS]
     if len(window) >= limit:
         raise HTTPException(
             status_code=429,
@@ -2513,7 +2552,7 @@ def _enforce_sliding_window(
             ),
         )
     window.append(now_ts)
-    bucket[client_ip] = window
+    bucket[client] = window
 
 
 async def start_scan_if_idle(mode: str) -> bool:
@@ -2539,7 +2578,7 @@ async def trigger_scan(
     request: Request,
     background_tasks: BackgroundTasks,
     mode: str = "prematch",
-    _auth: None = Depends(_require_api_key),
+    _auth: None = Depends(_require_scope("scan")),
 ):
     """Trigger a new scan of all bookmakers (mode=prematch|live). P0-7 per-mode lock."""
     if mode not in ("prematch", "live"):
@@ -2770,7 +2809,7 @@ _LOOPBACK_HOSTS = {"127.0.0.1", "::1", "localhost"}
 
 
 @router.post("/shutdown")
-async def shutdown_server(request: Request, _auth: None = Depends(_require_api_key)):
+async def shutdown_server(request: Request, _auth: None = Depends(_require_scope("admin"))):
     """Stop the server process (the dashboard's "Stop server" button).
 
     Only a client on this machine may call it: HOST defaults to 0.0.0.0, so
@@ -2779,6 +2818,7 @@ async def shutdown_server(request: Request, _auth: None = Depends(_require_api_k
     browser first; uvicorn's own handler then runs a clean lifespan shutdown.
     """
     client = request.client.host if request.client else ""
+    api_key_store.audit("shutdown", getattr(request.state, "api_key_id", ""), client)
     if client not in _LOOPBACK_HOSTS:
         raise HTTPException(status_code=403, detail="Shutdown is only allowed from this computer")
     logger.info("Shutdown requested from the dashboard")
@@ -2978,7 +3018,8 @@ async def get_config():
 @router.post("/config/toggle_market/{market}")
 async def toggle_market(
     market: str,
-    _auth: None = Depends(_require_api_key),
+    request: Request,
+    _auth: None = Depends(_require_scope("admin")),
 ):
     """Enable or disable an experimental market for future scans."""
     if market not in _market_enabled:
@@ -2989,6 +3030,7 @@ async def toggle_market(
     _save_market_state()
 
     logger.info(f"Experimental market '{market}' toggled {'ON' if new_state else 'OFF'}")
+    api_key_store.audit("toggle_market", getattr(request.state, "api_key_id", ""), market)
     return {
         "status": "ok",
         "market": market,
@@ -2999,7 +3041,8 @@ async def toggle_market(
 @router.post("/config/toggle/{bookmaker_id}")
 async def toggle_bookmaker(
     bookmaker_id: str,
-    _auth: None = Depends(_require_api_key),
+    request: Request,
+    _auth: None = Depends(_require_scope("admin")),
 ):
     """Enable or disable a bookmaker for future scans."""
     if bookmaker_id not in BOOKMAKERS:
@@ -3011,6 +3054,7 @@ async def toggle_bookmaker(
     _save_bookmaker_state()
 
     logger.info(f"Bookmaker '{bookmaker_id}' toggled {'ON' if new_state else 'OFF'}")
+    api_key_store.audit("toggle_bookmaker", getattr(request.state, "api_key_id", ""), bookmaker_id)
     return {
         "status": "ok",
         "bookmaker_id": bookmaker_id,
@@ -3729,7 +3773,7 @@ async def verify_links(
     limit: int = DEEP_LINK_VERIFY_DEFAULT_LIMIT,
     offset: int = 0,
     recheck: bool = False,
-    _auth: None = Depends(_require_api_key),
+    _auth: None = Depends(_require_scope("scan")),
 ):
     """Prove — or fail to prove — one bookmaker's per-event deep links.
 
@@ -4118,3 +4162,56 @@ async def set_bet_closing(
     if result is None:
         raise HTTPException(status_code=404, detail="Bet not found")
     return result
+
+
+class ApiKeyCreateRequest(BaseModel):
+    label: str = "operator"
+    scopes: list[str] = ["read", "scan"]
+
+
+@router.post("/keys")
+async def create_api_key(
+    req: ApiKeyCreateRequest,
+    request: Request,
+    _auth: None = Depends(_require_scope("admin")),
+):
+    """Create a named key. The plaintext token is returned exactly once."""
+    try:
+        token, record = api_key_store.create(req.label, req.scopes)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    api_key_store.audit(
+        "key_created_via_api",
+        getattr(request.state, "api_key_id", ""),
+        record["id"],
+    )
+    return {"token": token, "key": record}
+
+
+@router.get("/keys")
+async def list_api_keys(_auth: None = Depends(_require_scope("admin"))):
+    """List key metadata; hashes and salts are never returned."""
+    return {"keys": api_key_store.list_keys()}
+
+
+@router.delete("/keys/{key_id}")
+async def revoke_api_key(
+    key_id: str,
+    request: Request,
+    _auth: None = Depends(_require_scope("admin")),
+):
+    """Revoke a key immediately; the next request using it answers 401."""
+    if not api_key_store.revoke(key_id):
+        raise HTTPException(status_code=404, detail="Key not found")
+    api_key_store.audit(
+        "key_revoked_via_api",
+        getattr(request.state, "api_key_id", ""),
+        key_id,
+    )
+    return {"revoked": True, "id": key_id}
+
+
+@router.get("/audit")
+async def get_audit_log(limit: int = 100, _auth: None = Depends(_require_scope("admin"))):
+    """Privileged-action audit trail, newest first."""
+    return {"entries": api_key_store.audit_log(limit)}

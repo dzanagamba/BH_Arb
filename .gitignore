@@ -51,3 +51,6 @@ htmlcov/
 
 # Runtime-generated mapping evidence (learned from scans; never commit)
 config/generated/mapping_evidence.json
+
+# Named API keys (hashed) and audit trail; never commit
+config/generated/api_keys.json
