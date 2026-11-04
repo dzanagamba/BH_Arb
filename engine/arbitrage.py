@@ -26,6 +26,7 @@ from itertools import permutations
 from config.settings import (
     DEFAULT_INVESTMENT,
     EXPIRY_BUFFER_MINUTES,
+    LIVE_ODDS_TTL_SECONDS,
     MATCH_URL_TEMPLATES,
     MAX_SUREBET_PROFIT_PERCENT,
     MAX_TWO_SOURCE_PROFIT_PERCENT,
@@ -161,6 +162,25 @@ def _priced_markets(match: Match) -> list[Market]:
 def _oldest_fetch(group: MatchGroup) -> datetime | None:
     times = [m.fetched_at for m in group.matches if m.fetched_at]
     return min(times) if times else None
+
+
+def _attach_stake_fetches(surebet: Surebet, group: MatchGroup) -> None:
+    """Attach each winning leg's own collection time to its stake.
+
+    A group may list a book more than once, so the earliest fetch wins: that is
+    the conservative age for any price the book contributed. A leg whose book
+    has no recorded fetch stays `None` rather than borrowing another book's
+    timestamp, which would make an unknown-age leg look current.
+    """
+    fetch_by_book: dict[str, datetime] = {}
+    for match in group.matches:
+        if match.fetched_at is None:
+            continue
+        current = fetch_by_book.get(match.bookmaker)
+        if current is None or match.fetched_at < current:
+            fetch_by_book[match.bookmaker] = match.fetched_at
+    for stake in surebet.stakes:
+        stake.fetched_at = fetch_by_book.get(stake.bookmaker)
 
 
 def _settlement_for_market(market: Market) -> str:
@@ -377,7 +397,7 @@ class ArbitrageEngine:
         """
         surebets: list[Surebet] = []
         now_utc_naive = datetime.now(UTC).replace(tzinfo=None)
-        ttl = 60 if allow_past_kickoffs else ODDS_TTL_SECONDS  # live tight, prematch looser
+        ttl = LIVE_ODDS_TTL_SECONDS if allow_past_kickoffs else ODDS_TTL_SECONDS
 
         for group in groups:
             # Only a group the certainty gate VERIFIED may be priced. The matcher
@@ -436,6 +456,7 @@ class ArbitrageEngine:
                     result.listings = _collect_listings(group)
                     result.evidence = _evidence_summary(group)
                     result.odds_fetched_at = _oldest_fetch(group)
+                    _attach_stake_fetches(result, group)
                     attach_destinations(result, group, mode=mode)
                     surebets.append(result)
                     logger.info(

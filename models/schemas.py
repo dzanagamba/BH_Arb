@@ -252,6 +252,10 @@ class SurebetStake(BaseModel):
     market_type: str = ""
     selection: str = ""
     line: str = ""
+    # When this leg's price was collected (naive UTC). The freshness block on
+    # /api/results is summarised per book; this keeps the age attached to the
+    # exact leg a reviewer is about to place.
+    fetched_at: datetime | None = None
     destination: LegDestination | None = None
 
 

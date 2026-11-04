@@ -36,6 +36,8 @@ let autoRescanTimer = null;
 let knownSurebetSignatures = new Set();
 let healthSnapshot = null;          // last /api/health payload, kept for the no-surebet diagnostic
 let resultsSnapshot = null;         // last /api/results payload, same reason
+let freshnessSnapshot = null;       // P0-4: scan age, TTL and per-book freshness
+let freshnessBannerSignature = null; // avoids rebuilding the banner's button every tick
 let noSurebetReasons = null;        // the diagnostic copy table, fetched once at start-up
 let currentCandidates = [];         // the review page on screen
 const verifyState = {};             // surebet id -> {state, at, data}
@@ -564,6 +566,8 @@ async function loadResults(silent = false) {
         // `match_groups` is the mode-correct count of groups the certainty gate
         // accepted; the health payload's equivalent is prematch-only.
         resultsSnapshot = data;
+        freshnessSnapshot = data.freshness || null;
+        renderFreshnessBanner();
 
         setText('stat-matches', data.total_matches != null ? data.total_matches.toLocaleString() : '—');
         setText('stat-groups', data.match_groups != null ? Number(data.match_groups).toLocaleString() : '—');
@@ -585,6 +589,68 @@ async function loadResults(silent = false) {
     } catch (e) {
         console.error('Failed to load results:', e);
     }
+}
+
+// P0-4: staleness is a live state, not a value frozen at load time. Recompute
+// the age from the scan timestamp each tick so a page left open crosses its TTL
+// visibly instead of continuing to look current.
+function currentFreshness() {
+    if (!freshnessSnapshot) return null;
+    const scan = freshnessSnapshot.scan_time ? parseKickoff(freshnessSnapshot.scan_time) : null;
+    const age = scan ? Math.max(0, (Date.now() - scan.getTime()) / 1000) : null;
+    const ttl = Number(freshnessSnapshot.ttl_sec) || 0;
+    const stale = Boolean(freshnessSnapshot.stale) || age == null || (ttl > 0 && age > ttl);
+    return { ...freshnessSnapshot, age_sec: age, stale };
+}
+
+function staleFeed() {
+    return Boolean(currentFreshness()?.stale);
+}
+
+function freshnessAgeText(seconds) {
+    if (seconds == null) return 'unknown age';
+    if (seconds < 60) return `${Math.round(seconds)}s`;
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ${Math.round(seconds % 60)}s`;
+    const hours = Math.floor(minutes / 60);
+    return `${hours}h ${minutes % 60}m`;
+}
+
+function renderFreshnessBanner() {
+    const banner = document.getElementById('freshness-banner');
+    if (!banner) return;
+    const fresh = currentFreshness();
+    const stale = Boolean(fresh?.stale);
+    document.body.classList.toggle('feed-stale', stale);
+    const signature = [
+        stale,
+        fresh?.mode,
+        fresh?.state,
+        fresh?.ttl_sec,
+        fresh?.age_sec == null ? null : Math.floor(fresh.age_sec / 10),
+        (fresh?.stale_books || []).join(','),
+    ].join('|');
+    if (signature === freshnessBannerSignature) return;
+    freshnessBannerSignature = signature;
+    banner.hidden = !stale;
+    if (!stale) { banner.innerHTML = ''; return; }
+
+    const mode = fresh.mode === 'live' ? 'live' : 'prematch';
+    const ttl = fresh.ttl_sec;
+    const books = (fresh.stale_books || []).map(b => bookName(b));
+    const booksText = books.length
+        ? ` Stale book${books.length > 1 ? 's' : ''}: ${books.map(escapeHtml).join(', ')}.`
+        : '';
+    let message;
+    if (fresh.state === 'never_scanned') {
+        message = `<strong>No completed ${escapeHtml(mode)} scan.</strong> Nothing on this screen is a current price.`;
+    } else if (fresh.state === 'book_older_than_ttl') {
+        message = `<strong>Historical ${escapeHtml(mode)} data.</strong> At least one book is older than the ${escapeHtml(String(ttl))}s freshness budget.${booksText}`;
+    } else {
+        message = `<strong>Historical ${escapeHtml(mode)} data.</strong> The last scan is ${escapeHtml(freshnessAgeText(fresh.age_sec))} old; the budget is ${escapeHtml(String(ttl))}s.${booksText}`;
+    }
+    banner.innerHTML = `${message} These odds are not current — re-check a slip or run a new scan.
+        <button type="button" class="btn btn-primary btn-small" data-action="scan-now">Scan now</button>`;
 }
 
 function surebetSignature(sb) {
@@ -941,6 +1007,9 @@ function renderSlip() {
     const roundingCost = exactProfit - plan.profitPercent;
 
     const warnings = [];
+    if (staleFeed()) {
+        warnings.push('<div class="slip-alert slip-alert-bad">These are historical scan prices, not a current opportunity. Copy is disabled; use <strong>Re-check odds</strong> to establish the current prices before placing.</div>');
+    }
     if (plan.profit <= 0) {
         warnings.push(`<div class="slip-alert slip-alert-bad">With these stakes the worst outcome loses ${money(-plan.profit)} KM. ${Object.keys(state.placed).length ? 'A placed price moved — consider stopping or hedging rather than placing the rest.' : 'Raise the total stake or round to exact amounts.'}</div>`);
     } else if (!Object.keys(state.placed).length && roundingCost > exactProfit / 2) {
@@ -1076,7 +1145,7 @@ function renderSlip() {
 
         <div class="slip-actions">
             <button type="button" class="btn btn-secondary" data-action="verify-surebet" data-slip-id="${escapeHtml(sb.id)}">Re-check odds</button>
-            <button type="button" class="btn btn-secondary" data-action="copy-surebet" data-slip-id="${escapeHtml(sb.id)}">Copy slip</button>
+            <button type="button" class="btn btn-secondary" data-action="copy-surebet" data-slip-id="${escapeHtml(sb.id)}"${staleFeed() ? ' disabled aria-disabled="true" data-stale-blocked="true"' : ''}>Copy slip</button>
         </div>
     `;
     applyStatusBadge(pane.querySelector('.status-badge'), sb.status || sb.match_status);
@@ -1228,6 +1297,14 @@ function tickAges() {
     document.querySelectorAll('[data-ago]').forEach(el => {
         el.textContent = formatAgo(new Date(Number(el.dataset.ago)));
     });
+    // P0-4: crossing the TTL while the page is open must change what the page
+    // allows, not just a number in a corner. Re-render once on the transition.
+    const wasStale = document.body.classList.contains('feed-stale');
+    renderFreshnessBanner();
+    if (wasStale !== document.body.classList.contains('feed-stale')) {
+        applyFilters();
+        if (selectedSurebetId) renderSlip();
+    }
     // A check that just went stale changes the banner's colour and advice.
     const check = verifyState[selectedSurebetId];
     if (check && check.state === 'ok') {
@@ -1242,7 +1319,15 @@ function tickAges() {
 // from `dataset`, so a quote, backtick, parenthesis or `</script>` in a scraped
 // name cannot break out of the button.
 function copyAttributes(value, message) {
-    return `data-action="copy-text" data-copy="${escapeHtml(value)}" data-copy-message="${escapeHtml(message)}"`;
+    // Copying a stale price is the one action that turns a historical number
+    // into something a reviewer might place. Re-check stays enabled as the way
+    // to establish the current price.
+    // `typeof` keeps this helper executable in isolation by the XSS tests, while
+    // the browser uses the real freshness state.
+    const stale = typeof staleFeed === 'function' && staleFeed()
+        ? ' disabled aria-disabled="true" data-stale-blocked="true"'
+        : '';
+    return `data-action="copy-text" data-copy="${escapeHtml(value)}" data-copy-message="${escapeHtml(message)}"${stale}`;
 }
 
 async function copyText(text, message) {
@@ -1260,6 +1345,10 @@ async function copyText(text, message) {
 }
 
 function copySurebetDetails(id) {
+    if (staleFeed()) {
+        showToast('Historical prices — re-check the odds before copying.');
+        return;
+    }
     const sb = allSurebets.find(s => s.id === id);
     if (!sb) return;
     const state = slipFor(sb);

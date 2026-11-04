@@ -95,12 +95,21 @@ POST /api/scan
   against the link store on restore.
 - `POST /api/verify` re-scrapes just the books in one surebet and re-prices the
   exact market and outcomes it was built on.
+- **Freshness is a runtime state.** `/api/results` carries a `freshness` block:
+  mode, scan age, TTL, `stale`, per-book oldest/newest `fetched_at`, and the
+  stale books. Prematch prices expire after `ODDS_TTL_SECONDS` (600 s); live
+  prices after `LIVE_ODDS_TTL_SECONDS` (60 s). A stale scan keeps its rows for
+  diagnosis but is labelled historical. The dashboard shows a banner and
+  disables copy actions; **Re-check odds** stays available as the only path that
+  re-establishes a leg's current price.
 
 ## Dashboard
 
 - **Surebets** — best profit first. Selecting one opens the bet slip, which
   re-checks the odds, orders legs longest-odds-first, rounds stakes to whole KM,
-  and re-plans the remaining legs after you mark one as placed.
+  and re-plans the remaining legs after you mark one as placed. If the feed has
+  crossed its TTL, a banner marks the list as historical and copy actions are
+  disabled until you re-check or scan again.
 - **Diagnostics** — pairings the gate could not prove, with the evidence it
   used. This view is read-only.
 - **History** — per-scan counts and errors for both feeds.
@@ -137,7 +146,8 @@ Diagnostics queue; it cannot create or approve a pairing.
 Tuning that belongs in code lives in `config/settings.py`: `MIN_PROFIT_PERCENT`
 (`0.5`), `DUST_PROFIT_PERCENT` (`0.2`), `DEFAULT_INVESTMENT` (`100` BAM),
 `KICKOFF_WINDOW_MINUTES` (`120`), `MAX_SUREBET_PROFIT_PERCENT` (`20`),
-`ODDS_TTL_SECONDS`, `PRICE_SOURCES` and `BROWSER_CONCURRENCY`.
+`ODDS_TTL_SECONDS` (600), `LIVE_ODDS_TTL_SECONDS` (60), `PRICE_SOURCES` and
+`BROWSER_CONCURRENCY`.
 
 ## Match & mapping certainty
 

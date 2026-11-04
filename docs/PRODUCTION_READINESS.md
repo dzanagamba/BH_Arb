@@ -17,7 +17,7 @@ This is an evidence-based verdict, not a score:
 | Event identity | Good and measured | Ledger, Betradar ids, shared-fixture learning, league fingerprints and shared-opponent blocking exist. `scripts/pairing_audit.py` measures a 0.33% strict miss rate (22 of 6,624 offers) and zero groups repeating a bookmaker. |
 | Market identity | Good | Label classifier + cross-book consensus + generated registry + raw-offer resolver exist. All nine markets are enabled; first-half 1X2 and AH were proven on a real scan with 0 outliers, and first-half O/U is enabled with no current offer and the price guard active. Only the NSoft parser publishes `source_id`; the other scrapers still use the hand-written registry. |
 | Human input | Removed | The three write routes are gone; the Diagnostics tab is read-only. The evidence ledger is the only trust source. |
-| Freshness | Partial | The engine has odds TTL and every shown surebet is re-verified; there is still no per-book freshness budget, no last-known-value policy, and no push/streaming path. |
+| Freshness | Partial | Runtime TTLs are now explicit: `/api/results` reports scan age, TTL, `stale`, stale books and per-book oldest/newest fetch times, and the dashboard labels a stale feed as historical and disables copy actions. There is still no last-known-value policy or push/streaming path. |
 | Execution | Partial | Stakes are rounded, legs are ordered, the slip re-plans, and every shown surebet is re-checked before placement. Book limits, partial acceptance, balance, and the "price moved between legs" workflow are not complete. |
 | Operations | Partial | Scheduler, per-book back-off and a 10-cycle soak that plateaus at ~767 MB exist; no alerting, no 24 h soak, no deployment, no health budget for mapping coverage. |
 | Security | Good | Loopback by default, same-origin CORS, an all-route API-key guard, a CSRF guard, URL-scheme checks and CSP/anti-framing headers are in place; the dashboard prompts once. Script execution is nonce-gated with no `script-src 'unsafe-inline'`; inline styles remain the documented CSP gap. |
@@ -185,10 +185,11 @@ read before 2026-11-03.
    discovery on captured payloads, and generate the registry. Prove first-half
    and AH rows with captures and consensus; record absence for markets a book
    does not offer.
-4. **Add freshness and execution policy.** Per-book staleness budgets, last-known
-   value, a re-check immediately before placement, stake limits, partial
-   acceptance, and a clear "price moved" state. Pre-match 30–60 s polling is the
-   baseline; live needs a push or sub-10 s path.
+4. **Finish freshness and execution policy.** Runtime and per-book staleness
+   budgets, the stale banner and action-gating are in place. Still missing:
+   last-known value, a re-check immediately before placement, stake limits,
+   partial acceptance, and a clear "price moved" state. Pre-match 30–60 s polling
+   is the baseline; live needs a push or sub-10 s path.
 5. **Operate it.** Scheduler with per-book back-off, 24 h soak, memory/browser
    leak checks, health/alerting on mapping coverage and stale books, and a
    documented persistent deployment.

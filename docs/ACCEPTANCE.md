@@ -53,6 +53,34 @@ Regression tests:
 and `tests/test_cache_serialization.py::test_cached_group_payload_is_bounded`.
 
 
+## Runtime freshness (P0-4, 2026-11-04)
+
+F3 was a different failure from a stale cache file: the cache was bounded and
+restored correctly, but a running server kept serving `last_scan.json` without a
+hard stale state, so the dashboard could present hours-old prices as current.
+
+The policy is now explicit and shared by the engine, the API and the dashboard:
+
+- Prematch prices expire after `ODDS_TTL_SECONDS` (600 s); live prices after
+  `LIVE_ODDS_TTL_SECONDS` (60 s).
+- `/api/results` returns `freshness` with `mode`, `scan_time`, `age_sec`,
+  `ttl_sec`, `stale`, `state`, `stale_books`, and a `per_book` map carrying each
+  book's oldest/newest `fetched_at`, ages, missing-timestamp count and stale
+  flag. `/api/health` exposes the same block for both feeds.
+- A stale feed keeps its cached rows for diagnosis but is labelled historical.
+  The dashboard shows an alert banner, marks rows as stale, and disables copy
+  actions. **Re-check odds** stays enabled: `POST /api/verify` is still the only
+  path that re-establishes a leg's current price.
+- Each `SurebetStake` now carries its own `fetched_at`, so the slip can show the
+  age of the exact leg being placed instead of only the group's oldest fetch.
+
+A book with no timestamp, or a scan with no completed run, is treated as stale:
+silence is not proof of freshness. The test matrix covers fresh, near-expiry,
+past-TTL, one stale book among fresh ones, live's tighter TTL, never-scanned,
+missing timestamps, and per-leg fetch times.
+
+Tests: `tests/test_freshness_api.py`, `tests/test_frontend_freshness.py`.
+
 ## Browser hardening
 
 `server/app.py` sets `Content-Security-Policy` (`default-src 'self'`,

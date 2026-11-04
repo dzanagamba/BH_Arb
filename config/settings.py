@@ -146,7 +146,11 @@ MAX_SUREBET_PROFIT_PERCENT = 20.0  # Sanity cap — reject higher profits (likel
 # independent sources can still show a large edge because the median test has
 # something to compare against.
 MAX_TWO_SOURCE_PROFIT_PERCENT = 10.0
-ODDS_TTL_SECONDS = 600         # Max age of odds before considered stale (prematch 10 min, live 60s enforced in engine)
+# Freshness policy, shared by the pricing engine and the API/dashboard. A scan
+# is current only while every leg it serves is inside its feed's budget. Live
+# prices move far faster than prematch, so the live budget is deliberately tight.
+ODDS_TTL_SECONDS = 600         # Prematch: max age of odds before considered stale (10 min)
+LIVE_ODDS_TTL_SECONDS = 60     # Live: in-play odds expire after one minute
 
 # --- Scraper Settings ---
 NAVIGATION_TIMEOUT_MS = 60000  # Max navigation time (ms)

@@ -46,6 +46,7 @@ from config.settings import (
     ENABLED_MARKETS,
     ENABLED_SPORTS,
     EXPERIMENTAL_MARKETS,
+    LIVE_ODDS_TTL_SECONDS,
     MIN_LEARN_MATCHES,
     MIN_PROFIT_PERCENT,
     ODDS_TTL_SECONDS,
@@ -1630,6 +1631,119 @@ def _cache_size(path: str) -> int:
         return 0
 
 
+def _naive_utc(value: datetime) -> datetime:
+    """Normalize a datetime to naive UTC, the shape the cache stores."""
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(UTC).replace(tzinfo=None)
+
+
+def _age_seconds(value: datetime | None, now: datetime | None = None) -> float | None:
+    """Age of a stored timestamp in seconds, or None when it is unknown."""
+    if value is None:
+        return None
+    reference = now or datetime.now(UTC).replace(tzinfo=None)
+    try:
+        return (reference - _naive_utc(value)).total_seconds()
+    except Exception:
+        return None
+
+
+def _parse_timestamp(value: object) -> datetime | None:
+    """Read an ISO timestamp from a cached row, or None when absent/malformed."""
+    if isinstance(value, datetime):
+        return value
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _freshness_block(mode: str, status: ScanStatus, matches: list[dict]) -> dict[str, Any]:
+    """Summarize whether the served feed can still be called current.
+
+    `stale` is deliberately conservative. It is true when the scan itself is
+    older than the feed's TTL, and also when any book that supplied a listing
+    cannot prove it was fetched inside that TTL. The cached rows stay in the
+    payload: the dashboard must still be able to diagnose a stale feed. What
+    changes is that they are labelled historical instead of current.
+    """
+    ttl = LIVE_ODDS_TTL_SECONDS if mode == "live" else ODDS_TTL_SECONDS
+    now = datetime.now(UTC).replace(tzinfo=None)
+    scan_age = _age_seconds(status.last_scan_time, now)
+    per_book: dict[str, dict[str, Any]] = {}
+    for row in matches:
+        if not isinstance(row, dict):
+            continue
+        bookmaker = str(row.get("bookmaker") or "")
+        if not bookmaker:
+            continue
+        entry = per_book.setdefault(
+            bookmaker,
+            {
+                "bookmaker": bookmaker,
+                "matches": 0,
+                "oldest_fetched_at": None,
+                "newest_fetched_at": None,
+                "oldest_age_sec": None,
+                "newest_age_sec": None,
+                "missing_fetched_at": 0,
+                "stale": True,
+            },
+        )
+        entry["matches"] += 1
+        fetched_at = _parse_timestamp(row.get("fetched_at"))
+        if fetched_at is None:
+            entry["missing_fetched_at"] += 1
+            continue
+        fetched_at = _naive_utc(fetched_at)
+        if entry["oldest_fetched_at"] is None or fetched_at < entry["_oldest"]:
+            entry["_oldest"] = fetched_at
+            entry["oldest_fetched_at"] = fetched_at.isoformat()
+        if entry["newest_fetched_at"] is None or fetched_at > entry["_newest"]:
+            entry["_newest"] = fetched_at
+            entry["newest_fetched_at"] = fetched_at.isoformat()
+
+    stale_books: list[str] = []
+    for bookmaker, entry in per_book.items():
+        oldest = entry.pop("_oldest", None)
+        newest = entry.pop("_newest", None)
+        entry["oldest_age_sec"] = _age_seconds(oldest, now)
+        entry["newest_age_sec"] = _age_seconds(newest, now)
+        # No timestamp is not proof of freshness. A book that cannot state when
+        # it fetched a price is treated as stale until it can.
+        entry["stale"] = entry["oldest_age_sec"] is None or entry["oldest_age_sec"] > ttl
+        if entry["stale"]:
+            stale_books.append(bookmaker)
+
+    if scan_age is None:
+        state = "never_scanned"
+        stale = True
+    elif scan_age > ttl:
+        state = "scan_older_than_ttl"
+        stale = True
+    elif stale_books:
+        state = "book_older_than_ttl"
+        stale = True
+    else:
+        state = "fresh"
+        stale = False
+
+    return {
+        "mode": mode,
+        "as_of": now.isoformat(),
+        "scan_time": status.last_scan_time.isoformat() if status.last_scan_time else None,
+        "age_sec": scan_age,
+        "ttl_sec": ttl,
+        "stale": stale,
+        "state": state,
+        "stale_books": sorted(stale_books),
+        "per_book": dict(sorted(per_book.items())),
+    }
+
+
 def _save_cache(mode: str = "prematch"):
     """Persist last scan results to JSON cache files (with TTL metadata P0-6).
 
@@ -2003,6 +2117,12 @@ async def health():
             "errors": list(live_status.errors),
         },
         "odds_ttl_sec": ODDS_TTL_SECONDS,
+        # The same freshness policy the results payload serves. Health is where
+        # an operator checks whether a quiet scan is fresh data or a stale feed.
+        "freshness": {
+            "prematch": _freshness_block("prematch", scan_status, cached_matches),
+            "live": _freshness_block("live", live_status, cached_live_matches),
+        },
         # P0-1 guard. A scan cache that outgrows the budget means the persisted
         # evidence payload regressed to carrying data it does not need; the size
         # is reported rather than hidden so the regression is visible without a
@@ -2096,6 +2216,10 @@ async def get_results(mode: str = "prematch"):
             if status.last_scan_time
             else None
         ),
+        # P0-4: cached rows stay here for diagnosis, but the feed's age is now
+        # a first-class state. A stale result is labelled, not silently shown as
+        # a current opportunity.
+        "freshness": _freshness_block(mode, status, matches_cache),
     }
 
 

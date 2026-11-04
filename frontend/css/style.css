@@ -308,6 +308,37 @@ kbd {
 .error-banner span { flex: 1; }
 .error-banner-close { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 14px; }
 
+/* P0-4: a feed past its TTL is historical, not current. The banner is always
+   first in the main column so it cannot be mistaken for a row-level warning. */
+.freshness-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin: 16px 0 0;
+    padding: 12px 14px;
+    border: 1px solid color-mix(in srgb, var(--bad) 55%, var(--line));
+    border-radius: var(--radius);
+    background: color-mix(in srgb, var(--bad) 10%, var(--panel));
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 500;
+}
+.freshness-banner::before {
+    content: '';
+    width: 9px;
+    height: 9px;
+    flex: none;
+    border-radius: 50%;
+    background: var(--bad);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--bad) 18%, transparent);
+}
+.freshness-banner strong { font-weight: 700; }
+.freshness-banner .freshness-books { color: var(--muted); }
+.freshness-banner .btn { margin-left: auto; }
+body.feed-stale .sb-row { border-style: dashed; }
+body.feed-stale .row-profit b { color: var(--warn); }
+
 /* ─── Tabs ─────────────────────────────────────────────────────────────── */
 .main { max-width: 1520px; margin: 0 auto; padding: 0 24px 32px; }
 

@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-11-04
 **Repository:** `dzanagamba/BH_Arb` (`main`)
-**Status of this document:** audit complete, implementation not started
+**Status of this document:** audit complete; P0-1 through P0-4 done, implementation continuing
 **Purpose:** a durable, session-by-session plan so work can resume without re-reading the whole repository.
 
 > **How to use this document**
@@ -254,7 +254,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 | P0-1 | Bound the cached evidence payload | P0 | S | — | Done |
 | P0-2 | Dashboard XSS + inline-handler + CSP hardening | P0 | M | — | Done |
 | P0-3 | Gate-vocabulary truth audit and probe strengthening | P0 | S | — | Done |
-| P0-4 | Runtime freshness and stale-state policy | P0 | M | — | Not started |
+| P0-4 | Runtime freshness and stale-state policy | P0 | M | — | Done |
 | P0-5 | Reloadable deep-link declarations | P0 | S | — | Not started |
 | P0-6 | Opportunity-rate and arb-lifetime telemetry | P0 | M | P0-4 | Not started |
 | P0-7 | Feed-integrity scorecard and stale-book quarantine | P0 | M | P0-4 | Not started |
@@ -406,7 +406,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 
 ### P0-4 — Runtime freshness and stale-state policy
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P0
 **Effort:** M
 **Depends on:** none
@@ -426,10 +426,10 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 
 **Acceptance criteria:**
 
-- [ ] `/api/results` reports `stale`, `age_sec`, `ttl_sec`, and per-book freshness.
-- [ ] A stale feed is visually distinct and cannot be mistaken for a live opportunity.
-- [ ] The verify endpoint remains the only path that can re-establish a leg's current price.
-- [ ] Existing cache/restore behavior is unchanged for fresh data.
+- [x] `/api/results` reports `stale`, `age_sec`, `ttl_sec`, and per-book freshness.
+- [x] A stale feed is visually distinct and cannot be mistaken for a live opportunity.
+- [x] The verify endpoint remains the only path that can re-establish a leg's current price.
+- [x] Existing cache/restore behavior is unchanged for fresh data.
 
 **Tests:**
 
@@ -1421,6 +1421,35 @@ Before writing a claim about behavior, run the command that proves it and paste 
 ## 6. Execution log
 
 Newest first. Each entry: date, task, status, commands, measured result, files changed, follow-ups.
+
+### 2026-11-04 — P0-4: Runtime freshness and stale-state policy
+
+**Task:** P0-4 (first eligible task after P0-3; no dependencies). P0-1 was already `Done`, so it was not repeated.
+**Status:** Done.
+
+**Commands and results:**
+
+- `python -m pytest` → **1,275 passed**, 1 warning, 182.58 s (was 1,262; +13 tests).
+- `python -m ruff check .` → clean.
+- `python -m mypy .` → clean on 138 source files.
+- `python scripts/generate_market_mapping_doc.py --check` → in sync.
+- `python scripts/replay_mappings.py tests/fixtures/replay/2026-11-03 --cold --check` → exit 0, fixed point, 0 false merges, 0 unresolved evidence-backed pairs.
+- Task-specific matrix in `tests/test_freshness_api.py`: fresh, near-expiry, one second past TTL, one stale book among fresh ones, live 60 s TTL, never scanned, missing timestamp, per-leg fetch time. `tests/test_frontend_freshness.py` executes the shipped staleness helper under Node and pins the stale banner and disabled copy actions.
+
+**What changed:**
+
+- `config/settings.py`: added `LIVE_ODDS_TTL_SECONDS = 60`; the engine and API now read the same policy.
+- `server/api.py`: `_freshness_block()` adds `mode`, `scan_time`, `age_sec`, `ttl_sec`, `stale`, `state`, `stale_books` and per-book oldest/newest `fetched_at`/ages/missing counts to `/api/results` and both feeds in `/api/health`. Cached rows remain served for diagnosis.
+- `models/schemas.py`, `engine/arbitrage.py`: every `SurebetStake` carries its own `fetched_at`; the engine attaches the winning book's collection time (earliest if a book is listed twice).
+- `frontend/index.html`, `frontend/js/app.js`, `frontend/css/style.css`: runtime stale banner, `feed-stale` styling, age recomputed from the scan timestamp each second, copy actions disabled while stale, **Re-check odds** left enabled as the only path back to a current price.
+- `tests/test_freshness_api.py` (new), `tests/test_frontend_freshness.py` (new).
+- `README.md`, `docs/ACCEPTANCE.md`, `docs/PRODUCTION_READINESS.md` document the policy and the remaining freshness gaps.
+
+**Trust rules:** no certainty-gate, link-proof, settlement, cache-restore or one-leg-per-book/price-source rule was changed. Staleness is a price-source/currentness label, not an identity decision.
+
+**Follow-ups:** P0-5 (reloadable deep-link declarations) is the next eligible task by table order. P0-6 and P0-7 are now unblocked by P0-4.
+
+---
 
 ### 2026-11-04 — P0-3: Gate-vocabulary truth audit
 
