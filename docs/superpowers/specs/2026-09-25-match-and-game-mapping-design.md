@@ -203,7 +203,8 @@ removed.
 
 - Every group carries a status and evidence; every rejection records a reason
   (league_mismatch, kickoff_missing, kickoff_delta, category_mismatch,
-  team_unresolved, orientation_unresolved, link_unverified).
+  team_unresolved, orientation_unresolved, betradar_mismatch, sport_mismatch,
+  link_unverified, no_event_link).
 - `/api/health` exposes verified/pending/unmapped/unverified counts.
 - AI failures degrade to rules-only and are visible in health.
 - Unknown market IDs are counted, not silently dropped.

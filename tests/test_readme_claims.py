@@ -456,9 +456,14 @@ def _match(**overrides: object) -> Match:
 def _observed_reasons() -> tuple[set[str], set[str]]:
     """The reason vocabulary the gate can actually emit, by running it.
 
-    Split into hard rejects and the rest, because the README's table makes exactly
-    that distinction. Observed rather than grepped, so a reason the code stopped
-    producing cannot linger in the documentation unnoticed.
+    Returns ``(rejected, suggested)``, classified by the status of the gate
+    result that produced each reason. That is deliberately not membership in
+    ``HARD_REJECT_REASONS``: `sport_mismatch` is an explicit `rejected` result
+    returned before that set is consulted, so classifying by the set would put
+    it in the wrong README row.
+
+    Observed rather than grepped, so a reason the code stopped producing cannot
+    linger in the documentation unnoticed.
     """
     gate = CertaintyGate()
     kickoff = datetime(2026, 9, 25, 18, 0)
@@ -477,23 +482,39 @@ def _observed_reasons() -> tuple[set[str], set[str]]:
         # verified_link first, so a bare empty url/event_id never reaches it.
         _match(bookmaker="undeclared_book", url="", event_id="", deep_link_verified=False),
         _match(bookmaker="mbet", event_id="e3", category_tags=["women"]),
+        _match(sport="basketball"),
     ]
-    observed: set[str] = set()
-    for case in cases:
-        pair = [_match(), case]
+    rejected: set[str] = set()
+    suggested: set[str] = set()
+
+    def record(pair: list[Match]) -> None:
         gate.normalize(pair)
-        observed.update(gate.evaluate_pair(*pair).reasons)
+        result = gate.evaluate_pair(*pair)
+        (rejected if result.status == "rejected" else suggested).update(result.reasons)
+
+    for case in cases:
+        record([_match(), case])
 
     # Two different provider ids are a hard contradiction even when every name
     # agrees, so this is the only way to observe `betradar_mismatch`.
-    different_ids = [
+    record([
         _match(betradar_id="111"),
         _match(bookmaker="mbet", event_id="e2", betradar_id="222"),
-    ]
-    gate.normalize(different_ids)
-    observed.update(gate.evaluate_pair(*different_ids).reasons)
+    ])
 
-    return observed & set(HARD_REJECT_REASONS), observed - set(HARD_REJECT_REASONS)
+    # The id proves the event, but names that tie both ways cannot orient it.
+    record([
+        _match(home_team="Aa", away_team="Bb", betradar_id="111"),
+        _match(
+            bookmaker="wwin",
+            event_id="e2",
+            home_team="Cc",
+            away_team="Dd",
+            betradar_id="111",
+        ),
+    ])
+
+    return rejected, suggested
 
 
 def _vocabulary_problems(text: str) -> list[str]:
@@ -504,8 +525,8 @@ def _vocabulary_problems(text: str) -> list[str]:
     "rejected" and "suggested".
     """
     problems: list[str] = []
-    hard, soft = _observed_reasons()
-    for status, expected in (("rejected", hard), ("suggested", soft)):
+    rejected, suggested = _observed_reasons()
+    for status, expected in (("rejected", rejected), ("suggested", suggested)):
         try:
             cells = _row(text, f"`{status}`")
         except AssertionError as exc:
@@ -532,41 +553,48 @@ def test_status_reason_vocabulary_matches_what_the_gate_emits():
     asked whether each documented string appeared somewhere in
     ``certainty.py``, so a README could invent a reason and pass.
     """
-    hard, soft = _observed_reasons()
-    assert hard <= set(HARD_REJECT_REASONS), (
-        f"{sorted(hard - set(HARD_REJECT_REASONS))} produced a hard reject without being "
-        "in HARD_REJECT_REASONS, so calling it hard here is wrong"
+    rejected, suggested = _observed_reasons()
+    assert not (rejected & suggested), (
+        f"{sorted(rejected & suggested)} was observed under both a rejected and a "
+        "suggested result, so the probe does not isolate the reason"
     )
-    assert hard, "the probe produced no hard reasons, so this test would be vacuous"
-    assert soft, "the probe produced no soft reasons, so this test would be vacuous"
+    assert set(HARD_REJECT_REASONS) <= rejected, (
+        f"{sorted(set(HARD_REJECT_REASONS) - rejected)} is in HARD_REJECT_REASONS but "
+        "the probe never produced it"
+    )
+    assert rejected - set(HARD_REJECT_REASONS) == {"sport_mismatch"}, (
+        "the only rejected reason outside HARD_REJECT_REASONS must be sport_mismatch, "
+        "which returns rejected explicitly before the set is consulted"
+    )
+    assert rejected, "the probe produced no rejected reasons, so this test would be vacuous"
+    assert suggested, "the probe produced no suggested reasons, so this test would be vacuous"
     problems = _vocabulary_problems(README)
     assert problems == [], "; ".join(problems)
 
 
-def test_dead_hard_reject_vocabulary_is_documented_as_dead():
-    """``HARD_REJECT_REASONS`` names one reason the gate never emits; say so.
+def test_no_hard_reject_reason_is_dead():
+    """Every member of ``HARD_REJECT_REASONS`` is reachable and documented.
 
-    The assignment in `engine/certainty.py` lists `orientation_unresolved`, but
-    nothing in the module ever appends it — the unresolvable-orientation case is
-    reported as `team_unresolved`. Left undocumented, a reader comparing the table
-    with that set would conclude the gate rejects something it does not. The
-    README says so, and this pins both sides: implement the reason or delete the
-    entry, and this fails until the README's wrinkle sentence is updated to match.
+    The old README claimed `orientation_unresolved` was never emitted; the gate
+    emits it for a shared Betradar id whose names tie both ways. A dead entry is
+    not allowed to hide behind a prose exception: implement the reason or delete
+    it, and this test fails until the README follows.
     """
-    hard, _ = _observed_reasons()
-    dead = set(HARD_REJECT_REASONS) - hard
-    assert dead == {"orientation_unresolved"}, (
-        f"the hard-reject vocabulary the gate never emits is {sorted(dead)}, not just "
-        "orientation_unresolved; the README's note about it is stale"
+    rejected, _ = _observed_reasons()
+    dead = set(HARD_REJECT_REASONS) - rejected
+    assert dead == set(), (
+        f"the hard-reject vocabulary the gate never emits is {sorted(dead)}; "
+        "the probe must exercise every entry or the entry must be removed"
     )
     section = _section(README, "## Match & mapping certainty")
     assert "HARD_REJECT_REASONS" in section
-    for reason in dead:
+    for reason in HARD_REJECT_REASONS:
         assert reason in section, (
-            f"{reason!r} is declared hard-reject but never emitted, and the README no "
-            "longer says so"
+            f"{reason!r} is declared hard-reject but the README's certainty section "
+            "does not list it"
         )
-    assert "never emits" in section
+    assert "sport_mismatch" in section
+    assert "never emits" not in section
 
 
 def test_readme_cites_hard_reject_reasons_by_symbol_and_not_by_line():
@@ -608,7 +636,7 @@ def test_readme_cites_hard_reject_reasons_by_symbol_and_not_by_line():
 
 def test_vocabulary_check_fails_on_an_invented_and_on_a_dropped_reason():
     """Proves the vocabulary test reads the README's table cells, not just the code."""
-    invented = README.replace("`category_mismatch`", "`orientation_unresolved`", 1)
+    invented = README.replace("`category_mismatch`", "`not_a_gate_reason`", 1)
     assert invented != README, "the first mutation did not apply; untested"
     problems = _vocabulary_problems(invented)
     assert problems, "a README inventing a rejected reason passed the check"
@@ -619,6 +647,78 @@ def test_vocabulary_check_fails_on_an_invented_and_on_a_dropped_reason():
     problems = _vocabulary_problems(dropped)
     assert problems, "a README dropping a reason the gate emits passed the check"
     assert any("kickoff_delta" in problem for problem in problems)
+
+
+def _dotted_name(node: ast.AST) -> str | None:
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        parent = _dotted_name(node.value)
+        return f"{parent}.{node.attr}" if parent else node.attr
+    return None
+
+
+def _string_literals(node: ast.AST) -> set[str]:
+    if isinstance(node, ast.Constant):
+        return {node.value} if isinstance(node.value, str) else set()
+    if isinstance(node, ast.Set | ast.List | ast.Tuple):
+        return set().union(*(_string_literals(element) for element in node.elts))
+    if isinstance(node, ast.Call):
+        return set().union(*(_string_literals(argument) for argument in node.args))
+    if isinstance(node, ast.BoolOp):
+        return set().union(*(_string_literals(value) for value in node.values))
+    if isinstance(node, ast.IfExp):
+        return _string_literals(node.body) | _string_literals(node.orelse)
+    return set()
+
+
+def _gate_source_reasons() -> set[str]:
+    """Reason literals at the gate's own reason sinks, not every string in the file."""
+    tree = ast.parse((REPO_ROOT / "engine" / "certainty.py").read_text(encoding="utf-8"))
+    reasons: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign):
+            targets = {target.id for target in node.targets if isinstance(target, ast.Name)}
+            if "HARD_REJECT_REASONS" in targets:
+                reasons.update(_string_literals(node.value))
+        if isinstance(node, ast.Call):
+            function_name = _dotted_name(node.func)
+            if function_name in {
+                "reasons.append",
+                "reasons.extend",
+                "result.reasons.append",
+                "result.reasons.extend",
+                "link_reasons.add",
+            }:
+                reasons.update(_string_literals(node))
+            if function_name == "GateResult":
+                for keyword in node.keywords:
+                    if keyword.arg == "reasons":
+                        reasons.update(_string_literals(keyword.value))
+    return reasons
+
+
+def test_gate_source_reason_vocabulary_is_fully_exercised():
+    """A reason added to the gate fails this until it has a probe and a README row.
+
+    The observed-vocabulary test can only see reasons its probe reaches. This check
+    reads the reason literals at the gate's own sinks, so a new literal cannot sit
+    in the code unexercised and undocumented just because no case produces it.
+    """
+    source = _gate_source_reasons()
+    rejected, suggested = _observed_reasons()
+    observed = rejected | suggested
+
+    unexercised = source - observed
+    assert unexercised == set(), (
+        f"{sorted(unexercised)} appear as reason literals in engine/certainty.py but no "
+        "probe case produces them; add a case and a README table row"
+    )
+    unlisted = observed - source
+    assert unlisted == set(), (
+        f"{sorted(unlisted)} are produced by the probe but are not literal reasons in "
+        "engine/certainty.py; the source scan needs to understand the new sink"
+    )
 
 
 # ===========================================================================

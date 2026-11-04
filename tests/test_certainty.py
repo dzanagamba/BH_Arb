@@ -197,7 +197,7 @@ def test_team_unresolved_is_suggested_with_exact_reason():
     assert r.reasons == ["team_unresolved"]
 
 
-def test_reason_vocabulary_except_orientation_is_reachable():
+def test_gate_reason_vocabulary_is_reachable():
     gate = CertaintyGate()
 
     league_a = _m("a", "Sarajevo", "Zeljeznicar", "BiH - Premier Liga", event_id="1")
@@ -236,6 +236,16 @@ def test_reason_vocabulary_except_orientation_is_reachable():
         "a", "Sarajevo", "Zeljeznicar", "BiH - Premier Liga", link_ok=False
     )
     no_link_b = _m("b", "Sarajevo", "Zeljeznicar", "Premijer Liga BiH", link_ok=False)
+    # A shared provider id proves the event, but names that tie both ways cannot
+    # decide which side is home. The gate must emit `orientation_unresolved`.
+    orientation_a = _m("a", "Aa", "Bb", "League", betradar_id="111")
+    orientation_b = _m("b", "Cc", "Dd", "League", betradar_id="111")
+    # Sport identity is checked before every other proof and returns an explicit
+    # rejected result, so it is in the vocabulary even though it is not a member
+    # of HARD_REJECT_REASONS.
+    sport_a = _m("a", "Sarajevo", "Zeljeznicar", "BiH - Premier Liga", event_id="1")
+    sport_b = _m("b", "Sarajevo", "Zeljeznicar", "Premijer Liga BiH", event_id="2")
+    sport_b.sport = "basketball"
 
     results = []
     for left, right in (
@@ -246,6 +256,8 @@ def test_reason_vocabulary_except_orientation_is_reachable():
         (team_a, team_b),
         (link_a, link_b),
         (no_link_a, no_link_b),
+        (orientation_a, orientation_b),
+        (sport_a, sport_b),
     ):
         gate.normalize([left, right])
         results.append(gate.evaluate_pair(left, right))
@@ -259,8 +271,9 @@ def test_reason_vocabulary_except_orientation_is_reachable():
         "team_unresolved",
         "link_unverified",
         "no_event_link",
+        "orientation_unresolved",
+        "sport_mismatch",
     }
-    assert "orientation_unresolved" not in observed
 
 
 def test_missing_event_link_is_reported_separately():

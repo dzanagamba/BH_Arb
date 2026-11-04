@@ -147,7 +147,7 @@ These were open in `docs/HANDOFF.md` and are now implemented; keep them out of t
 - `build_targets` has `settled` + `offset` and converges.
 - Prematch expiry uses the latest kickoff plus a two-minute buffer.
 - `premier_kladionica` live BTTS and the NSoft live window have regression tests.
-- `orientation_unresolved` is emitted and tested; only the README is stale.
+- `orientation_unresolved` is emitted, tested, and documented in the README.
 - The approve/reject HTTP routes are gone; Diagnostics is read-only.
 
 ---
@@ -252,7 +252,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 |---|---|---|---|---|---|
 | P0-1 | Bound the cached evidence payload | P0 | S | — | Done |
 | P0-2 | Dashboard XSS + inline-handler + CSP hardening | P0 | M | — | Done |
-| P0-3 | Gate-vocabulary truth audit and probe strengthening | P0 | S | — | Not started |
+| P0-3 | Gate-vocabulary truth audit and probe strengthening | P0 | S | — | Done |
 | P0-4 | Runtime freshness and stale-state policy | P0 | M | — | Not started |
 | P0-5 | Reloadable deep-link declarations | P0 | S | — | Not started |
 | P0-6 | Opportunity-rate and arb-lifetime telemetry | P0 | M | P0-4 | Not started |
@@ -368,7 +368,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 
 ### P0-3 — Gate-vocabulary truth audit and probe strengthening
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P0
 **Effort:** S
 **Depends on:** none
@@ -387,10 +387,10 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 
 **Acceptance criteria:**
 
-- [ ] `_observed_reasons()` produces `orientation_unresolved` and `sport_mismatch`.
-- [ ] README's table lists every observed reason under the correct status.
-- [ ] No documentation claims a reason is unreachable when `tests/test_certainty.py` proves otherwise.
-- [ ] The test suite fails if a new reason is added without documentation.
+- [x] `_observed_reasons()` produces `orientation_unresolved` and `sport_mismatch`.
+- [x] README's table lists every observed reason under the correct status.
+- [x] No documentation claims a reason is unreachable when `tests/test_certainty.py` proves otherwise.
+- [x] The test suite fails if a new reason is added without documentation.
 
 **Tests:**
 
@@ -1378,6 +1378,31 @@ Before writing a claim about behavior, run the command that proves it and paste 
 ## 6. Execution log
 
 Newest first. Each entry: date, task, status, commands, measured result, files changed, follow-ups.
+
+### 2026-11-04 — P0-3: Gate-vocabulary truth audit
+
+**Task:** P0-3 (first eligible task after P0-2; no dependencies).
+**Status:** Done.
+
+**Commands and results:**
+
+- `python -m pytest` → **1,262 passed** (was 1,261; +1 test), 1 warning.
+- `python -m ruff check .` → clean.
+- `python -m mypy .` → clean on 136 source files.
+- `python scripts/generate_market_mapping_doc.py --check` → in sync.
+- `python scripts/replay_mappings.py tests/fixtures/replay/2026-11-03 --cold --check` → exit 0, fixed point, 0 false merges, 0 unresolved evidence-backed pairs.
+- Probe now observes both missing reasons: `orientation_unresolved` from a shared Betradar id with names that tie both ways, and `sport_mismatch` from a football/basketball pair. Rejected vocabulary is the four `HARD_REJECT_REASONS` members plus `sport_mismatch`; suggested vocabulary is unchanged.
+
+**What changed:**
+
+- `tests/test_readme_claims.py`: `_observed_reasons()` classifies by each gate result's status (not membership in `HARD_REJECT_REASONS`) and adds the orientation-tie and cross-sport cases. `test_status_reason_vocabulary_matches_what_the_gate_emits` now pins `HARD_REJECT_REASONS ⊆ rejected` and `rejected - HARD_REJECT_REASONS == {"sport_mismatch"}`. The old "dead vocabulary" test became `test_no_hard_reject_reason_is_dead`. Added `test_gate_source_reason_vocabulary_is_fully_exercised`, which scans the gate's reason sinks so a new literal fails until a probe case and README row exist.
+- `tests/test_certainty.py`: replaced the stale `test_reason_vocabulary_except_orientation_is_reachable` with `test_gate_reason_vocabulary_is_reachable`, covering all ten reasons.
+- `README.md`: rejected row now lists `orientation_unresolved` and `sport_mismatch`; the "never emits" wrinkle is gone and the `sport_mismatch` exception is explained.
+- `docs/HANDOFF.md`: item 6 marked fixed; fixed vocabulary completed. `docs/superpowers/specs/2026-09-25-match-and-game-mapping-design.md`: reason list completed.
+
+**Follow-ups:** P0-4 is the next eligible task (runtime freshness and stale-state policy).
+
+---
 
 ### 2026-11-04 — P0-2: Dashboard XSS, inline handlers, nonce CSP
 

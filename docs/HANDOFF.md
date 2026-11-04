@@ -36,8 +36,8 @@ The core change. A pair is `verified` only when every part of the claim is prove
 
 Statuses are `verified` / `suggested` / `rejected`, each carrying `MatchEvidence`. Reasons come
 from a fixed vocabulary: `league_mismatch`, `kickoff_missing`, `kickoff_delta`,
-`category_mismatch`, `team_unresolved`, `orientation_unresolved`, `link_unverified`,
-`no_event_link`.
+`category_mismatch`, `team_unresolved`, `orientation_unresolved`, `betradar_mismatch`,
+`sport_mismatch`, `link_unverified`, `no_event_link`.
 
 Only `verified` groups reach `engine/arbitrage.py`. The matcher also fixes team-and-odds
 orientation from the gate's single canonical frame, so a reversed book never inverts a surebet.
@@ -250,16 +250,13 @@ scrapers build their window from `scrapers.common.nsoft_event_window` (live look
   working-window receipt in the fixture's `endpoint` field. This is a bigger live-mode bug than
   the BTTS one.
 
-### 6. Decide `orientation_unresolved`: implement it or delete it
-A three-site removal, not a one-line fix. `engine/certainty.py:27` declares a hard-reject reason
-the gate never emits; `frontend/js/app.js:43` ships a user-facing label for it, and
-`tests/test_frontend_review.py:159` *requires* it to stay, so the three are coupled.
-
-**The right fix is to implement it, not delete it.** The gate genuinely has a case the vocabulary
-cannot express: a pair where the allowlist admits both teams but no complete home/away ordering
-is provable. `engine/certainty.py:500` returns `rejected` with `team_unresolved` for the pair
-path, and `:511-512` appends the same reason when group teams are not ok — which is why the
-reason was reachable in the design and unreachable in the code.
+### 6. ~~Decide `orientation_unresolved`: implement it or delete it~~ (fixed)
+**Now:** the gate emits `orientation_unresolved` when a shared Betradar id proves
+the event but the names tie both ways, so no home/away ordering is provable. The
+reason is in `HARD_REJECT_REASONS`, the README's `rejected` row, and
+`tests/test_certainty.py::test_same_betradar_id_without_an_orientation_is_not_verified`.
+`frontend/js/app.js` keeps its user-facing label. The README no longer claims it
+is unreachable.
 
 ### 7. Capture an EVLBet payload
 EVLBet is **enabled** and has no captured payload — its offer API returned an empty list for every

@@ -151,15 +151,14 @@ status:
 |---|---|---|
 | `verified` | Zero reasons. Every part of the claim is proven, links included. Only these groups reach arbitrage. | — |
 | `suggested` | At least one reason is outstanding: plausible but incomplete. Shown in Diagnostics only. | `kickoff_missing`, `kickoff_delta`, `team_unresolved`, `link_unverified`, `no_event_link` |
-| `rejected` | A hard gate contradicts the claim. | `league_mismatch`, `category_mismatch`, `betradar_mismatch` |
+| `rejected` | A hard gate contradicts the claim. | `league_mismatch`, `category_mismatch`, `betradar_mismatch`, `orientation_unresolved`, `sport_mismatch` |
 
 The strings above are the vocabulary the gate actually emits, and
 `tests/test_readme_claims.py` proves it by running the gate over one broken claim
-per reason. One wrinkle: `HARD_REJECT_REASONS` also lists
-`orientation_unresolved`, which the gate never emits; the unresolvable-
-orientation case is reported as `team_unresolved`. Treat `rejected` as the
-reasons above except `orientation_unresolved` until that entry is produced or
-deleted.
+per reason. `sport_mismatch` is the one reason not in `HARD_REJECT_REASONS`: the
+gate returns it as an explicit `rejected` result before that set is consulted,
+because a sport boundary is a contradiction no other evidence can override.
+Every member of `HARD_REJECT_REASONS` is reachable and appears in the table.
 
 ### What the gate trusts
 
