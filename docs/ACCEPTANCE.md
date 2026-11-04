@@ -59,9 +59,22 @@ and `tests/test_cache_serialization.py::test_cached_group_payload_is_bounded`.
 `object-src 'none'`, `base-uri 'self'`, `frame-ancestors 'none'`,
 `connect-src 'self'`), `X-Content-Type-Options: nosniff`,
 `X-Frame-Options: DENY` and `Referrer-Policy: no-referrer` on the dashboard and
-every API response. The dashboard still uses inline handlers, so `script-src`
-includes `'unsafe-inline'`; replacing those handlers with listeners and a nonce
-CSP remains open.
+every API response. Every request gets a fresh CSP nonce; the dashboard's two
+script tags (the pre-paint theme bootstrap and `/js/app.js`) are stamped with it
+and `script-src` is `'self' 'nonce-…'` with no `'unsafe-inline'`.
+
+The dashboard no longer ships or generates inline `on*` handlers or JSON inside
+HTML attributes. Actions are `data-action` attributes read by one delegated
+listener; copy buttons carry `data-copy`/`data-copy-message` values escaped for
+attribute context. A scraped name such as
+`O'Brien "X" <img src=x onerror=alert(1)>` stays text and its copy button passes
+the exact string to the clipboard.
+
+`style-src` still admits `'unsafe-inline'`: generated rows set CSS custom
+properties and widths (`style="--color:…"`), which a nonce cannot cover. This
+is the remaining documented gap; script execution is closed.
+
+Tests: `tests/test_csp_nonce.py`, `tests/test_frontend_xss.py`.
 
 ## Soak
 
@@ -260,7 +273,8 @@ EVLBet remains disabled and is an evidence-backed absence, not a silent omission
 * The legacy approve/reject HTTP routes are removed; the dashboard is read-only.
   The direct migration functions remain for legacy tests but are not reachable.
 * Execution limits, bankroll and the 24-hour soak are not done.
-* The CSP admits inline handlers; a nonce-based strict CSP remains open.
+* `script-src` is nonce-based with no `'unsafe-inline'`; `style-src` still admits
+  inline styles because generated rows set CSS custom properties and widths.
 * In-play remains deferred.
 
 **Verdict:** the prematch scanner is working and finds real, re-verified

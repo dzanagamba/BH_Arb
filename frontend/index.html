@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Surebet BiH</title>
     <meta name="description" content="Find and place surebets across Bosnian bookmakers.">
-    <script>
+    <script nonce="__CSP_NONCE__">
         // Apply the saved theme before first paint, so the page never flashes.
         try { const t = localStorage.getItem('theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}
     </script>
@@ -25,8 +25,8 @@
     </div>
 
     <div class="segmented" id="mode-toggle" role="tablist" aria-label="Match mode">
-        <button class="segment active" id="mode-prematch" role="tab" aria-selected="true" onclick="switchMode('prematch')">Upcoming</button>
-        <button class="segment" id="mode-live" role="tab" aria-selected="false" onclick="switchMode('live')"><span class="live-dot"></span>Live</button>
+        <button class="segment active" id="mode-prematch" role="tab" aria-selected="true" data-action="switch-mode" data-mode="prematch">Upcoming</button>
+        <button class="segment" id="mode-live" role="tab" aria-selected="false" data-action="switch-mode" data-mode="live"><span class="live-dot"></span>Live</button>
     </div>
 
     <div class="topbar-right">
@@ -35,13 +35,13 @@
             <span id="status-text">Ready</span>
         </div>
         <span class="autorescan" id="autorescan-countdown" style="display:none;"></span>
-        <button class="btn btn-icon btn-ghost" id="theme-btn" onclick="cycleTheme()" aria-label="Theme" title="Theme: system">
+        <button class="btn btn-icon btn-ghost" id="theme-btn" data-action="cycle-theme" aria-label="Theme" title="Theme: system">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 3v18" /><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg>
         </button>
-        <button class="btn btn-icon btn-ghost" id="settings-btn" onclick="toggleSettings(true)" aria-label="Settings" title="Settings">
+        <button class="btn btn-icon btn-ghost" id="settings-btn" data-action="toggle-settings" data-open="true" aria-label="Settings" title="Settings">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
         </button>
-        <button class="btn btn-primary btn-scan" id="scan-btn" onclick="scanNow()">Scan now</button>
+        <button class="btn btn-primary btn-scan" id="scan-btn" data-action="scan-now">Scan now</button>
     </div>
 </header>
 
@@ -57,23 +57,23 @@
 <div class="error-banner" id="error-banner" style="display:none;" role="alert">
     <svg class="error-banner-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
     <span id="error-banner-text"></span>
-    <button class="error-banner-close" onclick="hideError()" aria-label="Dismiss">✕</button>
+    <button class="error-banner-close" data-action="hide-error" aria-label="Dismiss">✕</button>
 </div>
 
 <main class="main">
     <nav class="results-tabs" role="tablist" aria-label="Dashboard views">
         <button class="tab-btn active" id="surebets-tab" data-tab="surebets" role="tab"
                 aria-selected="true" aria-controls="surebets-panel" tabindex="0"
-                onclick="switchTab('surebets')">Surebets <span id="surebets-count" class="tab-count">0</span></button>
+                data-action="switch-tab">Surebets <span id="surebets-count" class="tab-count">0</span></button>
         <button class="tab-btn" id="review-tab" data-tab="review" role="tab"
                 aria-selected="false" aria-controls="review-panel" tabindex="-1"
-                onclick="switchTab('review')">Diagnostics <span id="review-count" class="tab-count">0</span></button>
+                data-action="switch-tab">Diagnostics <span id="review-count" class="tab-count">0</span></button>
         <button class="tab-btn" id="history-tab" data-tab="history" role="tab"
                 aria-selected="false" aria-controls="history-panel" tabindex="-1"
-                onclick="switchTab('history')">History</button>
+                data-action="switch-tab">History</button>
         <button class="tab-btn" id="other-tab" data-tab="other" role="tab"
                 aria-selected="false" aria-controls="other-panel" tabindex="-1"
-                onclick="switchTab('other')">Other sports <span id="other-count" class="tab-count">0</span></button>
+                data-action="switch-tab">Other sports <span id="other-count" class="tab-count">0</span></button>
     </nav>
 
     <!-- Surebets: summary strip, then list on the left and bet slip on the right -->
@@ -108,15 +108,15 @@
                     <label class="search">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
                         <input class="input search-input" type="search" id="filter-search"
-                               placeholder="Search team or league" oninput="applyFilters()" aria-label="Search">
+                               placeholder="Search team or league" aria-label="Search">
                     </label>
                     <label class="inline-field" title="Hide surebets below this profit">
                         <span>Min</span>
                         <input class="input input-narrow mono" type="number" id="filter-profit"
-                               value="0.5" min="0" max="50" step="0.1" oninput="applyFilters()">
+                               value="0.5" min="0" max="50" step="0.1">
                         <span>%</span>
                     </label>
-                    <select class="input" id="filter-sort" onchange="applyFilters()" aria-label="Sort">
+                    <select class="input" id="filter-sort" aria-label="Sort">
                         <option value="profit">Best profit</option>
                         <option value="kickoff">Soonest kickoff</option>
                         <option value="league">League</option>
@@ -138,7 +138,7 @@
                         Click <strong>Scan Now</strong> to start scanning your connected bookmakers for arbitrage opportunities. Browser windows will open — solve any CAPTCHA if prompted.
                     </p>
                     <div id="empty-state-actions" hidden></div>
-                    <button type="button" class="btn btn-primary btn-lg empty-cta" onclick="scanNow()">Scan now</button>
+                    <button type="button" class="btn btn-primary btn-lg empty-cta" data-action="scan-now">Scan now</button>
                     <div class="empty-state-bookies" id="empty-state-bookies"></div>
                 </div>
 
@@ -206,18 +206,18 @@
         <div class="filters">
             <label class="inline-field">
                 <span>Sport</span>
-                <select class="input" id="other-sport-filter" onchange="setOtherSportFilter(this.value)" aria-label="Sport">
+                <select class="input" id="other-sport-filter" aria-label="Sport">
                     <option value="all">All other sports</option>
                 </select>
             </label>
             <label class="search">
                 <input class="input search-input" type="search" id="other-search"
-                       placeholder="Search team, player or league" oninput="renderOtherSports()" aria-label="Search other sports">
+                       placeholder="Search team, player or league" aria-label="Search other sports">
             </label>
             <label class="inline-field" title="Hide surebets below this profit">
                 <span>Min</span>
                 <input class="input input-narrow mono" type="number" id="other-profit"
-                       value="0.5" min="0" max="50" step="0.1" oninput="renderOtherSports()">
+                       value="0.5" min="0" max="50" step="0.1">
                 <span>%</span>
             </label>
         </div>
@@ -231,20 +231,19 @@
 </main>
 
 <!-- Settings drawer -->
-<div class="drawer-backdrop" id="settings-backdrop" onclick="toggleSettings(false)" hidden></div>
+<div class="drawer-backdrop" id="settings-backdrop" data-action="toggle-settings" data-open="false" hidden></div>
 <aside class="drawer" id="settings-drawer" aria-label="Settings" hidden>
     <div class="drawer-head">
         <h2>Settings</h2>
-        <button class="btn btn-icon btn-ghost" onclick="toggleSettings(false)" aria-label="Close settings">✕</button>
+        <button class="btn btn-icon btn-ghost" data-action="toggle-settings" data-open="false" aria-label="Close settings">✕</button>
     </div>
 
     <section class="drawer-section">
         <h3>Staking</h3>
         <label class="field"><span>Default total stake (KM)</span>
-            <input class="input mono" type="number" id="filter-investment" value="100" min="1" max="100000" step="10"
-                   oninput="recalculateAll(this.value)"></label>
+            <input class="input mono" type="number" id="filter-investment" value="100" min="1" max="100000" step="10"></label>
         <label class="field"><span>Round stakes to</span>
-            <select class="input" id="filter-rounding" onchange="setStakeRounding(this.value)">
+            <select class="input" id="filter-rounding">
                 <option value="1">Whole KM (recommended)</option>
                 <option value="5">Nearest 5 KM</option>
                 <option value="exact">Exact (2 decimals)</option>
@@ -254,13 +253,13 @@
     <section class="drawer-section">
         <h3>Scanning</h3>
         <label class="field"><span>Rescan automatically</span>
-            <select class="input" id="filter-autorescan" onchange="setAutoRescan(parseInt(this.value))">
+            <select class="input" id="filter-autorescan">
                 <option value="0">Off</option>
                 <option value="2">Every 2 min</option>
                 <option value="5">Every 5 min</option>
                 <option value="10">Every 10 min</option>
             </select></label>
-        <label class="field field-check"><input type="checkbox" id="sound-toggle" onchange="toggleSound()"> <span>Chime on a new surebet above 3%</span></label>
+        <label class="field field-check"><input type="checkbox" id="sound-toggle"> <span>Chime on a new surebet above 3%</span></label>
     </section>
 
     <section class="drawer-section">
@@ -273,9 +272,9 @@
         <h3>Experimental markets</h3>
         <p class="hint">Applied on the next scan.</p>
         <div id="experimental-checks">
-            <label class="field field-check exp-check" data-market="first_half_1x2"><input type="checkbox" value="first_half_1x2" onchange="toggleExperimentalMarket(this)"> <span>1st half 1X2</span></label>
-            <label class="field field-check exp-check" data-market="first_half_ou"><input type="checkbox" value="first_half_ou" onchange="toggleExperimentalMarket(this)"> <span>1st half Over/Under</span></label>
-            <label class="field field-check exp-check" data-market="asian_handicap"><input type="checkbox" value="asian_handicap" onchange="toggleExperimentalMarket(this)"> <span>Asian handicap</span></label>
+            <label class="field field-check exp-check" data-market="first_half_1x2"><input type="checkbox" value="first_half_1x2"> <span>1st half 1X2</span></label>
+            <label class="field field-check exp-check" data-market="first_half_ou"><input type="checkbox" value="first_half_ou"> <span>1st half Over/Under</span></label>
+            <label class="field field-check exp-check" data-market="asian_handicap"><input type="checkbox" value="asian_handicap"> <span>Asian handicap</span></label>
         </div>
     </section>
 
@@ -292,7 +291,7 @@
     <section class="drawer-section">
         <h3>Server</h3>
         <p class="hint">Stops the scanner on this computer. Start it again with <span class="mono">Start Surebet.bat</span>.</p>
-        <button class="btn btn-danger" id="shutdown-btn" onclick="shutdownServer()">Stop server</button>
+        <button class="btn btn-danger" id="shutdown-btn" data-action="shutdown-server">Stop server</button>
     </section>
 </aside>
 
@@ -305,6 +304,6 @@
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="/js/app.js?v=7"></script>
+<script src="/js/app.js?v=7" nonce="__CSP_NONCE__"></script>
 </body>
 </html>

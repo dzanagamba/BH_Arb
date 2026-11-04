@@ -124,6 +124,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     restorePreferences();
     restoreMode();
     updateThemeButton();
+    initInteractionHandlers();
     await loadConfig();
     initBookmakerChips();
     // The diagnostic copy table is static and local, so it is read once, before
@@ -140,6 +141,72 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Ages on screen ("re-checked 12s ago") tick once a second.
     setInterval(tickAges, 1000);
 });
+
+// ─── Static interaction handlers ──────────────────────────────────────────────
+// The shipped HTML and generated rows carry data attributes, never inline `on*`
+// handlers. Keeping the behavior here lets the CSP drop `script-src
+// 'unsafe-inline'` and keeps every value out of a JavaScript-string context.
+function initInteractionHandlers() {
+    document.addEventListener('click', handleDataAction);
+    document.addEventListener('input', handleDataInput);
+    document.addEventListener('change', handleDataChange);
+}
+
+function handleDataAction(event) {
+    const element = event.target && event.target.closest
+        ? event.target.closest('[data-action]')
+        : null;
+    if (!element) return;
+    switch (element.dataset.action) {
+        case 'switch-mode': switchMode(element.dataset.mode); break;
+        case 'cycle-theme': cycleTheme(); break;
+        case 'toggle-settings': toggleSettings(element.dataset.open !== 'false'); break;
+        case 'scan-now': scanNow(); break;
+        case 'hide-error': hideError(); break;
+        case 'switch-tab': switchTab(element.dataset.tab); break;
+        case 'shutdown-server': shutdownServer(); break;
+        case 'set-market-filter': setMarketFilter(element.dataset.market); break;
+        case 'copy-text': copyText(element.dataset.copy, element.dataset.copyMessage); break;
+        case 'close-slip': closeSlip(); break;
+        case 'set-slip-investment': setSlipInvestment(element.dataset.slipId, element.dataset.amount); break;
+        case 'mark-placed': markPlaced(element.dataset.slipId, element.dataset.outcomeLabel, element); break;
+        case 'unmark-placed': unmarkPlaced(element.dataset.slipId, element.dataset.outcomeLabel); break;
+        case 'verify-surebet': verifySurebet(element.dataset.slipId); break;
+        case 'copy-surebet': copySurebetDetails(element.dataset.slipId); break;
+    }
+}
+
+function handleDataInput(event) {
+    const element = event.target;
+    if (!element || !element.matches) return;
+    if (element.id === 'filter-search' || element.id === 'filter-profit') {
+        applyFilters();
+    } else if (element.id === 'other-search' || element.id === 'other-profit') {
+        renderOtherSports();
+    } else if (element.id === 'filter-investment') {
+        recalculateAll(element.value);
+    } else if (element.matches('[data-slip-investment-input]')) {
+        setSlipInvestment(element.dataset.slipId, element.value);
+    }
+}
+
+function handleDataChange(event) {
+    const element = event.target;
+    if (!element || !element.matches) return;
+    if (element.id === 'filter-sort') {
+        applyFilters();
+    } else if (element.id === 'other-sport-filter') {
+        setOtherSportFilter(element.value);
+    } else if (element.id === 'filter-rounding') {
+        setStakeRounding(element.value);
+    } else if (element.id === 'filter-autorescan') {
+        setAutoRescan(parseInt(element.value, 10));
+    } else if (element.id === 'sound-toggle') {
+        toggleSound();
+    } else if (element.matches('.exp-check input[type="checkbox"]')) {
+        toggleExperimentalMarket(element);
+    }
+}
 
 function restoreMode() {
     try {
@@ -587,7 +654,7 @@ function renderMarketChips() {
     const markets = Object.keys(MARKET_LABELS).filter(m => counts[m] || m === active);
     wrap.hidden = pool.length === 0;
     wrap.innerHTML = [['', 'All', pool.length], ...markets.map(m => [m, MARKET_LABELS[m], counts[m] || 0])]
-        .map(([value, label, count]) => `<button type="button" class="mchip${value === active ? ' active' : ''}" aria-pressed="${value === active}" onclick="setMarketFilter('${escapeHtml(value)}')">${escapeHtml(label)} <b>${count}</b></button>`)
+        .map(([value, label, count]) => `<button type="button" class="mchip${value === active ? ' active' : ''}" aria-pressed="${value === active}" data-action="set-market-filter" data-market="${escapeHtml(value)}">${escapeHtml(label)} <b>${count}</b></button>`)
         .join('');
 }
 
@@ -918,12 +985,12 @@ function renderSlip() {
                 <div class="leg-head">
                     <span class="leg-book">${escapeHtml(name)}</span>
                     ${url ? `<a class="btn btn-small dest-link" data-dest-kind="${escapeHtml(destKind)}" href="${escapeHtml(safeUrl(url))}" target="_blank" rel="noopener" title="${escapeHtml(dest.proof_summary || destKind || '')}">${escapeHtml(destLabel)} ↗</a>` : ''}
-                    ${destKind === 'search' && !url ? `<button type="button" class="btn btn-small btn-secondary" onclick="copyText(${escapeHtml(JSON.stringify(searchText))}, 'Search text copied')">Copy search text</button>` : ''}
-                    ${dest.ticket_script ? `<button type="button" class="btn btn-small btn-secondary" title="Paste this in the SportPlus page console; it only fills the slip" onclick="copyText(${escapeHtml(JSON.stringify(dest.ticket_script))}, 'SportPlus prefill script copied — paste it into the SportPlus page console')">${escapeHtml(dest.ticket_script_label || 'Copy prefill script')}</button>` : ''}
+                    ${destKind === 'search' && !url ? `<button type="button" class="btn btn-small btn-secondary" ${copyAttributes(searchText, 'Search text copied')}>Copy search text</button>` : ''}
+                    ${dest.ticket_script ? `<button type="button" class="btn btn-small btn-secondary" title="Paste this in the SportPlus page console; it only fills the slip" ${copyAttributes(dest.ticket_script, 'SportPlus prefill script copied — paste it into the SportPlus page console')}>${escapeHtml(dest.ticket_script_label || 'Copy prefill script')}</button>` : ''}
                 </div>
                 <div class="leg-listing">
                     <span title="How ${escapeHtml(name)} lists this match">${escapeHtml(listedAs)}</span>
-                    <button type="button" class="link-btn" onclick="copyText(${escapeHtml(JSON.stringify(searchText))}, '${copyLabel === 'copy search' ? 'Search text copied' : 'Match name copied'}')">${copyLabel}</button>
+                    <button type="button" class="link-btn" ${copyAttributes(searchText, copyLabel === 'copy search' ? 'Search text copied' : 'Match name copied')}>${copyLabel}</button>
                     ${listing?.league ? `<span class="leg-league">${escapeHtml(listing.league)}</span>` : ''}
                     ${destKind ? `<span class="leg-league">${escapeHtml(destKind === 'ticket_filled' ? 'ticket' : destKind === 'match_page' ? 'match page' : destKind)}</span>` : ''}
                 </div>
@@ -931,17 +998,17 @@ function renderSlip() {
                     <div><span class="leg-k">Pick</span><span class="leg-v">${escapeHtml(pickText)}${escapeHtml(lineText)}</span><span class="leg-sub">${escapeHtml(outcomeDescription(leg.outcome_label, sb.market_type, sb.sport))}</span>${stakeNote}</div>
                     <div><span class="leg-k">Odds</span><span class="leg-v mono">${leg.takenOdds.toFixed(2)}</span>${driftNote}</div>
                     <div><span class="leg-k">Stake</span>
-                        <button type="button" class="leg-v mono stake-copy" title="Copy stake" onclick="copyText('${stakeText}', 'Stake copied')">${stakeText} KM</button>
+                        <button type="button" class="leg-v mono stake-copy" title="Copy stake" ${copyAttributes(stakeText, 'Stake copied')}>${stakeText} KM</button>
                     </div>
                     <div><span class="leg-k">Returns</span><span class="leg-v mono">${money(leg.plannedStake * leg.takenOdds)}</span></div>
                 </div>
                 <div class="leg-placed-row">
                     ${leg.placed
                         ? `<span class="placed-tag">Placed at ${leg.takenOdds.toFixed(2)} for ${stakeText} KM</span>
-                           <button type="button" class="link-btn" onclick="unmarkPlaced('${escapeHtml(sb.id)}', ${escapeHtml(JSON.stringify(leg.outcome_label))})">undo</button>`
+                           <button type="button" class="link-btn" data-action="unmark-placed" data-slip-id="${escapeHtml(sb.id)}" data-outcome-label="${escapeHtml(leg.outcome_label)}">undo</button>`
                         : `<label class="placed-odds">Odds taken <input class="input input-narrow mono" type="number" step="0.01" min="1.01" value="${leg.odds.toFixed(2)}" data-placed-odds></label>
                            <label class="placed-odds">Stake accepted <input class="input input-narrow mono" type="number" step="1" min="0.01" value="${leg.plannedStake}" data-placed-stake></label>
-                           <button type="button" class="btn btn-secondary btn-small" onclick="markPlaced('${escapeHtml(sb.id)}', ${escapeHtml(JSON.stringify(leg.outcome_label))}, this)">Mark placed</button>`}
+                           <button type="button" class="btn btn-secondary btn-small" data-action="mark-placed" data-slip-id="${escapeHtml(sb.id)}" data-outcome-label="${escapeHtml(leg.outcome_label)}">Mark placed</button>`}
                 </div>
             </div>
         </li>`;
@@ -952,11 +1019,11 @@ function renderSlip() {
     const locked = placedCount ? ' disabled title="Fixed once a leg is placed"' : '';
     const presets = [50, 100, 200, 500].map(amount => `
         <button type="button" class="${Number(state.investment) === amount ? 'active' : ''}"${locked}
-                onclick="setSlipInvestment('${escapeHtml(sb.id)}', ${amount})">${amount}</button>`).join('');
+                data-action="set-slip-investment" data-slip-id="${escapeHtml(sb.id)}" data-amount="${amount}">${amount}</button>`).join('');
 
     pane.innerHTML = `
         <div class="slip-head">
-            <button type="button" class="link-btn slip-back" onclick="closeSlip()">← All surebets</button>
+            <button type="button" class="link-btn slip-back" data-action="close-slip">← All surebets</button>
             <div class="slip-eyebrow">
                 <span class="mkt">${escapeHtml(MARKET_LABELS[sb.market_type] || sb.market_type)}</span>
                 <span>${escapeHtml(formatLeague(sb.league))}</span>
@@ -976,7 +1043,7 @@ function renderSlip() {
             <div class="slip-stake">
                 <label class="inline-field"><span>Total stake</span>
                     <input class="input mono" type="number" min="1" step="10" value="${state.investment}"
-                           oninput="setSlipInvestment('${escapeHtml(sb.id)}', this.value)"${locked}> KM</label>
+                           data-slip-investment-input data-slip-id="${escapeHtml(sb.id)}"${locked}> KM</label>
                 <div class="slip-presets" aria-label="Quick stake">${presets}</div>
             </div>
         </div>
@@ -1008,8 +1075,8 @@ function renderSlip() {
         ${evidence ? `<div class="slip-evidence"><h4>Why these are the same match</h4><ul>${evidence}</ul></div>` : ''}
 
         <div class="slip-actions">
-            <button type="button" class="btn btn-secondary" onclick="verifySurebet('${escapeHtml(sb.id)}')">Re-check odds</button>
-            <button type="button" class="btn btn-secondary" onclick="copySurebetDetails('${escapeHtml(sb.id)}')">Copy slip</button>
+            <button type="button" class="btn btn-secondary" data-action="verify-surebet" data-slip-id="${escapeHtml(sb.id)}">Re-check odds</button>
+            <button type="button" class="btn btn-secondary" data-action="copy-surebet" data-slip-id="${escapeHtml(sb.id)}">Copy slip</button>
         </div>
     `;
     applyStatusBadge(pane.querySelector('.status-badge'), sb.status || sb.match_status);
@@ -1170,6 +1237,14 @@ function tickAges() {
 }
 
 // ─── Copy ─────────────────────────────────────────────────────────────────────
+// A data attribute, never a JavaScript string inside an HTML attribute. The
+// value is escaped for attribute context and the click handler reads it back
+// from `dataset`, so a quote, backtick, parenthesis or `</script>` in a scraped
+// name cannot break out of the button.
+function copyAttributes(value, message) {
+    return `data-action="copy-text" data-copy="${escapeHtml(value)}" data-copy-message="${escapeHtml(message)}"`;
+}
+
 async function copyText(text, message) {
     try {
         await navigator.clipboard.writeText(text);

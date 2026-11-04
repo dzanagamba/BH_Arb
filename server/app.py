@@ -1,13 +1,14 @@
 import asyncio
 import os
+import secrets
 import sys
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 from urllib.parse import urlsplit
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from config.settings import (
@@ -116,12 +117,17 @@ async def security_headers(request, call_next):
     """Add the browser-side hardening headers the dashboard can live with.
 
     Defined last so it wraps the guards too: a 401 or a refused cross-origin
-    write carries the same headers as a normal page. The dashboard still uses
-    inline handlers, so `script-src` has to admit inline code; that is a real
-    limitation, not a clean CSP. The other directives still block plugin
-    content, base-tag rewrites, framing and cross-origin form posts, and
-    `connect-src 'self'` keeps injected code from shipping data elsewhere.
+    write carries the same headers as a normal page. Every request gets a fresh
+    nonce, and the dashboard's two script tags are stamped with it by
+    `serve_dashboard`, so `script-src` no longer needs `'unsafe-inline'`.
+
+    `style-src` still admits inline styles: the dashboard sets CSS custom
+    properties and widths on generated elements (`style="--color:…"`), and a
+    nonce cannot cover style attributes. That is a deliberate, documented gap;
+    script injection is the executable risk this policy closes.
     """
+    nonce = secrets.token_urlsafe(16)
+    request.state.csp_nonce = nonce
     response = await call_next(request)
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "DENY")
@@ -129,7 +135,7 @@ async def security_headers(request, call_next):
     response.headers.setdefault(
         "Content-Security-Policy",
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline'; "
+        f"script-src 'self' 'nonce-{nonce}'; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "font-src https://fonts.gstatic.com; "
         "img-src 'self' data:; "
@@ -172,9 +178,15 @@ if os.path.exists(os.path.join(FRONTEND_DIR, "js")):
 
 
 @app.get("/", include_in_schema=False)
-async def serve_dashboard():
-    """Serve the main dashboard HTML."""
+async def serve_dashboard(request: Request):
+    """Serve the dashboard with this request's CSP nonce on its script tags."""
     index_path = os.path.join(FRONTEND_DIR, "index.html")
-    if os.path.exists(index_path):
-        return FileResponse(index_path)
-    return {"message": "Surebet Scanner API running. Frontend index.html not found."}
+    if not os.path.exists(index_path):
+        return {"message": "Surebet Scanner API running. Frontend index.html not found."}
+    nonce = getattr(request.state, "csp_nonce", "") or secrets.token_urlsafe(16)
+    with open(index_path, encoding="utf-8") as file:
+        html = file.read()
+    return HTMLResponse(
+        html.replace("__CSP_NONCE__", nonce),
+        headers={"Cache-Control": "no-store"},
+    )

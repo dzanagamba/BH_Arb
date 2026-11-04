@@ -251,7 +251,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 | ID | Task | Priority | Effort | Depends on | Status |
 |---|---|---|---|---|---|
 | P0-1 | Bound the cached evidence payload | P0 | S | — | Done |
-| P0-2 | Dashboard XSS + inline-handler + CSP hardening | P0 | M | — | Not started |
+| P0-2 | Dashboard XSS + inline-handler + CSP hardening | P0 | M | — | Done |
 | P0-3 | Gate-vocabulary truth audit and probe strengthening | P0 | S | — | Not started |
 | P0-4 | Runtime freshness and stale-state policy | P0 | M | — | Not started |
 | P0-5 | Reloadable deep-link declarations | P0 | S | — | Not started |
@@ -329,7 +329,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 
 ### P0-2 — Dashboard XSS + inline-handler + CSP hardening
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P0
 **Effort:** M
 **Depends on:** none
@@ -350,11 +350,11 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 
 **Acceptance criteria:**
 
-- [ ] No `on*=` attributes in shipped HTML or JS.
-- [ ] A fixture team name such as `O'Brien "X" <img src=x onerror=alert(1)>` renders as text and its copy button still works.
-- [ ] CSP response contains a nonce and no `script-src 'unsafe-inline'`.
-- [ ] Existing dashboard behavior and keyboard navigation are unchanged.
-- [ ] `tests/test_security_headers.py` and `tests/test_frontend_*.py` pass.
+- [x] No `on*=` attributes in shipped HTML or JS.
+- [x] A fixture team name such as `O'Brien "X" <img src=x onerror=alert(1)>` renders as text and its copy button still works.
+- [x] CSP response contains a nonce and no `script-src 'unsafe-inline'`.
+- [x] Existing dashboard behavior and keyboard navigation are unchanged.
+- [x] `tests/test_security_headers.py` and `tests/test_frontend_*.py` pass.
 
 **Tests:**
 
@@ -1378,6 +1378,32 @@ Before writing a claim about behavior, run the command that proves it and paste 
 ## 6. Execution log
 
 Newest first. Each entry: date, task, status, commands, measured result, files changed, follow-ups.
+
+### 2026-11-04 — P0-2: Dashboard XSS, inline handlers, nonce CSP
+
+**Task:** P0-2 (first eligible task after P0-1; no dependencies).
+**Status:** Done.
+
+**Commands and results:**
+
+- `python -m pytest` → **1,261 passed** (was 1,254; +7 tests), 1 warning.
+- `python -m ruff check .` → clean.
+- `python -m mypy .` → clean on 136 source files.
+- `python scripts/generate_market_mapping_doc.py --check` → in sync.
+- `python scripts/replay_mappings.py tests/fixtures/replay/2026-11-03 --cold --check` → exit 0, fixed point, 0 false merges, 0 unresolved evidence-backed pairs.
+- Playwright smoke against a local uvicorn instance: no console/page errors, zero `[onclick]`/`[oninput]`/`[onchange]` elements, per-response nonce present, settings open + Escape close, theme and mode buttons, tab ArrowRight keyboard navigation, and a hostile-name copy button whose clipboard value round-tripped exactly.
+
+**What changed:**
+
+- `frontend/index.html`: every inline handler replaced with `data-action`/`data-*` hooks; both script tags carry `__CSP_NONCE__`.
+- `frontend/js/app.js`: one delegated click/input/change handler; copy buttons use `data-copy`/`data-copy-message` via `copyAttributes`, never `JSON.stringify` in an attribute; slip actions and market chips use data attributes.
+- `server/app.py`: per-request CSP nonce from `secrets.token_urlsafe`, `script-src 'self' 'nonce-…'` with no `'unsafe-inline'`, dashboard served through `HTMLResponse` with `Cache-Control: no-store`. `style-src 'unsafe-inline'` remains because generated rows set CSS custom properties; documented as the only CSP gap.
+- `tests/test_csp_nonce.py` (new), `tests/test_frontend_xss.py` (new; Node-executed helpers plus hostile-name parser test).
+- `docs/ACCEPTANCE.md`, `docs/PRODUCTION_READINESS.md` updated; F2's documented gap closed.
+
+**Follow-ups:** P0-3 is the next eligible task. P1-1 remains unblocked from P0-1.
+
+---
 
 ### 2026-11-04 — P0-1: Bound the cached evidence payload
 
