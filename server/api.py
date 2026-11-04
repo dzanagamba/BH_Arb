@@ -401,6 +401,8 @@ def _suppress_candidate(candidate_id: str, decision: str, premise: str = "") -> 
 
 _HISTORY_FILE = os.path.join(CACHE_DIR, "scan_history.json")
 _HISTORY_MAX = 50
+_LINK_SWEEP_FILE = os.path.join(CACHE_DIR, "link_sweeps.json")
+_LINK_SWEEP_MAX = 200
 _PREMATCH_CACHE_FILE = os.path.join(CACHE_DIR, "last_scan.json")
 _LIVE_CACHE_FILE = os.path.join(CACHE_DIR, "last_live_scan.json")
 # P0-6: compact per-scan aggregates plus the bounded crossing-key store. The
@@ -2916,6 +2918,27 @@ class VerifyRequest(BaseModel):
     mode: str = "prematch"
 
 
+class LinkSweepReport(BaseModel):
+    """One completed sweep, as written by scripts/sweep_links.py."""
+    bookmaker: str
+    mode: str = "prematch"
+    started_at: str = ""
+    ended_at: str = ""
+    status: str = "running"
+    calls: int = 0
+    available: int = 0
+    checked: int = 0
+    verified: int = 0
+    failed: int = 0
+    errored: int = 0
+    unchecked: int = 0
+    remaining: int = 0
+    last_next_offset: int = 0
+    rate_limit_waits: int = 0
+    http_error: str = ""
+    calls_detail: list[dict[str, Any]] = []
+
+
 @router.get("/candidates")
 async def get_candidates(
     limit: int = CANDIDATE_PAGE_SIZE,
@@ -3709,3 +3732,45 @@ async def verify_links(
             for outcome in report.outcomes
         ],
     }
+
+
+def _load_link_sweeps() -> dict[str, Any]:
+    try:
+        with open(_LINK_SWEEP_FILE, encoding="utf-8") as file:
+            loaded = json.load(file)
+    except (OSError, ValueError):
+        return {"sweeps": []}
+    if not isinstance(loaded, dict) or not isinstance(loaded.get("sweeps"), list):
+        return {"sweeps": []}
+    return loaded
+
+
+@router.post("/link-sweeps")
+async def save_link_sweep(
+    report: LinkSweepReport,
+    _auth: None = Depends(_require_api_key),
+):
+    """Persist one completed link sweep for the Diagnostics view."""
+    payload = _load_link_sweeps()
+    payload["sweeps"].append(report.model_dump(mode="json"))
+    payload["sweeps"] = payload["sweeps"][-_LINK_SWEEP_MAX:]
+    _atomic_write_json(_LINK_SWEEP_FILE, payload, "link_sweeps")
+    return {"saved": True, "count": len(payload["sweeps"])}
+
+
+@router.get("/link-sweeps")
+async def get_link_sweeps(
+    bookmaker: str = "",
+    mode: str = "",
+    limit: int = 20,
+):
+    """Read the last sweeps, newest last, optionally filtered by book/mode."""
+    rows = [
+        row
+        for row in _load_link_sweeps()["sweeps"]
+        if isinstance(row, dict)
+        and (not bookmaker or row.get("bookmaker") == bookmaker)
+        and (not mode or row.get("mode") == mode)
+    ]
+    limit = max(1, min(limit, _LINK_SWEEP_MAX))
+    return {"sweeps": rows[-limit:], "count": len(rows[-limit:])}

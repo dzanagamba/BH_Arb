@@ -45,6 +45,7 @@ let evidenceTotal = 0;
 const EVIDENCE_PAGE_SIZE = 50;
 const verifyState = {};             // surebet id -> {state, at, data}
 const slipState = {};               // surebet id -> {investment, placed: {label: {odds, stake}}}
+const sweepState = { running: false };
 
 // How long a re-check counts as fresh enough to place on.
 const VERIFY_FRESH_SECONDS = { prematch: 120, live: 30 };
@@ -195,6 +196,7 @@ function handleDataAction(event) {
         case 'hide-error': hideError(); break;
         case 'switch-tab': switchTab(element.dataset.tab); break;
         case 'shutdown-server': shutdownServer(); break;
+        case 'sweep-links': sweepLinks(); break;
         case 'set-market-filter': setMarketFilter(element.dataset.market); break;
         case 'copy-text': copyText(element.dataset.copy, element.dataset.copyMessage); break;
         case 'close-slip': closeSlip(); break;
@@ -280,6 +282,13 @@ async function loadConfig() {
         const data = await res.json();
         bookmakersConfig = data.bookmakers || {};
         configuredSports = Array.isArray(data.sports) ? data.sports.map(s => s.id || s) : [];
+        const sweepBook = document.getElementById('sweep-book');
+        if (sweepBook) {
+            sweepBook.innerHTML = Object.entries(bookmakersConfig)
+                .filter(([, book]) => book.enabled)
+                .map(([id, book]) => `<option value="${escapeHtml(id)}">${escapeHtml(book.name || id)}</option>`)
+                .join('');
+        }
         const minInput = document.getElementById('filter-profit');
         if (data.min_profit_percent && minInput) minInput.value = data.min_profit_percent;
         const investInput = document.getElementById('filter-investment');
@@ -1890,6 +1899,90 @@ async function candidateListFetch(url) {
         }
     }
     return response;
+}
+
+const SWEEP_MAX_CALLS = 100;
+
+function sweepDelay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// A sweep is just repeated verify-links calls. The server owns the cursor, so
+// this loop stops when it reports remaining=0; a 429 is waited out, never
+// bypassed. One completed report is posted to /api/link-sweeps.
+async function sweepLinks() {
+    if (sweepState.running) return;
+    const bookEl = document.getElementById('sweep-book');
+    const modeEl = document.getElementById('sweep-mode');
+    const statusEl = document.getElementById('sweep-status');
+    const bookmaker = bookEl ? bookEl.value : '';
+    const mode = modeEl ? modeEl.value : 'prematch';
+    if (!bookmaker) {
+        if (statusEl) statusEl.textContent = 'Pick a book with a declared event route first.';
+        return;
+    }
+    sweepState.running = true;
+    const startedAt = new Date().toISOString();
+    const totals = {
+        bookmaker, mode, calls: 0, available: 0, checked: 0,
+        verified: 0, failed: 0, errored: 0, unchecked: 0,
+        remaining: 0, last_next_offset: 0,
+    };
+    let status = 'budget_exhausted';
+    let httpError = '';
+    try {
+        while (totals.calls < SWEEP_MAX_CALLS) {
+            const query = `bookmaker=${encodeURIComponent(bookmaker)}&mode=${encodeURIComponent(mode)}&limit=5`;
+            const response = await apiFetch(
+                `/api/verify-links?${query}`,
+                { method: 'POST' },
+                'This SureBet deployment requires an API key to sweep links.'
+            );
+            if (response.status === 429) {
+                if (statusEl) statusEl.textContent = 'Rate limited by the server — waiting before the next check…';
+                await sweepDelay(5000);
+                continue;
+            }
+            if (!response.ok) throw new Error(`verify-links returned ${response.status}`);
+            const body = await response.json();
+            totals.calls += 1;
+            totals.available = Math.max(totals.available, Number(body.available || 0));
+            for (const key of ['checked', 'verified', 'failed', 'errored', 'unchecked']) {
+                totals[key] += Number(body[key] || 0);
+            }
+            totals.remaining = Number(body.remaining || 0);
+            totals.last_next_offset = Number(body.next_offset || 0);
+            if (statusEl) {
+                statusEl.textContent = `Checked ${totals.checked} · verified ${totals.verified} · failed ${totals.failed} · errored ${totals.errored} · remaining ${totals.remaining}`;
+            }
+            if (body.status === 'skipped' || totals.remaining === 0) {
+                status = body.status === 'skipped' ? 'skipped' : 'converged';
+                break;
+            }
+            await sweepDelay(1500);
+        }
+        const report = {
+            ...totals, status, http_error: httpError,
+            started_at: startedAt, ended_at: new Date().toISOString(),
+            rate_limit_waits: 0, calls_detail: [],
+        };
+        await apiFetch(
+            '/api/link-sweeps',
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(report),
+            },
+            'This SureBet deployment requires an API key to save the sweep report.'
+        );
+        if (statusEl) {
+            statusEl.textContent = `Sweep ${status}: ${totals.checked} checked, ${totals.verified} verified, ${totals.failed} failed, ${totals.errored} errored.`;
+        }
+    } catch (error) {
+        if (statusEl) statusEl.textContent = `Sweep failed: ${error.message}`;
+    } finally {
+        sweepState.running = false;
+    }
 }
 
 async function loadCandidates() {

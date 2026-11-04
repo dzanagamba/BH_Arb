@@ -73,6 +73,7 @@ call site and in review. There are four accepted entries:
 | `scripts/docker_smoke.py` (`_health`) | `B310` (`urlopen`) | Fixed `http://127.0.0.1:<port>/api/health` loopback probe. |
 | `scripts/soak.py` (`_get_json`, `_post`) | `B310` (`urlopen`) | Operator-supplied scanner endpoint, normally loopback HTTP. |
 | `server/alerts.py` (webhook/Telegram `send`) | `B310` (`urlopen`) | Operator-configured HTTPS webhook or the fixed Telegram Bot API endpoint; URL/token are never logged. |
+| `scripts/sweep_links.py` (`_post_json`) | `B310` (`urlopen`) | Operator-supplied scanner endpoint, normally loopback HTTP. |
 
 `server/api.py`'s SHA-1 pair id was not allowlisted: it is a stable queue key,
 not a security primitive, and now passes `usedforsecurity=False` to make that

@@ -332,6 +332,17 @@
 
     <section class="drawer-section">
         <h3>Diagnostics</h3>
+        <div class="sweep-control">
+            <label class="field"><span>Link sweep book</span>
+                <select class="input" id="sweep-book"></select></label>
+            <label class="field"><span>Feed</span>
+                <select class="input" id="sweep-mode">
+                    <option value="prematch">Prematch</option>
+                    <option value="live">Live</option>
+                </select></label>
+            <button class="btn btn-secondary btn-small" data-action="sweep-links">Sweep links</button>
+            <p class="hint" id="sweep-status">Calls verify-links until every event is decided.</p>
+        </div>
         <div class="health-bar" id="health-bar" style="display:none;"></div>
         <p class="drawer-links">
             <a href="/api/debug/report" target="_blank" rel="noopener">Match report</a>

@@ -389,6 +389,9 @@ python scripts/generate_market_mapping_doc.py --check
 
 # Record one real scan's per-sport metrics.
 python scripts/record_scan.py prematch --out docs/evidence/prematch-scan.json
+
+# Sweep one book's declared event links until verify-links reports remaining 0.
+python scripts/sweep_links.py --bookmaker mozzartbet --mode prematch --check
 ```
 
 ## Adding bookmakers, markets and names

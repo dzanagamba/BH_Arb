@@ -265,7 +265,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 | P1-5 | Alerting with dedupe and retry | P1 | M | P1-2 | Done |
 | P1-6 | 24-hour soak and resource budget | P1 | M | P0-1, P1-2 | Waived |
 | P1-7 | Raw-price invariant and rounding audit | P1 | S | P0-4 | Done |
-| P2-1 | Convergent deep-link sweep automation and UI | P2 | M | P1-1 | Not started |
+| P2-1 | Convergent deep-link sweep automation and UI | P2 | M | P1-1 | Done |
 | P2-2 | Dated re-verification of no-event declarations | P2 | S | — | Not started |
 | P2-3 | Publish `source_id` from every parser; complete registry coverage | P2 | L | — | Not started |
 | P2-4 | Multi-day replay corpus and precision/recall evaluation | P2 | L | — | Not started |
@@ -791,7 +791,7 @@ harness, budget guard and two-cycle smoke evidence remain in `docs/SOAK.md`.
 
 ### P2-1 — Convergent deep-link sweep automation and UI
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P2
 **Effort:** M
 **Depends on:** P1-1
@@ -810,9 +810,9 @@ harness, budget guard and two-cycle smoke evidence remain in `docs/SOAK.md`.
 
 **Acceptance criteria:**
 
-- [ ] A sweep over a fixture cache terminates with `remaining: 0`.
-- [ ] A failed event does not prevent other events from being checked.
-- [ ] The report distinguishes verified, failed, errored, and undecided.
+- [x] A sweep over a fixture cache terminates with `remaining: 0`.
+- [x] A failed event does not prevent other events from being checked.
+- [x] The report distinguishes verified, failed, errored, and undecided.
 
 **Tests:**
 
@@ -1422,6 +1422,31 @@ Before writing a claim about behavior, run the command that proves it and paste 
 ## 6. Execution log
 
 Newest first. Each entry: date, task, status, commands, measured result, files changed, follow-ups.
+
+### 2026-11-04 — P2-1: Convergent deep-link sweep automation and UI
+
+**Task:** P2-1 (depends on P1-1, complete).
+**Status:** Done.
+
+**Commands and results:**
+
+- `python -m pytest tests/test_link_sweep.py -q` → 8 passed.
+- `python -m ruff check .` and `python -m mypy .` → clean.
+- The runner was exercised against fake `verify-links` responses: convergence, an errored event followed by another call, budget exhaustion, a 429 wait and a whole-request failure.
+
+**What changed:**
+
+- `scripts/sweep_links.py` (new): loops `POST /api/verify-links` until `remaining == 0`, waits out 429 using `Retry-After` instead of raising the rate limit, keeps going after per-event errors, stops at a call budget, and appends an atomic report to `cache/link_sweeps.json`.
+- `server/api.py`: `POST /api/link-sweeps` persists a sweep report (bounded to 200) and `GET /api/link-sweeps` reads the newest, filterable by book/mode.
+- Dashboard Diagnostics: book/mode selector, `Sweep links` button, live checked/verified/failed/errored/remaining text; it posts the completed report to the store.
+- `tests/test_link_sweep.py` (new): convergence, partial failure, budget, rate-limit pacing, request failure, persistence and dashboard hooks.
+- `README.md`, `docs/CI.md`: operator command and the sweep `urlopen` allowlist entry.
+
+**Trust rules:** unchanged. A sweep still goes through the existing rate limit, browser semaphore and decision store; it does not make a proof permanent.
+
+**Follow-ups:** P2-2 (dated no-event declarations) is next.
+
+---
 
 ### 2026-11-04 — P1-7: Raw-price invariant and rounding audit
 
