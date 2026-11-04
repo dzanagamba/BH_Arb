@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from engine.arbitrage import ArbitrageEngine
 from models.schemas import Market, MarketType, Match, MatchGroup, OddsValue
 
-KICKOFF = datetime(2026, 11, 4, 18, 0, tzinfo=UTC)
+KICKOFF = datetime(2030, 1, 1, 18, 0, tzinfo=UTC)
 
 
 def _match(book: str, sport: str, markets: list[Market]) -> Match:

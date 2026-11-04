@@ -180,6 +180,9 @@ PORT = int(os.getenv("PORT", "8000"))
 # is served by this process); set it only when a separate frontend needs access.
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "")
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").strip().upper()
+# "text" keeps the readable log line; "json" emits one JSON object per line for
+# a log collector. Both carry the request/scan correlation id.
+LOG_FORMAT = os.getenv("LOG_FORMAT", "text").strip().lower()
 # Optional API key — when set, POST /api/scan, /api/config/toggle, /api/recalculate,
 # /api/verify and GET /api/history require an `X-API-Key` header.
 API_KEY = os.getenv("API_KEY", "")

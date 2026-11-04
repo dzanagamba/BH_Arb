@@ -11,6 +11,7 @@ Endpoints:
   POST /api/verify     — Re-verify a surebet's odds against fresh bookmaker data
   POST /api/verify-links — On-demand deep-link proof for one bookmaker
   GET  /api/history    — Recent scan history
+  GET  /api/metrics    — Prometheus counters and gauges (P1-2)
 """
 
 import asyncio
@@ -26,6 +27,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Literal, NamedTuple
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 from rapidfuzz import fuzz
 
@@ -101,6 +103,12 @@ from scrapers.sportplus import SportPlusScraper
 from scrapers.wwin import WWINScraper
 from scripts.pairing_audit import audit as audit_pairing
 from server.mapping_coverage import build_coverage
+from server.observability import (
+    metrics,
+    new_request_id,
+    reset_scan_id,
+    set_scan_id,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -1358,6 +1366,42 @@ def _record_book_result(mode: str, bookmaker: str, ok: bool) -> None:
         _book_skip_until[key] = datetime.now(UTC).replace(tzinfo=None) + timedelta(minutes=minutes)
 
 
+def _metric_book(mode: str, bookmaker: str, outcome: str) -> None:
+    """Count one book's result so a silent feed is visible in `/api/metrics`."""
+    metrics.inc("bh_book_results_total", mode=mode, book=bookmaker, outcome=outcome)
+
+
+def _metric_browser_opened(delta: int) -> None:
+    """Track how many browser slots are in use against BROWSER_CONCURRENCY."""
+    metrics.add_gauge("bh_browser_slots_in_use", delta)
+
+
+def _init_metric_baseline() -> None:
+    """Publish zero-valued series so a fresh process is scrapable immediately.
+
+    Without this, a counter that has not been touched yet is absent from the
+    exposition, and an alert expression cannot distinguish "zero" from "this
+    build never registered the metric".
+    """
+    for metric_mode in ("prematch", "live"):
+        metrics.inc("bh_scans_started_total", 0, mode=metric_mode)
+        metrics.inc("bh_scans_completed_total", 0, mode=metric_mode)
+        metrics.inc("bh_scans_failed_total", 0, mode=metric_mode)
+        metrics.inc("bh_scan_seconds_total", 0, mode=metric_mode)
+        metrics.set_gauge("bh_scan_duration_seconds", 0, mode=metric_mode)
+        metrics.inc("bh_surebets_found_total", 0, mode=metric_mode)
+        metrics.set_gauge("bh_surebets_found", 0, mode=metric_mode)
+        metrics.inc(
+            "bh_surebets_dropped_total", 0, mode=metric_mode, reason="price_outlier"
+        )
+        metrics.set_gauge("bh_candidate_queue_size", 0, mode=metric_mode)
+    metrics.set_gauge("bh_browser_slots_in_use", 0)
+    metrics.set_gauge("bh_cache_budget_bytes", CACHE_SIZE_BUDGET_BYTES)
+
+
+_init_metric_baseline()
+
+
 def learn_scan_mappings(
     matches: list[Match],
     scan: str,
@@ -1387,6 +1431,10 @@ async def run_scan(mode: str = "prematch", scheduled: bool = False):
     is_live = mode == "live"
     status, surebets_cache, matches_cache, report_cache, per_bookie = _state_for(mode)
     scan_started_at = datetime.now(UTC).replace(tzinfo=None)
+    scan_started_monotonic = time.perf_counter()
+    scan_id = new_request_id()
+    scan_token = set_scan_id(scan_id)
+    metrics.inc("bh_scans_started_total", mode=mode)
 
     status.is_scanning = True
     status.bookmakers_done = []
@@ -1406,9 +1454,11 @@ async def run_scan(mode: str = "prematch", scheduled: bool = False):
         async def scrape_one(bookie_id: str, config: dict) -> list[Match]:
             if not _is_enabled(bookie_id):
                 status.bookmaker_progress[bookie_id] = "skipped"
+                _metric_book(mode, bookie_id, "skipped")
                 return []
             if scheduled and _book_is_backed_off(mode, bookie_id):
                 status.bookmaker_progress[bookie_id] = "skipped"
+                _metric_book(mode, bookie_id, "skipped")
                 with _BOOK_BACKOFF_LOCK:
                     until = _book_skip_until.get((mode, bookie_id))
                 status.errors.append(
@@ -1423,10 +1473,12 @@ async def run_scan(mode: str = "prematch", scheduled: bool = False):
             sem = _browser_sem if bookie_id in PLAYWRIGHT_BOOKIES else None
             if sem:
                 await sem.acquire()
+                _metric_browser_opened(1)
             try:
                 scraper_class = SCRAPERS.get(bookie_id)
                 if not scraper_class:
                     status.bookmaker_progress[bookie_id] = "error"
+                    _metric_book(mode, bookie_id, "error")
                     return []
 
                 scraper = scraper_class()
@@ -1457,6 +1509,7 @@ async def run_scan(mode: str = "prematch", scheduled: bool = False):
                 status.total_matches += len(matches)
                 per_bookie[bookie_id] = len(matches)
                 _record_book_result(mode, bookie_id, bool(matches))
+                _metric_book(mode, bookie_id, "success" if matches else "empty")
                 logger.info(f"✅ {config['name']}: {len(matches)} {'live' if is_live else 'prematch'} matches scraped")
                 return matches
 
@@ -1465,11 +1518,13 @@ async def run_scan(mode: str = "prematch", scheduled: bool = False):
                 status.bookmaker_progress[bookie_id] = "error"
                 status.errors.append(error_msg)
                 _record_book_result(mode, bookie_id, False)
+                _metric_book(mode, bookie_id, "error")
                 logger.error(f"❌ Scrape error — {error_msg}", exc_info=True)
                 return []
             finally:
                 if sem:
                     sem.release()
+                    _metric_browser_opened(-1)
 
         # Run all scrapers concurrently
         status.current_bookmaker = "Scraping all bookmakers..."
@@ -1662,16 +1717,59 @@ async def run_scan(mode: str = "prematch", scheduled: bool = False):
 
         _refresh_pairing_summary(mode, matches_cache, report_cache)
 
+        duration_seconds = round(time.perf_counter() - scan_started_monotonic, 3)
+        cache_file = _LIVE_CACHE_FILE if is_live else _PREMATCH_CACHE_FILE
+        cache_bytes = _cache_size(cache_file)
+        books_ok = sorted({match.bookmaker for match in all_matches})
+        metrics.set_gauge("bh_scan_duration_seconds", duration_seconds, mode=mode)
+        metrics.inc("bh_scan_seconds_total", duration_seconds, mode=mode)
+        metrics.inc("bh_scans_completed_total", mode=mode)
+        metrics.inc("bh_surebets_found_total", len(surebets), mode=mode)
+        metrics.set_gauge("bh_surebets_found", len(surebets), mode=mode)
+        metrics.inc(
+            "bh_surebets_dropped_total",
+            len(price_dropped),
+            mode=mode,
+            reason="price_outlier",
+        )
+        metrics.set_gauge(
+            "bh_candidate_queue_size", len(_candidates_for(mode)), mode=mode
+        )
+        metrics.set_gauge("bh_cache_size_bytes", cache_bytes, mode=mode)
+        metrics.set_gauge("bh_cache_budget_bytes", CACHE_SIZE_BUDGET_BYTES)
+
+        # One completion line an operator or a log collector can act on. The
+        # fields are the scan's shape, never a secret or an odds payload.
         logger.info(
-            f"🎯 {'Live' if is_live else 'Prematch'} scan complete: {len(all_matches)} matches scraped, "
-            f"{len(groups)} match groups, {len(surebets)} surebets found"
+            "scan complete",
+            extra={
+                "mode": mode,
+                "duration_seconds": duration_seconds,
+                "books": len(books_ok),
+                "books_total": sum(1 for book in BOOKMAKERS if _is_enabled(book)),
+                "groups": len(groups),
+                "surebets": len(surebets),
+                "drops": len(price_dropped),
+                "cache_bytes": cache_bytes,
+            },
         )
     except Exception as e:
-        logger.error(f"❌ Scan failed: {e}", exc_info=True)
+        metrics.inc("bh_scans_failed_total", mode=mode)
+        logger.error(
+            "scan failed",
+            extra={
+                "mode": mode,
+                "duration_seconds": round(
+                    time.perf_counter() - scan_started_monotonic, 3
+                ),
+            },
+            exc_info=True,
+        )
         status.errors.append(f"Scan error: {str(e)[:200]}")
     finally:
         status.is_scanning = False
         status.current_bookmaker = ""
+        reset_scan_id(scan_token)
 
 
 def _refresh_pairing_summary(
@@ -2232,6 +2330,45 @@ def _unverified_link_count(matches: list[dict]) -> int:
         and not match.get("deep_link_verified")
         and not declares_no_event_id(str(match.get("bookmaker", "")))
         and not declares_route_pattern_verified(str(match.get("bookmaker", "")))
+    )
+
+
+def _last_scan_age_samples() -> list[tuple[dict[str, object], float]]:
+    """Age of each feed's last completed scan, computed at scrape time."""
+    now = datetime.now(UTC).replace(tzinfo=None)
+    samples: list[tuple[dict[str, object], float]] = []
+    for mode, status in (("prematch", scan_status), ("live", live_status)):
+        if status.last_scan_time:
+            age = (now - _naive_utc(status.last_scan_time)).total_seconds()
+            samples.append(({"mode": mode}, max(0.0, age)))
+    return samples
+
+
+def _cache_size_samples() -> list[tuple[dict[str, object], float]]:
+    return [
+        ({"mode": "prematch"}, float(_cache_size(_PREMATCH_CACHE_FILE))),
+        ({"mode": "live"}, float(_cache_size(_LIVE_CACHE_FILE))),
+    ]
+
+
+metrics.register_gauge_provider(
+    "bh_last_scan_age_seconds",
+    "Seconds since the last completed scan for each feed.",
+    _last_scan_age_samples,
+)
+metrics.register_gauge_provider(
+    "bh_cache_size_bytes",
+    "Size of the persisted scan cache for each feed.",
+    _cache_size_samples,
+)
+
+
+@router.get("/metrics")
+async def get_metrics(_auth: None = Depends(_require_api_key)):
+    """Prometheus text exposition. Protected like every other /api route."""
+    return PlainTextResponse(
+        metrics.render(),
+        media_type="text/plain; version=0.0.4; charset=utf-8",
     )
 
 
@@ -3014,6 +3151,7 @@ async def verify_surebet(req: VerifyRequest, _auth: None = Depends(_require_api_
             sem = _browser_sem if bookie_id in PLAYWRIGHT_BOOKIES else None
             if sem:
                 await sem.acquire()
+                _metric_browser_opened(1)
             try:
                 scraper = scraper_class()
                 fresh_matches.extend(await scraper.scrape(live=is_live, scan_time=fetched_at))
@@ -3022,6 +3160,7 @@ async def verify_surebet(req: VerifyRequest, _auth: None = Depends(_require_api_
             finally:
                 if sem:
                     sem.release()
+                    _metric_browser_opened(-1)
 
     for match in fresh_matches:
         if not match.fetched_at:
@@ -3357,14 +3496,32 @@ async def verify_links(
     # browser budget respected here.
     async with _deep_link_check_lock:
         async with _browser_sem:
-            report = await _run_link_verification(
-                bookmaker,
-                matches_cache,
+            _metric_browser_opened(1)
+            try:
+                report = await _run_link_verification(
+                    bookmaker,
+                    matches_cache,
+                    mode=mode,
+                    live=live,
+                    limit=limit,
+                    offset=offset,
+                    settled=settled,
+                )
+            finally:
+                _metric_browser_opened(-1)
+
+    if report.checked:
+        for outcome_name, count in (
+            ("verified", report.verified),
+            ("failed", report.failed),
+            ("errored", report.errored),
+        ):
+            metrics.inc(
+                "bh_link_checks_total",
+                count,
                 mode=mode,
-                live=live,
-                limit=limit,
-                offset=offset,
-                settled=settled,
+                book=bookmaker,
+                outcome=outcome_name,
             )
 
     # A completed check is worth keeping even if a scan overtook us: the store is

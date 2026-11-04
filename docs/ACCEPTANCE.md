@@ -207,6 +207,58 @@ detail and 404, summary size without evidence, compatibility alias, live mode)
 and `tests/test_frontend_evidence.py` (tab, endpoints, filter reload, narrow
 layout hooks).
 
+## Structured logs, request IDs and metrics (P1-2, 2026-11-04)
+
+An unattended scanner needs to answer two questions from a distance: *which
+request failed?* and *is the feed actually working?* Neither had a durable
+answer before: logs were unstructured text and the only counters were in
+`/api/health`.
+
+**Correlation.** `server/observability.py` keeps a request id and a scan id in
+context variables. `server/app.py` accepts `X-Request-ID` when it is short and
+log-safe (`^[A-Za-z0-9._:-]{1,128}$`) and generates one otherwise, then returns
+it on every response, including 401/403. A log-record factory stamps both ids on
+every record, so pytest capture, uvicorn and operator handlers all see them.
+`run_scan` creates a `scan_id` and publishes it for the duration of the scan.
+
+**Structured logs.** `LOG_FORMAT=json` switches the root handler to
+`JsonLogFormatter`; anything else keeps `req=<id>` in the text line. The JSON
+formatter serialises only a fixed allowlist of extras, so an accidental
+`extra={"api_key": ...}` or an odds payload cannot leak into the log. A
+completed scan emits exactly one `scan complete` record with `mode`,
+`duration_seconds`, `books`, `books_total`, `groups`, `surebets`, `drops` and
+`cache_bytes`; a failure emits `scan failed` with the traceback.
+
+**Metrics.** `GET /api/metrics` renders Prometheus text with no extra
+dependency. The registry exposes:
+
+| Metric | Type | Meaning |
+|---|---|---|
+| `bh_scans_started_total{mode}` | counter | Scans entered |
+| `bh_scans_completed_total{mode}` | counter | Scans that reached the end |
+| `bh_scans_failed_total{mode}` | counter | Scans that raised |
+| `bh_scan_duration_seconds{mode}` | gauge | Last completed scan duration |
+| `bh_scan_seconds_total{mode}` | counter | Cumulative scan seconds |
+| `bh_book_results_total{mode,book,outcome}` | counter | `success`, `empty`, `error`, `skipped` |
+| `bh_surebets_found{mode}` / `_total` | gauge / counter | Last and cumulative surebet count |
+| `bh_surebets_dropped_total{mode,reason}` | counter | Price-guard drops |
+| `bh_link_checks_total{mode,book,outcome}` | counter | Deep-link checks (`verified`, `failed`, `errored`) |
+| `bh_candidate_queue_size{mode}` | gauge | Review queue after the scan |
+| `bh_cache_size_bytes{mode}` | gauge | Persisted scan cache |
+| `bh_last_scan_age_seconds{mode}` | gauge | Age of the last completed scan |
+| `bh_browser_slots_in_use` | gauge | Playwright slots held against `BROWSER_CONCURRENCY` |
+| `bh_rss_bytes` | gauge | Process resident memory |
+
+Zero-valued series are registered at import so a fresh process is scrapable
+immediately. `/api/metrics` is subject to the same API-key guard and
+`_require_api_key` dependency as the other routes.
+
+Tests: `tests/test_request_id.py` (echo, generate, hostile/oversized header,
+id on a refused request, context filter, JSON formatter allowlist, traceback,
+`LOG_FORMAT=json`) and `tests/test_metrics.py` (text escaping, endpoint without
+a server, API-key protection, one structured scan-completion record, counters,
+per-book empty/error outcomes, failed-scan counter).
+
 ## Browser hardening
 
 `server/app.py` sets `Content-Security-Policy` (`default-src 'self'`,

@@ -1,7 +1,9 @@
 import asyncio
+import logging
 import os
 import secrets
 import sys
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 from urllib.parse import urlsplit
@@ -31,6 +33,13 @@ from server.api import (
     _suppressed_candidates,
     _suppressed_premises,
     router,
+)
+from server.observability import (
+    REQUEST_ID_HEADER,
+    new_request_id,
+    reset_request_id,
+    set_request_id,
+    valid_request_id,
 )
 from server.scheduler import scan_loop
 
@@ -150,6 +159,43 @@ async def security_headers(request, call_next):
 
 # Include API routes
 app.include_router(router, prefix="/api")
+
+
+request_logger = logging.getLogger("server.request")
+
+
+@app.middleware("http")
+async def request_id_middleware(request, call_next):
+    """Correlate every log line with the request that caused it.
+
+    An incoming `X-Request-ID` is trusted only when it is short and log-safe;
+    otherwise a fresh id is generated, so a caller cannot forge extra log
+    fields. The id is returned on the response and is available to endpoints as
+    `request.state.request_id`. Defined last so it wraps the guards: a 401 or a
+    refused cross-origin write still gets an id and a completion log.
+    """
+    incoming = request.headers.get(REQUEST_ID_HEADER)
+    request_id = incoming if valid_request_id(incoming) else new_request_id()
+    token = set_request_id(request_id)
+    request.state.request_id = request_id
+    started = time.perf_counter()
+    status_code = 500
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        response.headers[REQUEST_ID_HEADER] = request_id
+        return response
+    finally:
+        request_logger.debug(
+            "request complete",
+            extra={
+                "request_method": request.method,
+                "request_path": request.url.path,
+                "status_code": status_code,
+                "duration_seconds": round(time.perf_counter() - started, 4),
+            },
+        )
+        reset_request_id(token)
 
 
 def _restore_state() -> None:

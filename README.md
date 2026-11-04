@@ -117,6 +117,16 @@ POST /api/scan
   copies used for pricing, with its reason shown in the dashboard; recovery
   needs three consecutive clean scans. This is a price-source restriction, not
   a change to the certainty gate.
+- **Unattended operation is observable.** Every request accepts or generates an
+  `X-Request-ID`, returns it on the response, and stamps it on every log record
+  emitted while the request runs; a scan gets its own `scan_id`. Set
+  `LOG_FORMAT=json` for one JSON object per line. `GET /api/metrics` serves
+  Prometheus text: scan started/completed/failed, per-book success/empty/error,
+  surebets found/dropped, link checks, candidate-queue size, cache size, scan
+  duration, last-scan age per feed, browser slots in use, and process RSS. The
+  endpoint is protected like every other `/api` route. A completed scan emits
+  one `scan complete` record with duration, book counts, groups, surebets,
+  drops and cache size — never odds or credentials.
 
 ## Dashboard
 
@@ -154,6 +164,7 @@ Copy `.env.example` to `.env` and set only what you need:
 | `SCAN_RATE_LIMIT` | `3` | Maximum scans a client may trigger per minute. |
 | `HEADLESS` | `true` | Set `false` to watch Playwright browsers. |
 | `LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING` or `ERROR`. |
+| `LOG_FORMAT` | `text` | `text` for the readable line, `json` for one JSON object per line. Both carry `request_id`/`scan_id`. |
 | `VERIFY_SSL` | `false` | Enforce TLS verification on direct HTTP calls. |
 | `AUTO_SCAN_PREMATCH_MINUTES` | `0` | Scheduled prematch scans; `0` disables them. |
 | `AUTO_SCAN_LIVE_MINUTES` | `0` | Scheduled live scans; `0` disables them. |

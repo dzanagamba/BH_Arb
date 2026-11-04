@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-11-04
 **Repository:** `dzanagamba/BH_Arb` (`main`)
-**Status of this document:** audit complete; P0-1 through P0-7 and P1-1 done, implementation continuing
+**Status of this document:** audit complete; P0-1 through P0-7, P1-1 and P1-2 done, implementation continuing
 **Purpose:** a durable, session-by-session plan so work can resume without re-reading the whole repository.
 
 > **How to use this document**
@@ -259,7 +259,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 | P0-6 | Opportunity-rate and arb-lifetime telemetry | P0 | M | P0-4 | Done |
 | P0-7 | Feed-integrity scorecard and stale-book quarantine | P0 | M | P0-4 | Done |
 | P1-1 | Paginated, filtered group-evidence API | P1 | M | P0-1 | Done |
-| P1-2 | Structured logs, request IDs, metrics endpoint | P1 | M | — | Not started |
+| P1-2 | Structured logs, request IDs, metrics endpoint | P1 | M | — | Done |
 | P1-3 | Reproducible deployment (Docker/systemd) | P1 | M | — | Not started |
 | P1-4 | CI hardening: coverage, dependency and security scans | P1 | S | — | Not started |
 | P1-5 | Alerting with dedupe and retry | P1 | M | P1-2 | Not started |
@@ -586,7 +586,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 
 ### P1-2 — Structured logs, request IDs, metrics endpoint
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P1
 **Effort:** M
 **Depends on:** none
@@ -606,9 +606,9 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 
 **Acceptance criteria:**
 
-- [ ] A scan emits one structured completion log with duration, books, groups, surebets, drops, and cache size.
-- [ ] `/api/metrics` exposes the counters and is protected like other `/api` routes.
-- [ ] No secret or full odds payload is logged.
+- [x] A scan emits one structured completion log with duration, books, groups, surebets, drops, and cache size.
+- [x] `/api/metrics` exposes the counters and is protected like other `/api` routes.
+- [x] No secret or full odds payload is logged.
 
 **Tests:**
 
@@ -1421,6 +1421,35 @@ Before writing a claim about behavior, run the command that proves it and paste 
 ## 6. Execution log
 
 Newest first. Each entry: date, task, status, commands, measured result, files changed, follow-ups.
+
+### 2026-11-04 — P1-2: Structured logs, request IDs, metrics endpoint
+
+**Task:** P1-2 (first eligible task after P1-1; no dependencies).
+**Status:** Done.
+
+**Commands and results:**
+
+- `python -m pytest` → **1,318 passed**, 1 warning, 173.82 s (was 1,302; +16 tests).
+- `python -m ruff check .` → clean.
+- `python -m mypy .` → clean on 148 source files.
+- `python scripts/generate_market_mapping_doc.py --check` → in sync.
+- `python scripts/replay_mappings.py tests/fixtures/replay/2026-11-03 --cold --check` → exit 0, fixed point, 0 false merges, 0 unresolved evidence-backed pairs.
+- New tests cover request-id echo/generation/replacement, ids on refused requests, context propagation, the JSON allowlist and traceback, `LOG_FORMAT=json`, Prometheus text/escaping, `/api/metrics` without a server, API-key protection, one structured scan-completion record, per-book outcomes, and the failed-scan counter.
+
+**What changed:**
+
+- `server/observability.py` (new): request/scan context ids, a log-record factory that stamps them on every record, `ContextLogFilter`, `JsonLogFormatter` with a fixed extra allowlist, `configure_logging()`, and a dependency-free Prometheus counters/gauges registry with dynamic gauge providers.
+- `server/app.py`: request-id middleware accepts a safe incoming `X-Request-ID` or generates one, returns it on every response (including 401/403), and emits a debug completion line.
+- `server/api.py`: scan started/completed/failed, duration, per-book success/empty/error/skipped, surebets found/dropped, link checks, candidate-queue size, cache size, last-scan age, browser-slot and RSS gauges; one structured `scan complete` log (and `scan failed` with traceback); `GET /api/metrics` in Prometheus text, protected like other routes.
+- `main.py`, `config/settings.py`, `.env.example`: `LOG_FORMAT` (`text`/`json`) wired into startup logging.
+- `tests/test_request_id.py`, `tests/test_metrics.py` (new); two unrelated pricing fixtures moved to a fixed 2030 kickoff because their 2026-11-04 18:00 value expires during the evening and made the suite time-dependent.
+- `README.md`, `docs/ACCEPTANCE.md`, `docs/PRODUCTION_READINESS.md` document the metrics, log format and correlation ids.
+
+**Trust rules:** unchanged. Metrics are observational only; they do not price, rank or admit a surebet. The JSON formatter serialises a fixed allowlist, so odds payloads, API keys and arbitrary extras cannot be logged. The endpoint uses the same API-key guard and dependency as every other `/api` route.
+
+**Follow-ups:** P1-3 (reproducible deployment) and P1-4 (CI hardening) are the next eligible tasks. P1-5 and P1-6 are now unblocked by P1-2.
+
+---
 
 ### 2026-11-04 — P1-1: Paginated, filtered group-evidence API
 

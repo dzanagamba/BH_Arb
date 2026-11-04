@@ -8,13 +8,10 @@ import uvicorn
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
-from config.settings import HOST, LOG_LEVEL, PORT
+from config.settings import HOST, LOG_FORMAT, LOG_LEVEL, PORT
+from server.observability import configure_logging
 
-logging.basicConfig(
-    level=getattr(logging, LOG_LEVEL, logging.INFO),
-    format="%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
-    datefmt="%H:%M:%S",
-)
+configure_logging(LOG_LEVEL, LOG_FORMAT)
 
 if __name__ == "__main__":
     print(f"""

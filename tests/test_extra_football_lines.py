@@ -110,7 +110,9 @@ def _group(market_type: MarketType, left: tuple[float, float], right: tuple[floa
         home_team="Home",
         away_team="Away",
         league="League",
-        kickoff=datetime(2026, 11, 4, 18, 0),
+        # A fixed future date: a fixture pinned to "today" starts failing the
+        # prematch expiry gate once the wall clock passes kickoff.
+        kickoff=datetime(2030, 1, 1, 18, 0),
         markets=[
             Market(
                 market_type=market_type,
