@@ -266,7 +266,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 | P1-6 | 24-hour soak and resource budget | P1 | M | P0-1, P1-2 | Waived |
 | P1-7 | Raw-price invariant and rounding audit | P1 | S | P0-4 | Done |
 | P2-1 | Convergent deep-link sweep automation and UI | P2 | M | P1-1 | Done |
-| P2-2 | Dated re-verification of no-event declarations | P2 | S | — | Not started |
+| P2-2 | Dated re-verification of no-event declarations | P2 | S | — | Done |
 | P2-3 | Publish `source_id` from every parser; complete registry coverage | P2 | L | — | Not started |
 | P2-4 | Multi-day replay corpus and precision/recall evaluation | P2 | L | — | Not started |
 | P2-5 | Sports expansion with measured admissibility | P2 | L | P2-4 | Not started |
@@ -825,7 +825,7 @@ harness, budget guard and two-cycle smoke evidence remain in `docs/SOAK.md`.
 
 ### P2-2 — Dated re-verification of no-event declarations
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P2
 **Effort:** S
 **Depends on:** none
@@ -844,9 +844,9 @@ harness, budget guard and two-cycle smoke evidence remain in `docs/SOAK.md`.
 
 **Acceptance criteria:**
 
-- [ ] Every book has a dated declaration.
-- [ ] An expired declaration is visible via a script/health field.
-- [ ] The README's reproduction command still works.
+- [x] Every book has a dated declaration.
+- [x] An expired declaration is visible via a script/health field.
+- [x] The README's reproduction command still works.
 
 **Tests:**
 
@@ -1422,6 +1422,33 @@ Before writing a claim about behavior, run the command that proves it and paste 
 ## 6. Execution log
 
 Newest first. Each entry: date, task, status, commands, measured result, files changed, follow-ups.
+
+### 2026-11-04 — P2-2: Dated re-verification of no-event declarations
+
+**Task:** P2-2 (no dependencies).
+**Status:** Done.
+
+**Commands and results:**
+
+- `python -m pytest tests/test_deeplinks.py -q` → passed.
+- `python scripts/audit_deeplinks.py --check` → all 10 declarations inside the 180-day policy.
+- `python -m ruff check .`, `python -m mypy .` → clean.
+
+**What changed:**
+
+- `config/bookmaker_deeplinks.json`: every book now has `verified_at`; the six undated notes were rewritten as dated declaration audits without changing the conclusion.
+- `config/settings.py`: `DEEPLINK_DECLARATION_MAX_AGE_DAYS` (180 days).
+- `scrapers/common.py`: `declaration_verified_at()` and `declaration_audit()`, which treats a missing or malformed date as stale.
+- `server/api.py`: `/api/health` exposes `deep_link_declaration_audit`.
+- `scripts/audit_deeplinks.py` (new): prints the audit and exits non-zero with `--check` when any declaration is overdue.
+- `tests/test_deeplinks.py`: every book has a dated note; missing/old dates are stale; health exposes the audit; the script fails when overdue.
+- `README.md`: audit command.
+
+**Trust rules:** unchanged. The dated declaration still has exactly the same effect on the gate; the audit only makes an old human decision visible.
+
+**Follow-ups:** P2-3 (`source_id` coverage) is next.
+
+---
 
 ### 2026-11-04 — P2-1: Convergent deep-link sweep automation and UI
 

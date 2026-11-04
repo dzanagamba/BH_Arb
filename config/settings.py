@@ -229,6 +229,14 @@ FEED_INTEGRITY_MISSING_DEGRADED_RATE = 0.35
 FEED_INTEGRITY_OUTLIER_DEGRADED_RATE = 0.10
 FEED_INTEGRITY_OUTLIER_QUARANTINE_RATE = 0.25
 
+# --- Deep-link declarations (P1-5/P2-2) ---
+# A no-event declaration is a human check with a date. Warn when it is older
+# than this; the gate still uses the declaration, the audit only makes it
+# visible.
+DEEPLINK_DECLARATION_MAX_AGE_DAYS = int(
+    os.getenv("DEEPLINK_DECLARATION_MAX_AGE_DAYS", "180")
+)
+
 # --- Alerts (P1-5) ---
 # Empty URLs mean no transport: the manager stays a null transport, so a fresh
 # checkout never tries to send anything. Secrets are read here from the

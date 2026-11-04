@@ -392,6 +392,9 @@ python scripts/record_scan.py prematch --out docs/evidence/prematch-scan.json
 
 # Sweep one book's declared event links until verify-links reports remaining 0.
 python scripts/sweep_links.py --bookmaker mozzartbet --mode prematch --check
+
+# Show dated no-event declarations; --check fails when one is overdue.
+python scripts/audit_deeplinks.py --check
 ```
 
 ## Adding bookmakers, markets and names

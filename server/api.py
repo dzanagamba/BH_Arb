@@ -43,6 +43,7 @@ from config.settings import (
     CACHE_DIR,
     CACHE_SIZE_BUDGET_BYTES,
     DEEP_LINK_VERIFY_RATE_LIMIT,
+    DEEPLINK_DECLARATION_MAX_AGE_DAYS,
     DEFAULT_INVESTMENT,
     DUST_PROFIT_PERCENT,
     ENABLED_MARKETS,
@@ -94,6 +95,7 @@ from models.schemas import (
 from scrapers.admiralbet import AdmiralbetScraper
 from scrapers.betole import BetoleScraper
 from scrapers.common import (
+    declaration_audit,
     declares_no_event_id,
     declares_route_pattern_verified,
     deeplink_declaration_source,
@@ -2522,6 +2524,9 @@ async def health():
         # this map has to be able to say.
         "deep_link_declarations": effective_deeplink_declarations(BOOKMAKERS),
         "deep_link_declaration_source": deeplink_declaration_source(),
+        "deep_link_declaration_audit": declaration_audit(
+            BOOKMAKERS, DEEPLINK_DECLARATION_MAX_AGE_DAYS
+        ),
         "scheduler": {
             "prematch_minutes": AUTO_SCAN_PREMATCH_MINUTES,
             "live_minutes": AUTO_SCAN_LIVE_MINUTES,

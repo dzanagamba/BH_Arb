@@ -12,7 +12,7 @@ import json
 import logging
 import os
 from collections.abc import Iterable
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import TYPE_CHECKING
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
@@ -822,6 +822,44 @@ def declares_no_event_id(bookmaker: str) -> bool:
     tell apart.
     """
     return _declared_config(bookmaker).get("supports_event_id") is False
+
+
+def declaration_verified_at(bookmaker: str) -> str:
+    """The date the declaration was last manually checked, or ``""``."""
+    raw = _declared_config(bookmaker).get("verified_at")
+    return raw if isinstance(raw, str) else ""
+
+
+def declaration_audit(
+    bookmakers: Iterable[str],
+    max_age_days: int,
+    *,
+    today: date | None = None,
+) -> list[dict]:
+    """Return one dated row per book, marking stale or undated declarations.
+
+    Missing or malformed dates are stale, not silently exempt: a declaration
+    with no date is exactly the trust assumption this audit exists to expose.
+    """
+    now = today or datetime.now(UTC).date()
+    rows: list[dict] = []
+    for bookmaker in bookmakers:
+        raw = declaration_verified_at(bookmaker)
+        try:
+            checked = date.fromisoformat(raw)
+        except ValueError:
+            checked = None
+        age_days = (now - checked).days if checked is not None else None
+        rows.append(
+            {
+                "bookmaker": bookmaker,
+                "verified_at": raw,
+                "age_days": age_days,
+                "max_age_days": max_age_days,
+                "stale": age_days is None or age_days > max_age_days,
+            }
+        )
+    return rows
 
 
 def effective_deeplink_declarations(bookmakers: Iterable[str] | None = None) -> dict:

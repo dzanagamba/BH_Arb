@@ -379,3 +379,72 @@ def test_health_reports_the_declaration_source_and_a_bad_file_safely(tmp_path, m
     # The malformed file is visible and grants nothing; health still answers.
     assert body["deep_link_declarations"]["wwin"]["configured"] is False
     assert body["deep_link_declarations"]["wwin"]["declared_no_event_id"] is False
+
+
+# ─── P2-2: every declaration is dated, and the date is auditable ────────────
+
+
+def test_every_book_has_a_dated_declaration():
+    from datetime import date
+
+    for bookmaker, spec in _read_config().items():
+        assert spec.get("note"), f"{bookmaker} needs an evidence note"
+        raw = spec.get("verified_at")
+        assert isinstance(raw, str) and raw, f"{bookmaker} needs verified_at"
+        # Raises if the date is not a real ISO date.
+        assert date.fromisoformat(raw)
+        assert spec.get("supports_event_id") in (True, False)
+
+
+def test_declaration_audit_marks_missing_and_old_dates_stale(monkeypatch):
+    from datetime import date
+
+    monkeypatch.setattr(
+        common,
+        "_deeplink_cache",
+        {
+            "fresh": {"verified_at": "2026-11-04"},
+            "old": {"verified_at": "2025-01-01"},
+            "missing": {},
+        },
+    )
+    monkeypatch.setattr(common, "_deeplink_loaded_at", None)
+
+    rows = common.declaration_audit(
+        ["fresh", "old", "missing"],
+        30,
+        today=date(2026, 11, 4),
+    )
+
+    assert [row["stale"] for row in rows] == [False, True, True]
+    assert rows[0]["age_days"] == 0
+    assert rows[2]["verified_at"] == ""
+
+
+def test_health_exposes_the_declaration_audit():
+    from fastapi.testclient import TestClient
+
+    from server.app import app
+
+    body = TestClient(app).get("/api/health").json()
+    audit = body["deep_link_declaration_audit"]
+    assert {row["bookmaker"] for row in audit} == set(BOOKMAKERS)
+    assert all("verified_at" in row and "stale" in row for row in audit)
+
+
+def test_audit_script_fails_when_a_declaration_is_overdue(monkeypatch):
+    from scripts import audit_deeplinks
+
+    monkeypatch.setattr(
+        audit_deeplinks,
+        "declaration_audit",
+        lambda *args, **kwargs: [{"bookmaker": "demo", "stale": False}],
+    )
+    assert audit_deeplinks.main(["--check"]) == 0
+
+    monkeypatch.setattr(
+        audit_deeplinks,
+        "declaration_audit",
+        lambda *args, **kwargs: [{"bookmaker": "demo", "stale": True}],
+    )
+    assert audit_deeplinks.main(["--check"]) == 1

@@ -3,13 +3,15 @@
     "supports_event_id": false,
     "template": "https://www.mdshop.ba/sport-prematch?sport=Fudbal",
     "template_live": "https://www.mdshop.ba/sport-live",
-    "note": "2026-10-20 browser re-check: ?event=<id> is inert (same page as the plain football list); match detail opens a login wall. No public per-event route — declared false, competition page is the best public link."
+    "note": "2026-10-20 browser re-check: ?event=<id> is inert (same page as the plain football list); match detail opens a login wall. No public per-event route — declared false, competition page is the best public link.",
+    "verified_at": "2026-10-20"
   },
   "admiralbet": {
     "supports_event_id": false,
     "template": "https://www.admiralbet.ba/sport-prematch?sport=Fudbal",
     "template_live": "https://www.admiralbet.ba/sport-live",
-    "note": "2026-10-20 browser re-check: ?event=<id> is inert (same page as the plain football list); same NSoft platform as MDShop. No public per-event route — declared false, competition page is the best public link."
+    "note": "2026-10-20 browser re-check: ?event=<id> is inert (same page as the plain football list); same NSoft platform as MDShop. No public per-event route — declared false, competition page is the best public link.",
+    "verified_at": "2026-10-20"
   },
   "mozzartbet": {
     "supports_event_id": true,
@@ -18,37 +20,44 @@
     "note": "2026-11-03: route pattern re-verified on 3 sampled events; the path embeds the provider event id. Per-event proof is no longer required when the id is present.",
     "route_pattern_verified": true,
     "route_pattern_checked_at": "2026-11-03",
-    "route_pattern_sample": "3/3 events: 10077474, 10077500, 10088115"
+    "route_pattern_sample": "3/3 events: 10077474, 10077500, 10088115",
+    "verified_at": "2026-11-03"
   },
   "wwin": {
     "supports_event_id": false,
     "template": "https://wwin.ba/kladjenje/",
-    "note": "Betradar feed exposes brid but no per-event route"
+    "note": "2026-11-04 declaration audit: the Betradar feed exposes brid but no per-event route; original finding unchanged.",
+    "verified_at": "2026-11-04"
   },
   "mbet": {
     "supports_event_id": false,
     "template": "https://www.mbet.ba/",
-    "note": "SPA has no stable per-event URL"
+    "note": "2026-11-04 declaration audit: the SPA has no stable per-event URL; original finding unchanged.",
+    "verified_at": "2026-11-04"
   },
   "sportplus": {
     "supports_event_id": false,
     "template": "https://www.sportplus.ba/prematch/betting",
-    "note": "SPA uses in-page selection"
+    "note": "2026-11-04 declaration audit: the SPA uses in-page selection, not a per-event URL; original finding unchanged.",
+    "verified_at": "2026-11-04"
   },
   "evlbet": {
     "supports_event_id": false,
     "template": "https://evlbet.com/",
-    "note": "flat feed has Id but no public route"
+    "note": "2026-11-04 declaration audit: the flat feed has an Id but no public route; original finding unchanged.",
+    "verified_at": "2026-11-04"
   },
   "premier_kladionica": {
     "supports_event_id": false,
     "template": "https://www.premier-kladionica.com/ponuda/",
-    "note": "no per-event route"
+    "note": "2026-11-04 declaration audit: no per-event route found in the public offer; original finding unchanged.",
+    "verified_at": "2026-11-04"
   },
   "betole": {
     "supports_event_id": false,
     "template": "https://www.betole.ba/ba/sport/S",
-    "note": "no per-event route"
+    "note": "2026-11-04 declaration audit: no per-event route found in the public offer; original finding unchanged.",
+    "verified_at": "2026-11-04"
   },
   "maxbet": {
     "supports_event_id": true,
@@ -58,6 +67,7 @@
     "note": "2026-11-03: route pattern verified on 3 sampled events; /match/<id> makes the app request /sportsbook/rest/v2/matches/<id>. Per-event proof is no longer required when the id is present.",
     "route_pattern_verified": true,
     "route_pattern_checked_at": "2026-11-03",
-    "route_pattern_sample": "3/3 events: 1004636, 1004669, 1006942"
+    "route_pattern_sample": "3/3 events: 1004636, 1004669, 1006942",
+    "verified_at": "2026-11-03"
   }
 }
