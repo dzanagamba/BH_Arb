@@ -314,8 +314,8 @@ backoff (`ALERT_RETRY_ATTEMPTS`, default 3). A failure increments
 scan. `_notify_scan_alerts` is also wrapped as a second boundary.
 
 **Triggers.** Surebets at or above `ALERT_MIN_PROFIT_PERCENT`, stale feed per
-book, quarantine with its reasons, the scheduled-scan backoff threshold, cache
-budget and RSS budget.
+book, a quarantined or degraded book with its reasons, the scheduled-scan
+backoff threshold, cache budget and RSS budget.
 
 **Secrets.** `.env` / systemd environment only. `tests/test_alerts.py` uses a
 fake transport that raises `RuntimeError("token=SUPERSECRET")` and asserts the

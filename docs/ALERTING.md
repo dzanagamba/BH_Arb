@@ -46,6 +46,11 @@ ALERT_TELEGRAM_CHAT_ID=...
   transport names. Prometheus gets
   `bh_alerts_sent_total`, `bh_alerts_failed_total` and
   `bh_alerts_suppressed_total`, labelled by kind (and transport for sent/failed).
+- **Triggers.** Surebets at or above `ALERT_MIN_PROFIT_PERCENT`, stale feed per
+  book, a quarantined or degraded book with its reasons, the scheduled-scan
+  backoff threshold, cache budget and RSS budget. Degraded books still price,
+  but they are named so a missing market family cannot stay silent for a whole
+  run.
 - **Alert bodies use dashboard labels.** They carry the match, market, profit
   and one line per leg, not the full scan payload or any API key.
 

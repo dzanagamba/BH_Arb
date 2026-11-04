@@ -176,7 +176,7 @@ def test_feed_alerts_name_each_stale_book_and_ignore_never_scanned():
     assert all(alert.kind == "feed_stale" for alert in alerts)
 
 
-def test_quarantine_alerts_carry_the_reasons():
+def test_feed_state_alerts_cover_quarantine_and_degraded_books():
     alerts = quarantine_alerts(
         "live",
         {
@@ -185,13 +185,19 @@ def test_quarantine_alerts_carry_the_reasons():
                 "name": "MBet",
                 "reasons": ["stale_prices", "outlier_rate"],
             },
+            "maxbet": {
+                "state": "degraded",
+                "name": "MaxBet",
+                "reasons": ["missing_markets"],
+            },
             "mdshop": {"state": "healthy", "reasons": []},
         },
     )
 
-    assert len(alerts) == 1
-    assert alerts[0].kind == "book_quarantined"
-    assert "stale_prices" in alerts[0].body
+    by_kind = {alert.kind: alert for alert in alerts}
+    assert set(by_kind) == {"book_quarantined", "book_degraded"}
+    assert "stale_prices" in by_kind["book_quarantined"].body
+    assert "missing_markets" in by_kind["book_degraded"].body
 
 
 def test_a_book_failure_alert_waits_for_the_backoff_threshold():

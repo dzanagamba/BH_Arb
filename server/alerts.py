@@ -254,22 +254,35 @@ def feed_alerts(mode: str, freshness: Mapping[str, Any]) -> list[Alert]:
 
 
 def quarantine_alerts(mode: str, scorecard: Mapping[str, Any]) -> list[Alert]:
-    """One alert per book the feed-integrity scorecard quarantined."""
+    """One alert per book the feed-integrity scorecard marked unhealthy.
+
+    A quarantined book is excluded from pricing. A degraded book is still
+    priced but has a named problem (missing markets, a high outlier rate), and
+    the P1-6 acceptance rule says no book may be silently absent for a whole
+    run. Both states produce a deduped alert; the kind says which.
+    """
     alerts: list[Alert] = []
     for book, entry in scorecard.items():
-        if not isinstance(entry, Mapping) or entry.get("state") != "quarantined":
+        if not isinstance(entry, Mapping):
+            continue
+        state = str(entry.get("state") or "")
+        if state not in {"quarantined", "degraded"}:
             continue
         reasons = sorted(str(reason) for reason in entry.get("reasons") or [])
         if not reasons:
             continue
+        kind = "book_quarantined" if state == "quarantined" else "book_degraded"
+        consequence = (
+            "excluded from pricing" if state == "quarantined" else "priced with a warning"
+        )
         alerts.append(
             Alert(
-                kind="book_quarantined",
-                signature=_sha(["quarantine", mode, book, reasons]),
-                title=f"{mode}: {book} quarantined",
+                kind=kind,
+                signature=_sha(["feed_state", mode, book, state, reasons]),
+                title=f"{mode}: {book} {state}",
                 body=(
-                    f"{entry.get('name') or book} is excluded from pricing "
-                    f"({', '.join(reasons)}). Recovery needs clean scans."
+                    f"{entry.get('name') or book} is {consequence} "
+                    f"({', '.join(reasons)})."
                 ),
                 mode=mode,
             )
