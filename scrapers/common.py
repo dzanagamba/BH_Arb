@@ -223,15 +223,21 @@ def normalize_outcome(label: str, market_type: MarketType) -> str:
         return raw
 
     if market_type in (
+        MarketType.OVER_UNDER_0_5,
         MarketType.OVER_UNDER_1_5,
         MarketType.OVER_UNDER_2_5,
         MarketType.OVER_UNDER_3_5,
+        MarketType.OVER_UNDER_4_5,
+        MarketType.OVER_UNDER_5_5,
         MarketType.FIRST_HALF_OU,
     ):
         threshold = {
+            MarketType.OVER_UNDER_0_5: "0.5",
             MarketType.OVER_UNDER_1_5: "1.5",
             MarketType.OVER_UNDER_2_5: "2.5",
             MarketType.OVER_UNDER_3_5: "3.5",
+            MarketType.OVER_UNDER_4_5: "4.5",
+            MarketType.OVER_UNDER_5_5: "5.5",
             MarketType.FIRST_HALF_OU: "",
         }[market_type]
         if market_type == MarketType.FIRST_HALF_OU:
@@ -316,6 +322,39 @@ NSOFT_LIVE_OU_BET_IDS = {22}        # live O/U goals, threshold in sbv
 # Fallback-path twin of the registry's `requires_sbv`.
 NSOFT_LIVE_REQUIRED_SBV: dict[int, str] = {6: "0-0", 995: "0-0"}
 
+# Non-football prematch bet types, measured 2026-11-04 against the live MDShop
+# catalogue for each NSoft sport id. The IDs are sport-scoped: 186 is a
+# basketball winner, not a football 1X2. Live non-football IDs were not proven
+# (no in-play events in the measurement window), so that path refuses to guess.
+NSOFT_SPORT_BET_TYPES: dict[str, dict[int, tuple[MarketType, str]]] = {
+    "basketball": {
+        186: (MarketType.MONEYLINE, "full_time_incl_ot"),
+        191: (MarketType.HANDICAP, "regulation"),
+        213: (MarketType.TOTAL, "regulation"),
+    },
+    "tennis": {
+        1723: (MarketType.MONEYLINE, "full_match"),
+        # 220 is the game handicap. 210 is a *set* handicap (±1.5 sets) and
+        # was rejected by price consensus as a false game handicap.
+        220: (MarketType.HANDICAP, "full_match"),
+        187: (MarketType.TOTAL, "full_match"),
+    },
+}
+NSOFT_SPORT_LABELS: dict[str, tuple[str, ...]] = {
+    "basketball": ("1", "2"),
+    "tennis": ("1", "2"),
+}
+# A book may publish a different ID for the same sport market. Only observed,
+# measured overrides belong here. Admiralbet's basketball winner is 1640;
+# MDShop serves 186.
+NSOFT_SPORT_BET_TYPES_BY_BOOK: dict[tuple[str, str], dict[int, tuple[MarketType, str]]] = {
+    ("admiralbet", "basketball"): {
+        1640: (MarketType.MONEYLINE, "full_time_incl_ot"),
+        191: (MarketType.HANDICAP, "regulation"),
+        213: (MarketType.TOTAL, "regulation"),
+    },
+}
+
 # Registry loading is lazy so importing shared scraper helpers remains cheap
 # for callers that do not parse an NSoft payload.
 def _nsoft_registry() -> MarketRegistry:
@@ -359,9 +398,12 @@ _MARKET_LABEL_SETS: dict[MarketType, set[str]] = {
     MarketType.MATCH_RESULT: {"1", "X", "2"},
     MarketType.DOUBLE_CHANCE: {"1X", "12", "X2"},
     MarketType.BTTS: {"GG", "NG"},
+    MarketType.OVER_UNDER_0_5: {"Over 0.5", "Under 0.5"},
     MarketType.OVER_UNDER_1_5: {"Over 1.5", "Under 1.5"},
     MarketType.OVER_UNDER_2_5: {"Over 2.5", "Under 2.5"},
     MarketType.OVER_UNDER_3_5: {"Over 3.5", "Under 3.5"},
+    MarketType.OVER_UNDER_4_5: {"Over 4.5", "Under 4.5"},
+    MarketType.OVER_UNDER_5_5: {"Over 5.5", "Under 5.5"},
 }
 
 
@@ -382,6 +424,94 @@ def nsoft_offered(obj: dict) -> bool:
     return obj.get("isPlayable") is not False and obj.get("isInOffer") is not False
 
 
+def _parse_nsoft_sport_bets(
+    bets: list,
+    sport: str,
+    *,
+    bookmaker: str,
+    source_context: dict[str, str] | None = None,
+) -> list[Market]:
+    """Parse the measured non-football NSoft bet types for one sport."""
+    mapping = (
+        NSOFT_SPORT_BET_TYPES_BY_BOOK.get((bookmaker, sport))
+        or NSOFT_SPORT_BET_TYPES.get(sport)
+    )
+    if not mapping:
+        return []
+    labels = NSOFT_SPORT_LABELS.get(sport, ())
+    markets: list[Market] = []
+    for bet in bets:
+        if not isinstance(bet, dict) or not nsoft_offered(bet):
+            continue
+        raw_id = bet.get("betTypeId")
+        try:
+            bet_type_id = int(str(raw_id))
+        except (TypeError, ValueError):
+            continue
+        spec = mapping.get(bet_type_id)
+        if spec is None:
+            continue
+        market_type, settlement = spec
+        raw_sbv = bet.get("sbv") or bet.get("sBV")
+        line: float | None = None
+        if raw_sbv is not None:
+            try:
+                line = float(str(raw_sbv).replace(",", "."))
+            except ValueError:
+                line = None
+
+        outcomes = bet.get("betOutcomes", [])
+        picked: list[OddsValue] = []
+        for outcome in outcomes:
+            if not isinstance(outcome, dict) or not nsoft_offered(outcome):
+                continue
+            name = str(outcome.get("name") or "").strip()
+            try:
+                value = float(outcome.get("odd") or 0.0)
+            except (TypeError, ValueError):
+                continue
+            if value < 1.01:
+                continue
+            if market_type == MarketType.MONEYLINE:
+                if name in labels:
+                    picked.append(OddsValue(label=name, value=value))
+            elif market_type == MarketType.HANDICAP:
+                if line is None or name not in ("1", "2"):
+                    continue
+                from scrapers.common import ah_label
+
+                # NSoft's `sbv` on 191/220 is the home line. The 2026-11-04
+                # cross-book consensus check (sportplus/maxbet) confirmed this
+                # orientation; the earlier candidate reading was an outlier.
+                home_line = line
+                label = ah_label("1", home_line) if name == "1" else ah_label("2", -home_line)
+                picked.append(OddsValue(label=label, value=value))
+            elif market_type == MarketType.TOTAL:
+                if line is None:
+                    continue
+                if name.casefold() in ("manje", "under"):
+                    picked.append(OddsValue(label=f"Under {abs(line):g}", value=value))
+                elif name.casefold() in ("vise", "više", "over"):
+                    picked.append(OddsValue(label=f"Over {abs(line):g}", value=value))
+        actual = {odd.label for odd in picked}
+        if len(actual) != len(picked):
+            continue
+        if market_type == MarketType.MONEYLINE and actual != set(labels):
+            continue
+        if len(picked) < 2:
+            continue
+        markets.append(
+            Market(
+                market_type=market_type,
+                odds=picked,
+                source_id=str(bet_type_id),
+                source_context=dict(source_context or {}),
+                settlement=settlement,
+            )
+        )
+    return markets
+
+
 def parse_nsoft_bets(
     bets: list,
     extra_bet_types: dict[int, MarketType] | None = None,
@@ -392,6 +522,7 @@ def parse_nsoft_bets(
     mode: str = "prematch",
     base_required_sbv: dict[int, str] | None = None,
     source_context: dict[str, str] | None = None,
+    sport: str = "football",
 ) -> list[Market]:
     """
     Parse an NSoft ``bets[]`` array into Market objects.
@@ -412,6 +543,15 @@ def parse_nsoft_bets(
     NSoft's live rest-of-match markets match the full-time ones only at 0-0.
     """
     registry = _nsoft_registry()
+    if sport != "football":
+        # Non-football IDs are sport-scoped and only prematch is proven. A live
+        # non-football ID space has not been observed, so refuse rather than
+        # relabel a live market as a full-time one.
+        if mode == "live":
+            return []
+        return _parse_nsoft_sport_bets(
+            bets, sport, bookmaker=bookmaker, source_context=source_context
+        )
     has_mode = getattr(registry, "has_mode", None)
     has_registry = (
         has_mode(bookmaker, mode)
@@ -467,9 +607,12 @@ def parse_nsoft_bets(
             market_type = bet_type_map.get(btid)
             if market_type is None and btid in ou_bet_ids and sbv_val is not None:
                 market_type = {
+                    0.5: MarketType.OVER_UNDER_0_5,
                     1.5: MarketType.OVER_UNDER_1_5,
                     2.5: MarketType.OVER_UNDER_2_5,
                     3.5: MarketType.OVER_UNDER_3_5,
+                    4.5: MarketType.OVER_UNDER_4_5,
+                    5.5: MarketType.OVER_UNDER_5_5,
                 }.get(sbv_val)
             if market_type is None:
                 continue

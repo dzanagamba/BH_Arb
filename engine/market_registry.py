@@ -64,9 +64,12 @@ _DEFAULT_LABELS: dict[MarketType, set[str]] = {
     MarketType.MATCH_RESULT: {"1", "X", "2"},
     MarketType.DOUBLE_CHANCE: {"1X", "12", "X2"},
     MarketType.BTTS: {"GG", "NG"},
+    MarketType.OVER_UNDER_0_5: {"Over 0.5", "Under 0.5"},
     MarketType.OVER_UNDER_1_5: {"Over 1.5", "Under 1.5"},
     MarketType.OVER_UNDER_2_5: {"Over 2.5", "Under 2.5"},
     MarketType.OVER_UNDER_3_5: {"Over 3.5", "Under 3.5"},
+    MarketType.OVER_UNDER_4_5: {"Over 4.5", "Under 4.5"},
+    MarketType.OVER_UNDER_5_5: {"Over 5.5", "Under 5.5"},
 }
 
 

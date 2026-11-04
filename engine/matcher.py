@@ -30,7 +30,7 @@ import json
 import logging
 import os
 import re
-from datetime import UTC
+from datetime import UTC, timedelta
 
 from config.settings import (
     BOOKMAKERS,
@@ -39,12 +39,12 @@ from config.settings import (
     TEAM_MATCH_MIN_PERCENT,
     price_source,
 )
-from engine import name_identity
+from engine import name_identity, sports
 from engine.certainty import CertaintyGate, GateResult
 from engine.league_names import GENERIC_LEAGUES
 from engine.mapping_evidence import MappingLedger, league_equivalence_key, team_alias_key
 from engine.normalizer import TeamNormalizer, canonical_team_name, canonicalize_fixture
-from models.schemas import Market, MarketType, Match, MatchEvidence, MatchGroup, OddsValue
+from models.schemas import MarketType, Match, MatchEvidence, MatchGroup, OddsValue
 from scrapers.common import flip_ah_label
 
 logger = logging.getLogger(__name__)
@@ -164,8 +164,23 @@ class MatchMatcher:
         parse, so two books that mark a U21 side differently agree on it.
         """
         for m in matches:
+            m.sport = sports.normalize_sport(m.sport) or m.sport or sports.FOOTBALL
             source_home = m.home_team_source or m.home_team
             source_away = m.away_team_source or m.away_team
+            if m.sport != sports.FOOTBALL:
+                home = sports.clean_team(m.sport, source_home)
+                away = sports.clean_team(m.sport, source_away)
+                m.home_team, m.away_team = home, away
+                m.home_team_source = source_home if home != source_home else ""
+                m.away_team_source = source_away if away != source_away else ""
+                m.league_normalized = sports.clean_league(m.sport, m.league)
+                m.country_normalized = self.normalizer.normalize_country(m.country)
+                m.home_team_normalized = name_identity.normalize(home)
+                m.away_team_normalized = name_identity.normalize(away)
+                m.category_tags = self.normalizer.detect_special_category(
+                    f"{source_home} {source_away} {m.league}"
+                )
+                continue
             fixture = canonicalize_fixture(source_home, source_away, m.league)
             m.home_team, m.away_team = fixture.home, fixture.away
             m.home_team_source = source_home if fixture.home != source_home else ""
@@ -241,23 +256,30 @@ class MatchMatcher:
         # Creation index per group (by identity) — the deterministic tie-break
         # between candidates of equal confidence.
         group_index: dict[int, int] = {}
-        # League index: normalized league → groups in it. Generic leagues keyed under "".
-        # Cuts the candidate list per match from O(all groups) to O(same-league groups).
-        groups_by_league: dict[str, list[MatchGroup]] = {}
+        # League index: (sport, normalized league) → groups in it. Generic
+        # leagues keyed under "". The sport is part of the key, so a football
+        # group can never even be offered to a basketball listing.
+        groups_by_league: dict[tuple[str, str], list[MatchGroup]] = {}
         # Exact team key → groups that already hold that team. This is the
         # shared-opponent lookup: a listing whose league name differs can still
         # be offered to the group of the team it is playing, and the gate decides.
-        groups_by_team: dict[str, list[MatchGroup]] = {}
-        # Betradar id → the group that already holds it. A shared provider id is
-        # proof of identity even when the books name the teams and league
-        # differently, so this group is offered to the match before the scored
-        # candidates; the gate still decides.
-        groups_by_betradar: dict[str, MatchGroup] = {}
+        groups_by_team: dict[tuple[str, str], list[MatchGroup]] = {}
+        # Betradar id → the group that already holds it, scoped by sport.
+        groups_by_betradar: dict[tuple[str, str], MatchGroup] = {}
+        # Non-football candidate index: (sport, UTC date) → groups. A date
+        # bucket keeps the open-league scan bounded without ever crossing sports.
+        groups_by_sport_date: dict[tuple[str, str], list[MatchGroup]] = {}
 
         for match in sorted_matches:
             m_league = match.league_normalized or match.league or ""
             candidate_groups: list[MatchGroup]
-            if is_open(match):
+            if match.sport != sports.FOOTBALL:
+                candidate_groups = []
+                for date_key in _sport_date_keys(match):
+                    candidate_groups.extend(
+                        groups_by_sport_date.get((match.sport, date_key), [])
+                    )
+            elif is_open(match):
                 # Generic or unmapped league — eligible against every group
                 candidate_groups = list(groups)
             else:
@@ -271,12 +293,14 @@ class MatchMatcher:
                         league_keys.append(left)
                 candidate_groups = []
                 for league_key in league_keys:
-                    candidate_groups.extend(groups_by_league.get(league_key, []))
+                    candidate_groups.extend(
+                        groups_by_league.get((match.sport, league_key), [])
+                    )
 
             # Shared-opponent candidates, independent of the league bucket.
             for team_name in (match.home_team, match.away_team):
                 for team_key in _team_index_keys(team_name):
-                    for group in groups_by_team.get(team_key, []):
+                    for group in groups_by_team.get((match.sport, team_key), []):
                         if group not in candidate_groups:
                             candidate_groups.append(group)
 
@@ -302,12 +326,22 @@ class MatchMatcher:
             # already holds this id is offered first even when its names put it
             # outside the league bucket. The gate still decides.
             if match.betradar_id:
-                known_group = groups_by_betradar.get(match.betradar_id)
+                known_group = groups_by_betradar.get((match.sport, match.betradar_id))
                 if known_group is not None and match.bookmaker not in {
                     m.bookmaker for m in known_group.matches
                 }:
-                    if all(group is not known_group for _, _, group in scored):
-                        scored.insert(0, (1.0, group_index[id(known_group)], known_group))
+                    # A shared provider id is proof of the event. That group
+                    # must be the first candidate even when another group's
+                    # spelling happens to score higher; otherwise the id-carrying
+                    # books split across two groups that both look valid.
+                    scored = [
+                        (1.0, group_index[id(known_group)], known_group),
+                        *[
+                            item
+                            for item in scored
+                            if item[2] is not known_group
+                        ],
+                    ]
 
             accepted = False
             for best_conf, _, best_group in scored:
@@ -322,29 +356,51 @@ class MatchMatcher:
                     best_group.matches.append(match_to_add)
                     best_group.evidence.extend(gate_result.evidence)
                     if match.betradar_id:
-                        groups_by_betradar.setdefault(match.betradar_id, best_group)
+                        groups_by_betradar.setdefault(
+                            (match.sport, match.betradar_id), best_group
+                        )
                     for team_name in (match.home_team, match.away_team):
                         for team_key in _team_index_keys(team_name):
-                            bucket = groups_by_team.setdefault(team_key, [])
+                            bucket = groups_by_team.setdefault(
+                                (match.sport, team_key), []
+                            )
                             if best_group not in bucket:
                                 bucket.append(best_group)
                     if len({m.bookmaker for m in best_group.matches}) >= 2:
                         best_group.status = "verified"
 
                     # Upgrade group's canonical league/kickoff if generic or unmapped.
+                    # Football only: non-football leagues have no mapping file, and
+                    # treating every one as "unmapped" would rewrite the canonical
+                    # league on every member.
                     if (
-                        (
+                        best_group.sport != sports.FOOTBALL
+                        and not best_group.league
+                        and match.league_normalized
+                    ):
+                        # The first non-football listing may carry no
+                        # competition ("-" in SportPlus). Keep the group's
+                        # display league from the first member that does.
+                        best_group.league = match.league_normalized
+                    if (
+                        best_group.sport == sports.FOOTBALL
+                        and (
                             best_group.league in GENERIC_LEAGUES
                             or not self.gate._is_mapped_league(best_group.league)
                         )
                         and not is_open(match)
                     ):
-                        old_key = ""
+                        old_key = (best_group.sport, "")
                         best_group.league = match.league_normalized
                         # Re-index the upgraded group into its new league bucket
-                        if old_key in groups_by_league and best_group in groups_by_league[old_key]:
+                        if (
+                            old_key in groups_by_league
+                            and best_group in groups_by_league[old_key]
+                        ):
                             groups_by_league[old_key].remove(best_group)
-                        groups_by_league.setdefault(best_group.league, []).append(best_group)
+                        groups_by_league.setdefault(
+                            (best_group.sport, best_group.league), []
+                        ).append(best_group)
                     if not best_group.kickoff and match.kickoff:
                         best_group.kickoff = match.kickoff
 
@@ -367,7 +423,16 @@ class MatchMatcher:
                 new_group = MatchGroup(
                     canonical_home=match.home_team_normalized or match.home_team,
                     canonical_away=match.away_team_normalized or match.away_team,
-                    league=match.league_normalized or match.league,
+                    sport=match.sport,
+                    # For a non-football listing a missing competition is
+                    # unknown, not the literal bookmaker placeholder "-". Keep
+                    # it empty so the first member that names the competition
+                    # can fill it.
+                    league=(
+                        match.league_normalized
+                        if match.sport != sports.FOOTBALL
+                        else (match.league_normalized or match.league)
+                    ),
                     kickoff=match.kickoff,
                     matches=[match],
                     status="suggested",
@@ -382,14 +447,25 @@ class MatchMatcher:
                 group_index[id(new_group)] = len(groups)
                 groups.append(new_group)
                 if match.betradar_id:
-                    groups_by_betradar.setdefault(match.betradar_id, new_group)
+                    groups_by_betradar.setdefault(
+                        (match.sport, match.betradar_id), new_group
+                    )
                 for team_name in (match.home_team, match.away_team):
                     for team_key in _team_index_keys(team_name):
-                        bucket = groups_by_team.setdefault(team_key, [])
+                        bucket = groups_by_team.setdefault((match.sport, team_key), [])
                         if new_group not in bucket:
                             bucket.append(new_group)
-                bucket_key = "" if is_open(match) else new_group.league
+                bucket_key = (
+                    (match.sport, "")
+                    if match.sport != sports.FOOTBALL or is_open(match)
+                    else (match.sport, new_group.league)
+                )
                 groups_by_league.setdefault(bucket_key, []).append(new_group)
+                if match.sport != sports.FOOTBALL:
+                    for date_key in _sport_date_keys(match):
+                        groups_by_sport_date.setdefault(
+                            (match.sport, date_key), []
+                        ).append(new_group)
 
         # Only return groups whose every accepted addition passed the gate and
         # that contain at least two distinct price sources. Two books on one
@@ -425,6 +501,12 @@ class MatchMatcher:
 
         Returns: (confidence_score, is_swapped)
         """
+        # Hard gate: a group belongs to exactly one sport.
+        if match.sport != group.sport or any(
+            member.sport != match.sport for member in group.matches
+        ):
+            return 0.0, False
+
         m_league = match.league_normalized or ""
         g_league = group.league or ""
 
@@ -434,7 +516,16 @@ class MatchMatcher:
         match_tags = set(match.category_tags or [])
         group_tags = set(group.matches[0].category_tags or []) if group.matches else set()
         if match_tags != group_tags:
-            return 0.0, False
+            # MBet does not mark ITF women's events; the gate decides whether
+            # the two player names at the same minute are the same match. Do
+            # not prune that candidate before the gate can see it.
+            tennis_women_gap = (
+                match.sport == sports.TENNIS
+                and match_tags in (set(), {"Women"})
+                and group_tags in (set(), {"Women"})
+            )
+            if not tennis_women_gap:
+                return 0.0, False
 
         # Hard gate: two KNOWN leagues must be identical or explicitly
         # equivalent; no blanket competition compatibility is allowed. An
@@ -512,24 +603,64 @@ class MatchMatcher:
         anchor_home = anchor.home_team if anchor else ""
         anchor_away = anchor.away_team if anchor else ""
 
-        # Check direct orientation
-        dir_home = similarity(
-            match.home_team, match.home_team_normalized, group.canonical_home, anchor_home
-        )
-        dir_away = similarity(
-            match.away_team, match.away_team_normalized, group.canonical_away, anchor_away
-        )
+        # Football keeps the anchor's spelling as the single reference. A
+        # non-football group can contain a book that names the same player or
+        # club differently ("Samsonova L" anchor, "Laura Samson" member); the
+        # gate already proves a candidate against every member, so the scorer
+        # must not prune it on the anchor alone. Try each member and keep the
+        # best whole-fixture orientation.
+        if match.sport != sports.FOOTBALL and group.matches:
+            references = [
+                (
+                    member.home_team_normalized,
+                    member.home_team,
+                    member.away_team_normalized,
+                    member.away_team,
+                )
+                for member in group.matches
+            ]
+        else:
+            references = [
+                (
+                    group.canonical_home,
+                    anchor_home,
+                    group.canonical_away,
+                    anchor_away,
+                )
+            ]
 
-        # Check swapped orientation
-        swap_home = similarity(
-            match.home_team, match.home_team_normalized, group.canonical_away, anchor_away
-        )
-        swap_away = similarity(
-            match.away_team, match.away_team_normalized, group.canonical_home, anchor_home
-        )
-
-        dir_conf = ((dir_home + dir_away) / 2.0) * 0.80 + time_score * 0.20 if (dir_home >= TEAM_MATCH_RATIO and dir_away >= TEAM_MATCH_RATIO) else 0.0
-        swap_conf = ((swap_home + swap_away) / 2.0) * 0.80 + time_score * 0.20 if (swap_home >= TEAM_MATCH_RATIO and swap_away >= TEAM_MATCH_RATIO) else 0.0
+        dir_conf = swap_conf = 0.0
+        for group_home, group_home_raw, group_away, group_away_raw in references:
+            # Check direct orientation
+            dir_home = similarity(
+                match.home_team, match.home_team_normalized, group_home, group_home_raw
+            )
+            dir_away = similarity(
+                match.away_team, match.away_team_normalized, group_away, group_away_raw
+            )
+            # Check swapped orientation
+            swap_home = similarity(
+                match.home_team, match.home_team_normalized, group_away, group_away_raw
+            )
+            swap_away = similarity(
+                match.away_team, match.away_team_normalized, group_home, group_home_raw
+            )
+            if (
+                dir_home >= TEAM_MATCH_RATIO
+                and dir_away >= TEAM_MATCH_RATIO
+            ):
+                dir_conf = max(
+                    dir_conf,
+                    ((dir_home + dir_away) / 2.0) * 0.80 + time_score * 0.20,
+                )
+            if (
+                swap_home >= TEAM_MATCH_RATIO
+                and swap_away >= TEAM_MATCH_RATIO
+            ):
+                swap_conf = max(
+                    swap_conf,
+                    ((swap_home + swap_away) / 2.0) * 0.80 + time_score * 0.20,
+                )
 
         if dir_conf >= swap_conf and dir_conf >= GROUP_MIN_CONFIDENCE:
             return dir_conf, False
@@ -556,6 +687,7 @@ class MatchMatcher:
             bookmakers: list[dict] = []
             entry: dict[str, object] = {
                 "group_id": i + 1,
+                "sport": group.sport,
                 "canonical_match": f"{group.canonical_home} vs {group.canonical_away}",
                 "league": group.league,
                 "kickoff": group.kickoff.isoformat() if group.kickoff else "unknown",
@@ -589,6 +721,25 @@ def _team_index_keys(name: str) -> set[str]:
     return {key for key in (raw, normalized) if key}
 
 
+def _sport_date_keys(match: Match) -> tuple[str, ...]:
+    """UTC date buckets a non-football listing may belong to.
+
+    Book feeds disagree about a midnight kickoff by a few hours, so the two
+    neighbouring dates are offered as well. The gate still proves the kickoff.
+    """
+    if match.kickoff is None:
+        return ("",)
+    kickoff = (
+        match.kickoff.astimezone(UTC).replace(tzinfo=None)
+        if match.kickoff.tzinfo
+        else match.kickoff
+    )
+    day = kickoff.date()
+    return tuple(
+        (day + timedelta(days=offset)).isoformat() for offset in (-1, 0, 1)
+    )
+
+
 def _processing_order_key(match: Match) -> tuple[object, ...]:
     """Total order over normalized matches, independent of input position.
 
@@ -609,6 +760,16 @@ def _processing_order_key(match: Match) -> tuple[object, ...]:
         )
         kickoff = kickoff_utc.isoformat()
     return (
+        match.sport,
+        # Build provider-id groups first in the non-football pass. A book
+        # without a provider id then joins the already-proven group instead of
+        # anchoring a duplicate with its own league spelling. Football keeps
+        # this element constant, so its long-standing order is untouched.
+        (
+            1
+            if match.sport != sports.FOOTBALL and not match.betradar_id
+            else 0
+        ),
         match.league_normalized,
         kickoff == "",
         kickoff,
@@ -630,6 +791,7 @@ def swap_match_teams_and_odds(match: Match) -> Match:
     so that outcome 1 corresponds to canonical home team and outcome 2 to canonical away team.
     """
     m = match.model_copy(deep=True)
+    m.sport = match.sport
     m.home_team, m.away_team = m.away_team, m.home_team
     m.home_team_source, m.away_team_source = m.away_team_source, m.home_team_source
     m.home_team_normalized, m.away_team_normalized = m.away_team_normalized, m.home_team_normalized
@@ -646,13 +808,28 @@ def swap_match_teams_and_odds(match: Match) -> Match:
     for market in m.markets:
         new_odds = []
         for ov in market.odds:
-            if market.market_type == MarketType.ASIAN_HANDICAP:
+            if market.market_type in (MarketType.ASIAN_HANDICAP, MarketType.HANDICAP):
                 new_label = flip_ah_label(ov.label)
-            elif market.market_type == MarketType.FIRST_HALF_1X2:
+            elif market.market_type in (
+                MarketType.MATCH_RESULT,
+                MarketType.FIRST_HALF_1X2,
+                MarketType.MONEYLINE,
+                MarketType.MONEYLINE_3WAY,
+            ):
                 new_label = FLIP_MAP.get(ov.label, ov.label)
             else:
                 new_label = FLIP_MAP.get(ov.label, ov.label)
             new_odds.append(OddsValue(label=new_label, value=ov.value))
-        new_markets.append(Market(market_type=market.market_type, odds=new_odds))
+        new_markets.append(
+            market.model_copy(
+                update={
+                    "odds": new_odds,
+                    "outcome_ids": {
+                        FLIP_MAP.get(label, label): value
+                        for label, value in market.outcome_ids.items()
+                    },
+                }
+            )
+        )
     m.markets = new_markets
     return m

@@ -105,7 +105,7 @@ def test_known_nsoft_ou_id_with_unsupported_line_is_not_unmapped():
     unmapped_markets.pop("mdshop:137", None)
     markets = parse_nsoft_bets([{
         "betTypeId": 137,
-        "sBV": 4.5,
+        "sBV": 6.5,
         "betOutcomes": [
             {"name": "Over", "odd": 1.9},
             {"name": "Under", "odd": 1.9},

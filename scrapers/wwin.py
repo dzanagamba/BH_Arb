@@ -12,8 +12,9 @@ Prematch:
     idBt 95 -> 1X2 (t: 1/X/2)
     idBt 6  -> double chance (t: 1X/12/X2)
     idBt 3  -> BTTS (t: Yes/No)
-    idBt 11 -> O/U totals (spec="total=X,Y", t: Over/Under); only
-               lines 1,5 / 2,5 / 3,5 are supported.
+    idBt 11 -> O/U totals (spec="total=X,Y", t: Over/Under); the full
+               half-goal lines 0,5 / 1,5 / 2,5 / 3,5 / 4,5 / 5,5 are mapped.
+               Quarter/whole lines are a different bet and are not mapped.
   Football sport id is 2. Events expose `hname`/`aname`, `tname` (league),
   `cname` (country), `startTime` (epoch seconds), `brid` (Betradar id).
 
@@ -51,9 +52,12 @@ def _request_market_ids(mode: str) -> list[int | str]:
         MarketType.MATCH_RESULT,
         MarketType.DOUBLE_CHANCE,
         MarketType.BTTS,
+        MarketType.OVER_UNDER_0_5,
         MarketType.OVER_UNDER_1_5,
         MarketType.OVER_UNDER_2_5,
         MarketType.OVER_UNDER_3_5,
+        MarketType.OVER_UNDER_4_5,
+        MarketType.OVER_UNDER_5_5,
     ):
         ids.update(MARKET_REGISTRY.ids_for("wwin", mode, market_type))
     ordered: list[int | str] = [sid for sid in (95, 6, 3, 11, 2) if sid in ids]
@@ -68,9 +72,12 @@ def _request_market_ids(mode: str) -> list[int | str]:
 # Handicap (7, 10), HT/FT (4), advance "Prolaz" (476),
 # Asian totals (443), correct score (51) etc. are deliberately excluded.
 WWIN_OU_LINES = {
+    "0,5": MarketType.OVER_UNDER_0_5,
     "1,5": MarketType.OVER_UNDER_1_5,
     "2,5": MarketType.OVER_UNDER_2_5,
     "3,5": MarketType.OVER_UNDER_3_5,
+    "4,5": MarketType.OVER_UNDER_4_5,
+    "5,5": MarketType.OVER_UNDER_5_5,
 }
 
 

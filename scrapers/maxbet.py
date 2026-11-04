@@ -28,6 +28,7 @@ from urllib.parse import urlencode
 import httpx
 
 from config.settings import VERIFY_SSL
+from engine import sports
 from engine.market_registry import MARKET_REGISTRY, MarketSpec, record_unmapped
 from models.schemas import Market, Match, OddsValue
 from scrapers.base import fetch_with_retry
@@ -41,6 +42,19 @@ BASE_URL = "https://sportsbook.maxbet.ba"
 MATCHES_API = f"{BASE_URL}/sportsbook/rest/v2/matches"
 FOOTBALL_SPORT_ID = 1
 ODD_TYPE_IDS = (1, 10, 27, 17)
+
+SPORT_IDS = {
+    sports.FOOTBALL: 1,
+    sports.BASKETBALL: 2,
+    sports.TENNIS: 5,
+    sports.ICE_HOCKEY: 4,
+}
+SPORT_ODD_TYPE_IDS: dict[str, tuple[int, ...]] = {
+    # 175 = winner incl. overtime, 16 = handicap, 224 = total points.
+    sports.BASKETBALL: (175, 16, 224),
+    # 175 = match winner, 176 = game handicap, 178 = total games.
+    sports.TENNIS: (175, 176, 178),
+}
 
 API_HEADERS = {
     "User-Agent": (
@@ -112,7 +126,7 @@ def parse_maxbet_odds(odds: list, mode: str = "prematch") -> list[Market]:
         total = (market.get("specifiers") or {}).get("total")
         if total is not None:
             try:
-                line = float(total)
+                line = float(str(total))
             except (TypeError, ValueError):
                 continue
         spec = _spec_for(mode, odd_type_id, line)
@@ -146,6 +160,110 @@ def parse_maxbet_odds(odds: list, mode: str = "prematch") -> list[Market]:
     return markets
 
 
+_TOTAL_UNDER = ("manje", "under", "up-", "-", "1(m)")
+_TOTAL_OVER = ("više", "vise", "over", "up+", "+", "2(v)")
+
+
+def _outcome_side(outcome: dict) -> str:
+    text = str(outcome.get("outcome") or "").strip().casefold()
+    for token in _TOTAL_UNDER:
+        if text.startswith(token):
+            return "under"
+    for token in _TOTAL_OVER:
+        if text.startswith(token):
+            return "over"
+    return ""
+
+
+def parse_sport_odds(odds: list, sport: str, mode: str = "prematch") -> list[Market]:
+    """Parse a non-football MaxBet ``odds[]`` array by the sport's odd types."""
+    spec = sports.spec_for(sport)
+    ids = SPORT_ODD_TYPE_IDS.get(sport)
+    if spec is None or ids is None:
+        return []
+    markets: list[Market] = []
+    for market in odds or []:
+        if not isinstance(market, dict):
+            continue
+        odd_type_id = market.get("id")
+        if odd_type_id not in ids:
+            continue
+        outcomes = [
+            item
+            for item in (market.get("outcomes") or [])
+            if isinstance(item, dict)
+            and item.get("status") == 0
+            and item.get("marketAvailableForBetting") is not False
+        ]
+        values: dict[str, float] = {}
+        for outcome in outcomes:
+            try:
+                value = float(outcome.get("oddValue") or 0.0)
+            except (TypeError, ValueError):
+                continue
+            if value < 1.01:
+                continue
+            label = str(outcome.get("outcome") or "").strip()
+            if odd_type_id == 175:
+                if label not in ("1", "2"):
+                    continue
+                values[label] = value
+            elif odd_type_id in (16, 176):
+                hcp = (market.get("specifiers") or {}).get("hcp")
+                try:
+                    line = float(str(hcp))
+                except (TypeError, ValueError):
+                    continue
+                if label.startswith(("H1", "HG1")):
+                    values[f"1 {line:g}"] = value
+                elif label.startswith(("H2", "HG2")):
+                    values[f"2 {-line:g}"] = value
+            else:
+                side = _outcome_side(outcome)
+                total = (market.get("specifiers") or {}).get("total")
+                try:
+                    line = float(str(total))
+                except (TypeError, ValueError):
+                    continue
+                if side:
+                    values[f"{'Over' if side == 'over' else 'Under'} {abs(line):g}"] = value
+
+        if odd_type_id == 175:
+            if set(values) != set(spec.moneyline_labels):
+                continue
+            markets.append(
+                Market(
+                    market_type=spec.moneyline,
+                    odds=[OddsValue(label=label, value=values[label]) for label in spec.moneyline_labels],
+                    source_id=str(odd_type_id),
+                    settlement=spec.moneyline_settlement,
+                )
+            )
+        elif odd_type_id in (16, 176):
+            if len(values) != 2:
+                continue
+            markets.append(
+                Market(
+                    market_type=spec.handicap,
+                    odds=[OddsValue(label=label, value=value) for label, value in values.items()],
+                    source_id=str(odd_type_id),
+                    settlement=spec.handicap_settlement,
+                )
+            )
+        else:
+            if len(values) != 2:
+                continue
+            markets.append(
+                Market(
+                    market_type=spec.total,
+                    odds=[OddsValue(label=label, value=value) for label, value in values.items()],
+                    source_id=str(odd_type_id),
+                    settlement=spec.total_settlement,
+                )
+            )
+    return markets
+
+
 def _teams(event: dict) -> tuple[str, str]:
     """Home/away as the event name spells them, else the competitor list.
 
@@ -174,35 +292,64 @@ class MaxBetScraper:
         self.headers = dict(API_HEADERS)
 
     async def fetch_and_parse(
-        self, live: bool = False, scan_time: datetime | None = None
+        self,
+        live: bool = False,
+        scan_time: datetime | None = None,
+        sports_wanted: tuple[str, ...] | list[str] | None = None,
     ) -> list[Match]:
-        params: list[tuple[str, str | int]] = [("sportId", FOOTBALL_SPORT_ID)]
-        params += [("ot", odd_type) for odd_type in ODD_TYPE_IDS]
-        if live:
-            params.append(("status", "Live"))
-        params.append(("ln", "cnr"))
+        wanted = (
+            [sports.FOOTBALL]
+            if sports_wanted is None
+            else [
+                sports.normalize_sport(value) or value
+                for value in sports_wanted
+                if (sports.normalize_sport(value) or value) in SPORT_IDS
+            ]
+        )
+        if not wanted:
+            return []
 
+        all_matches: list[Match] = []
         async with httpx.AsyncClient(timeout=60.0, verify=VERIFY_SSL) as client:
-            # A list of pairs keeps the repeated `ot` keys.
-            response = await fetch_with_retry(
-                client, f"{MATCHES_API}?{urlencode(params)}", headers=self.headers
-            )
-        if response is None or response.status_code != 200:
-            raise RuntimeError(
-                f"MaxBet matches feed returned "
-                f"{response.status_code if response is not None else 'no response'}"
-            )
-        events = response.json()
-        if not isinstance(events, list):
-            raise RuntimeError("MaxBet matches feed did not return a list")
+            for sport in wanted:
+                params: list[tuple[str, str | int]] = [("sportId", SPORT_IDS[sport])]
+                if sport == sports.FOOTBALL:
+                    params += [("ot", odd_type) for odd_type in ODD_TYPE_IDS]
+                else:
+                    params += [("ot", odd_type) for odd_type in SPORT_ODD_TYPE_IDS[sport]]
+                if live:
+                    params.append(("status", "Live"))
+                params.append(("ln", "cnr"))
 
-        matches = self.parse_events(events, live=live)
-        logger.info(f"[MaxBet] {'live' if live else 'prematch'}: {len(matches)} matches")
-        return matches
+                # A list of pairs keeps the repeated `ot` keys.
+                response = await fetch_with_retry(
+                    client, f"{MATCHES_API}?{urlencode(params)}", headers=self.headers
+                )
+                if response is None or response.status_code != 200:
+                    if sport == sports.FOOTBALL:
+                        raise RuntimeError(
+                            f"MaxBet matches feed returned "
+                            f"{response.status_code if response is not None else 'no response'}"
+                        )
+                    logger.warning(
+                        f"[MaxBet] {sport} feed returned "
+                        f"{response.status_code if response is not None else 'no response'}"
+                    )
+                    continue
+                events = response.json()
+                if not isinstance(events, list):
+                    if sport == sports.FOOTBALL:
+                        raise RuntimeError("MaxBet matches feed did not return a list")
+                    continue
+                all_matches.extend(self.parse_events(events, live=live, sport=sport))
 
-    def parse_events(self, events: list, live: bool = False) -> list[Match]:
+        logger.info(f"[MaxBet] {'live' if live else 'prematch'}: {len(all_matches)} matches")
+        return all_matches
+
+    def parse_events(self, events: list, live: bool = False, sport: str = "football") -> list[Match]:
         mode = "live" if live else "prematch"
         wanted_status = LIVE_STATUS if live else PREMATCH_STATUS
+        requested_sport_id = SPORT_IDS.get(sport, FOOTBALL_SPORT_ID)
         fetched_at = datetime.now(UTC).replace(tzinfo=None)
         seen: set[str] = set()
         matches: list[Match] = []
@@ -211,7 +358,7 @@ class MaxBetScraper:
                 continue
             if event.get("eventType") != "Match" or event.get("antepost"):
                 continue
-            if event.get("sportId") != FOOTBALL_SPORT_ID or event.get("status") != wanted_status:
+            if event.get("sportId") != requested_sport_id or event.get("status") != wanted_status:
                 continue
             event_id = str(event.get("id") or "")
             if not event_id or event_id in seen:
@@ -219,21 +366,30 @@ class MaxBetScraper:
             home, away = _teams(event)
             if not home or not away:
                 continue
-            markets = parse_maxbet_odds(event.get("odds") or [], mode=mode)
+            markets = (
+                parse_maxbet_odds(event.get("odds") or [], mode=mode)
+                if sport == sports.FOOTBALL
+                else parse_sport_odds(event.get("odds") or [], sport, mode=mode)
+            )
             if not markets:
                 continue
             seen.add(event_id)
             external = event.get("externalIds") or {}
             matches.append(Match(
                 bookmaker=BOOKMAKER_ID,
+                sport=sport,
                 home_team=home,
                 away_team=away,
                 # League names carry the country in English ("Germany DFB
                 # Pokal"); `country` stays empty on purpose, because the
                 # matcher compares it as text and the other books name
                 # countries in Bosnian.
-                league=qualify_league(
-                    str(event.get("leagueName") or ""), str(event.get("categoryName") or "")
+                league=(
+                    qualify_league(
+                        str(event.get("leagueName") or ""), str(event.get("categoryName") or "")
+                    )
+                    if sport == sports.FOOTBALL
+                    else str(event.get("leagueName") or "")
                 ),
                 kickoff=parse_dt(event.get("startDate")),
                 markets=markets,
@@ -247,5 +403,12 @@ class MaxBetScraper:
             ))
         return matches
 
-    async def scrape(self, live: bool = False, scan_time: datetime | None = None) -> list[Match]:
-        return await self.fetch_and_parse(live=live, scan_time=scan_time)
+    async def scrape(
+        self,
+        live: bool = False,
+        scan_time: datetime | None = None,
+        sports_wanted: tuple[str, ...] | list[str] | None = None,
+    ) -> list[Match]:
+        return await self.fetch_and_parse(
+            live=live, scan_time=scan_time, sports_wanted=sports_wanted
+        )

@@ -390,11 +390,11 @@ def test_intro_bookmaker_count_matches_settings():
 
 
 def test_intro_market_type_claims_match_the_registry():
-    """The intro used to claim six MarketType values; schemas defines nine."""
+    """The intro used to claim six MarketType values; schemas defines sixteen."""
     registry_types = {value for _b, _m, value, _ids in _mapped_declarations()}
     all_types = {member.value for member in MarketType}
-    assert len(all_types) == 9, "MarketType grew; revisit the intro wording"
-    assert len(registry_types) == 6, (
+    assert len(all_types) == 16, "MarketType grew; revisit the intro wording"
+    assert len(registry_types) == 9, (
         "the registry now maps a different number of MarketType values; "
         "the intro states how many it maps"
     )

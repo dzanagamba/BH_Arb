@@ -505,6 +505,45 @@
         ],
         "line": 3.5,
         "min_legs": 2
+      },
+      "over_under_0_5": {
+        "ids": [
+          137,
+          138
+        ],
+        "labels": [
+          "Over 0.5",
+          "Under 0.5"
+        ],
+        "min_legs": 2,
+        "line": 0.5,
+        "settlement": "full_time"
+      },
+      "over_under_4_5": {
+        "ids": [
+          137,
+          138
+        ],
+        "labels": [
+          "Over 4.5",
+          "Under 4.5"
+        ],
+        "min_legs": 2,
+        "line": 4.5,
+        "settlement": "full_time"
+      },
+      "over_under_5_5": {
+        "ids": [
+          137,
+          138
+        ],
+        "labels": [
+          "Over 5.5",
+          "Under 5.5"
+        ],
+        "min_legs": 2,
+        "line": 5.5,
+        "settlement": "full_time"
       }
     },
     "live": {
@@ -528,6 +567,42 @@
         ],
         "line": 3.5,
         "min_legs": 2
+      },
+      "over_under_0_5": {
+        "ids": [
+          22
+        ],
+        "labels": [
+          "Over 0.5",
+          "Under 0.5"
+        ],
+        "min_legs": 2,
+        "line": 0.5,
+        "settlement": "full_time"
+      },
+      "over_under_4_5": {
+        "ids": [
+          22
+        ],
+        "labels": [
+          "Over 4.5",
+          "Under 4.5"
+        ],
+        "min_legs": 2,
+        "line": 4.5,
+        "settlement": "full_time"
+      },
+      "over_under_5_5": {
+        "ids": [
+          22
+        ],
+        "labels": [
+          "Over 5.5",
+          "Under 5.5"
+        ],
+        "min_legs": 2,
+        "line": 5.5,
+        "settlement": "full_time"
       }
     }
   },
@@ -591,6 +666,45 @@
         ],
         "line": 3.5,
         "min_legs": 2
+      },
+      "over_under_0_5": {
+        "ids": [
+          137,
+          138
+        ],
+        "labels": [
+          "Over 0.5",
+          "Under 0.5"
+        ],
+        "min_legs": 2,
+        "line": 0.5,
+        "settlement": "full_time"
+      },
+      "over_under_4_5": {
+        "ids": [
+          137,
+          138
+        ],
+        "labels": [
+          "Over 4.5",
+          "Under 4.5"
+        ],
+        "min_legs": 2,
+        "line": 4.5,
+        "settlement": "full_time"
+      },
+      "over_under_5_5": {
+        "ids": [
+          137,
+          138
+        ],
+        "labels": [
+          "Over 5.5",
+          "Under 5.5"
+        ],
+        "min_legs": 2,
+        "line": 5.5,
+        "settlement": "full_time"
       }
     },
     "live": {
@@ -614,6 +728,42 @@
         ],
         "line": 3.5,
         "min_legs": 2
+      },
+      "over_under_0_5": {
+        "ids": [
+          22
+        ],
+        "labels": [
+          "Over 0.5",
+          "Under 0.5"
+        ],
+        "min_legs": 2,
+        "line": 0.5,
+        "settlement": "full_time"
+      },
+      "over_under_4_5": {
+        "ids": [
+          22
+        ],
+        "labels": [
+          "Over 4.5",
+          "Under 4.5"
+        ],
+        "min_legs": 2,
+        "line": 4.5,
+        "settlement": "full_time"
+      },
+      "over_under_5_5": {
+        "ids": [
+          22
+        ],
+        "labels": [
+          "Over 5.5",
+          "Under 5.5"
+        ],
+        "min_legs": 2,
+        "line": 5.5,
+        "settlement": "full_time"
       }
     }
   },
@@ -674,6 +824,42 @@
         ],
         "line": 3.5,
         "min_legs": 2
+      },
+      "over_under_0_5": {
+        "ids": [
+          11
+        ],
+        "labels": [
+          "Over 0.5",
+          "Under 0.5"
+        ],
+        "min_legs": 2,
+        "line": 0.5,
+        "settlement": "full_time"
+      },
+      "over_under_4_5": {
+        "ids": [
+          11
+        ],
+        "labels": [
+          "Over 4.5",
+          "Under 4.5"
+        ],
+        "min_legs": 2,
+        "line": 4.5,
+        "settlement": "full_time"
+      },
+      "over_under_5_5": {
+        "ids": [
+          11
+        ],
+        "labels": [
+          "Over 5.5",
+          "Under 5.5"
+        ],
+        "min_legs": 2,
+        "line": 5.5,
+        "settlement": "full_time"
       }
     },
     "live": {
@@ -729,6 +915,42 @@
         ],
         "line": 3.5,
         "min_legs": 2
+      },
+      "over_under_0_5": {
+        "ids": [
+          11
+        ],
+        "labels": [
+          "Over 0.5",
+          "Under 0.5"
+        ],
+        "min_legs": 2,
+        "line": 0.5,
+        "settlement": "full_time"
+      },
+      "over_under_4_5": {
+        "ids": [
+          11
+        ],
+        "labels": [
+          "Over 4.5",
+          "Under 4.5"
+        ],
+        "min_legs": 2,
+        "line": 4.5,
+        "settlement": "full_time"
+      },
+      "over_under_5_5": {
+        "ids": [
+          11
+        ],
+        "labels": [
+          "Over 5.5",
+          "Under 5.5"
+        ],
+        "min_legs": 2,
+        "line": 5.5,
+        "settlement": "full_time"
       }
     }
   },
@@ -789,6 +1011,42 @@
         ],
         "line": 3.5,
         "min_legs": 2
+      },
+      "over_under_0_5": {
+        "ids": [
+          "ZBROJ_GOLOVA"
+        ],
+        "labels": [
+          "Over 0.5",
+          "Under 0.5"
+        ],
+        "min_legs": 2,
+        "line": 0.5,
+        "settlement": "full_time"
+      },
+      "over_under_4_5": {
+        "ids": [
+          "ZBROJ_GOLOVA"
+        ],
+        "labels": [
+          "Over 4.5",
+          "Under 4.5"
+        ],
+        "min_legs": 2,
+        "line": 4.5,
+        "settlement": "full_time"
+      },
+      "over_under_5_5": {
+        "ids": [
+          "ZBROJ_GOLOVA"
+        ],
+        "labels": [
+          "Over 5.5",
+          "Under 5.5"
+        ],
+        "min_legs": 2,
+        "line": 5.5,
+        "settlement": "full_time"
       }
     },
     "live": {
@@ -844,6 +1102,42 @@
         ],
         "line": 3.5,
         "min_legs": 2
+      },
+      "over_under_0_5": {
+        "ids": [
+          "LIVE_ZBROJ_GOLOVA"
+        ],
+        "labels": [
+          "Over 0.5",
+          "Under 0.5"
+        ],
+        "min_legs": 2,
+        "line": 0.5,
+        "settlement": "full_time"
+      },
+      "over_under_4_5": {
+        "ids": [
+          "LIVE_ZBROJ_GOLOVA"
+        ],
+        "labels": [
+          "Over 4.5",
+          "Under 4.5"
+        ],
+        "min_legs": 2,
+        "line": 4.5,
+        "settlement": "full_time"
+      },
+      "over_under_5_5": {
+        "ids": [
+          "LIVE_ZBROJ_GOLOVA"
+        ],
+        "labels": [
+          "Over 5.5",
+          "Under 5.5"
+        ],
+        "min_legs": 2,
+        "line": 5.5,
+        "settlement": "full_time"
       }
     }
   },
@@ -904,6 +1198,30 @@
         ],
         "line": 3.5,
         "min_legs": 2
+      },
+      "over_under_4_5": {
+        "ids": [
+          "ofb:tg"
+        ],
+        "labels": [
+          "Over 4.5",
+          "Under 4.5"
+        ],
+        "min_legs": 2,
+        "line": 4.5,
+        "settlement": "full_time"
+      },
+      "over_under_5_5": {
+        "ids": [
+          "ofb:tg"
+        ],
+        "labels": [
+          "Over 5.5",
+          "Under 5.5"
+        ],
+        "min_legs": 2,
+        "line": 5.5,
+        "settlement": "full_time"
       }
     },
     "live": {
@@ -959,6 +1277,30 @@
         ],
         "line": 3.5,
         "min_legs": 2
+      },
+      "over_under_4_5": {
+        "ids": [
+          "lfb:tg"
+        ],
+        "labels": [
+          "Over 4.5",
+          "Under 4.5"
+        ],
+        "min_legs": 2,
+        "line": 4.5,
+        "settlement": "full_time"
+      },
+      "over_under_5_5": {
+        "ids": [
+          "lfb:tg"
+        ],
+        "labels": [
+          "Over 5.5",
+          "Under 5.5"
+        ],
+        "min_legs": 2,
+        "line": 5.5,
+        "settlement": "full_time"
       }
     }
   },
@@ -1238,6 +1580,30 @@
         ],
         "line": 3.5,
         "min_legs": 2
+      },
+      "over_under_4_5": {
+        "ids": [
+          3
+        ],
+        "labels": [
+          "Over 4.5",
+          "Under 4.5"
+        ],
+        "min_legs": 2,
+        "line": 4.5,
+        "settlement": "full_time"
+      },
+      "over_under_5_5": {
+        "ids": [
+          3
+        ],
+        "labels": [
+          "Over 5.5",
+          "Under 5.5"
+        ],
+        "min_legs": 2,
+        "line": 5.5,
+        "settlement": "full_time"
       }
     },
     "live": {
@@ -1293,6 +1659,30 @@
         ],
         "line": 3.5,
         "min_legs": 2
+      },
+      "over_under_4_5": {
+        "ids": [
+          3
+        ],
+        "labels": [
+          "Over 4.5",
+          "Under 4.5"
+        ],
+        "min_legs": 2,
+        "line": 4.5,
+        "settlement": "full_time"
+      },
+      "over_under_5_5": {
+        "ids": [
+          3
+        ],
+        "labels": [
+          "Over 5.5",
+          "Under 5.5"
+        ],
+        "min_legs": 2,
+        "line": 5.5,
+        "settlement": "full_time"
       }
     }
   },
@@ -1353,6 +1743,42 @@
         ],
         "line": 3.5,
         "min_legs": 2
+      },
+      "over_under_0_5": {
+        "ids": [
+          17
+        ],
+        "labels": [
+          "Over 0.5",
+          "Under 0.5"
+        ],
+        "min_legs": 2,
+        "line": 0.5,
+        "settlement": "full_time"
+      },
+      "over_under_4_5": {
+        "ids": [
+          17
+        ],
+        "labels": [
+          "Over 4.5",
+          "Under 4.5"
+        ],
+        "min_legs": 2,
+        "line": 4.5,
+        "settlement": "full_time"
+      },
+      "over_under_5_5": {
+        "ids": [
+          17
+        ],
+        "labels": [
+          "Over 5.5",
+          "Under 5.5"
+        ],
+        "min_legs": 2,
+        "line": 5.5,
+        "settlement": "full_time"
       }
     },
     "live": {
@@ -1408,6 +1834,42 @@
         ],
         "line": 3.5,
         "min_legs": 2
+      },
+      "over_under_0_5": {
+        "ids": [
+          17
+        ],
+        "labels": [
+          "Over 0.5",
+          "Under 0.5"
+        ],
+        "min_legs": 2,
+        "line": 0.5,
+        "settlement": "full_time"
+      },
+      "over_under_4_5": {
+        "ids": [
+          17
+        ],
+        "labels": [
+          "Over 4.5",
+          "Under 4.5"
+        ],
+        "min_legs": 2,
+        "line": 4.5,
+        "settlement": "full_time"
+      },
+      "over_under_5_5": {
+        "ids": [
+          17
+        ],
+        "labels": [
+          "Over 5.5",
+          "Under 5.5"
+        ],
+        "min_legs": 2,
+        "line": 5.5,
+        "settlement": "full_time"
       }
     }
   }

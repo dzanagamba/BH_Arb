@@ -107,7 +107,13 @@ RESERVE_PATTERN = re.compile(
 # 'W' alone is a women's marker only when NOT followed by a letter — avoids
 # false positives on clubs like "W Connection" (Trinidad men's club).
 WOMEN_PATTERN = re.compile(
-    r'\b(Žene|Ženski|Women|Ladies)\b|(?:\bW\b)(?!\s*[A-Za-z])',
+    # "Ž"/"Wom" are the forms NSoft and MaxBet use for a women's competition
+    # ("Evrokup Ž", "Alba Berlin Wom"). The bare "W" still requires that it is
+    # not the first letter of a following word, so "W Connection" stays a men's
+    # club.
+    r'\b(Žene|Ženski|Ž|Women|Wom|Ladies|WTA)\b'
+    r'|(?:\bITF\s+W\d{1,3}\b)'
+    r'|(?:\bW\b)(?!\s*[A-Za-z])',
     re.IGNORECASE,
 )
 ESPORTS_PATTERN = re.compile(

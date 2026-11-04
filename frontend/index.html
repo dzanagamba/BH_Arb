@@ -12,7 +12,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/css/style.css?v=6">
+    <link rel="stylesheet" href="/css/style.css?v=7">
 </head>
 <body>
 
@@ -71,6 +71,9 @@
         <button class="tab-btn" id="history-tab" data-tab="history" role="tab"
                 aria-selected="false" aria-controls="history-panel" tabindex="-1"
                 onclick="switchTab('history')">History</button>
+        <button class="tab-btn" id="other-tab" data-tab="other" role="tab"
+                aria-selected="false" aria-controls="other-panel" tabindex="-1"
+                onclick="switchTab('other')">Other sports <span id="other-count" class="tab-count">0</span></button>
     </nav>
 
     <!-- Surebets: summary strip, then list on the left and bet slip on the right -->
@@ -185,6 +188,46 @@
             </table>
         </div>
     </section>
+    <!-- Other sports: separate from football, with its own sport filter. -->
+    <section id="other-panel" class="tab-panel" role="tabpanel" aria-labelledby="other-tab"
+             aria-hidden="true" data-tab-panel="other" hidden>
+        <div class="kpis" aria-label="Other sports summary">
+            <div class="kpi kpi-hero">
+                <span class="kpi-k">Best other-sport edge</span>
+                <span class="kpi-v mono" id="other-kpi-best">—</span>
+                <span class="kpi-sub" id="other-kpi-sports">none yet</span>
+            </div>
+            <div class="kpi">
+                <span class="kpi-k">Surebets</span>
+                <span class="kpi-v mono" id="other-kpi-count">0</span>
+                <span class="kpi-sub">basketball and tennis</span>
+            </div>
+        </div>
+        <div class="filters">
+            <label class="inline-field">
+                <span>Sport</span>
+                <select class="input" id="other-sport-filter" onchange="setOtherSportFilter(this.value)" aria-label="Sport">
+                    <option value="all">All other sports</option>
+                </select>
+            </label>
+            <label class="search">
+                <input class="input search-input" type="search" id="other-search"
+                       placeholder="Search team, player or league" oninput="renderOtherSports()" aria-label="Search other sports">
+            </label>
+            <label class="inline-field" title="Hide surebets below this profit">
+                <span>Min</span>
+                <input class="input input-narrow mono" type="number" id="other-profit"
+                       value="0.5" min="0" max="50" step="0.1" oninput="renderOtherSports()">
+                <span>%</span>
+            </label>
+        </div>
+        <div class="results-grid" id="other-grid" role="listbox" aria-label="Other sports surebets"></div>
+        <div class="empty-state" id="other-empty">
+            <h2 class="empty-state-title">No other-sport surebets in this scan</h2>
+            <p class="empty-state-desc">Basketball and tennis are scanned in both Upcoming and Live. Football stays in the Surebets tab.</p>
+        </div>
+    </section>
+
 </main>
 
 <!-- Settings drawer -->
@@ -262,6 +305,6 @@
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="/js/app.js?v=6"></script>
+<script src="/js/app.js?v=7"></script>
 </body>
 </html>

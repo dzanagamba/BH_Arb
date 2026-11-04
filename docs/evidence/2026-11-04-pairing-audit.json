@@ -1,0 +1,52 @@
+{
+  "after_football_only_live": {
+    "duplicate_book_groups": [],
+    "groups": 3,
+    "matches": 22,
+    "strict_miss_rate": 0.0909,
+    "strict_misses": 2
+  },
+  "after_football_only_prematch": {
+    "duplicate_book_groups": [],
+    "groups": 1106,
+    "matches": 7089,
+    "strict_miss_rate": 0.0104,
+    "strict_misses": 74
+  },
+  "after_live": {
+    "duplicate_book_groups": [],
+    "groups": 8,
+    "matches": 60,
+    "strict_miss_rate": 0.0333,
+    "strict_misses": 2,
+    "ungrouped": 35
+  },
+  "after_non_football_live": {
+    "groups": 5,
+    "matches": 38,
+    "strict_miss_rate": 0.0,
+    "strict_misses": 0
+  },
+  "after_non_football_prematch": {
+    "groups": 290,
+    "matches": 1378,
+    "strict_miss_rate": 0.0116,
+    "strict_misses": 16
+  },
+  "after_prematch": {
+    "duplicate_book_groups": [],
+    "groups": 1396,
+    "matches": 8467,
+    "strict_miss_rate": 0.0106,
+    "strict_misses": 90,
+    "ungrouped": 1478
+  },
+  "before": {
+    "matches": 6624,
+    "note": "historical corpus, football only",
+    "source": "docs/PRODUCTION_READINESS.md",
+    "strict_miss_rate": 0.0033,
+    "strict_misses": 22
+  },
+  "generated_at": "2026-11-04T00:45:00+00:00"
+}

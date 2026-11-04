@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 import httpx
 
 from config.settings import VERIFY_SSL
+from engine import sports
 from models.schemas import Market, Match
 from scrapers.base import fetch_with_retry
 from scrapers.common import (
@@ -33,6 +34,9 @@ BOOKMAKER_ID = "mdshop"
 
 SPORT_MAP: dict[int, str] = {
     1: "football",
+    2: "basketball",
+    3: "tennis",
+    4: "ice_hockey",
 }
 
 API_HEADERS = {
@@ -77,15 +81,25 @@ class MDShopScraper:
         self.base_url = BASE_API
         self.headers = dict(API_HEADERS)
 
-    async def fetch_and_parse(self, live: bool = False, scan_time: datetime | None = None) -> list[Match]:
+    async def fetch_and_parse(
+        self,
+        live: bool = False,
+        scan_time: datetime | None = None,
+        sports_wanted: tuple[str, ...] | list[str] | None = None,
+    ) -> list[Match]:
         """
-        Fetch events for all sports and parse into Match objects.
+        Fetch events for the requested sports and parse into Match objects.
         `live=True` fetches the in-play feed, which uses a different bet type
         ID space handled by parse_nsoft_live_bets(), and a backward-looking
         window (see `scrapers.common.nsoft_event_window`).
         `scan_time` (naive UTC) is the single wall-clock for this scan — passed from
         server/api.py:run_scan. When None, falls back to now for standalone/test usage.
         """
+        wanted = (
+            {sports.FOOTBALL}
+            if sports_wanted is None
+            else {sports.normalize_sport(value) or value for value in sports_wanted}
+        )
         now_aware = (scan_time.replace(tzinfo=UTC) if scan_time and scan_time.tzinfo is None else scan_time) if scan_time else datetime.now(UTC)
         # Live looks back 12h: NSoft filters by kickoff, so a window starting at
         # now drops every game already in play. See `nsoft_event_window`.
@@ -98,6 +112,8 @@ class MDShopScraper:
 
         async with httpx.AsyncClient(timeout=30.0, verify=VERIFY_SSL) as client:
             for sport_id, sport_name in SPORT_MAP.items():
+                if sport_name not in wanted:
+                    continue
                 url = (
                     f"{self.base_url}?sportId={sport_id}&isLive={'true' if live else 'false'}"
                     f"&dateFrom={now_str}&dateTo={future_str}"
@@ -175,17 +191,19 @@ class MDShopScraper:
             "event_name": event_name,
         }
         markets = self._parse_bets(
-            ev.get("bets", []), live=live, source_context=source_context
+            ev.get("bets", []), live=live, source_context=source_context,
+            sport=sport_name,
         )
         if not markets:
             return None
 
         league_name = str(
-            ev.get("competitionName") or ev.get("regionName") or ev.get("groupName") or ev.get("categoryName") or sport_name.capitalize()
+            ev.get("competitionName") or ev.get("regionName") or ev.get("groupName") or ev.get("categoryName") or sports.display_name(sport_name)
         )
 
         return Match(
             bookmaker=BOOKMAKER_ID,
+            sport=sport_name,
             home_team=home,
             away_team=away,
             league=league_name,
@@ -206,6 +224,7 @@ class MDShopScraper:
         bets: list,
         live: bool = False,
         source_context: dict[str, str] | None = None,
+        sport: str = "football",
     ) -> list[Market]:
         """Parse bet objects into Market list (validated NSoft parser)."""
         if live:
@@ -217,10 +236,18 @@ class MDShopScraper:
             bookmaker=BOOKMAKER_ID,
             mode="prematch",
             source_context=source_context,
+            sport=sport,
         )
 
-    async def scrape(self, live: bool = False, scan_time: datetime | None = None) -> list[Match]:
+    async def scrape(
+        self,
+        live: bool = False,
+        scan_time: datetime | None = None,
+        sports_wanted: tuple[str, ...] | list[str] | None = None,
+    ) -> list[Match]:
         """
         Wrapper method compatible with our existing scraper interface.
         """
-        return await self.fetch_and_parse(live=live, scan_time=scan_time)
+        return await self.fetch_and_parse(
+            live=live, scan_time=scan_time, sports_wanted=sports_wanted
+        )

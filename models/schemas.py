@@ -15,6 +15,26 @@ class MarketType(str, Enum):
     FIRST_HALF_1X2 = "first_half_1x2"
     FIRST_HALF_OU = "first_half_ou"
     ASIAN_HANDICAP = "asian_handicap"
+    # Extra football total lines admitted from measured cross-book offers.
+    OVER_UNDER_0_5 = "over_under_0_5"
+    OVER_UNDER_4_5 = "over_under_4_5"
+    OVER_UNDER_5_5 = "over_under_5_5"
+    # Non-football families. The sport lives on Match/Surebet, so one family
+    # name can mean "points" in basketball and "games" in tennis without ever
+    # crossing sports: sport identity is a hard gate.
+    MONEYLINE = "moneyline"          # two-way winner: "1" / "2"
+    MONEYLINE_3WAY = "moneyline_3way"  # three-way winner: "1" / "X" / "2"
+    HANDICAP = "handicap"            # line-embedded: "1 -4.5" / "2 +4.5"
+    TOTAL = "total"                  # line-embedded: "Over 221.5" / "Under 221.5"
+
+
+class Sport(str, Enum):
+    """Canonical sport identity. The value is persisted in the cache and API."""
+
+    FOOTBALL = "football"
+    BASKETBALL = "basketball"
+    TENNIS = "tennis"
+    ICE_HOCKEY = "ice_hockey"
 
 
 class OddsValue(BaseModel):
@@ -37,6 +57,12 @@ class Market(BaseModel):
     # Canonical outcome label -> the book's own outcome id. Only a parser that
     # read the id from the payload fills this; it is never guessed.
     outcome_ids: dict[str, str] = {}
+    # What the market settles on. Two markets may only be paired when these
+    # match: "full_time" (football), "full_time_incl_ot" (basketball winner),
+    # "regulation" (basketball handicap/total, hockey 60 minutes), "full_match"
+    # (tennis). A mismatch is not a naming difference; it is a different bet.
+    settlement: str = "full_time"
+    period: str = "full_time"
 
 
 class RawOffer(BaseModel):
@@ -62,6 +88,9 @@ class RawOffer(BaseModel):
 class Match(BaseModel):
     """A match scraped from a single bookmaker."""
     bookmaker: str
+    # Hard identity key. A football listing and a basketball listing can never
+    # share a match group, whatever their names look like.
+    sport: str = "football"
     home_team: str
     away_team: str
     home_team_normalized: str = ""
@@ -177,6 +206,7 @@ class MatchGroup(BaseModel):
     """Same real-world match found across multiple bookmakers."""
     canonical_home: str
     canonical_away: str
+    sport: str = "football"
     league: str = ""
     kickoff: datetime | None = None
     matches: list[Match] = []
@@ -228,6 +258,7 @@ class SurebetStake(BaseModel):
 class Surebet(BaseModel):
     """A detected arbitrage opportunity."""
     id: str
+    sport: str = "football"
     home_team: str
     away_team: str
     league: str = ""

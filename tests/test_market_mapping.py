@@ -90,7 +90,7 @@ def test_nsoft_ou_by_sbv():
 
 
 def test_nsoft_unsupported_ou_line_rejected():
-    bets = [_bet(137, [("Manje", 1.90), ("Vise", 1.90)], sbv=4.5)]
+    bets = [_bet(137, [("Manje", 1.90), ("Vise", 1.90)], sbv=6.5)]
     assert parse_nsoft_bets(bets) == []
 
 

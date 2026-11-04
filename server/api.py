@@ -43,6 +43,7 @@ from config.settings import (
     DEFAULT_INVESTMENT,
     DUST_PROFIT_PERCENT,
     ENABLED_MARKETS,
+    ENABLED_SPORTS,
     EXPERIMENTAL_MARKETS,
     MIN_LEARN_MATCHES,
     MIN_PROFIT_PERCENT,
@@ -1393,11 +1394,20 @@ async def run_scan(mode: str = "prematch", scheduled: bool = False):
                 # Pass uniform scan_time for window consistency; fallback only
                 # when the scraper signature lacks scan_time (not on internal errors)
                 try:
-                    matches = await scraper.scrape(live=is_live, scan_time=scan_started_at)
+                    matches = await scraper.scrape(
+                        live=is_live,
+                        scan_time=scan_started_at,
+                        sports_wanted=ENABLED_SPORTS,
+                    )
                 except TypeError as te:
-                    if "scan_time" not in str(te):
+                    if "sports_wanted" in str(te):
+                        matches = await scraper.scrape(
+                            live=is_live, scan_time=scan_started_at
+                        )
+                    elif "scan_time" not in str(te):
                         raise
-                    matches = await scraper.scrape(live=is_live)
+                    else:
+                        matches = await scraper.scrape(live=is_live)
                 # Stamp fetched_at if scraper missed it (defense in depth)
                 for m in matches:
                     if not m.fetched_at:
@@ -1990,6 +2000,34 @@ async def get_status(mode: str = "prematch"):
     return status.model_dump(mode="json")
 
 
+def _sport_summary(
+    matches: list[dict], report: list[dict], surebets: list[dict]
+) -> dict[str, dict[str, int]]:
+    """Per-sport match/group/verified/surebet counts for the results payload."""
+    summary: dict[str, dict[str, int]] = {}
+    for match in matches:
+        sport = str(match.get("sport") or "football")
+        bucket = summary.setdefault(
+            sport, {"matches": 0, "groups": 0, "verified_groups": 0, "surebets": 0}
+        )
+        bucket["matches"] += 1
+    for group in report:
+        sport = str(group.get("sport") or "football")
+        bucket = summary.setdefault(
+            sport, {"matches": 0, "groups": 0, "verified_groups": 0, "surebets": 0}
+        )
+        bucket["groups"] += 1
+        if group.get("status") == "verified":
+            bucket["verified_groups"] += 1
+    for surebet in surebets:
+        sport = str(surebet.get("sport") or "football")
+        bucket = summary.setdefault(
+            sport, {"matches": 0, "groups": 0, "verified_groups": 0, "surebets": 0}
+        )
+        bucket["surebets"] += 1
+    return dict(sorted(summary.items()))
+
+
 @router.get("/results")
 async def get_results(mode: str = "prematch"):
     """Get the cached results from the last scan (mode=prematch|live)."""
@@ -2005,6 +2043,8 @@ async def get_results(mode: str = "prematch"):
         "mode": mode,
         "match_groups": len(report_cache),
         "group_statuses": group_statuses,
+        "sport_stats": _sport_summary(matches_cache, report_cache, surebets_cache),
+        "unmapped_markets": dict(unmapped_markets),
         "pairing": _pairing_summary.get(mode) or {},
         "last_scan_time": (
             status.last_scan_time.isoformat()
@@ -2042,6 +2082,10 @@ async def get_config():
         },
         "human_mapping_enabled": HUMAN_MAPPING_ENABLED,
         "experimental_markets": {m: _market_enabled.get(m, False) for m in EXPERIMENTAL_MARKETS},
+        "sports": [
+            {"id": sport, "label": sport.replace("_", " ").title()}
+            for sport in ENABLED_SPORTS
+        ],
         "min_profit_percent": MIN_PROFIT_PERCENT,
         "dust_profit_percent": DUST_PROFIT_PERCENT,
         "default_investment": DEFAULT_INVESTMENT,

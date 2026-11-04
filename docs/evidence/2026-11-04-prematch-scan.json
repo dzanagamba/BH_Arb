@@ -1,0 +1,45 @@
+{
+  "bookmakers": {
+    "admiralbet": 1141,
+    "betole": 1232,
+    "maxbet": 1442,
+    "mbet": 1071,
+    "mdshop": 1141,
+    "mozzartbet": 496,
+    "premier_kladionica": 1000,
+    "sportplus": 1118,
+    "wwin": 988
+  },
+  "errors": [
+    "1 surebet(s) dropped: a leg was a price outlier"
+  ],
+  "generated_at": "2026-11-04T10:50:58+00:00",
+  "group_statuses": {
+    "verified": 1657
+  },
+  "groups": 1657,
+  "matches": 9629,
+  "mode": "prematch",
+  "sport_stats": {
+    "basketball": {
+      "groups": 114,
+      "matches": 568,
+      "surebets": 1,
+      "verified_groups": 114
+    },
+    "football": {
+      "groups": 1295,
+      "matches": 8018,
+      "surebets": 7,
+      "verified_groups": 1295
+    },
+    "tennis": {
+      "groups": 248,
+      "matches": 1043,
+      "surebets": 0,
+      "verified_groups": 248
+    }
+  },
+  "surebets": 8,
+  "unmapped_markets": {}
+}

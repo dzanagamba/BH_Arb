@@ -1,0 +1,220 @@
+{
+  "blockers": {
+    "betole": "The desk feed is football-only (every event carries sport='S'); it publishes no other sport to measure.",
+    "mozzartbet": "A Cloudflare browser session is required and the non-football sport id map was not proven from a captured payload.",
+    "premier_kladionica": "Non-football event sports are in the sync, but the setTip market rows use a different sport dimension than the event rows; no mapping was proven, so no non-football market is admitted.",
+    "wwin": "The event endpoint needs a browser session; unauthenticated probes return an empty body, so sport ids and market ids are unproven."
+  },
+  "decision": {
+    "implemented": [
+      "basketball",
+      "tennis"
+    ],
+    "left_unimplemented": [
+      "ice_hockey"
+    ],
+    "reason_ice_hockey": "Only sportplus and mbet publish three regular-time families; NSoft has no full-match handicap id and MaxBet's only total includes overtime. Pairing an incl-OT total with a regular-time one would price two different bets."
+  },
+  "enabled_books": [
+    "mozzartbet",
+    "mdshop",
+    "admiralbet",
+    "betole",
+    "mbet",
+    "sportplus",
+    "premier_kladionica",
+    "wwin",
+    "maxbet"
+  ],
+  "generated_at": "2026-11-04T00:53:08+00:00",
+  "method": "at least three of the nine enabled books must publish at least three comparable full-match families with the same settlement",
+  "sports": {
+    "basketball": {
+      "admissible": true,
+      "books": [
+        {
+          "book": "sportplus",
+          "comparable_families": 3,
+          "markets": {
+            "handicap": 55,
+            "moneyline": 76,
+            "total": 56
+          },
+          "matches": 76,
+          "sport": "basketball"
+        },
+        {
+          "book": "mbet",
+          "comparable_families": 3,
+          "markets": {
+            "handicap": 29,
+            "moneyline": 81,
+            "total": 90
+          },
+          "matches": 90,
+          "sport": "basketball"
+        },
+        {
+          "book": "mdshop",
+          "comparable_families": 3,
+          "markets": {
+            "handicap": 101,
+            "moneyline": 89,
+            "total": 103
+          },
+          "matches": 103,
+          "sport": "basketball"
+        },
+        {
+          "book": "admiralbet",
+          "comparable_families": 3,
+          "markets": {
+            "handicap": 101,
+            "moneyline": 89,
+            "total": 103
+          },
+          "matches": 103,
+          "sport": "basketball"
+        },
+        {
+          "book": "maxbet",
+          "comparable_families": 2,
+          "markets": {
+            "moneyline": 32,
+            "total": 6
+          },
+          "matches": 32,
+          "sport": "basketball"
+        }
+      ],
+      "qualifying_books": [
+        "sportplus",
+        "mbet",
+        "mdshop",
+        "admiralbet"
+      ]
+    },
+    "ice_hockey": {
+      "admissible": false,
+      "books": [
+        {
+          "book": "sportplus",
+          "comparable_families": 3,
+          "markets": [
+            "handicap",
+            "moneyline",
+            "total"
+          ],
+          "matches": 53,
+          "settlement_note": "regular time (Zbroj golova); winner incl. OT is a separate market",
+          "sport": "ice_hockey"
+        },
+        {
+          "book": "mbet",
+          "comparable_families": 3,
+          "markets": [
+            "handicap",
+            "moneyline",
+            "total"
+          ],
+          "matches": 55,
+          "settlement_note": "oih:fs is the 3-way full-time market; oih:g is match goals",
+          "sport": "ice_hockey"
+        },
+        {
+          "book": "mdshop+admiralbet",
+          "comparable_families": 2,
+          "markets": [
+            "moneyline",
+            "total"
+          ],
+          "matches": 21,
+          "settlement_note": "135 is 3-way regulation; 137 is match goals; no full-match handicap ID was observed",
+          "sport": "ice_hockey"
+        },
+        {
+          "book": "maxbet",
+          "comparable_families": 2,
+          "markets": [
+            "handicap",
+            "moneyline"
+          ],
+          "matches": 22,
+          "settlement_note": "total id 212 includes overtime; no regular-time total was offered in this window",
+          "sport": "ice_hockey"
+        }
+      ],
+      "qualifying_books": [
+        "sportplus",
+        "mbet"
+      ]
+    },
+    "tennis": {
+      "admissible": true,
+      "books": [
+        {
+          "book": "sportplus",
+          "comparable_families": 3,
+          "markets": {
+            "handicap": 45,
+            "moneyline": 96,
+            "total": 47
+          },
+          "matches": 96,
+          "sport": "tennis"
+        },
+        {
+          "book": "mbet",
+          "comparable_families": 3,
+          "markets": {
+            "handicap": 29,
+            "moneyline": 186,
+            "total": 125
+          },
+          "matches": 186,
+          "sport": "tennis"
+        },
+        {
+          "book": "mdshop",
+          "comparable_families": 3,
+          "markets": {
+            "handicap": 46,
+            "moneyline": 184,
+            "total": 46
+          },
+          "matches": 184,
+          "sport": "tennis"
+        },
+        {
+          "book": "admiralbet",
+          "comparable_families": 3,
+          "markets": {
+            "handicap": 46,
+            "moneyline": 184,
+            "total": 46
+          },
+          "matches": 184,
+          "sport": "tennis"
+        },
+        {
+          "book": "maxbet",
+          "comparable_families": 3,
+          "markets": {
+            "handicap": 27,
+            "moneyline": 324,
+            "total": 27
+          },
+          "matches": 324,
+          "sport": "tennis"
+        }
+      ],
+      "qualifying_books": [
+        "sportplus",
+        "mbet",
+        "mdshop",
+        "admiralbet",
+        "maxbet"
+      ]
+    }
+  }
+}

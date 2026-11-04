@@ -10,6 +10,7 @@ API: getEventsStartingSoonFilterSelections?topN=25&skipN={skip}
 import logging
 from datetime import UTC, datetime
 
+from engine import sports
 from models.schemas import Market, Match
 from scrapers.base import launch_browser, settle
 from scrapers.common import (
@@ -31,6 +32,13 @@ def _parse_dt(raw) -> datetime | None:
 BOOKMAKER_ID = "admiralbet"
 BASE_URL = "https://www.admiralbet.ba"
 API_DOMAIN = "https://bihoffer.admiralbet.ba"
+
+SPORT_MAP: dict[int, str] = {
+    1: "football",
+    2: "basketball",
+    3: "tennis",
+    4: "ice_hockey",
+}
 
 # Bet type ID mapping — VERIFIED against the live Admiralbet catalog (2026-08):
 #   - 135/1639: 1X2 (Admiralbet serves 1X2 as 1639, MDShop as 135)
@@ -71,6 +79,7 @@ def _parse_bets(
     bets: list,
     live: bool = False,
     source_context: dict[str, str] | None = None,
+    sport: str = "football",
 ) -> list[Market]:
     if live:
         # Live feed uses the NSoft live bet type ID space (6/18/42/995/22/28).
@@ -83,13 +92,24 @@ def _parse_bets(
         bookmaker=BOOKMAKER_ID,
         mode="prematch",
         source_context=source_context,
+        sport=sport,
     )
 
 
 class AdmiralbetScraper:
     """Admiralbet — Playwright hybrid (session + API pagination)."""
 
-    async def fetch_and_parse(self, live: bool = False, scan_time: datetime | None = None) -> list[Match]:
+    async def fetch_and_parse(
+        self,
+        live: bool = False,
+        scan_time: datetime | None = None,
+        sports_wanted: tuple[str, ...] | list[str] | None = None,
+    ) -> list[Match]:
+        wanted = (
+            {sports.FOOTBALL}
+            if sports_wanted is None
+            else {sports.normalize_sport(value) or value for value in sports_wanted}
+        )
         p, browser, context = await launch_browser()
         all_raw_events: list[dict] = []
         try:
@@ -106,36 +126,37 @@ class AdmiralbetScraper:
             )
             await settle(page, 5000)
 
-            # 3. Fetch all football events via getwebevents endpoint. Live
-            #    looks back 12h: NSoft filters by kickoff, so a window starting
-            #    at now drops every game already in play. See
-            #    `scrapers.common.nsoft_event_window`.
+            # 3. Fetch each requested sport. Live looks back 12h: NSoft filters
+            #    by kickoff, so a window starting at now drops every game
+            #    already in play. See `scrapers.common.nsoft_event_window`.
             now_aware = (scan_time.replace(tzinfo=UTC) if scan_time and scan_time.tzinfo is None else scan_time) if scan_time else datetime.now(UTC)
             window_from, window_to = nsoft_event_window(now_aware, live)
             date_from = window_from.strftime("%Y-%m-%dT%H:%M:%S.000")
             date_to = window_to.strftime("%Y-%m-%dT%H:%M:%S.000")
 
-            url = (
-                f"{API_DOMAIN}/api/offer/getwebevents"
-                f"?sportId=1&isLive={'true' if live else 'false'}"
-                f"&dateFrom={date_from}&dateTo={date_to}"
-                f"&eventMappingTypes=1,2,3,4,5"
-            )
-            resp = await page.request.get(
-                url,
-                headers={
-                    "Accept": "application/utf8+json, application/json;q=0.9, text/plain;q=0.8, */*;q=0.7",
-                    "language": "bs-Latn",
-                    "officeid": "2037",
-                    "Referer": f"{BASE_URL}/sport-prematch?sport=Fudbal",
-                },
-            )
-            if resp.status == 200:
-                data = await resp.json()
-                if isinstance(data, dict):
-                    all_raw_events = data.get("events", [])
-                elif isinstance(data, list):
-                    all_raw_events = data
+            for sport_id, sport_name in SPORT_MAP.items():
+                if sport_name not in wanted:
+                    continue
+                url = (
+                    f"{API_DOMAIN}/api/offer/getwebevents"
+                    f"?sportId={sport_id}&isLive={'true' if live else 'false'}"
+                    f"&dateFrom={date_from}&dateTo={date_to}"
+                    f"&eventMappingTypes=1,2,3,4,5"
+                )
+                resp = await page.request.get(
+                    url,
+                    headers={
+                        "Accept": "application/utf8+json, application/json;q=0.9, text/plain;q=0.8, */*;q=0.7",
+                        "language": "bs-Latn",
+                        "officeid": "2037",
+                        "Referer": f"{BASE_URL}/sport-prematch?sport=Fudbal",
+                    },
+                )
+                if resp.status == 200:
+                    data = await resp.json()
+                    events = data.get("events", []) if isinstance(data, dict) else data
+                    if isinstance(events, list):
+                        all_raw_events.extend(events)
         except Exception as e:
             logger.error(f"[Admiralbet] Fetch error: {e}")
         finally:
@@ -165,6 +186,7 @@ class AdmiralbetScraper:
             seen.add(code)
             league = _league_name(ev)
             kickoff = _parse_dt(ev.get("dateTime") or ev.get("dateFrom") or ev.get("kickoff"))
+            sport_name = SPORT_MAP.get(int(ev.get("sportId") or 0), "football")
             source_context = {
                 "sport_id": str(ev.get("sportId") or ""),
                 "region_id": str(ev.get("regionId") or ""),
@@ -175,12 +197,13 @@ class AdmiralbetScraper:
                 "event_name": str(ev.get("name") or ""),
             }
             markets = _parse_bets(
-                ev.get("bets", []), live=live, source_context=source_context
+                ev.get("bets", []), live=live, source_context=source_context,
+                sport=sport_name,
             )
             if not markets:
                 continue
             matches.append(Match(
-                bookmaker=BOOKMAKER_ID, home_team=home, away_team=away,
+                bookmaker=BOOKMAKER_ID, sport=sport_name, home_team=home, away_team=away,
                 league=league, kickoff=kickoff, markets=markets,
                 url=build_event_url("admiralbet", mid, BASE_URL, live=live), match_code=mid,
                 event_id=mid, source_context=source_context, deep_link_verified=False,
@@ -192,5 +215,12 @@ class AdmiralbetScraper:
         logger.info(f"[Admiralbet] {len(matches)} {'live' if live else 'prematch'} matches from {len(all_raw_events)} raw events")
         return matches
 
-    async def scrape(self, live: bool = False, scan_time: datetime | None = None) -> list[Match]:
-        return await self.fetch_and_parse(live=live, scan_time=scan_time)
+    async def scrape(
+        self,
+        live: bool = False,
+        scan_time: datetime | None = None,
+        sports_wanted: tuple[str, ...] | list[str] | None = None,
+    ) -> list[Match]:
+        return await self.fetch_and_parse(
+            live=live, scan_time=scan_time, sports_wanted=sports_wanted
+        )

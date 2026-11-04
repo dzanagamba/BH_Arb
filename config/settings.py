@@ -98,7 +98,24 @@ ENABLED_MARKETS = [
     "first_half_1x2",
     "first_half_ou",
     "asian_handicap",
+    # Admitted 2026-11-04 from measured label/structure classification and
+    # cross-book price consensus (docs/MULTISPORT_EVIDENCE.md). The 0.5/4.5/5.5
+    # lines are complete two-way partitions and price with the same math.
+    "over_under_0_5",
+    "over_under_4_5",
+    "over_under_5_5",
+    # Non-football families. Sport identity on the group prevents any pairing
+    # across sports; these names only describe the market shape.
+    "moneyline",
+    "moneyline_3way",
+    "handicap",
+    "total",
 ]
+
+# Which sports the scan parses. Football is the original path and must stay
+# first; the rest are admitted only by the measurement in
+# scripts/measure_sports.py (three books, three comparable markets).
+ENABLED_SPORTS: list[str] = ["football", "basketball", "tennis"]
 
 # Experimental markets — OFF by default, toggleable from the dashboard checkbox.
 # They are parsed and detected only while enabled (persisted per-scan via the
@@ -123,6 +140,12 @@ def price_source(bookmaker: str) -> str:
 
 
 MAX_SUREBET_PROFIT_PERCENT = 20.0  # Sanity cap — reject higher profits (likely scraper/data errors)
+# A two-source edge above this is treated as a stale price, not a gift. Real
+# reachable arbitrage is usually 1–5%; research on stale lines puts the
+# suspicious band above 5% and the book-error band far higher. Three or more
+# independent sources can still show a large edge because the median test has
+# something to compare against.
+MAX_TWO_SOURCE_PROFIT_PERCENT = 10.0
 ODDS_TTL_SECONDS = 600         # Max age of odds before considered stale (prematch 10 min, live 60s enforced in engine)
 
 # --- Scraper Settings ---

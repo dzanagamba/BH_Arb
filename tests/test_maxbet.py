@@ -52,7 +52,9 @@ def test_totals_are_read_at_the_registered_lines_only():
         [_total("0.5", 1.02, 10.0), _total("2.5", 1.8, 2.0), _total("4.5", 5.5, 1.1)]
     )
     assert [(m.market_type, {o.label: o.value for o in m.odds}) for m in markets] == [
+        (MarketType.OVER_UNDER_0_5, {"Over 0.5": 1.02, "Under 0.5": 10.0}),
         (MarketType.OVER_UNDER_2_5, {"Over 2.5": 1.8, "Under 2.5": 2.0}),
+        (MarketType.OVER_UNDER_4_5, {"Over 4.5": 5.5, "Under 4.5": 1.1}),
     ]
 
 

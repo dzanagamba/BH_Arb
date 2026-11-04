@@ -28,7 +28,8 @@ Market decoding (football sport id = 2):
 Supported (name-based, verified):
   "UTAKMICA"             -> 1X2 (kods 1/X/2) + double chance (1X/X2/12)
   "OBA DAJU GOL"         -> BTTS (kods da/ne or o-da/o-ne); live: "OBA TIMA DAJU GOL"
-  "ZBROJ GOLOVA"         -> O/U goals; line from setTipVar; only 1.5/2.5/3.5
+  "ZBROJ GOLOVA"         -> O/U goals; line from setTipVar; half-goal lines
+                            0.5 through 5.5 are mapped (all observed offers).
 In-play markets are prefixed "LIVE - " (used for live mode). All other
 markets (handicaps, halves, HT/FT, correct score, corners, cards, "NAČIN
 PROLAZA", player markets, combos) are excluded.
@@ -76,9 +77,12 @@ NAME_FH_1X2 = "1. POLUVRIJEME"
 FH_OU_NAME_PREFIXES = ("1. POLUVRIJEME - ZBROJ GOLOVA", "ZBROJ GOLOVA 1.")
 
 OU_LINES = {
+    "0.5": MarketType.OVER_UNDER_0_5,
     "1.5": MarketType.OVER_UNDER_1_5,
     "2.5": MarketType.OVER_UNDER_2_5,
     "3.5": MarketType.OVER_UNDER_3_5,
+    "4.5": MarketType.OVER_UNDER_4_5,
+    "5.5": MarketType.OVER_UNDER_5_5,
 }
 
 FH_OU_LINES = {"0.5", "1.5", "2.5"}

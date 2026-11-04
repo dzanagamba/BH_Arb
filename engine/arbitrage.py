@@ -18,6 +18,7 @@ Sanity checks:
 """
 
 import logging
+import statistics
 import uuid
 from datetime import UTC, datetime, timedelta
 from itertools import permutations
@@ -27,6 +28,7 @@ from config.settings import (
     EXPIRY_BUFFER_MINUTES,
     MATCH_URL_TEMPLATES,
     MAX_SUREBET_PROFIT_PERCENT,
+    MAX_TWO_SOURCE_PROFIT_PERCENT,
     MIN_PROFIT_PERCENT,
     ODDS_TTL_SECONDS,
     PREMATCH_EXPIRY_BUFFER_MINUTES,
@@ -37,6 +39,25 @@ from models.schemas import Market, MarketType, Match, MatchGroup, Surebet, Sureb
 from scrapers.common import parse_ah_label
 
 logger = logging.getLogger(__name__)
+
+
+def _too_good_for_two_sources(
+    profit_percent: float,
+    odds_map: dict[str, tuple[str, float]],
+    available_books: int,
+) -> bool:
+    """Reject a large edge that only two independent price sources support.
+
+    A 13% edge between two books is far more often one stale or suspended price
+    than a placeable bet (research cited in docs/MULTISPORT_EVIDENCE.md). The
+    rule does not lower the global cap and does not touch three-source edges.
+    """
+    sources = {price_source(bookmaker) for bookmaker, _ in odds_map.values()}
+    return (
+        profit_percent >= MAX_TWO_SOURCE_PROFIT_PERCENT
+        and len(sources) < 3
+        and available_books < 3
+    )
 
 
 def _collect_match_urls(group: MatchGroup) -> dict[str, str]:
@@ -112,6 +133,17 @@ def _priced_markets(match: Match) -> list[Market]:
     seen: dict[MarketType, set[str]] = {}
     ambiguous: set[MarketType] = set()
     for market in match.markets:
+        # The multi-line non-football families legitimately repeat a type for
+        # each line ("total" at 211.5, 212.5, ...). Their labels carry the line,
+        # so a repeated label is the same bet and the engine takes the best
+        # price; the football collision this guard exists for cannot occur.
+        if market.market_type in (
+            MarketType.MONEYLINE,
+            MarketType.MONEYLINE_3WAY,
+            MarketType.HANDICAP,
+            MarketType.TOTAL,
+        ):
+            continue
         labels = {odd.label for odd in market.odds}
         quoted = seen.setdefault(market.market_type, set())
         if quoted & labels:
@@ -131,18 +163,149 @@ def _oldest_fetch(group: MatchGroup) -> datetime | None:
     return min(times) if times else None
 
 
+def _settlement_for_market(market: Market) -> str:
+    """Settlement is part of a market's identity, not a label detail."""
+    return market.settlement or "full_time"
+
+
+def _dominant_settlement(markets: list[tuple[str, Market]]) -> str:
+    """The settlement with the most distinct books for one market type.
+
+    A listing that settles a bet differently is not a price for the same bet.
+    The engine keeps the settlement the most price sources agree on and drops
+    the rest; when two settlements tie, the lexicographically first is chosen
+    so the result is deterministic, and the tie is surfaced in the log.
+    """
+    counts: dict[str, set[str]] = {}
+    for bookmaker, market in markets:
+        counts.setdefault(_settlement_for_market(market), set()).add(bookmaker)
+    if not counts:
+        return "full_time"
+    ranked = sorted(counts.items(), key=lambda item: (-len(item[1]), item[0]))
+    if len(ranked) > 1 and len(ranked[0][1]) == len(ranked[1][1]):
+        logger.warning(
+            "Tied settlements %s; using %s",
+            [name for name, _ in ranked[:2]],
+            ranked[0][0],
+        )
+    return ranked[0][0]
+
+
+def _plausible_book_quotes(
+    bookie_odds: dict[str, dict[str, float]],
+    labels: list[str],
+    *,
+    min_margin: float = 1.0,
+    enabled: bool = True,
+) -> dict[str, dict[str, float]]:
+    """Drop a book whose own complete set is already an arbitrage.
+
+    A licensed book prices a complete market at a margin above 1.0. A book
+    whose own two/three legs imply less than 1.0 is showing a stale or
+    suspended price, not a gift: pairing it with another book's stale price is
+    how a scanner manufactures a false surebet. The leg is dropped, and the
+    book can still contribute a partial set if one is needed elsewhere.
+    """
+    if not enabled:
+        return bookie_odds
+    kept: dict[str, dict[str, float]] = {}
+    for bookmaker, odds in bookie_odds.items():
+        if all(label in odds and odds[label] > 1.0 for label in labels):
+            margin = sum(1.0 / odds[label] for label in labels)
+            if margin < min_margin:
+                logger.warning(
+                    "[%s] complete %s set implies %.3f (< %.2f); dropped as stale",
+                    bookmaker,
+                    labels,
+                    margin,
+                    min_margin,
+                )
+                continue
+        kept[bookmaker] = odds
+    return kept
+
+
+def _consistent_book_quotes(
+    bookie_odds: dict[str, dict[str, float]],
+    labels: list[str],
+    *,
+    max_deviation: float = 0.20,
+) -> dict[str, dict[str, float]]:
+    """Drop a book whose side of a line is far from every peer's price.
+
+    A skewed two-way market can manufacture a surebet from the *other* side:
+    book A is far too short on away, book B far too short on home, and taking
+    A's home plus B's away looks like a large edge. Each leg is the best price
+    on its label, so the per-leg outlier guard never sees the broken side. With
+    at least three books a label deviation beyond 20% from the peer median is
+    evidence that the book's whole line is stale, so neither side may support
+    an edge.
+    """
+    if len(bookie_odds) < 3:
+        return bookie_odds
+    kept: dict[str, dict[str, float]] = {}
+    for bookmaker, odds in bookie_odds.items():
+        if not all(label in odds for label in labels):
+            kept[bookmaker] = odds
+            continue
+        stale = False
+        for label in labels:
+            # One vote per price source: MDShop and Admiralbet quote the same
+            # feed, so two entries must not outweigh two independent books.
+            peers_by_source: dict[str, list[float]] = {}
+            for other_book, other in bookie_odds.items():
+                if other_book == bookmaker or label not in other:
+                    continue
+                peers_by_source.setdefault(price_source(other_book), []).append(
+                    other[label]
+                )
+            peers = [statistics.median(values) for values in peers_by_source.values()]
+            if len(peers) < 2:
+                continue
+            median = statistics.median(peers)
+            if median > 0 and abs(odds[label] - median) / median > max_deviation:
+                stale = True
+                break
+        if stale:
+            logger.warning(
+                "[%s] line %s price deviates >%.0f%% from the peer median; "
+                "dropped as stale",
+                bookmaker,
+                labels,
+                max_deviation * 100,
+            )
+        else:
+            kept[bookmaker] = odds
+    return kept
+
+
 # Required outcome labels for each market type
 REQUIRED_LABELS: dict[MarketType, list[str]] = {
     MarketType.MATCH_RESULT: ["1", "X", "2"],
+    MarketType.OVER_UNDER_0_5: ["Over 0.5", "Under 0.5"],
     MarketType.OVER_UNDER_1_5: ["Over 1.5", "Under 1.5"],
     MarketType.OVER_UNDER_2_5: ["Over 2.5", "Under 2.5"],
     MarketType.OVER_UNDER_3_5: ["Over 3.5", "Under 3.5"],
+    MarketType.OVER_UNDER_4_5: ["Over 4.5", "Under 4.5"],
+    MarketType.OVER_UNDER_5_5: ["Over 5.5", "Under 5.5"],
     MarketType.BTTS: ["GG", "NG"],
     MarketType.DOUBLE_CHANCE: [],  # Cross-market arb — handled by _check_cross_market_dc
     MarketType.FIRST_HALF_1X2: ["1", "X", "2"],
-    # FIRST_HALF_OU / ASIAN_HANDICAP: line-embedded labels — handled by
-    # _check_line_market (labels carry the line: "Over 1.5" / "1 -0.5").
+    MarketType.MONEYLINE: ["1", "2"],
+    MarketType.MONEYLINE_3WAY: ["1", "X", "2"],
+    # FIRST_HALF_OU / ASIAN_HANDICAP / HANDICAP / TOTAL: line-embedded labels —
+    # handled by _check_line_market (labels carry the line).
 }
+
+# Market types whose outcome labels embed the line.
+LINE_MARKETS = frozenset(
+    {
+        MarketType.FIRST_HALF_OU,
+        MarketType.ASIAN_HANDICAP,
+        MarketType.HANDICAP,
+        MarketType.TOTAL,
+    }
+)
 
 # First-half total-goal lines supported for FIRST_HALF_OU.
 FIRST_HALF_OU_LINES = {"0.5", "1.5", "2.5"}
@@ -261,7 +424,7 @@ class ArbitrageEngine:
                 if market_type == MarketType.DOUBLE_CHANCE:
                     # Cross-market 1X2 + Double Chance arbitrage
                     result = self._check_cross_market_dc(group, min_profit, investment)
-                elif market_type in (MarketType.FIRST_HALF_OU, MarketType.ASIAN_HANDICAP):
+                elif market_type in LINE_MARKETS:
                     result = self._check_line_market(group, market_type, min_profit, investment)
                 else:
                     required = REQUIRED_LABELS.get(market_type, [])
@@ -301,12 +464,23 @@ class ArbitrageEngine:
 
         n = len(required_labels)
 
-        # Build bookie -> outcome_label -> odds mapping
+        # Build bookie -> outcome_label -> odds mapping. Markets of one type
+        # whose settlement differs are not comparable: keep the settlement the
+        # most books agree on.
+        typed = [
+            (match.bookmaker, market)
+            for match in group.matches
+            for market in _priced_markets(match)
+            if market.market_type == market_type
+        ]
+        settlement = _dominant_settlement(typed)
         bookie_odds: dict[str, dict[str, float]] = {}
         for match in group.matches:
             bm = match.bookmaker
             for market in _priced_markets(match):
                 if market.market_type == market_type:
+                    if _settlement_for_market(market) != settlement:
+                        continue
                     if bm not in bookie_odds:
                         bookie_odds[bm] = {}
                     for odds_val in market.odds:
@@ -321,12 +495,47 @@ class ArbitrageEngine:
         if len(available_bms) < n:
             return None
 
+        if group.sport != "football":
+            bookie_odds = _consistent_book_quotes(bookie_odds, required_labels)
+        bookie_odds = _plausible_book_quotes(
+            bookie_odds, required_labels, enabled=group.sport != "football"
+        )
         best = self._best_combination(bookie_odds, required_labels)
         if best is None:
             return None
         best_implied, best_odds_map = best
 
         profit_percent = (1.0 / best_implied - 1.0) * 100.0
+
+        if group.sport != "football":
+            # A book whose own set was dropped as stale does not support the
+            # edge. Counting it would let two live books look like three
+            # price sources. Football keeps its original count untouched.
+            available_books = len({
+                price_source(bookmaker)
+                for bookmaker, odds in bookie_odds.items()
+                if all(label in odds for label in required_labels)
+            })
+        else:
+            available_books = len(
+                {
+                    match.bookmaker
+                    for match in group.matches
+                    if any(
+                        market.market_type == market_type
+                        for market in _priced_markets(match)
+                    )
+                }
+            )
+        if _too_good_for_two_sources(profit_percent, best_odds_map, available_books):
+            logger.warning(
+                "Rejected %.1f%% edge supported by fewer than three price sources "
+                "(stale-price guard) — %s vs %s",
+                profit_percent,
+                group.canonical_home,
+                group.canonical_away,
+            )
+            return None
 
         # Minimum profit threshold
         if profit_percent < min_profit:
@@ -344,6 +553,7 @@ class ArbitrageEngine:
 
         return Surebet(
             id=str(uuid.uuid4())[:8],
+            sport=group.sport,
             home_team=group.canonical_home,
             away_team=group.canonical_away,
             league=group.league,
@@ -375,11 +585,20 @@ class ArbitrageEngine:
         best line wins. Requires the full complementary pair on a line.
         """
         # bookie -> label -> best odds
+        typed = [
+            (match.bookmaker, market)
+            for match in group.matches
+            for market in _priced_markets(match)
+            if market.market_type == market_type
+        ]
+        settlement = _dominant_settlement(typed)
         bookie_odds: dict[str, dict[str, float]] = {}
         for match in group.matches:
             bm = match.bookmaker
             for market in _priced_markets(match):
                 if market.market_type != market_type:
+                    continue
+                if _settlement_for_market(market) != settlement:
                     continue
                 for ov in market.odds:
                     if ov.value > 1.0:
@@ -399,7 +618,9 @@ class ArbitrageEngine:
                 bucket = lines.setdefault(line_key, {})
                 bucket[label] = max(bucket.get(label, 0.0), odd)
 
-        best_overall: tuple[float, dict[str, tuple[str, float]], list[str]] | None = None
+        best_overall: (
+            tuple[float, dict[str, tuple[str, float]], list[str], int] | None
+        ) = None
         for line_key, bucket in lines.items():
             labels = self._line_labels(market_type, line_key)
             if any(lbl not in bucket for lbl in labels):
@@ -412,17 +633,50 @@ class ArbitrageEngine:
             restricted = {bm: om for bm, om in restricted.items() if om}
             if len(restricted) < 2:
                 continue
+            if group.sport != "football":
+                restricted = _consistent_book_quotes(restricted, labels)
+            restricted = _plausible_book_quotes(
+                restricted, labels, enabled=group.sport != "football"
+            )
             best = self._best_combination(restricted, labels)
             if best is None:
                 continue
+            supporting = len({
+                price_source(bookmaker)
+                for bookmaker, odds in restricted.items()
+                if all(label in odds for label in labels)
+            })
             if best_overall is None or best[0] < best_overall[0]:
-                best_overall = (best[0], best[1], labels)
+                best_overall = (best[0], best[1], labels, supporting)
 
         if best_overall is None:
             return None
 
-        best_implied, best_odds_map, labels = best_overall
+        best_implied, best_odds_map, labels, supporting_books = best_overall
         profit_percent = (1.0 / best_implied - 1.0) * 100.0
+
+        if group.sport != "football":
+            available_books = supporting_books
+        else:
+            available_books = len(
+                {
+                    match.bookmaker
+                    for match in group.matches
+                    if any(
+                        market.market_type == market_type
+                        for market in _priced_markets(match)
+                    )
+                }
+            )
+        if _too_good_for_two_sources(profit_percent, best_odds_map, available_books):
+            logger.warning(
+                "Rejected %.1f%% line-market edge supported by fewer than three "
+                "price sources (stale-price guard) — %s vs %s",
+                profit_percent,
+                group.canonical_home,
+                group.canonical_away,
+            )
+            return None
 
         if profit_percent < min_profit:
             return None
@@ -437,6 +691,7 @@ class ArbitrageEngine:
 
         return Surebet(
             id=str(uuid.uuid4())[:8],
+            sport=group.sport,
             home_team=group.canonical_home,
             away_team=group.canonical_away,
             league=group.league,
@@ -453,16 +708,17 @@ class ArbitrageEngine:
     @staticmethod
     def _line_key(market_type: MarketType, label: str) -> str | None:
         """Map a line-embedded label to its complementary-line key."""
-        if market_type == MarketType.FIRST_HALF_OU:
+        if market_type in (MarketType.FIRST_HALF_OU, MarketType.TOTAL):
             low = label.lower()
+            line = ""
             if low.startswith("over "):
                 line = label[5:].strip()
-                return line if line in FIRST_HALF_OU_LINES else None
-            if low.startswith("under "):
+            elif low.startswith("under "):
                 line = label[6:].strip()
-                return line if line in FIRST_HALF_OU_LINES else None
-            return None
-        if market_type == MarketType.ASIAN_HANDICAP:
+            if market_type == MarketType.FIRST_HALF_OU and line not in FIRST_HALF_OU_LINES:
+                return None
+            return line or None
+        if market_type in (MarketType.ASIAN_HANDICAP, MarketType.HANDICAP):
             parsed = parse_ah_label(label)
             if parsed is None:
                 return None
@@ -475,9 +731,9 @@ class ArbitrageEngine:
     @staticmethod
     def _line_labels(market_type: MarketType, line_key: str) -> list[str]:
         """The two complementary labels for a line key."""
-        if market_type == MarketType.FIRST_HALF_OU:
+        if market_type in (MarketType.FIRST_HALF_OU, MarketType.TOTAL):
             return [f"Over {line_key}", f"Under {line_key}"]
-        if market_type == MarketType.ASIAN_HANDICAP:
+        if market_type in (MarketType.ASIAN_HANDICAP, MarketType.HANDICAP):
             from scrapers.common import ah_label
 
             line = float(line_key)
@@ -566,6 +822,27 @@ class ArbitrageEngine:
         best_implied, best_odds_map, label = best_overall
         profit_percent = (1.0 / best_implied - 1.0) * 100.0
 
+        available_books = len(
+            {
+                match.bookmaker
+                for match in group.matches
+                if any(
+                    market.market_type
+                    in (MarketType.MATCH_RESULT, MarketType.DOUBLE_CHANCE)
+                    for market in _priced_markets(match)
+                )
+            }
+        )
+        if _too_good_for_two_sources(profit_percent, best_odds_map, available_books):
+            logger.warning(
+                "Rejected %.1f%% cross-market edge supported by fewer than three "
+                "price sources (stale-price guard) — %s vs %s",
+                profit_percent,
+                group.canonical_home,
+                group.canonical_away,
+            )
+            return None
+
         if profit_percent < min_profit:
             return None
         if profit_percent > MAX_SUREBET_PROFIT_PERCENT:
@@ -579,6 +856,7 @@ class ArbitrageEngine:
 
         return Surebet(
             id=str(uuid.uuid4())[:8],
+            sport=group.sport,
             home_team=group.canonical_home,
             away_team=group.canonical_away,
             league=group.league,
@@ -628,11 +906,16 @@ class ArbitrageEngine:
                         if ov.label in wanted and ov.value > 1.0:
                             book = pinned.setdefault(match.bookmaker, {})
                             book[ov.label] = max(book.get(ov.label, 0.0), ov.value)
-            pinned_best = self._best_combination(pinned, list(labels))
+            pinned_best = self._best_combination(
+                _plausible_book_quotes(
+                    pinned, list(labels), enabled=group.sport != "football"
+                ),
+                list(labels),
+            )
             if pinned_best is None:
                 return None
             best_implied, best_odds_map = pinned_best
-        elif market_type in (MarketType.FIRST_HALF_OU, MarketType.ASIAN_HANDICAP):
+        elif market_type in LINE_MARKETS:
             line_result = self._check_line_market(
                 group, market_type, min_profit=-100.0, investment=DEFAULT_INVESTMENT,
                 max_profit=float("inf"),
@@ -676,7 +959,12 @@ class ArbitrageEngine:
                             bookie_odds[match.bookmaker][ov.label] = max(
                                 bookie_odds[match.bookmaker][ov.label], ov.value
                             )
-            best = self._best_combination(bookie_odds, required)
+            best = self._best_combination(
+                _plausible_book_quotes(
+                    bookie_odds, required, enabled=group.sport != "football"
+                ),
+                required,
+            )
             if best is None:
                 return None
             best_implied, best_odds_map = best

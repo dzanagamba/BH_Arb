@@ -17,7 +17,9 @@
 // ─── State ────────────────────────────────────────────────────────────────────
 let currentMode = 'prematch';       // 'prematch' (upcoming) | 'live' (in-play)
 let activeScanMode = null;          // mode of the currently running scan
-let activeTab = 'surebets';         // 'surebets' | 'review' | 'history'
+let activeTab = 'surebets';         // 'surebets' | 'other' | 'review' | 'history'
+let otherSportFilter = 'all';       // sport id or 'all' for the Other sports tab
+let configuredSports = [];          // sports the backend says it scans
 let candidateApiKey = (() => { try { return sessionStorage.getItem('apiKey') || ''; } catch (e) { return ''; } })();
 let candidateApiKeyDeclined = false; // a cancelled prompt stops background re-asks
 let allSurebets = [];               // full list from the server
@@ -54,6 +56,7 @@ const REASON_LABELS = Object.freeze({
     kickoff_missing: 'Kickoff time missing',
     orientation_unresolved: 'Home/away order unclear',
     no_event_link: 'No event link',
+    sport_mismatch: 'Different sport',
 });
 
 const SUREBET_STATUS_LABELS = Object.freeze({
@@ -76,18 +79,29 @@ const BOOKMAKER_COLORS = {
 
 const MARKET_LABELS = {
     '1x2':            '1X2',
+    'over_under_0_5': 'O/U 0.5',
     'over_under_1_5': 'O/U 1.5',
     'over_under_2_5': 'O/U 2.5',
     'over_under_3_5': 'O/U 3.5',
+    'over_under_4_5': 'O/U 4.5',
+    'over_under_5_5': 'O/U 5.5',
     'btts':           'BTTS',
     'double_chance':  '1X2 + DC',
     'first_half_1x2': '1H 1X2',
     'first_half_ou':  '1H O/U',
     'asian_handicap': 'Asian Hcp',
+    'moneyline':      'Moneyline',
+    'moneyline_3way': '3-way',
+    'handicap':       'Handicap',
+    'total':          'Total',
+};
+
+const SPORT_LABELS = {
+    football: 'Football', basketball: 'Basketball', tennis: 'Tennis', ice_hockey: 'Ice hockey',
 };
 
 // What each outcome label means, in words a bettor types into a ticket.
-function outcomeDescription(label, marketType) {
+function outcomeDescription(label, marketType, sport) {
     const half = marketType && marketType.startsWith('first_half') ? ' (1st half)' : '';
     const words = {
         '1': 'Home win', 'X': 'Draw', '2': 'Away win',
@@ -95,10 +109,13 @@ function outcomeDescription(label, marketType) {
         'GG': 'Both teams score', 'NG': 'Not both teams score',
     };
     if (words[label]) return words[label] + half;
+    const line = /^([12])\s+([+-]?\d+(?:\.\d+)?)$/.exec(label);
+    if (line) return `${line[1] === '1' ? 'Home' : 'Away'} ${line[2]}${half}`;
+    const unit = sport === 'tennis' ? 'games' : sport === 'basketball' ? 'points' : 'goals';
     const over = /^Over (.+)$/.exec(label);
-    if (over) return `Over ${over[1]} goals${half}`;
+    if (over) return `Over ${over[1]} ${unit}${half}`;
     const under = /^Under (.+)$/.exec(label);
-    if (under) return `Under ${under[1]} goals${half}`;
+    if (under) return `Under ${under[1]} ${unit}${half}`;
     return label + half;
 }
 
@@ -157,6 +174,7 @@ async function loadConfig() {
         const res = await apiFetch('/api/config');
         const data = await res.json();
         bookmakersConfig = data.bookmakers || {};
+        configuredSports = Array.isArray(data.sports) ? data.sports.map(s => s.id || s) : [];
         const minInput = document.getElementById('filter-profit');
         if (data.min_profit_percent && minInput) minInput.value = data.min_profit_percent;
         const investInput = document.getElementById('filter-investment');
@@ -180,7 +198,7 @@ async function loadConfig() {
 
 // ─── Navigation ───────────────────────────────────────────────────────────────
 function switchTab(tab) {
-    const target = ['review', 'history'].includes(tab) ? tab : 'surebets';
+    const target = ['review', 'history', 'other'].includes(tab) ? tab : 'surebets';
     activeTab = target;
     document.querySelectorAll('.results-tabs [role="tab"]').forEach(button => {
         const isActive = button.dataset.tab === target;
@@ -195,6 +213,7 @@ function switchTab(tab) {
     });
     if (target === 'review') loadCandidates();
     if (target === 'history') loadHistory();
+    if (target === 'other') renderOtherSports();
 }
 
 function handleTabKeydown(event) {
@@ -487,6 +506,7 @@ async function loadResults(silent = false) {
             selectedSurebetId = null;
         }
         applyFilters();
+        renderOtherSports();
 
         // Chime for NEW high-value surebets only — never on page load, never
         // twice for the same surebet across rescans.
@@ -508,6 +528,10 @@ function surebetSignature(sb) {
     return `${sb.home_team}|${sb.away_team}|${sb.market_type}|${stakes}`;
 }
 
+function footballSurebets() {
+    return allSurebets.filter(sb => (sb.sport || 'football') === 'football');
+}
+
 function applyFilters() {
     const marketFilter = document.getElementById('filter-market').value;
     const profitInput = document.getElementById('filter-profit').value;
@@ -516,6 +540,8 @@ function applyFilters() {
     const sortMode = document.getElementById('filter-sort').value;
 
     filteredSurebets = allSurebets.filter(sb => {
+        // This panel is football only; the Other sports tab has its own filter.
+        if ((sb.sport || 'football') !== 'football') return false;
         if (marketFilter && sb.market_type !== marketFilter) return false;
         if (sb.profit_percent < minProfit) return false;
         // Every leg's bookmaker has to be one you have turned on.
@@ -555,11 +581,12 @@ function renderMarketChips() {
     const wrap = document.getElementById('market-chips');
     const active = document.getElementById('filter-market').value;
     if (!wrap) return;
+    const pool = footballSurebets();
     const counts = {};
-    allSurebets.forEach(sb => { counts[sb.market_type] = (counts[sb.market_type] || 0) + 1; });
+    pool.forEach(sb => { counts[sb.market_type] = (counts[sb.market_type] || 0) + 1; });
     const markets = Object.keys(MARKET_LABELS).filter(m => counts[m] || m === active);
-    wrap.hidden = allSurebets.length === 0;
-    wrap.innerHTML = [['', 'All', allSurebets.length], ...markets.map(m => [m, MARKET_LABELS[m], counts[m] || 0])]
+    wrap.hidden = pool.length === 0;
+    wrap.innerHTML = [['', 'All', pool.length], ...markets.map(m => [m, MARKET_LABELS[m], counts[m] || 0])]
         .map(([value, label, count]) => `<button type="button" class="mchip${value === active ? ' active' : ''}" aria-pressed="${value === active}" onclick="setMarketFilter('${escapeHtml(value)}')">${escapeHtml(label)} <b>${count}</b></button>`)
         .join('');
 }
@@ -570,6 +597,7 @@ function setMarketFilter(market) {
 }
 
 function renderKpis(surebets) {
+    const pool = footballSurebets();
     const best = surebets.reduce((top, sb) => (!top || sb.profit_percent > top.profit_percent ? sb : top), null);
     const hero = document.querySelector('.kpi-hero');
     if (hero) hero.toggleAttribute('data-empty', !best);
@@ -578,10 +606,77 @@ function renderKpis(surebets) {
         ? `+${money(globalInvestment * best.profit_percent / 100)} KM on ${globalInvestment} KM · ${formatTeamName(best.home_team)}`
         : 'no surebet yet');
     setText('kpi-count', surebets.length);
-    setText('kpi-count-sub', allSurebets.length > surebets.length
-        ? `of ${allSurebets.length} found · ${allSurebets.length - surebets.length} filtered out`
+    setText('kpi-count-sub', pool.length > surebets.length
+        ? `of ${pool.length} found · ${pool.length - surebets.length} filtered out`
         : 'above your minimum');
     setText('kpi-mode-sub', currentMode === 'live' ? 'live matches' : 'upcoming matches');
+}
+
+function otherSurebets() {
+    return allSurebets.filter(sb => (sb.sport || 'football') !== 'football');
+}
+
+function setOtherSportFilter(value) {
+    otherSportFilter = value || 'all';
+    renderOtherSports();
+}
+
+function renderOtherSports() {
+    const grid = document.getElementById('other-grid');
+    if (!grid) return;
+    const pool = otherSurebets();
+    const sports = [...new Set([
+        ...configuredSports.filter(s => s !== 'football'),
+        ...pool.map(sb => sb.sport || 'football'),
+    ])].sort();
+    if (otherSportFilter !== 'all' && !sports.includes(otherSportFilter)) {
+        otherSportFilter = 'all';
+    }
+    const select = document.getElementById('other-sport-filter');
+    if (select) {
+        const options = ['<option value="all">All other sports</option>']
+            .concat(sports.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(SPORT_LABELS[s] || s)}</option>`));
+        select.innerHTML = options.join('');
+        select.value = otherSportFilter;
+    }
+    const search = (document.getElementById('other-search')?.value || '').trim().toLowerCase();
+    const minProfit = parseFloat(document.getElementById('other-profit')?.value || '0') || 0;
+    const rows = pool.filter(sb => {
+        if (otherSportFilter !== 'all' && (sb.sport || 'football') !== otherSportFilter) return false;
+        if (sb.profit_percent < minProfit) return false;
+        if (!sb.stakes.every(s => activeBookmakers.has(s.bookmaker))) return false;
+        if (search) {
+            const haystack = `${sb.home_team} ${sb.away_team} ${sb.league || ''}`.toLowerCase();
+            if (!haystack.includes(search)) return false;
+        }
+        return true;
+    }).sort((a, b) => b.profit_percent - a.profit_percent);
+
+    setText('other-count', pool.length);
+    setText('other-kpi-count', rows.length);
+    const best = rows[0];
+    setText('other-kpi-best', best ? `${best.profit_percent.toFixed(2)}%` : '—');
+    setText('other-kpi-sports', sports.length ? sports.map(s => SPORT_LABELS[s] || s).join(' · ') : 'none yet');
+    const empty = document.getElementById('other-empty');
+    if (empty) empty.hidden = rows.length > 0;
+    grid.innerHTML = rows.map(sb => {
+        const sport = sb.sport || 'football';
+        const legs = sb.stakes.map(stake => `
+            <span class="leg-pill" title="${escapeHtml(bookName(stake.bookmaker))}: ${escapeHtml(outcomeDescription(stake.outcome_label, sb.market_type, sport))} at ${stake.odds.toFixed(2)}">
+                <b>${escapeHtml(bookName(stake.bookmaker))}</b>
+                ${escapeHtml(outcomeDescription(stake.outcome_label, sb.market_type, sport))}
+                <span class="mono">${stake.odds.toFixed(2)}</span>
+            </span>`).join('');
+        return `<article class="other-card" role="listitem" data-sport="${escapeHtml(sport)}">
+            <div class="row-top">
+                <span class="sport-badge">${escapeHtml(SPORT_LABELS[sport] || sport)}</span>
+                <span class="profit mono">${sb.profit_percent.toFixed(2)}%</span>
+            </div>
+            <div class="row-title">${escapeHtml(formatTeamName(sb.home_team))} <span class="row-vs">vs</span> ${escapeHtml(formatTeamName(sb.away_team))}</div>
+            <div class="row-meta"><span class="mkt">${escapeHtml(MARKET_LABELS[sb.market_type] || sb.market_type)}</span><span class="row-league">${escapeHtml(formatLeague(sb.league))}</span></div>
+            <div class="other-legs">${legs}</div>
+        </article>`;
+    }).join('');
 }
 
 function renderSurebets(surebets) {
@@ -632,7 +727,7 @@ function buildSurebetRow(sb) {
     const whenClass = currentMode === 'live' ? ' live' : (minutesAway != null && minutesAway >= 0 && minutesAway < 60 ? ' soon' : '');
     const whenText = whenClass === ' soon' ? `in ${Math.max(1, Math.round(minutesAway))} min` : when;
     const legs = placementOrder(sb.stakes).map(s => `
-        <span class="leg-pill" title="${escapeHtml(bookName(s.bookmaker))}: ${escapeHtml(outcomeDescription(s.outcome_label, sb.market_type))} at ${s.odds.toFixed(2)}">
+        <span class="leg-pill" title="${escapeHtml(bookName(s.bookmaker))}: ${escapeHtml(outcomeDescription(s.outcome_label, sb.market_type, sb.sport))} at ${s.odds.toFixed(2)}">
             <span class="book-dot" style="--color:${escapeHtml(bookColor(s.bookmaker))}">${escapeHtml(bookShort(s.bookmaker))}</span>
             <span class="leg-pick">${escapeHtml(s.outcome_label)}</span>
             <span class="leg-odds">${s.odds.toFixed(2)}</span>
@@ -833,7 +928,7 @@ function renderSlip() {
                     ${destKind ? `<span class="leg-league">${escapeHtml(destKind === 'ticket_filled' ? 'ticket' : destKind === 'match_page' ? 'match page' : destKind)}</span>` : ''}
                 </div>
                 <div class="leg-bet">
-                    <div><span class="leg-k">Pick</span><span class="leg-v">${escapeHtml(pickText)}${escapeHtml(lineText)}</span><span class="leg-sub">${escapeHtml(outcomeDescription(leg.outcome_label, sb.market_type))}</span>${stakeNote}</div>
+                    <div><span class="leg-k">Pick</span><span class="leg-v">${escapeHtml(pickText)}${escapeHtml(lineText)}</span><span class="leg-sub">${escapeHtml(outcomeDescription(leg.outcome_label, sb.market_type, sb.sport))}</span>${stakeNote}</div>
                     <div><span class="leg-k">Odds</span><span class="leg-v mono">${leg.takenOdds.toFixed(2)}</span>${driftNote}</div>
                     <div><span class="leg-k">Stake</span>
                         <button type="button" class="leg-v mono stake-copy" title="Copy stake" onclick="copyText('${stakeText}', 'Stake copied')">${stakeText} KM</button>

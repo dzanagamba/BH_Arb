@@ -960,3 +960,33 @@ kbd {
 .stopped-card { max-width: 420px; padding: 28px; text-align: center; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-lg); }
 .stopped-card h2 { margin: 0 0 8px; font-size: 20px; }
 .stopped-card p { margin: 0; color: var(--muted); line-height: 1.5; }
+
+/* Other sports tab: read-only cards, football panel untouched. */
+.other-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--panel);
+}
+.other-card .row-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.other-card .profit { color: var(--accent); font-weight: 700; }
+.other-card .row-title { font-weight: 650; font-size: 14.5px; }
+.other-card .row-vs { color: var(--muted); font-weight: 500; }
+.other-card .row-meta { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12.5px; }
+.other-card .other-legs { display: flex; flex-wrap: wrap; gap: 6px; }
+.sport-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 7px;
+    border-radius: 999px;
+    border: 1px solid var(--line-strong);
+    background: var(--panel-2);
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 650;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+}

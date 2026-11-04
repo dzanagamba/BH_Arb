@@ -14,6 +14,7 @@ from datetime import UTC, datetime, timedelta
 import httpx
 
 from config.settings import VERIFY_SSL
+from engine import sports
 from engine.market_registry import MARKET_REGISTRY, record_unmapped
 from models.schemas import Market, MarketType, Match, OddsValue
 from scrapers.base import fetch_pages, fetch_with_retry
@@ -27,6 +28,7 @@ BOOKMAKER_ID = "mbet"
 SPORT_MAP: dict[str, str] = {
     "fb": "football",
     "bk": "basketball",
+    "bb": "basketball",
     "tn": "tennis",
     "ih": "hockey",
     "hb": "handball",
@@ -37,8 +39,10 @@ SPORT_MAP: dict[str, str] = {
     "mma": "mma",
     "bx": "boxing",
     "am": "american_football",
+    "af": "american_football",
     "es": "esports",
     "vo": "volleyball",
+    "vb": "volleyball",
     "tt": "table_tennis",
 }
 
@@ -217,12 +221,16 @@ def _resolve_mbet_market(raw_sport_id: str, odds_dict: dict) -> dict[str, list[O
         (MarketType.OVER_UNDER_2_5, f"o{s}:tg:3+", f"o{s}:tg:0-2"),
         (MarketType.OVER_UNDER_1_5, f"o{s}:tg:2+", f"o{s}:tg:0-1"),
         (MarketType.OVER_UNDER_3_5, f"o{s}:tg:4+", f"o{s}:tg:0-3"),
+        (MarketType.OVER_UNDER_4_5, f"o{s}:tg:5+", f"o{s}:tg:0-4"),
+        (MarketType.OVER_UNDER_5_5, f"o{s}:tg:6+", f"o{s}:tg:0-5"),
     ]
     for mt, over_key, under_key in ou_mappings:
         threshold = {
             MarketType.OVER_UNDER_1_5: "1.5",
             MarketType.OVER_UNDER_2_5: "2.5",
             MarketType.OVER_UNDER_3_5: "3.5",
+            MarketType.OVER_UNDER_4_5: "4.5",
+            MarketType.OVER_UNDER_5_5: "5.5",
         }[mt]
         spec = _registered_spec("prematch", "ofb:tg", mt, line=float(threshold))
         over_val = None
@@ -342,6 +350,8 @@ def _resolve_mbet_live_market(odds_dict: dict) -> dict[str, list[OddsValue]]:
         "1.5": (MarketType.OVER_UNDER_1_5, "Over 1.5", "Under 1.5"),
         "2.5": (MarketType.OVER_UNDER_2_5, "Over 2.5", "Under 2.5"),
         "3.5": (MarketType.OVER_UNDER_3_5, "Over 3.5", "Under 3.5"),
+        "4.5": (MarketType.OVER_UNDER_4_5, "Over 4.5", "Under 4.5"),
+        "5.5": (MarketType.OVER_UNDER_5_5, "Over 5.5", "Under 5.5"),
     }
     for key, entry in odds_dict.items():
         if not isinstance(key, str) or not key.startswith("lfb:tg:"):
@@ -378,11 +388,15 @@ def _resolve_mbet_live_market(odds_dict: dict) -> dict[str, list[OddsValue]]:
             "over_under_1_5": ("lfb:tg", MarketType.OVER_UNDER_1_5),
             "over_under_2_5": ("lfb:tg", MarketType.OVER_UNDER_2_5),
             "over_under_3_5": ("lfb:tg", MarketType.OVER_UNDER_3_5),
+            "over_under_4_5": ("lfb:tg", MarketType.OVER_UNDER_4_5),
+            "over_under_5_5": ("lfb:tg", MarketType.OVER_UNDER_5_5),
         }.get(market_key, (None, None))
         line = {
             "over_under_1_5": 1.5,
             "over_under_2_5": 2.5,
             "over_under_3_5": 3.5,
+            "over_under_4_5": 4.5,
+            "over_under_5_5": 5.5,
         }.get(market_key)
         spec = (
             MARKET_REGISTRY.lookup_type(
@@ -397,6 +411,149 @@ def _resolve_mbet_live_market(odds_dict: dict) -> dict[str, list[OddsValue]]:
     return markets
 
 
+def _active(odds_dict: dict, key: str) -> float | None:
+    return _get_active_value(odds_dict.get(key))
+
+
+def _sport_market_keys(sport: str, live: bool) -> dict[str, str]:
+    """Key prefixes for one sport. Live keys carry a leading ``l``."""
+    prefix = f"l{sport}" if live else f"o{sport}"
+    if sport == "bb":
+        return {
+            "moneyline": f"{prefix}:fsot" if not live else f"{prefix}:ft",
+            "handicap": f"{prefix}:hc" if not live else f"{prefix}:h",
+            "total": f"{prefix}:p" if not live else f"{prefix}:tg",
+        }
+    if sport == "tn":
+        return {
+            "moneyline": f"{prefix}:fs",
+            "handicap": f"{prefix}:hg",
+            "total": f"{prefix}:g" if not live else f"{prefix}:tg",
+        }
+    if sport == "ih":
+        return {
+            "moneyline": f"{prefix}:fs" if not live else f"{prefix}:ft",
+            "handicap": f"{prefix}:h",
+            "total": f"{prefix}:g" if not live else f"{prefix}:tg",
+        }
+    return {}
+
+
+def _resolve_mbet_sport_market(
+    sport: str, odds_dict: dict, live: bool = False
+) -> dict[str, list[tuple[MarketType, list[OddsValue], str]]]:
+    """Resolve MBet's non-football keys into canonical sport markets.
+
+    Returns ``{family: [(market_type, odds, settlement)]}``. Only complete
+    two-way sets are kept; a 1/X/2 key that carries a draw is not the two-way
+    basketball moneyline.
+    """
+    canonical = {"bb": sports.BASKETBALL, "tn": sports.TENNIS, "ih": sports.ICE_HOCKEY}.get(sport)
+    spec = sports.spec_for(canonical or "")
+    if spec is None:
+        return {}
+    keys = _sport_market_keys(sport, live)
+    if not keys:
+        return {}
+    out: dict[str, list[tuple[MarketType, list[OddsValue], str]]] = {}
+
+    # Moneyline.
+    one = _active(odds_dict, f"{keys['moneyline']}:1")
+    two = _active(odds_dict, f"{keys['moneyline']}:2")
+    if one and two:
+        labels = spec.moneyline_labels
+        if labels == ("1", "2"):
+            # A 1/X/2 key is a regular-time three-way market, not the two-way
+            # including-overtime winner. It cannot be relabelled as one.
+            if _active(odds_dict, f"{keys['moneyline']}:X") is not None:
+                pass
+            else:
+                out["moneyline"] = [
+                    (
+                        spec.moneyline,
+                        [OddsValue(label="1", value=one), OddsValue(label="2", value=two)],
+                        spec.moneyline_settlement,
+                    )
+                ]
+        elif labels == ("1", "X", "2"):
+            draw = _active(odds_dict, f"{keys['moneyline']}:X")
+            if draw:
+                out["moneyline"] = [
+                    (
+                        spec.moneyline,
+                        [
+                            OddsValue(label="1", value=one),
+                            OddsValue(label="X", value=draw),
+                            OddsValue(label="2", value=two),
+                        ],
+                        spec.moneyline_settlement,
+                    )
+                ]
+
+    # Handicap: side keys H1|line / H2|line (prematch) or 1|line / 2|line.
+    hc_prefix = f"{keys['handicap']}:"
+    lines: dict[float, dict[str, float]] = {}
+    for key, entry in odds_dict.items():
+        if not isinstance(key, str) or not key.startswith(hc_prefix):
+            continue
+        side, _, line_text = key[len(hc_prefix):].partition("|")
+        try:
+            line = float(line_text)
+        except ValueError:
+            continue
+        value = _get_active_value(entry)
+        if value is None:
+            continue
+        # MBet's key line is that side's own line: `1|-2.5` is home -2.5 and
+        # `2|2.5` is away +2.5. Canonicalise to the home line.
+        if side in ("H1", "1"):
+            lines.setdefault(line, {})["1"] = value
+        elif side in ("H2", "2"):
+            lines.setdefault(-line, {})["2"] = value
+    handicap_odds: list[OddsValue] = []
+    for home_line, sides in sorted(lines.items()):
+        if "1" in sides and "2" in sides:
+            from scrapers.common import ah_label
+
+            handicap_odds.extend([
+                OddsValue(label=ah_label("1", home_line), value=sides["1"]),
+                OddsValue(label=ah_label("2", -home_line), value=sides["2"]),
+            ])
+    if handicap_odds:
+        out["handicap"] = [(spec.handicap, handicap_odds, spec.handicap_settlement)]
+
+    # Total: OVER/UNDER tokens per line.
+    total_prefix = f"{keys['total']}:"
+    totals: dict[float, dict[str, float]] = {}
+    for key, entry in odds_dict.items():
+        if not isinstance(key, str) or not key.startswith(total_prefix):
+            continue
+        suffix = key[len(total_prefix):]
+        direction, _, line_text = suffix.partition("|")
+        try:
+            line = abs(float(line_text))
+        except ValueError:
+            continue
+        value = _get_active_value(entry)
+        if value is None:
+            continue
+        token = direction.casefold()
+        if token in ("over", "(+)", "viš", "vis"):
+            totals.setdefault(line, {})["over"] = value
+        elif token in ("under", "(-)", "manj"):
+            totals.setdefault(line, {})["under"] = value
+    total_odds: list[OddsValue] = []
+    for line, sides in sorted(totals.items()):
+        if "over" in sides and "under" in sides:
+            total_odds.extend([
+                OddsValue(label=f"Over {line:g}", value=sides["over"]),
+                OddsValue(label=f"Under {line:g}", value=sides["under"]),
+            ])
+    if total_odds:
+        out["total"] = [(spec.total, total_odds, spec.total_settlement)]
+    return out
+
+
 class MBetScraper:
     """Scraper for mbet.ba — Alea platform, 100-event paginated API."""
 
@@ -404,9 +561,19 @@ class MBetScraper:
         self.base_url = BASE_API
         self.headers = dict(API_HEADERS)
 
-    async def fetch_and_parse(self, live: bool = False, scan_time: datetime | None = None) -> list[Match]:
+    async def fetch_and_parse(
+        self,
+        live: bool = False,
+        scan_time: datetime | None = None,
+        sports_wanted: tuple[str, ...] | list[str] | None = None,
+    ) -> list[Match]:
         # Single wall-clock from run_scan ensures uniform 14-day window across scrapers
         now_aware = (scan_time.replace(tzinfo=UTC) if scan_time and scan_time.tzinfo is None else scan_time) if scan_time else datetime.now(UTC)
+        wanted = (
+            {sports.FOOTBALL}
+            if sports_wanted is None
+            else {sports.normalize_sport(value) or value for value in sports_wanted}
+        )
         now_str = now_aware.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         future = now_aware + timedelta(days=14)
         future_str = future.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
@@ -438,7 +605,7 @@ class MBetScraper:
 
         for e in raw_events:
             try:
-                match = self._parse_event(e, seen_codes, live=live)
+                match = self._parse_event(e, seen_codes, live=live, wanted=wanted)
                 if match:
                     all_matches.append(match)
             except Exception as ex:
@@ -448,11 +615,18 @@ class MBetScraper:
         logger.info(f"[MBet] Total {'live' if live else 'prematch'}: {len(all_matches)} matches")
         return all_matches
 
-    def _parse_event(self, e: dict, seen_codes: set, live: bool = False) -> Match | None:
+    def _parse_event(
+        self,
+        e: dict,
+        seen_codes: set,
+        live: bool = False,
+        wanted: set[str] | None = None,
+    ) -> Match | None:
+        wanted = wanted or {sports.FOOTBALL}
         raw_sport_id = e.get("id_sport", "")
-        sport_name = SPORT_MAP.get(raw_sport_id)
-        if sport_name != "football":
-            return None  # Football-only pipeline — skip all other sports
+        sport_name = sports.normalize_sport(SPORT_MAP.get(raw_sport_id) or raw_sport_id)
+        if sport_name not in wanted:
+            return None
 
         if live and e.get("finished"):
             return None  # Finished live events carry stale/closed odds
@@ -481,30 +655,44 @@ class MBetScraper:
         if not isinstance(raw_odds, dict):
             return None
 
-        market_dicts = (
-            _resolve_mbet_live_market(raw_odds)
-            if live
-            else _resolve_mbet_market(raw_sport_id, raw_odds)
-        )
-
         markets: list[Market] = []
-        for key, odds_list in market_dicts.items():
-            if key == "1X2":
-                markets.append(Market(market_type=MarketType.MATCH_RESULT, odds=odds_list))
-            elif key == "DC":
-                markets.append(Market(market_type=MarketType.DOUBLE_CHANCE, odds=odds_list))
-            elif key == "BTTS":
-                markets.append(Market(market_type=MarketType.BTTS, odds=odds_list))
-            elif key == "first_half_1x2":
-                markets.append(Market(market_type=MarketType.FIRST_HALF_1X2, odds=odds_list))
-            elif key == "asian_handicap":
-                markets.append(Market(market_type=MarketType.ASIAN_HANDICAP, odds=odds_list))
-            elif key == "over_under_1_5":
-                markets.append(Market(market_type=MarketType.OVER_UNDER_1_5, odds=odds_list))
-            elif key == "over_under_2_5":
-                markets.append(Market(market_type=MarketType.OVER_UNDER_2_5, odds=odds_list))
-            elif key == "over_under_3_5":
-                markets.append(Market(market_type=MarketType.OVER_UNDER_3_5, odds=odds_list))
+        if sport_name == sports.FOOTBALL:
+            market_dicts = (
+                _resolve_mbet_live_market(raw_odds)
+                if live
+                else _resolve_mbet_market(raw_sport_id, raw_odds)
+            )
+            for key, odds_list in market_dicts.items():
+                if key == "1X2":
+                    markets.append(Market(market_type=MarketType.MATCH_RESULT, odds=odds_list))
+                elif key == "DC":
+                    markets.append(Market(market_type=MarketType.DOUBLE_CHANCE, odds=odds_list))
+                elif key == "BTTS":
+                    markets.append(Market(market_type=MarketType.BTTS, odds=odds_list))
+                elif key == "first_half_1x2":
+                    markets.append(Market(market_type=MarketType.FIRST_HALF_1X2, odds=odds_list))
+                elif key == "asian_handicap":
+                    markets.append(Market(market_type=MarketType.ASIAN_HANDICAP, odds=odds_list))
+                elif key == "over_under_1_5":
+                    markets.append(Market(market_type=MarketType.OVER_UNDER_1_5, odds=odds_list))
+                elif key == "over_under_2_5":
+                    markets.append(Market(market_type=MarketType.OVER_UNDER_2_5, odds=odds_list))
+                elif key == "over_under_3_5":
+                    markets.append(Market(market_type=MarketType.OVER_UNDER_3_5, odds=odds_list))
+                elif key == "over_under_4_5":
+                    markets.append(Market(market_type=MarketType.OVER_UNDER_4_5, odds=odds_list))
+                elif key == "over_under_5_5":
+                    markets.append(Market(market_type=MarketType.OVER_UNDER_5_5, odds=odds_list))
+        else:
+            for entries in _resolve_mbet_sport_market(raw_sport_id, raw_odds, live=live).values():
+                for market_type, odds_list, settlement in entries:
+                    markets.append(
+                        Market(
+                            market_type=market_type,
+                            odds=odds_list,
+                            settlement=settlement,
+                        )
+                    )
 
         if not markets:
             return None
@@ -513,11 +701,12 @@ class MBetScraper:
         tournament = e.get("tournament") or {}
         category = e.get("category") or {}
         league_name = str(
-            tournament.get("name") or category.get("name") or sport_name.capitalize()
+            tournament.get("name") or category.get("name") or sports.display_name(sport_name)
         )
 
         return Match(
             bookmaker=BOOKMAKER_ID,
+            sport=sport_name,
             home_team=home,
             away_team=away,
             league=league_name,
@@ -531,6 +720,13 @@ class MBetScraper:
             fetched_at=datetime.now(UTC).replace(tzinfo=None),
         )
 
-    async def scrape(self, live: bool = False, scan_time: datetime | None = None) -> list[Match]:
+    async def scrape(
+        self,
+        live: bool = False,
+        scan_time: datetime | None = None,
+        sports_wanted: tuple[str, ...] | list[str] | None = None,
+    ) -> list[Match]:
         """Compatibility wrapper."""
-        return await self.fetch_and_parse(live=live, scan_time=scan_time)
+        return await self.fetch_and_parse(
+            live=live, scan_time=scan_time, sports_wanted=sports_wanted
+        )

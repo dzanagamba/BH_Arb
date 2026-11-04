@@ -24,7 +24,14 @@ from dataclasses import dataclass
 
 from models.schemas import Market, MarketType, OddsValue
 
-_SUPPORTED_LINES = {1.5: MarketType.OVER_UNDER_1_5, 2.5: MarketType.OVER_UNDER_2_5, 3.5: MarketType.OVER_UNDER_3_5}
+_SUPPORTED_LINES = {
+    0.5: MarketType.OVER_UNDER_0_5,
+    1.5: MarketType.OVER_UNDER_1_5,
+    2.5: MarketType.OVER_UNDER_2_5,
+    3.5: MarketType.OVER_UNDER_3_5,
+    4.5: MarketType.OVER_UNDER_4_5,
+    5.5: MarketType.OVER_UNDER_5_5,
+}
 _FIRST_HALF_MARKERS = (
     "1st half",
     "first half",

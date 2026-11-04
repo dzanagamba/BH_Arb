@@ -85,7 +85,8 @@ def test_pk_norm_and_line_parsing():
     assert _parse_line("(-1,5+)") == "1.5"
     assert _parse_line("(-3,5+)") == "3.5"
     assert _parse_line("") is None
-    assert _parse_line("(-0,5+)") is None  # unsupported line
+    assert _parse_line("(-0,5+)") == "0.5"
+    assert _parse_line("(-6,5+)") is None  # a line the scanner does not price
 
 
 def test_pk_markets_classified_correctly():

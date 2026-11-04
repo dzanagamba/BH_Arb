@@ -1,8 +1,10 @@
 # BH_Arb
 
-Arbitrage research scanner for the Bosnian football betting market. It compares
-odds across bookmakers, proves which listings describe the same match, and
-prices only the groups the certainty gate can defend. It never places a bet.
+Arbitrage research scanner for the Bosnian bookmaker market. It compares odds
+across bookmakers, proves which listings describe the same match, and prices
+only the groups the certainty gate can defend. Football stays the primary feed;
+basketball and tennis are admitted only after a measured three-book, three-market
+review (`docs/MULTISPORT_EVIDENCE.md`). It never places a bet.
 
 > ### What `verified` means
 >
@@ -60,6 +62,10 @@ prices only the groups the certainty gate can defend. It never places a bet.
   whether the edge still exists.
 - **Runs two independent feeds**: **Upcoming** (prematch) and **Live**
   (in-play), each with its own cache, locks, diagnostics queue and history.
+- **Adds other sports separately**: a dedicated **Other sports** tab shows
+  basketball and tennis with its own sport filter in both feeds, while the
+  Surebets tab stays football-only. Cross-sport pairing is a hard reject.
+  Details and per-book coverage: `docs/MULTISPORT_EVIDENCE.md`.
 
 ## Quick start
 
@@ -366,6 +372,10 @@ python scripts/derive_mappings.py cache/last_scan.json --apply
 # Regenerate the ID tables in MARKET_MAPPING.md, or fail if they are stale.
 python scripts/generate_market_mapping_doc.py
 python scripts/generate_market_mapping_doc.py --check
+
+# Record one real scan's per-sport metrics, or audit non-football name identity.
+python scripts/record_scan.py prematch --out docs/evidence/prematch-scan.json
+python scripts/audit_nonfootball_matching.py --out docs/evidence/matching-audit.json
 ```
 
 ## Adding bookmakers, markets and names

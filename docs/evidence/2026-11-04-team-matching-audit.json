@@ -1,0 +1,43 @@
+{
+  "books": [
+    "sportplus",
+    "mbet",
+    "mdshop",
+    "maxbet"
+  ],
+  "generated_at": "2026-11-04T10:31:59+00:00",
+  "matches_per_book": {
+    "maxbet": 349,
+    "mbet": 239,
+    "mdshop": 405,
+    "sportplus": 226
+  },
+  "sports": {
+    "basketball": {
+      "exact_name_pairs_in_window": 150,
+      "exact_name_pairs_missed": [],
+      "exact_name_pairs_outside_verified_window": 0,
+      "exact_name_pairs_paired": 150,
+      "false_merges": [],
+      "groups": 107,
+      "matches": 422,
+      "provider_ids": 170,
+      "provider_pairs": 220,
+      "provider_pairs_missed": [],
+      "provider_pairs_paired": 220
+    },
+    "tennis": {
+      "exact_name_pairs_in_window": 202,
+      "exact_name_pairs_missed": [],
+      "exact_name_pairs_outside_verified_window": 44,
+      "exact_name_pairs_paired": 202,
+      "false_merges": [],
+      "groups": 255,
+      "matches": 797,
+      "provider_ids": 278,
+      "provider_pairs": 232,
+      "provider_pairs_missed": [],
+      "provider_pairs_paired": 232
+    }
+  }
+}

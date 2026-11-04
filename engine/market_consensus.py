@@ -24,11 +24,16 @@ _COMPLETE: dict[MarketType, tuple[frozenset[str], int]] = {
     MarketType.MATCH_RESULT: (frozenset({"1", "X", "2"}), 1),
     MarketType.DOUBLE_CHANCE: (frozenset({"1X", "12", "X2"}), 2),
     MarketType.BTTS: (frozenset({"GG", "NG"}), 1),
+    MarketType.OVER_UNDER_0_5: (frozenset({"Over 0.5", "Under 0.5"}), 1),
     MarketType.OVER_UNDER_1_5: (frozenset({"Over 1.5", "Under 1.5"}), 1),
     MarketType.OVER_UNDER_2_5: (frozenset({"Over 2.5", "Under 2.5"}), 1),
     MarketType.OVER_UNDER_3_5: (frozenset({"Over 3.5", "Under 3.5"}), 1),
+    MarketType.OVER_UNDER_4_5: (frozenset({"Over 4.5", "Under 4.5"}), 1),
+    MarketType.OVER_UNDER_5_5: (frozenset({"Over 5.5", "Under 5.5"}), 1),
     MarketType.FIRST_HALF_1X2: (frozenset({"1", "X", "2"}), 1),
     MarketType.FIRST_HALF_OU: (frozenset({"Over 2.5", "Under 2.5"}), 1),
+    MarketType.MONEYLINE: (frozenset({"1", "2"}), 1),
+    MarketType.MONEYLINE_3WAY: (frozenset({"1", "X", "2"}), 1),
 }
 
 

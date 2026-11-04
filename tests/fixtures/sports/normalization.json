@@ -1,0 +1,56 @@
+{
+  "basketball": {
+    "sportplus": {
+      "home": "Spartak Subotica",
+      "away": "Zadar",
+      "league": "ABA LIGA - GRUPA B"
+    },
+    "mdshop": {
+      "home": "KK Spartak Subotica",
+      "away": "Zadar",
+      "league": "ABA liga - Grupa B"
+    },
+    "admiralbet": {
+      "home": "KK Spartak Subotica",
+      "away": "Zadar",
+      "league": "ABA liga - Grupa B"
+    },
+    "mbet": {
+      "home": "Spartak Subotica",
+      "away": "Zadar",
+      "league": "ABA Liga - Grupa B"
+    },
+    "maxbet": {
+      "home": "KK Spartak Subotica",
+      "away": "Zadar",
+      "league": "ABA Liga - Grupa B"
+    }
+  },
+  "tennis": {
+    "sportplus": {
+      "home": "Zverev A.",
+      "away": "Musetti L.",
+      "league": "ATP - PARIZ (M) - TVRDA PODLOGA"
+    },
+    "mdshop": {
+      "home": "Zverev, Alexander",
+      "away": "Musetti, Lorenzo",
+      "league": "Pariz"
+    },
+    "admiralbet": {
+      "home": "Zverev, Alexander",
+      "away": "Musetti, Lorenzo",
+      "league": "Pariz"
+    },
+    "mbet": {
+      "home": "Alexander Zverev",
+      "away": "Lorenzo Musetti",
+      "league": "ATP Pariz"
+    },
+    "maxbet": {
+      "home": "Alexander Zverev",
+      "away": "Lorenzo Musetti",
+      "league": "ATP Pariz"
+    }
+  }
+}

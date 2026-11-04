@@ -1,0 +1,66 @@
+{
+  "compared_market_rows": 5140,
+  "generated_at": "2026-11-04T10:04:02+00:00",
+  "groups": 1009,
+  "markets": {
+    "over_under_0_5": {
+      "admitted": true,
+      "classified_rows": 961,
+      "price_sources": [
+        "maxbet",
+        "nsoft",
+        "premier_kladionica",
+        "wwin"
+      ],
+      "rows": 961,
+      "source_rows": {
+        "maxbet": 46,
+        "nsoft": 264,
+        "premier_kladionica": 645,
+        "wwin": 6
+      }
+    },
+    "over_under_4_5": {
+      "admitted": true,
+      "classified_rows": 3827,
+      "price_sources": [
+        "maxbet",
+        "mbet",
+        "nsoft",
+        "premier_kladionica",
+        "wwin"
+      ],
+      "rows": 3827,
+      "source_rows": {
+        "maxbet": 991,
+        "mbet": 805,
+        "nsoft": 731,
+        "premier_kladionica": 982,
+        "wwin": 318
+      }
+    },
+    "over_under_5_5": {
+      "admitted": true,
+      "classified_rows": 2452,
+      "price_sources": [
+        "maxbet",
+        "mbet",
+        "nsoft",
+        "premier_kladionica",
+        "wwin"
+      ],
+      "rows": 2452,
+      "source_rows": {
+        "maxbet": 530,
+        "mbet": 728,
+        "nsoft": 460,
+        "premier_kladionica": 713,
+        "wwin": 21
+      }
+    }
+  },
+  "matches": 4611,
+  "method": "at least three independent price sources, every label set classifies to the line, and zero devigged-median outliers on the verified groups",
+  "outlier_count": 0,
+  "outliers": []
+}

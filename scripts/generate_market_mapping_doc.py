@@ -42,12 +42,19 @@ MARKET_TYPE_LABEL: dict[MarketType, str] = {
     MarketType.MATCH_RESULT: "Full-time 1X2",
     MarketType.DOUBLE_CHANCE: "Double Chance",
     MarketType.BTTS: "BTTS",
+    MarketType.OVER_UNDER_0_5: "Over/Under 0.5",
     MarketType.OVER_UNDER_1_5: "Over/Under 1.5",
     MarketType.OVER_UNDER_2_5: "Over/Under 2.5",
     MarketType.OVER_UNDER_3_5: "Over/Under 3.5",
+    MarketType.OVER_UNDER_4_5: "Over/Under 4.5",
+    MarketType.OVER_UNDER_5_5: "Over/Under 5.5",
     MarketType.FIRST_HALF_1X2: "First-half 1X2",
     MarketType.FIRST_HALF_OU: "First-half Over/Under",
     MarketType.ASIAN_HANDICAP: "Asian Handicap",
+    MarketType.MONEYLINE: "Moneyline (two-way)",
+    MarketType.MONEYLINE_3WAY: "Moneyline (three-way)",
+    MarketType.HANDICAP: "Handicap",
+    MarketType.TOTAL: "Total",
 }
 
 MAPPED_HEADER = "| Bookmaker | Mode | Market | Source IDs | Outcome labels | Min legs | Line | Settlement |"

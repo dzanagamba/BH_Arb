@@ -9,11 +9,13 @@ Returns: { "matches": [...] } with competitor names and market arrays.
 
 import json
 import logging
+import re
 from datetime import UTC, datetime
 
 import httpx
 
 from config.settings import VERIFY_SSL
+from engine import sports
 from engine.market_registry import MARKET_REGISTRY, record_unmapped
 from models.schemas import Market, MarketType, Match, OddsValue
 from scrapers.base import fetch_with_retry
@@ -27,7 +29,7 @@ SPORT_MAP: dict[str, str] = {
     "NOGOMET": "football",
     "KOŠARKA": "basketball",
     "TENIS": "tennis",
-    "HOKEJ": "hockey",
+    "HOKEJ": "ice_hockey",
     "RUKOMET": "handball",
     "VATERPOLO": "waterpolo",
     "BASEBALL": "baseball",
@@ -36,6 +38,10 @@ SPORT_MAP: dict[str, str] = {
     "ULTIMATE FIGHT": "mma",
     "BOKS": "boxing",
     "FUTSAL": "futsal",
+    "AM. NOGOMET": "american_football",
+    "AMERIČKI NOGOMET": "american_football",
+    "ODBOJKA": "volleyball",
+    "STOLNI TENIS": "table_tennis",
 }
 
 API_HEADERS = {
@@ -50,6 +56,154 @@ API_HEADERS = {
 
 BASE_API = "https://www.sportplus.ba/api/v1/prematch/offer"
 LIVE_API = "https://www.sportplus.ba/api/v1/live/offer"
+
+_PREFIX_LABEL = re.compile(r"^[A-Z]{1,3}/")
+_NUMBER = re.compile(r"[+-]?\d+(?:[.,]\d+)?")
+
+
+def _wanted_sports(values: tuple[str, ...] | list[str] | None) -> set[str]:
+    """Canonical sports to parse. Default is football, the historical path."""
+    if values is None:
+        return {sports.FOOTBALL}
+    wanted = {sports.normalize_sport(value) or value for value in values}
+    return wanted or {sports.FOOTBALL}
+
+
+def _line_from_text(text: str) -> float | None:
+    """Last signed decimal in a label/competitor string, comma or dot."""
+    matches = _NUMBER.findall(str(text or ""))
+    if not matches:
+        return None
+    try:
+        return float(matches[-1].replace(",", "."))
+    except ValueError:
+        return None
+
+
+def _sportplus_odds(odds_raw: list) -> dict[str, float]:
+    values: dict[str, float] = {}
+    for odd in odds_raw:
+        if not isinstance(odd, dict):
+            continue
+        alias = str(odd.get("alias") or odd.get("field") or "")
+        try:
+            value = float(odd.get("value") or 0.0)
+        except (TypeError, ValueError):
+            continue
+        if value >= 1.01:
+            values[alias] = max(values.get(alias, 0.0), value)
+    return values
+
+
+_PERIOD_MARKERS = (
+    "set",
+    "četvrt",
+    "cetvrt",
+    "poluvrijeme",
+    "poluvreme",
+    "trećin",
+    "trecin",
+    "inning",
+    "period",
+)
+
+
+def _has_period_marker(text: str) -> bool:
+    folded = " ".join(str(text or "").casefold().split())
+    return any(marker in folded for marker in _PERIOD_MARKERS)
+
+
+def _parse_sportplus_sport_markets(
+    raw_markets: list, sport: str, live: bool = False
+) -> list[Market]:
+    """Classify SportPlus basketball/tennis markets by name and structure."""
+    spec = sports.spec_for(sport)
+    if spec is None:
+        return []
+    result: list[Market] = []
+    for raw in raw_markets:
+        if not isinstance(raw, dict):
+            continue
+        name = " ".join(str(raw.get("name") or "").strip().split())
+        folded = name.casefold()
+        competitors = str(raw.get("competitors") or "")
+        odds = _sportplus_odds(raw.get("odds", []))
+        if not odds:
+            continue
+
+        family = ""
+        settlement = ""
+        line: float | None = None
+        if sport == sports.BASKETBALL:
+            if folded in ("pobjednik", "konačan pobjednik", "konacan pobjednik"):
+                # Prematch "POBJEDNIK" is including overtime; the live feed's
+                # "Pobjednik" is regular time and "Konačan pobjednik" is the
+                # including-overtime one. Only the latter two-family name or the
+                # prematch description proves the settlement.
+                if live and folded == "pobjednik":
+                    continue
+                family, settlement = "moneyline", spec.moneyline_settlement
+            elif "hendikep" in folded and not _has_period_marker(folded):
+                family, settlement = "handicap", spec.handicap_settlement
+                line = _line_from_text(name if live else competitors)
+            elif folded.startswith("zbroj") and "uključ" not in folded and "ukljuc" not in folded:
+                if _has_period_marker(folded):
+                    continue
+                family, settlement = "total", spec.total_settlement
+                line = _line_from_text(name if live else competitors)
+        elif sport == sports.TENNIS:
+            if folded in ("osnovno", "pobjednik"):
+                family, settlement = "moneyline", spec.moneyline_settlement
+            elif "hendikep gemova" in folded and not _has_period_marker(folded):
+                family, settlement = "handicap", spec.handicap_settlement
+                line = _line_from_text(name if live else competitors)
+            elif folded.startswith("zbroj gemova") and not _has_period_marker(folded):
+                family, settlement = "total", spec.total_settlement
+                line = _line_from_text(name if live else competitors)
+        if not family:
+            continue
+
+        if family == "moneyline":
+            labels = spec.moneyline_labels
+            picked = [(label, odds[label]) for label in labels if label in odds]
+            if len(picked) != len(labels):
+                continue
+            market_type = spec.moneyline
+        elif family == "handicap":
+            if line is None or "1" not in odds or "2" not in odds:
+                continue
+            from scrapers.common import ah_label
+
+            market_type = spec.handicap
+            # SportPlus writes the underdog/away line in the competitors suffix
+            # (`h/Fils(+2,5)`), so the home line is its negation.
+            home_line = -line
+            picked = [
+                (ah_label("1", home_line), odds["1"]),
+                (ah_label("2", -home_line), odds["2"]),
+            ]
+        else:
+            if line is None:
+                continue
+            under = odds.get("Manje") or odds.get("1(M)") or odds.get("M")
+            over = odds.get("Više") or odds.get("Vise") or odds.get("2(V)") or odds.get("V")
+            if not over or not under:
+                continue
+            market_type = spec.total
+            magnitude = abs(line)
+            picked = [(f"Over {magnitude:g}", over), (f"Under {magnitude:g}", under)]
+
+        result.append(
+            Market(
+                market_type=market_type,
+                odds=[OddsValue(label=label, value=value) for label, value in picked],
+                source_id=str(raw.get("id") or ""),
+                settlement=settlement,
+                period="full_time",
+            )
+        )
+    return result
+
 
 
 def _registered_spec(
@@ -74,9 +228,15 @@ class SportPlusScraper:
         self.url = BASE_API
         self.headers = dict(API_HEADERS)
 
-    async def fetch_and_parse(self, live: bool = False, scan_time: datetime | None = None) -> list[Match]:
+    async def fetch_and_parse(
+        self,
+        live: bool = False,
+        scan_time: datetime | None = None,
+        sports_wanted: tuple[str, ...] | list[str] | None = None,
+    ) -> list[Match]:
+        wanted = _wanted_sports(sports_wanted)
         if live:
-            return await self._fetch_live(scan_time=scan_time)
+            return await self._fetch_live(scan_time=scan_time, sports_wanted=wanted)
         all_matches: list[Match] = []
         seen_codes: set[tuple] = set()
 
@@ -97,7 +257,7 @@ class SportPlusScraper:
 
                 for m in raw_matches:
                     try:
-                        match = self._parse_match(m, seen_codes)
+                        match = self._parse_match(m, seen_codes, wanted)
                         if match:
                             all_matches.append(match)
                     except Exception as e:
@@ -110,8 +270,13 @@ class SportPlusScraper:
         logger.info(f"[SportPlus] Total: {len(all_matches)} matches")
         return all_matches
 
-    async def _fetch_live(self, scan_time: datetime | None = None) -> list[Match]:
+    async def _fetch_live(
+        self,
+        scan_time: datetime | None = None,
+        sports_wanted: set[str] | None = None,
+    ) -> list[Match]:
         """Fetch and parse the in-play offer (`/api/v1/live/offer`)."""
+        wanted = sports_wanted or {sports.FOOTBALL}
         all_matches: list[Match] = []
         seen_ids: set[str] = set()
 
@@ -127,15 +292,16 @@ class SportPlusScraper:
                     data = json.loads(data)
 
                 # Live payload: { "date": ..., "sports": [{ id, name, matches: [...] }] }
-                sports = data.get("sports", []) if isinstance(data, dict) else []
-                for sport in sports:
+                sports_raw = data.get("sports", []) if isinstance(data, dict) else []
+                for sport in sports_raw:
                     if not isinstance(sport, dict):
                         continue
-                    if str(sport.get("name", "")).upper() != "NOGOMET":
+                    sport_name = sports.normalize_sport(sport.get("name"))
+                    if sport_name not in wanted:
                         continue
                     for m in sport.get("matches", []):
                         try:
-                            match = self._parse_live_match(m, seen_ids)
+                            match = self._parse_live_match(m, seen_ids, sport_name)
                             if match:
                                 all_matches.append(match)
                         except Exception as e:
@@ -147,7 +313,7 @@ class SportPlusScraper:
         logger.info(f"[SportPlus] Live total: {len(all_matches)} matches")
         return all_matches
 
-    def _parse_live_match(self, m: dict, seen_ids: set) -> Match | None:
+    def _parse_live_match(self, m: dict, seen_ids: set, sport: str = "football") -> Match | None:
         """Parse a live match object (nested under sports[].matches)."""
         if not isinstance(m, dict):
             return None
@@ -162,21 +328,22 @@ class SportPlusScraper:
         home = str(m.get("home", "") or "").strip().rstrip("/").strip()
         away = str(m.get("away", "") or "").strip().rstrip("/").strip()
         # Live feeds prefix names with short labels like "ML/" or "SR/"
-        import re as _re
-        home = _re.sub(r"^[A-Z]{1,3}/", "", home).strip()
-        away = _re.sub(r"^[A-Z]{1,3}/", "", away).strip()
+        home = _PREFIX_LABEL.sub("", home).strip()
+        away = _PREFIX_LABEL.sub("", away).strip()
         if not home or not away or home.lower() == away.lower():
             return None
 
-        markets = self._parse_live_markets(m.get("markets", []))
+        markets = self._parse_live_markets(m.get("markets", []), sport)
         if not markets:
             return None
 
+        league = str(m.get("leagueName") or sports.display_name(sport))
         return Match(
             bookmaker=BOOKMAKER_ID,
+            sport=sport,
             home_team=home,
             away_team=away,
-            league="Fudbal",
+            league=league,
             kickoff=None,
             markets=markets,
             url="https://www.sportplus.ba/live",
@@ -188,7 +355,13 @@ class SportPlusScraper:
             fetched_at=datetime.now(UTC).replace(tzinfo=None),
         )
 
-    def _parse_live_markets(self, raw_markets: list) -> list[Market]:
+    def _parse_live_markets(self, raw_markets: list, sport: str = "football") -> list[Market]:
+        """Parse live markets; non-football uses the sport vocabulary."""
+        if sport != sports.FOOTBALL:
+            return _parse_sportplus_sport_markets(raw_markets, sport, live=True)
+        return self._parse_live_markets_football(raw_markets)
+
+    def _parse_live_markets_football(self, raw_markets: list) -> list[Market]:
         """
         Parse live SportPlus markets by NAME (the live ID space is shared
         across sports, so IDs alone are ambiguous):
@@ -308,11 +481,12 @@ class SportPlusScraper:
                     append_market(market_type, ou_odds)
         return result
 
-    def _parse_match(self, m: dict, seen_codes: set) -> Match | None:
+    def _parse_match(self, m: dict, seen_codes: set, wanted: set[str] | None = None) -> Match | None:
+        wanted = wanted or {sports.FOOTBALL}
         raw_sport = str(m.get("sportName", "")).upper()
-        sport_name = SPORT_MAP.get(raw_sport)
-        if sport_name != "football":
-            return None  # Football-only pipeline — skip all other sports
+        sport_name = sports.normalize_sport(SPORT_MAP.get(raw_sport) or raw_sport)
+        if not sport_name or sport_name not in wanted:
+            return None
 
         competitors_str = m.get("competitors", "")
         if " - " not in competitors_str:
@@ -338,9 +512,13 @@ class SportPlusScraper:
         league_raw = m.get("leagueName")
         country_raw = m.get("countryName")
         country = str(country_raw).strip() if country_raw else ""
-        league_name = qualify_league(str(league_raw or ""), country) or sport_name.capitalize()
+        if sport_name == sports.FOOTBALL:
+            league_name = qualify_league(str(league_raw or ""), country)
+        else:
+            league_name = str(league_raw or "").strip()
+        league_name = league_name or sports.display_name(sport_name)
 
-        markets = self._parse_markets(m.get("markets", []))
+        markets = self._parse_markets(m.get("markets", []), sport_name)
         if not markets:
             return None
         for market in markets:
@@ -353,6 +531,7 @@ class SportPlusScraper:
 
         return Match(
             bookmaker=BOOKMAKER_ID,
+            sport=sport_name,
             home_team=home,
             away_team=away,
             league=league_name,
@@ -367,8 +546,10 @@ class SportPlusScraper:
             fetched_at=datetime.now(UTC).replace(tzinfo=None),
         )
 
-    def _parse_markets(self, raw_markets: list) -> list[Market]:
+    def _parse_markets(self, raw_markets: list, sport: str = "football") -> list[Market]:
         """Parse SportPlus market objects into Market list."""
+        if sport != sports.FOOTBALL:
+            return _parse_sportplus_sport_markets(raw_markets, sport, live=False)
         # SportPlus exposes standard O/U 2.5 (id=768) and the same threshold
         # through the goal-range blocks (ids=800/802). Keep one canonical
         # market per type while retaining the best valid quote if both blocks
@@ -648,6 +829,11 @@ class SportPlusScraper:
             return [gg, ng]
         return []
 
-    async def scrape(self, live: bool = False, scan_time: datetime | None = None) -> list[Match]:
+    async def scrape(
+        self,
+        live: bool = False,
+        scan_time: datetime | None = None,
+        sports_wanted: tuple[str, ...] | list[str] | None = None,
+    ) -> list[Match]:
         """Compatibility wrapper."""
-        return await self.fetch_and_parse(live=live, scan_time=scan_time)
+        return await self.fetch_and_parse(live=live, scan_time=scan_time, sports_wanted=sports_wanted)

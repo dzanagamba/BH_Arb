@@ -1073,7 +1073,8 @@ def test_same_betradar_id_verifies_despite_different_names():
     assert league.reason == "betradar_id"
 
 
-def test_same_betradar_id_still_needs_the_kickoff():
+def test_same_betradar_id_overrides_a_disagreeing_kickoff():
+    """A provider id is per event; measured feeds differed by up to 5h40."""
     gate = CertaintyGate()
     a = _m("mdshop", "Man. City", "Arsenal", "England 1", betradar_id="111")
     b = _m(
@@ -1082,8 +1083,21 @@ def test_same_betradar_id_still_needs_the_kickoff():
     )
     gate.normalize([a, b])
     result = gate.evaluate_pair(a, b)
+    assert result.status == "verified"
+    assert "kickoff_delta" not in result.reasons
+    kickoff = next(item for item in result.evidence if item.rule == "kickoff")
+    assert kickoff.kickoff_delta_minutes == 60
+
+
+def test_same_betradar_id_without_an_orientation_is_not_verified():
+    """The id says same event, but names that tie both ways cannot orient it."""
+    gate = CertaintyGate()
+    a = _m("mdshop", "Aa", "Bb", "League", betradar_id="111")
+    b = _m("wwin", "Cc", "Dd", "League", betradar_id="111")
+    gate.normalize([a, b])
+    result = gate.evaluate_pair(a, b)
     assert result.status != "verified"
-    assert "kickoff_delta" in result.reasons
+    assert "orientation_unresolved" in result.reasons
 
 
 def test_different_betradar_ids_reject():

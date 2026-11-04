@@ -163,7 +163,7 @@ def _parse_markets(
     dc_odds: list[OddsValue] = []
     btts_dict: dict[str, float] = {}
     ou_dict: dict[str, dict[str, float]] = {
-        "1.5": {}, "2.5": {}, "3.5": {}
+        "1.5": {}, "2.5": {}, "3.5": {}, "4.5": {}, "5.5": {}
     }
 
     for o in raw_odds:
@@ -231,11 +231,15 @@ def _parse_markets(
                 "2+": "1.5", "0-1": "1.5",
                 "3+": "2.5", "0-2": "2.5",
                 "4+": "3.5", "0-3": "3.5",
+                "5+": "4.5", "0-4": "4.5",
+                "6+": "5.5", "0-5": "5.5",
             }.get(sname)
             market_type = {
                 "1.5": MarketType.OVER_UNDER_1_5,
                 "2.5": MarketType.OVER_UNDER_2_5,
                 "3.5": MarketType.OVER_UNDER_3_5,
+                "4.5": MarketType.OVER_UNDER_4_5,
+                "5.5": MarketType.OVER_UNDER_5_5,
             }.get(line_name or "")
             spec = (
                 _registered_spec(
@@ -249,7 +253,7 @@ def _parse_markets(
                 else None
             )
             if spec is not None and line_name is not None:
-                if sname in ("2+", "3+", "4+"):
+                if sname in ("2+", "3+", "4+", "5+", "6+"):
                     label = f"Over {line_name}"
                 else:
                     label = f"Under {line_name}"
@@ -294,6 +298,8 @@ def _parse_markets(
         "1.5": MarketType.OVER_UNDER_1_5,
         "2.5": MarketType.OVER_UNDER_2_5,
         "3.5": MarketType.OVER_UNDER_3_5,
+        "4.5": MarketType.OVER_UNDER_4_5,
+        "5.5": MarketType.OVER_UNDER_5_5,
     }
     for thresh, odds_map in ou_dict.items():
         over_label = f"Over {thresh}"

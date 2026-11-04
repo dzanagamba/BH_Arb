@@ -1,15 +1,20 @@
 # Football Market Mapping
 
 This is the canonical market audit for the ten configured bookmakers in
-`config/settings.BOOKMAKERS`. The scanner enables all nine `MarketType` values
-in `models/schemas.py`. First-half 1X2 (`first_half_1x2`) and Asian handicap
-(`asian_handicap`) are parsed directly by individual scrapers and were proven on
-the 2026-11-03 real scan (1,875 and 1,368 rows, 0 price outliers across 4,374
-comparisons). First-half over/under (`first_half_ou`) is enabled but had no
-offer in that scan; it is parsed by Premier Kladionica and the cross-book price
-guard applies if a book starts publishing it. Any offer with a similar-looking
-outcome label is ignored unless its settlement meaning and complete outcome set
-are known.
+`config/settings.BOOKMAKERS`. The football scanner enables nine of the sixteen
+`MarketType` values in `models/schemas.py`; the other seven model the expanded
+multi-sport scanner and the measured extra football lines:
+`over_under_0_5`, `over_under_4_5`, `over_under_5_5`, `moneyline`,
+`moneyline_3way`, `handicap` and `total`. A non-football market is always scoped
+by the listing's `sport`, so `total` means points in basketball and games in
+tennis and the two can never be paired. First-half 1X2 (`first_half_1x2`) and
+Asian handicap (`asian_handicap`) are parsed directly by individual scrapers and
+were proven on the 2026-11-03 real scan (1,875 and 1,368 rows, 0 price outliers
+across 4,374 comparisons). First-half over/under (`first_half_ou`) is enabled but
+had no offer in that scan; it is parsed by Premier Kladionica and the cross-book
+price guard applies if a book starts publishing it. Any offer with a
+similar-looking outcome label is ignored unless its settlement meaning and
+complete outcome set are known.
 
 Audit date: 2026-08-14; prematch and live captures re-taken 2026-10-20 (EVLBet has no
 feed to capture); MaxBet captured 2026-10-27. Live sources were checked where the bookmaker API was
@@ -36,7 +41,7 @@ Verify without writing: `python scripts/generate_market_mapping_doc.py --check`
 Source of truth: `config/bookmaker_markets.json`, loaded by
 `engine/market_registry.py`. Values below are resolved through the loader,
 so registry defaults (outcome labels, min legs, settlement) are included.
-Covers 10 bookmakers and 97 book/mode/market rows.
+Covers 10 bookmakers and 135 book/mode/market rows.
 
 Scope: these are the IDs the **registry declares**. It is the authority on
 the declared mapping, not on parser dispatch — a book's parser may read a
@@ -55,54 +60,82 @@ bottom of this file say so.
 | `mdshop` | prematch | Over/Under 1.5 (`over_under_1_5`) | `137`, `138` | Over 1.5, Under 1.5 | 2 | 1.5 | full_time |
 | `mdshop` | prematch | Over/Under 2.5 (`over_under_2_5`) | `137`, `138` | Over 2.5, Under 2.5 | 2 | 2.5 | full_time |
 | `mdshop` | prematch | Over/Under 3.5 (`over_under_3_5`) | `137`, `138` | Over 3.5, Under 3.5 | 2 | 3.5 | full_time |
+| `mdshop` | prematch | Over/Under 0.5 (`over_under_0_5`) | `137`, `138` | Over 0.5, Under 0.5 | 2 | 0.5 | full_time |
+| `mdshop` | prematch | Over/Under 4.5 (`over_under_4_5`) | `137`, `138` | Over 4.5, Under 4.5 | 2 | 4.5 | full_time |
+| `mdshop` | prematch | Over/Under 5.5 (`over_under_5_5`) | `137`, `138` | Over 5.5, Under 5.5 | 2 | 5.5 | full_time |
 | `mdshop` | live | Over/Under 1.5 (`over_under_1_5`) | `22` | Over 1.5, Under 1.5 | 2 | 1.5 | full_time |
 | `mdshop` | live | Over/Under 2.5 (`over_under_2_5`) | `22` | Over 2.5, Under 2.5 | 2 | 2.5 | full_time |
 | `mdshop` | live | Over/Under 3.5 (`over_under_3_5`) | `22` | Over 3.5, Under 3.5 | 2 | 3.5 | full_time |
+| `mdshop` | live | Over/Under 0.5 (`over_under_0_5`) | `22` | Over 0.5, Under 0.5 | 2 | 0.5 | full_time |
+| `mdshop` | live | Over/Under 4.5 (`over_under_4_5`) | `22` | Over 4.5, Under 4.5 | 2 | 4.5 | full_time |
+| `mdshop` | live | Over/Under 5.5 (`over_under_5_5`) | `22` | Over 5.5, Under 5.5 | 2 | 5.5 | full_time |
 | `admiralbet` | prematch | Full-time 1X2 (`1x2`) | `1639` | 1, 2, X | 3 | — | full_time |
 | `admiralbet` | prematch | Double Chance (`double_chance`) | `152` | 12, 1X, X2 | 2 | — | full_time |
 | `admiralbet` | prematch | BTTS (`btts`) | `151` | GG, NG | 2 | — | full_time |
 | `admiralbet` | prematch | Over/Under 1.5 (`over_under_1_5`) | `137`, `138` | Over 1.5, Under 1.5 | 2 | 1.5 | full_time |
 | `admiralbet` | prematch | Over/Under 2.5 (`over_under_2_5`) | `137`, `138` | Over 2.5, Under 2.5 | 2 | 2.5 | full_time |
 | `admiralbet` | prematch | Over/Under 3.5 (`over_under_3_5`) | `137`, `138` | Over 3.5, Under 3.5 | 2 | 3.5 | full_time |
+| `admiralbet` | prematch | Over/Under 0.5 (`over_under_0_5`) | `137`, `138` | Over 0.5, Under 0.5 | 2 | 0.5 | full_time |
+| `admiralbet` | prematch | Over/Under 4.5 (`over_under_4_5`) | `137`, `138` | Over 4.5, Under 4.5 | 2 | 4.5 | full_time |
+| `admiralbet` | prematch | Over/Under 5.5 (`over_under_5_5`) | `137`, `138` | Over 5.5, Under 5.5 | 2 | 5.5 | full_time |
 | `admiralbet` | live | Over/Under 1.5 (`over_under_1_5`) | `22` | Over 1.5, Under 1.5 | 2 | 1.5 | full_time |
 | `admiralbet` | live | Over/Under 2.5 (`over_under_2_5`) | `22` | Over 2.5, Under 2.5 | 2 | 2.5 | full_time |
 | `admiralbet` | live | Over/Under 3.5 (`over_under_3_5`) | `22` | Over 3.5, Under 3.5 | 2 | 3.5 | full_time |
+| `admiralbet` | live | Over/Under 0.5 (`over_under_0_5`) | `22` | Over 0.5, Under 0.5 | 2 | 0.5 | full_time |
+| `admiralbet` | live | Over/Under 4.5 (`over_under_4_5`) | `22` | Over 4.5, Under 4.5 | 2 | 4.5 | full_time |
+| `admiralbet` | live | Over/Under 5.5 (`over_under_5_5`) | `22` | Over 5.5, Under 5.5 | 2 | 5.5 | full_time |
 | `wwin` | prematch | Full-time 1X2 (`1x2`) | `95` | 1, 2, X | 3 | — | full_time |
 | `wwin` | prematch | Double Chance (`double_chance`) | `6` | 12, 1X, X2 | 2 | — | full_time |
 | `wwin` | prematch | BTTS (`btts`) | `3` | GG, NG | 2 | — | full_time |
 | `wwin` | prematch | Over/Under 1.5 (`over_under_1_5`) | `11` | Over 1.5, Under 1.5 | 2 | 1.5 | full_time |
 | `wwin` | prematch | Over/Under 2.5 (`over_under_2_5`) | `11` | Over 2.5, Under 2.5 | 2 | 2.5 | full_time |
 | `wwin` | prematch | Over/Under 3.5 (`over_under_3_5`) | `11` | Over 3.5, Under 3.5 | 2 | 3.5 | full_time |
+| `wwin` | prematch | Over/Under 0.5 (`over_under_0_5`) | `11` | Over 0.5, Under 0.5 | 2 | 0.5 | full_time |
+| `wwin` | prematch | Over/Under 4.5 (`over_under_4_5`) | `11` | Over 4.5, Under 4.5 | 2 | 4.5 | full_time |
+| `wwin` | prematch | Over/Under 5.5 (`over_under_5_5`) | `11` | Over 5.5, Under 5.5 | 2 | 5.5 | full_time |
 | `wwin` | live | Full-time 1X2 (`1x2`) | `95` | 1, 2, X | 3 | — | full_time |
 | `wwin` | live | Double Chance (`double_chance`) | `6` | 12, 1X, X2 | 2 | — | full_time |
 | `wwin` | live | BTTS (`btts`) | `3` | GG, NG | 2 | — | full_time |
 | `wwin` | live | Over/Under 1.5 (`over_under_1_5`) | `11` | Over 1.5, Under 1.5 | 2 | 1.5 | full_time |
 | `wwin` | live | Over/Under 2.5 (`over_under_2_5`) | `11` | Over 2.5, Under 2.5 | 2 | 2.5 | full_time |
 | `wwin` | live | Over/Under 3.5 (`over_under_3_5`) | `11` | Over 3.5, Under 3.5 | 2 | 3.5 | full_time |
+| `wwin` | live | Over/Under 0.5 (`over_under_0_5`) | `11` | Over 0.5, Under 0.5 | 2 | 0.5 | full_time |
+| `wwin` | live | Over/Under 4.5 (`over_under_4_5`) | `11` | Over 4.5, Under 4.5 | 2 | 4.5 | full_time |
+| `wwin` | live | Over/Under 5.5 (`over_under_5_5`) | `11` | Over 5.5, Under 5.5 | 2 | 5.5 | full_time |
 | `premier_kladionica` | prematch | Full-time 1X2 (`1x2`) | `UTAKMICA_1X2` | 1, 2, X | 3 | — | full_time |
 | `premier_kladionica` | prematch | Double Chance (`double_chance`) | `UTAKMICA_DC` | 12, 1X, X2 | 2 | — | full_time |
 | `premier_kladionica` | prematch | BTTS (`btts`) | `OBA_DAJU_GOL` | GG, NG | 2 | — | full_time |
 | `premier_kladionica` | prematch | Over/Under 1.5 (`over_under_1_5`) | `ZBROJ_GOLOVA` | Over 1.5, Under 1.5 | 2 | 1.5 | full_time |
 | `premier_kladionica` | prematch | Over/Under 2.5 (`over_under_2_5`) | `ZBROJ_GOLOVA` | Over 2.5, Under 2.5 | 2 | 2.5 | full_time |
 | `premier_kladionica` | prematch | Over/Under 3.5 (`over_under_3_5`) | `ZBROJ_GOLOVA` | Over 3.5, Under 3.5 | 2 | 3.5 | full_time |
+| `premier_kladionica` | prematch | Over/Under 0.5 (`over_under_0_5`) | `ZBROJ_GOLOVA` | Over 0.5, Under 0.5 | 2 | 0.5 | full_time |
+| `premier_kladionica` | prematch | Over/Under 4.5 (`over_under_4_5`) | `ZBROJ_GOLOVA` | Over 4.5, Under 4.5 | 2 | 4.5 | full_time |
+| `premier_kladionica` | prematch | Over/Under 5.5 (`over_under_5_5`) | `ZBROJ_GOLOVA` | Over 5.5, Under 5.5 | 2 | 5.5 | full_time |
 | `premier_kladionica` | live | Full-time 1X2 (`1x2`) | `LIVE_UTAKMICA` | 1, 2, X | 3 | — | full_time |
 | `premier_kladionica` | live | Double Chance (`double_chance`) | `LIVE_UTAKMICA_DC` | 12, 1X, X2 | 2 | — | full_time |
 | `premier_kladionica` | live | BTTS (`btts`) | `LIVE_OBA_DAJU_GOL` | GG, NG | 2 | — | full_time |
 | `premier_kladionica` | live | Over/Under 1.5 (`over_under_1_5`) | `LIVE_ZBROJ_GOLOVA` | Over 1.5, Under 1.5 | 2 | 1.5 | full_time |
 | `premier_kladionica` | live | Over/Under 2.5 (`over_under_2_5`) | `LIVE_ZBROJ_GOLOVA` | Over 2.5, Under 2.5 | 2 | 2.5 | full_time |
 | `premier_kladionica` | live | Over/Under 3.5 (`over_under_3_5`) | `LIVE_ZBROJ_GOLOVA` | Over 3.5, Under 3.5 | 2 | 3.5 | full_time |
+| `premier_kladionica` | live | Over/Under 0.5 (`over_under_0_5`) | `LIVE_ZBROJ_GOLOVA` | Over 0.5, Under 0.5 | 2 | 0.5 | full_time |
+| `premier_kladionica` | live | Over/Under 4.5 (`over_under_4_5`) | `LIVE_ZBROJ_GOLOVA` | Over 4.5, Under 4.5 | 2 | 4.5 | full_time |
+| `premier_kladionica` | live | Over/Under 5.5 (`over_under_5_5`) | `LIVE_ZBROJ_GOLOVA` | Over 5.5, Under 5.5 | 2 | 5.5 | full_time |
 | `mbet` | prematch | Full-time 1X2 (`1x2`) | `ofb:fs` | 1, 2, X | 3 | — | full_time |
 | `mbet` | prematch | Double Chance (`double_chance`) | `ofb:dc` | 12, 1X, X2 | 2 | — | full_time |
 | `mbet` | prematch | BTTS (`btts`) | `ofb:gg` | GG, NG | 2 | — | full_time |
 | `mbet` | prematch | Over/Under 1.5 (`over_under_1_5`) | `ofb:tg` | Over 1.5, Under 1.5 | 2 | 1.5 | full_time |
 | `mbet` | prematch | Over/Under 2.5 (`over_under_2_5`) | `ofb:tg` | Over 2.5, Under 2.5 | 2 | 2.5 | full_time |
 | `mbet` | prematch | Over/Under 3.5 (`over_under_3_5`) | `ofb:tg` | Over 3.5, Under 3.5 | 2 | 3.5 | full_time |
+| `mbet` | prematch | Over/Under 4.5 (`over_under_4_5`) | `ofb:tg` | Over 4.5, Under 4.5 | 2 | 4.5 | full_time |
+| `mbet` | prematch | Over/Under 5.5 (`over_under_5_5`) | `ofb:tg` | Over 5.5, Under 5.5 | 2 | 5.5 | full_time |
 | `mbet` | live | Full-time 1X2 (`1x2`) | `lfb:ft` | 1, 2, X | 3 | — | full_time |
 | `mbet` | live | Double Chance (`double_chance`) | `lfb:dc` | 12, 1X, X2 | 2 | — | full_time |
 | `mbet` | live | BTTS (`btts`) | `lfb:bttsny` | GG, NG | 2 | — | full_time |
 | `mbet` | live | Over/Under 1.5 (`over_under_1_5`) | `lfb:tg` | Over 1.5, Under 1.5 | 2 | 1.5 | full_time |
 | `mbet` | live | Over/Under 2.5 (`over_under_2_5`) | `lfb:tg` | Over 2.5, Under 2.5 | 2 | 2.5 | full_time |
 | `mbet` | live | Over/Under 3.5 (`over_under_3_5`) | `lfb:tg` | Over 3.5, Under 3.5 | 2 | 3.5 | full_time |
+| `mbet` | live | Over/Under 4.5 (`over_under_4_5`) | `lfb:tg` | Over 4.5, Under 4.5 | 2 | 4.5 | full_time |
+| `mbet` | live | Over/Under 5.5 (`over_under_5_5`) | `lfb:tg` | Over 5.5, Under 5.5 | 2 | 5.5 | full_time |
 | `sportplus` | prematch | Full-time 1X2 (`1x2`) | `1` | 1, 2, X | 3 | — | full_time |
 | `sportplus` | prematch | Double Chance (`double_chance`) | `1` | 12, 1X, X2 | 2 | — | full_time |
 | `sportplus` | prematch | BTTS (`btts`) | `6` | GG, NG | 2 | — | full_time |
@@ -128,24 +161,34 @@ bottom of this file say so.
 | `mozzartbet` | prematch | Over/Under 1.5 (`over_under_1_5`) | `3` | Over 1.5, Under 1.5 | 2 | 1.5 | full_time |
 | `mozzartbet` | prematch | Over/Under 2.5 (`over_under_2_5`) | `3` | Over 2.5, Under 2.5 | 2 | 2.5 | full_time |
 | `mozzartbet` | prematch | Over/Under 3.5 (`over_under_3_5`) | `3` | Over 3.5, Under 3.5 | 2 | 3.5 | full_time |
+| `mozzartbet` | prematch | Over/Under 4.5 (`over_under_4_5`) | `3` | Over 4.5, Under 4.5 | 2 | 4.5 | full_time |
+| `mozzartbet` | prematch | Over/Under 5.5 (`over_under_5_5`) | `3` | Over 5.5, Under 5.5 | 2 | 5.5 | full_time |
 | `mozzartbet` | live | Full-time 1X2 (`1x2`) | `1` | 1, 2, X | 3 | — | full_time |
 | `mozzartbet` | live | Double Chance (`double_chance`) | `2` | 12, 1X, X2 | 2 | — | full_time |
 | `mozzartbet` | live | BTTS (`btts`) | `130` | GG, NG | 2 | — | full_time |
 | `mozzartbet` | live | Over/Under 1.5 (`over_under_1_5`) | `3` | Over 1.5, Under 1.5 | 2 | 1.5 | full_time |
 | `mozzartbet` | live | Over/Under 2.5 (`over_under_2_5`) | `3` | Over 2.5, Under 2.5 | 2 | 2.5 | full_time |
 | `mozzartbet` | live | Over/Under 3.5 (`over_under_3_5`) | `3` | Over 3.5, Under 3.5 | 2 | 3.5 | full_time |
+| `mozzartbet` | live | Over/Under 4.5 (`over_under_4_5`) | `3` | Over 4.5, Under 4.5 | 2 | 4.5 | full_time |
+| `mozzartbet` | live | Over/Under 5.5 (`over_under_5_5`) | `3` | Over 5.5, Under 5.5 | 2 | 5.5 | full_time |
 | `maxbet` | prematch | Full-time 1X2 (`1x2`) | `1` | 1, 2, X | 3 | — | full_time |
 | `maxbet` | prematch | Double Chance (`double_chance`) | `10` | 12, 1X, X2 | 2 | — | full_time |
 | `maxbet` | prematch | BTTS (`btts`) | `27` | GG, NG | 2 | — | full_time |
 | `maxbet` | prematch | Over/Under 1.5 (`over_under_1_5`) | `17` | Over 1.5, Under 1.5 | 2 | 1.5 | full_time |
 | `maxbet` | prematch | Over/Under 2.5 (`over_under_2_5`) | `17` | Over 2.5, Under 2.5 | 2 | 2.5 | full_time |
 | `maxbet` | prematch | Over/Under 3.5 (`over_under_3_5`) | `17` | Over 3.5, Under 3.5 | 2 | 3.5 | full_time |
+| `maxbet` | prematch | Over/Under 0.5 (`over_under_0_5`) | `17` | Over 0.5, Under 0.5 | 2 | 0.5 | full_time |
+| `maxbet` | prematch | Over/Under 4.5 (`over_under_4_5`) | `17` | Over 4.5, Under 4.5 | 2 | 4.5 | full_time |
+| `maxbet` | prematch | Over/Under 5.5 (`over_under_5_5`) | `17` | Over 5.5, Under 5.5 | 2 | 5.5 | full_time |
 | `maxbet` | live | Full-time 1X2 (`1x2`) | `1` | 1, 2, X | 3 | — | full_time |
 | `maxbet` | live | Double Chance (`double_chance`) | `10` | 12, 1X, X2 | 2 | — | full_time |
 | `maxbet` | live | BTTS (`btts`) | `27` | GG, NG | 2 | — | full_time |
 | `maxbet` | live | Over/Under 1.5 (`over_under_1_5`) | `17` | Over 1.5, Under 1.5 | 2 | 1.5 | full_time |
 | `maxbet` | live | Over/Under 2.5 (`over_under_2_5`) | `17` | Over 2.5, Under 2.5 | 2 | 2.5 | full_time |
 | `maxbet` | live | Over/Under 3.5 (`over_under_3_5`) | `17` | Over 3.5, Under 3.5 | 2 | 3.5 | full_time |
+| `maxbet` | live | Over/Under 0.5 (`over_under_0_5`) | `17` | Over 0.5, Under 0.5 | 2 | 0.5 | full_time |
+| `maxbet` | live | Over/Under 4.5 (`over_under_4_5`) | `17` | Over 4.5, Under 4.5 | 2 | 4.5 | full_time |
+| `maxbet` | live | Over/Under 5.5 (`over_under_5_5`) | `17` | Over 5.5, Under 5.5 | 2 | 5.5 | full_time |
 
 ### Deliberately unmapped source IDs
 

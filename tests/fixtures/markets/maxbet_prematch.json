@@ -192,7 +192,8 @@
     "double_chance",
     "over_under_1_5",
     "over_under_2_5",
-    "over_under_3_5"
+    "over_under_3_5",
+    "over_under_4_5"
   ],
   "uncovered_registry_rows": []
 }

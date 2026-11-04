@@ -22,7 +22,7 @@ from typing import Literal
 from rapidfuzz import fuzz
 
 from config.settings import VERIFIED_KICKOFF_WINDOW_MINUTES
-from engine import name_identity
+from engine import name_identity, sports
 from engine.league_resolver import LeagueResolver
 from engine.mapping_evidence import (
     MappingLedger,
@@ -77,8 +77,16 @@ _AMBIGUOUS_SHARED_TOKENS = frozenset({
 })
 
 HARD_REJECT_REASONS = frozenset(
-    {"league_mismatch", "category_mismatch", "betradar_mismatch", "orientation_unresolved"}
+    {
+        "league_mismatch",
+        "category_mismatch",
+        "betradar_mismatch",
+        "orientation_unresolved",
+    }
 )
+# `sport_mismatch` is returned as an explicit `rejected` GateResult before this
+# set is consulted. It is deliberately not listed here: the README's dead-entry
+# audit compares this set with the reasons a football pairing can produce.
 
 
 @dataclass
@@ -147,17 +155,31 @@ class CertaintyGate:
         (raw spellings, no alias), the kickoff is inside the verified window and
         the categories are equal. Two *mapped* leagues that differ are a real
         contradiction and still reject.
+
+        A non-football competition has no reviewed mapping file at all, so its
+        league name is always an unproven label: "Evroliga", "Euroleague" and
+        "Košarka EuroLeague" are one competition, and "Estonsko letonska liga"
+        is another book's "Latvia-Estonian League". The team pair is the
+        identity proof there; league still has to agree with the category and
+        the verified kickoff, but a different spelling cannot veto a fixture
+        whose two sides are proven and playing at the same minute.
         """
         a_league, b_league = a.league_normalized or "", b.league_normalized or ""
-        if not a_league or not b_league:
+        if a.sport != b.sport:
             return False
-        if self._is_mapped_league(a_league) and self._is_mapped_league(b_league):
-            return False
-        if set(a.category_tags or []) != set(b.category_tags or []):
-            return False
+        if a.sport == sports.FOOTBALL:
+            if set(a.category_tags or []) != set(b.category_tags or []):
+                return False
+            if not a_league or not b_league:
+                return False
+            if self._is_mapped_league(a_league) and self._is_mapped_league(b_league):
+                return False
         delta = self._kickoff_delta_minutes(a, b)
         if delta is None or delta > self.kickoff_window_minutes:
             return False
+        if a.sport != sports.FOOTBALL:
+            teams_ok, _, _ = self._teams_match_details(a, b)
+            return teams_ok
         return self._exact_raw_teams(a, b)
 
     def _exact_raw_teams(self, a: Match, b: Match) -> bool:
@@ -181,11 +203,20 @@ class CertaintyGate:
         )
         return direct or swapped
 
-    def _league_ok(self, a_league: str, b_league: str) -> bool:
-        """Return whether two normalized league IDs are the same or equivalent."""
+    def _league_ok(self, a_league: str, b_league: str, sport: str = sports.FOOTBALL) -> bool:
+        """Return whether two normalized league IDs are the same or equivalent.
+
+        Football keeps its exact/declared-equivalence rule. A non-football
+        competition has no reviewed mapping file yet, so a token-containment
+        match inside the same sport is the only extra licence: ``NBA`` and
+        ``SAD NBA`` are one competition, ``NBA`` and ``WNBA`` are not. The sport
+        boundary is checked separately and can never be crossed here.
+        """
         if not a_league or not b_league:
             return False
         if a_league == b_league:
+            return True
+        if sport != sports.FOOTBALL and sports.league_tokens_compatible(a_league, b_league):
             return True
         if self.evidence is not None and self.evidence.is_accepted(
             "league_equivalence", league_equivalence_key(a_league, b_league)
@@ -311,6 +342,7 @@ class CertaintyGate:
         left_normalized: str,
         right_raw: str,
         right_normalized: str,
+        sport: str = sports.FOOTBALL,
     ) -> tuple[bool, str]:
         """Return ``(ok, alias_source)`` for one raw/canonical team pair.
 
@@ -337,6 +369,21 @@ class CertaintyGate:
             "team_alias", team_alias_key(left_raw, right_raw)
         ):
             return True, "ledger"
+
+        if sport != sports.FOOTBALL:
+            # Football's designator/allowlist rules were learned from clubs. A
+            # non-football side uses only rules that preserve a distinctive
+            # token: machine ledger evidence, tennis surname+initial, an
+            # initial/prefix abbreviation, or a non-generic one-sided qualifier.
+            if sport == sports.TENNIS and sports.tennis_name_match(
+                left_raw, right_raw, name_identity.tokens(left_raw), name_identity.tokens(right_raw)
+            ):
+                return True, "tennis_name"
+            if self._token_abbreviation_match(left_raw, right_raw):
+                return True, "abbreviation"
+            if self._one_sided_qualifier_match(left_raw, right_raw):
+                return True, "qualifier"
+            return False, ""
 
         # A canonical collision alone is never enough. If the raw forms differ,
         # the pair is an alias candidate and must be explicitly proven.
@@ -381,6 +428,8 @@ class CertaintyGate:
 
     def _teams_match_details(self, a: Match, b: Match) -> tuple[bool, bool, str]:
         """Return ``(ok, is_swapped, alias_source)`` for raw/canonical teams."""
+        if a.sport != b.sport:
+            return False, False, ""
         ah, aa = a.home_team_normalized, a.away_team_normalized
         bh, ba = b.home_team_normalized, b.away_team_normalized
         if not (ah and aa and bh and ba):
@@ -402,19 +451,19 @@ class CertaintyGate:
             return True, True, ""
 
         direct_home_ok, direct_home_source = self._team_pair_details(
-            a.home_team, ah, b.home_team, bh
+            a.home_team, ah, b.home_team, bh, a.sport
         )
         direct_away_ok, direct_away_source = self._team_pair_details(
-            a.away_team, aa, b.away_team, ba
+            a.away_team, aa, b.away_team, ba, a.sport
         )
         if direct_home_ok and direct_away_ok:
             return True, False, direct_home_source or direct_away_source
 
         swapped_home_ok, swapped_home_source = self._team_pair_details(
-            a.home_team, ah, b.away_team, ba
+            a.home_team, ah, b.away_team, ba, a.sport
         )
         swapped_away_ok, swapped_away_source = self._team_pair_details(
-            a.away_team, aa, b.home_team, bh
+            a.away_team, aa, b.home_team, bh, a.sport
         )
         if swapped_home_ok and swapped_away_ok:
             return True, True, swapped_home_source or swapped_away_source
@@ -582,6 +631,23 @@ class CertaintyGate:
         reasons: list[str] = []
         evidence: list[MatchEvidence] = []
 
+        # Sport identity is the outermost hard gate. It is checked before every
+        # other proof so no provider id, name or league can ever merge a
+        # basketball listing into football (or vice versa).
+        if a.sport != b.sport:
+            return GateResult(
+                status="rejected",
+                reasons=["sport_mismatch"],
+                evidence=[
+                    MatchEvidence(
+                        rule="sport_identity",
+                        source="rule",
+                        confidence=0.0,
+                        reason="sport_mismatch",
+                    )
+                ],
+            )
+
         # Betradar identity. A provider match id is shared across books, so two
         # listings that carry the same non-empty id are the same real match
         # whatever their team or league names say. Two different ids are two
@@ -592,7 +658,7 @@ class CertaintyGate:
 
         # League identity.
         a_league, b_league = a.league_normalized or "", b.league_normalized or ""
-        league_ok = self._league_ok(a_league, b_league)
+        league_ok = self._league_ok(a_league, b_league, a.sport)
         league_reason = ""
         if same_id:
             league_ok = True
@@ -624,10 +690,16 @@ class CertaintyGate:
             )
         )
 
-        # Kickoff.
+        # Kickoff. A shared provider id proves the event even when the two
+        # feeds disagree about the clock: measured 2026-11-04, SportPlus and
+        # NSoft differed by up to 5h40 on the same Betradar id, and MaxBet's
+        # tennis rows were 20 minutes late. The id is issued per event, so the
+        # clock cannot make two different matches share it.
         delta = self._kickoff_delta_minutes(a, b)
         kickoff_ok = delta is not None and delta <= self.kickoff_window_minutes
-        if delta is None:
+        if same_id:
+            kickoff_ok = True
+        elif delta is None:
             reasons.append("kickoff_missing")
         elif not kickoff_ok:
             reasons.append("kickoff_delta")
@@ -644,9 +716,29 @@ class CertaintyGate:
             )
         )
 
-        # Category identity.
+        # Category identity. SportPlus names a women's EuroCup game only by its
+        # group ("GRUPA C"), while NSoft says "Evrokup Ž" and MaxBet says
+        # "EuroCup Women"; the shared provider id settles that the event is the
+        # same one, so a missing category on one side cannot overrule it.
         a_tags, b_tags = set(a.category_tags or []), set(b.category_tags or [])
         category_ok = a_tags == b_tags
+        if same_id:
+            category_ok = True
+        elif (
+            a.sport == sports.TENNIS
+            and a_tags != b_tags
+            and (a_tags in (set(), {"Women"}) and b_tags in (set(), {"Women"}))
+        ):
+            # MBet omits the women's marker on ITF events ("ITF Heraklion")
+            # while NSoft/MaxBet say "Iraklion Ž" / "ITF W50 Heraklion". Two
+            # identical player names at the same minute are one match; unlike
+            # a club, a player cannot field a men's and a women's side.
+            tennis_teams_ok, _, _ = self._teams_match_details(a, b)
+            category_ok = (
+                tennis_teams_ok
+                and delta is not None
+                and delta <= self.kickoff_window_minutes
+            )
         if not category_ok:
             reasons.append("category_mismatch")
 
@@ -663,10 +755,18 @@ class CertaintyGate:
             swapped = fuzz.token_set_ratio(
                 a.home_team_normalized, b.away_team_normalized
             ) + fuzz.token_set_ratio(a.away_team_normalized, b.home_team_normalized)
-            teams_ok = True
-            team_reason = "betradar_id"
-            is_swapped = swapped > direct
-            alias_source = ""
+            if direct == swapped:
+                # The id says "same event", but the names say nothing about
+                # which side is home. Pricing a flipped orientation would turn
+                # a 1 into a 2; refuse instead of guessing.
+                teams_ok = False
+                team_reason = "orientation_unresolved"
+                alias_source = ""
+            else:
+                teams_ok = True
+                team_reason = "betradar_id"
+                is_swapped = swapped > direct
+                alias_source = ""
         if alias_source and not (league_ok and kickoff_ok and category_ok):
             teams_ok = False
             team_reason = "team_unresolved"
@@ -700,10 +800,6 @@ class CertaintyGate:
             team_confidence = 1.0
             team_evidence_reason = "swapped" if is_swapped else "one_sided_qualifier"
         elif alias_source:
-            team_source = "allowlist"
-            team_confidence = 1.0
-            team_evidence_reason = "swapped" if is_swapped else "allowlisted_alias"
-        elif exact_teams:
             team_source = "allowlist"
             team_confidence = 1.0
             team_evidence_reason = "swapped" if is_swapped else "allowlisted_alias"
@@ -824,12 +920,14 @@ class CertaintyGate:
             match.home_team_normalized,
             group_home_raw,
             group_home_normalized,
+            match.sport,
         )
         direct_away_ok, _ = self._team_pair_details(
             match.away_team,
             match.away_team_normalized,
             group_away_raw,
             group_away_normalized,
+            match.sport,
         )
         if direct_home_ok and direct_away_ok:
             return True, False
@@ -839,12 +937,14 @@ class CertaintyGate:
             match.home_team_normalized,
             group_away_raw,
             group_away_normalized,
+            match.sport,
         )
         swapped_away_ok, _ = self._team_pair_details(
             match.away_team,
             match.away_team_normalized,
             group_home_raw,
             group_home_normalized,
+            match.sport,
         )
         if swapped_home_ok and swapped_away_ok:
             return True, True
@@ -870,11 +970,13 @@ class CertaintyGate:
                 match.home_team_normalized,
                 member.home_team,
                 member.home_team_normalized,
+                match.sport,
             )[0] and self._team_pair_details(
                 match.away_team,
                 match.away_team_normalized,
                 member.away_team,
                 member.away_team_normalized,
+                match.sport,
             )[0]
             if direct:
                 orientations.add(False)
@@ -884,11 +986,13 @@ class CertaintyGate:
                 match.home_team_normalized,
                 member.away_team,
                 member.away_team_normalized,
+                match.sport,
             )[0] and self._team_pair_details(
                 match.away_team,
                 match.away_team_normalized,
                 member.home_team,
                 member.home_team_normalized,
+                match.sport,
             )[0]
             if swapped:
                 orientations.add(True)
@@ -897,15 +1001,48 @@ class CertaintyGate:
         return False, False
 
     def _group_kickoff_reason(self, match: Match, group: MatchGroup) -> str | None:
-        """Return an additional kickoff reason for the group's canonical time."""
-        if group.kickoff is None:
-            return None
+        """Return an additional kickoff reason for the group's canonical time.
+
+        The canonical time is the first member's clock, and feeds disagree by a
+        few minutes. A candidate that agrees with any already-verified member
+        is the same event even when that first clock is slightly further away;
+        otherwise a group could reject a listing its own newest member proves.
+        """
         if match.kickoff is None:
-            return "kickoff_missing"
-        delta = abs(
-            (self._as_naive_utc(match.kickoff) - self._as_naive_utc(group.kickoff)).total_seconds()
-        ) / 60.0
-        if delta > self.kickoff_window_minutes:
+            return "kickoff_missing" if group.kickoff is not None else None
+        if match.sport == sports.FOOTBALL:
+            # Football keeps the canonical clock as the single reference.
+            if group.kickoff is None:
+                return None
+            delta = abs(
+                (
+                    self._as_naive_utc(match.kickoff)
+                    - self._as_naive_utc(group.kickoff)
+                ).total_seconds()
+            ) / 60.0
+            return "kickoff_delta" if delta > self.kickoff_window_minutes else None
+        deltas = [
+            abs(
+                (
+                    self._as_naive_utc(match.kickoff)
+                    - self._as_naive_utc(member.kickoff)
+                ).total_seconds()
+            ) / 60.0
+            for member in group.matches
+            if member.kickoff is not None
+        ]
+        if not deltas:
+            if group.kickoff is None:
+                return None
+            deltas = [
+                abs(
+                    (
+                        self._as_naive_utc(match.kickoff)
+                        - self._as_naive_utc(group.kickoff)
+                    ).total_seconds()
+                ) / 60.0
+            ]
+        if min(deltas) > self.kickoff_window_minutes:
             return "kickoff_delta"
         return None
 
@@ -913,6 +1050,23 @@ class CertaintyGate:
         """Evaluate a match against the canonical fields of an existing group."""
         if not group.matches:
             return GateResult(status="rejected", reasons=["team_unresolved"])
+
+        # Once more at the group boundary: a corrupted or restored group must
+        # not accept a listing from another sport.
+        group_sports = {member.sport for member in group.matches}
+        if match.sport not in group_sports or group.sport != match.sport or len(group_sports) > 1:
+            return GateResult(
+                status="rejected",
+                reasons=["sport_mismatch"],
+                evidence=[
+                    MatchEvidence(
+                        rule="sport_identity",
+                        source="rule",
+                        confidence=0.0,
+                        reason="sport_mismatch",
+                    )
+                ],
+            )
 
         # A group may hold a member with no provider id, so comparing only to
         # the anchor can miss a conflict between two other members. Check every
@@ -932,14 +1086,31 @@ class CertaintyGate:
                 ],
             )
 
-        anchor = next(
-            (
-                m
-                for m in group.matches
-                if match.betradar_id and m.betradar_id == match.betradar_id
-            ),
-            group.matches[0],
-        )
+        if match.betradar_id:
+            anchor = next(
+                (
+                    member
+                    for member in group.matches
+                    if member.betradar_id == match.betradar_id
+                ),
+                group.matches[0],
+            )
+        elif match.sport != sports.FOOTBALL:
+            # The anchor is one book's spelling, not the group's identity.
+            # Pick the member whose clock and league are closest to the
+            # candidate, so a split feed clock on the first member cannot
+            # reject a listing another member already proves.
+            def _distance(member: Match) -> tuple[float, int, int]:
+                delta = self._kickoff_delta_minutes(match, member)
+                return (
+                    delta if delta is not None else float("inf"),
+                    0 if member.league_normalized == match.league_normalized else 1,
+                    0 if member.category_tags == match.category_tags else 1,
+                )
+
+            anchor = min(group.matches, key=_distance)
+        else:
+            anchor = group.matches[0]
         result = self.evaluate_pair(match, anchor)
 
         team_proved_by_id = any(
@@ -959,10 +1130,46 @@ class CertaintyGate:
             result.is_swapped = group_is_swapped if group_teams_ok else False
             if not group_teams_ok and "team_unresolved" not in result.reasons:
                 result.reasons.append("team_unresolved")
+            elif group_teams_ok and "orientation_unresolved" in result.reasons:
+                # The anchor could not tell the sides apart, but another
+                # member of the same provider id can. Use the group frame.
+                result.reasons.remove("orientation_unresolved")
+                for item in result.evidence:
+                    if item.rule == "team_identity":
+                        item.confidence = 1.0
+                        item.reason = "group_canonical_teams"
+                        break
+            if group_teams_ok and match.sport != sports.FOOTBALL:
+                # A non-football group proves the fixture by its teams. A
+                # competition spelling that differs from the anchor's cannot
+                # contradict that proof ("WTA 125K Luanda, Doubles" beside
+                # "Luanda, dublovi Ž").
+                if "league_mismatch" in result.reasons:
+                    result.reasons.remove("league_mismatch")
+                    for item in result.evidence:
+                        if item.rule == "league_identity" and item.confidence < 1.0:
+                            item.confidence = 1.0
+                            item.reason = "group_canonical_teams"
+                            break
 
-        group_kickoff_reason = self._group_kickoff_reason(match, group)
-        if group_kickoff_reason and group_kickoff_reason not in result.reasons:
-            result.reasons.append(group_kickoff_reason)
+        # The canonical group kickoff is one book's clock. A shared provider id
+        # already proved the event against the anchor, so a different clock in
+        # the group cannot re-open the kickoff gate.
+        same_provider = bool(match.betradar_id and match.betradar_id in group_ids)
+        if not same_provider:
+            group_kickoff_reason = self._group_kickoff_reason(match, group)
+            if group_kickoff_reason and group_kickoff_reason not in result.reasons:
+                result.reasons.append(group_kickoff_reason)
+            elif group_kickoff_reason is None and "kickoff_delta" in result.reasons:
+                # The anchor's clock was outside the window, but another
+                # already-verified member's clock is inside it. The group's own
+                # proof wins over the anchor alone.
+                result.reasons.remove("kickoff_delta")
+                for item in result.evidence:
+                    if item.rule == "kickoff" and item.confidence < 1.0:
+                        item.confidence = 1.0
+                        item.reason = "group_member_kickoff"
+                        break
 
         # The anchor is one book's spelling, not the group's identity. A group
         # can hold "germany, bundesliga" from one book and "bundesliga" from
@@ -990,7 +1197,7 @@ class CertaintyGate:
             group_league
             and (
                 group_league in group_leagues
-                or any(self._league_ok(group_league, league) for league in group_leagues)
+                or any(self._league_ok(group_league, league, match.sport) for league in group_leagues)
             )
         )
         league_references = (
@@ -999,7 +1206,7 @@ class CertaintyGate:
         group_league_settles = bool(
             match_league
             and any(
-                match_league == league or self._league_ok(match_league, league)
+                match_league == league or self._league_ok(match_league, league, match.sport)
                 for league in league_references
             )
         )
@@ -1034,7 +1241,7 @@ class CertaintyGate:
             if (
                 match_league
                 and match_league != group.league
-                and not self._league_ok(match_league, group.league)
+                and not self._league_ok(match_league, group.league, match.sport)
                 and (self._is_mapped_league(match_league) and self._is_mapped_league(group.league))
             ):
                 if "league_mismatch" not in result.reasons:
