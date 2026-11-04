@@ -77,6 +77,11 @@ from engine.opportunity_metrics import (
     update_lifetimes,
 )
 from engine.price_guard import filter_price_outliers
+from engine.pricing_invariant import (
+    implied_sum,
+    round_stake,
+    rounding_summary,
+)
 from models.schemas import (
     CandidateReview,
     MarketType,
@@ -2903,6 +2908,7 @@ class RecalculateRequest(BaseModel):
     surebet_id: str
     investment: float
     mode: str = "prematch"
+    rounding: Literal["exact", "1", "5"] = "exact"
 
 
 class VerifyRequest(BaseModel):
@@ -3381,33 +3387,46 @@ async def recalculate_stakes(
     if not target:
         raise HTTPException(status_code=404, detail="Surebet not found")
 
-    # Recalculate stakes
-    total_margin = target["total_margin"]
-    if total_margin >= 1.0 or total_margin <= 0:
+    # Recalculate from the served odds, not from the cached rounded margin.
+    # That is the same source a reviewer recomputes by hand.
+    odds = [float(stake["odds"]) for stake in target["stakes"]]
+    raw_margin = implied_sum(odds)
+    if raw_margin >= 1.0 or raw_margin <= 0:
         raise HTTPException(status_code=400, detail="Not a valid surebet")
 
     new_stakes = []
     for stake in target["stakes"]:
-        odds = stake["odds"]
-        implied = 1.0 / odds
-        new_stake = req.investment * (implied / total_margin)
-        potential_return = new_stake * odds
+        leg_odds = float(stake["odds"])
+        raw_stake = req.investment * (1.0 / leg_odds) / raw_margin
+        rounded_stake = round_stake(raw_stake, req.rounding)
         new_stakes.append({
             "bookmaker": stake["bookmaker"],
             "outcome_label": stake["outcome_label"],
-            "odds": odds,
-            "stake": round(new_stake, 2),
-            "potential_return": round(potential_return, 2),
+            "odds": leg_odds,
+            "stake": rounded_stake,
+            "potential_return": round(rounded_stake * leg_odds, 2),
         })
 
-    guaranteed_return = round(req.investment / total_margin, 2)
-    profit = round(guaranteed_return - req.investment, 2)
-
+    summary = rounding_summary(
+        new_stakes,
+        investment=req.investment,
+        rounding=req.rounding,
+    )
+    exact = {
+        "return": summary["exact_return"],
+        "profit": summary["exact_profit"],
+        "profit_percent": summary["exact_profit_percent"],
+    }
     return {
         "stakes": new_stakes,
         "investment": req.investment,
-        "guaranteed_return": guaranteed_return,
-        "guaranteed_profit": profit,
+        "raw_margin": raw_margin,
+        "implied_sum": raw_margin,
+        "exact": exact,
+        "realized": summary,
+        # Kept for older clients; these are the exact, not realized, values.
+        "guaranteed_return": summary["exact_return"],
+        "guaranteed_profit": summary["exact_profit"],
     }
 
 

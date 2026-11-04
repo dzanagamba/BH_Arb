@@ -37,8 +37,31 @@ from config.settings import (
 )
 from engine.destinations import attach_destinations
 from engine.opportunity_metrics import BoardObservation, ScanMetrics, event_identity
-from models.schemas import Market, MarketType, Match, MatchGroup, Surebet, SurebetStake
+from engine.pricing_invariant import rounding_summary
+from models.schemas import (
+    Market,
+    MarketType,
+    Match,
+    MatchGroup,
+    RoundingSummary,
+    Surebet,
+    SurebetStake,
+)
 from scrapers.common import parse_ah_label
+
+
+def _rounding_block(
+    stakes: list[SurebetStake], investment: float
+) -> RoundingSummary:
+    """Exact vs realized profit for the stake rows about to be served."""
+    return RoundingSummary.model_validate(
+        rounding_summary(
+            [stake.model_dump() for stake in stakes],
+            investment=investment,
+            rounding="exact",
+        )
+    )
+
 
 logger = logging.getLogger(__name__)
 
@@ -653,6 +676,8 @@ class ArbitrageEngine:
             market_type=market_type,
             profit_percent=round(profit_percent, 2),
             total_margin=round(best_implied, 4),
+            raw_margin=best_implied,
+            realized=_rounding_block(stakes, investment),
             stakes=stakes,
             match_urls=_collect_match_urls(group),
             bet_urls=_collect_bet_urls(group),
@@ -804,6 +829,8 @@ class ArbitrageEngine:
             market_type=market_type,
             profit_percent=round(profit_percent, 2),
             total_margin=round(best_implied, 4),
+            raw_margin=best_implied,
+            realized=_rounding_block(stakes, investment),
             stakes=stakes,
             match_urls=_collect_match_urls(group),
             bet_urls=_collect_bet_urls(group),
@@ -982,6 +1009,8 @@ class ArbitrageEngine:
             market_type=MarketType.DOUBLE_CHANCE,
             profit_percent=round(profit_percent, 2),
             total_margin=round(best_implied, 4),
+            raw_margin=best_implied,
+            realized=_rounding_block(stakes, investment),
             stakes=stakes,
             match_urls=_collect_match_urls(group),
             bet_urls=_collect_bet_urls(group),

@@ -259,6 +259,37 @@ id on a refused request, context filter, JSON formatter allowlist, traceback,
 a server, API-key protection, one structured scan-completion record, counters,
 per-book empty/error outcomes, failed-scan counter).
 
+## Raw-price invariant and rounding audit (P1-7, 2026-11-04)
+
+Every surebet now carries `raw_margin` (exact `sum(1/odds)`) and `realized`, a
+`RoundingSummary` built from the stake rows actually served. `total_margin`
+stays the four-decimal display value, so a reviewer can compare
+`round(sum(1/odds), 4)` to it and use `raw_margin` for the exact check.
+
+`POST /api/recalculate` recomputes from the served odds, accepts
+`rounding: exact | 1 | 5`, and returns separate `exact` and `realized` blocks.
+The legacy `guaranteed_return`/`guaranteed_profit` fields remain and are the
+exact values, never disguised as realized ones.
+
+The dashboard slip shows **exact profit**, **realized profit** and the
+**rounding effect**. It also recomputes the margin from `sb.stakes` and blocks
+the slip with a warning if the served odds do not reproduce `raw_margin` /
+`profit_percent`; it does not silently trust a second calculation.
+
+`tests/test_pricing_invariant.py` asserts the invariant for every surebet from a
+real-shaped group, checks the rounded summary, exercises `/api/recalculate`, and
+tampers with `total_margin` without changing the odds to prove the test fails
+when a derived value moves.
+
+## 24-hour soak (P1-6, in progress)
+
+The harness and resource guard are complete: `--cycles 0` now means "until
+`--minutes`", samples carry cache bytes and per-book feed states, and any leaked
+browser or RSS/cache budget breach fails `--check`. The two-cycle smoke run
+(RSS 940.4 → 924.4 MB, 0 browsers, cache 31.2 MB) is in
+[`docs/SOAK.md`](SOAK.md); it is not a substitute for the 24-hour run. The
+acceptance boxes stay unchecked until that run is published.
+
 ## Operator alerts (P1-5, 2026-11-04)
 
 An unattended scanner had no way to say that a new edge appeared, a feed went

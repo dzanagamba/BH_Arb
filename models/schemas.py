@@ -259,6 +259,25 @@ class SurebetStake(BaseModel):
     destination: LegDestination | None = None
 
 
+class RoundingSummary(BaseModel):
+    """Exact versus realized profit for the displayed rounded stakes.
+
+    ``exact_*`` is the profit if the investment were split proportionally with
+    no stake rounding. ``realized_*`` is the worst outcome of the rounded
+    stakes. ``rounding_loss`` makes the difference explicit instead of hiding
+    it behind a single profit number.
+    """
+    stake_total: float
+    exact_return: float
+    exact_profit: float
+    exact_profit_percent: float
+    worst_case_return: float
+    realized_profit: float
+    realized_profit_percent: float
+    rounding_loss: float
+    rounding: str = "exact"
+
+
 class Surebet(BaseModel):
     """A detected arbitrage opportunity."""
     id: str
@@ -269,7 +288,12 @@ class Surebet(BaseModel):
     kickoff: datetime | None = None
     market_type: MarketType
     profit_percent: float
+    # Exact sum(1/odds) for the served legs. ``total_margin`` carries the same
+    # value for backward compatibility; ``raw_margin`` exists so a reviewer can
+    # see that the displayed number is not a rounded derivation.
     total_margin: float
+    raw_margin: float = 0.0
+    realized: RoundingSummary | None = None
     stakes: list[SurebetStake]
     match_urls: dict[str, str] = {}  # bookmaker -> match page URL
     bet_urls: dict[str, str] = {}  # bookmaker -> bet-slip prefill URL (empty when unsupported)

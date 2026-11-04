@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-11-04
 **Repository:** `dzanagamba/BH_Arb` (`main`)
-**Status of this document:** audit complete; P0-1 through P0-7 and P1-1 through P1-5 done; P1-6 code complete, 24-hour acceptance run pending; implementation continuing
+**Status of this document:** audit complete; P0-1 through P0-7 and P1-1 through P1-5 and P1-7 done; P1-6 code complete, 24-hour acceptance run pending; implementation continuing
 **Purpose:** a durable, session-by-session plan so work can resume without re-reading the whole repository.
 
 > **How to use this document**
@@ -264,7 +264,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 | P1-4 | CI hardening: coverage, dependency and security scans | P1 | S | — | Done |
 | P1-5 | Alerting with dedupe and retry | P1 | M | P1-2 | Done |
 | P1-6 | 24-hour soak and resource budget | P1 | M | P0-1, P1-2 | In progress |
-| P1-7 | Raw-price invariant and rounding audit | P1 | S | P0-4 | Not started |
+| P1-7 | Raw-price invariant and rounding audit | P1 | S | P0-4 | Done |
 | P2-1 | Convergent deep-link sweep automation and UI | P2 | M | P1-1 | Not started |
 | P2-2 | Dated re-verification of no-event declarations | P2 | S | — | Not started |
 | P2-3 | Publish `source_id` from every parser; complete registry coverage | P2 | L | — | Not started |
@@ -754,7 +754,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 
 ### P1-7 — Raw-price invariant and rounding audit
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P1
 **Effort:** S
 **Depends on:** P0-4
@@ -774,10 +774,10 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 
 **Acceptance criteria:**
 
-- [ ] Every surebet's displayed margin is reproducible from its served odds.
-- [ ] The slip shows exact and realized profit, and never presents the exact margin as the realized one.
-- [ ] A rounding loss is visible, not hidden.
-- [ ] A test fails if a derived value is changed without its source odds.
+- [x] Every surebet's displayed margin is reproducible from its served odds.
+- [x] The slip shows exact and realized profit, and never presents the exact margin as the realized one.
+- [x] A rounding loss is visible, not hidden.
+- [x] A test fails if a derived value is changed without its source odds.
 
 **Tests:**
 
@@ -1421,6 +1421,37 @@ Before writing a claim about behavior, run the command that proves it and paste 
 ## 6. Execution log
 
 Newest first. Each entry: date, task, status, commands, measured result, files changed, follow-ups.
+
+### 2026-11-04 — P1-7: Raw-price invariant and rounding audit
+
+**Task:** P1-7 (depends on P0-4, complete).
+**Status:** Done.
+
+**Commands and results:**
+
+- `python -m pytest --cov --cov-report=term-missing` → **1,360 passed**, 1 warning, 162.48 s; coverage **81.99%** (floor 80%).
+- `python -m pytest tests/test_pricing_invariant.py` → 6 passed.
+- `python -m pytest tests/test_arbitrage.py tests/test_e2e_certified.py tests/test_verify_surebet.py tests/test_frontend_review.py` → pass.
+- `python -m ruff check .` → clean.
+- `python -m mypy .` → clean on 155 source files.
+- Market doc in sync; cold replay exit 0, fixed point.
+- `pip-audit` clean; Bandit medium+ exit 0.
+
+**What changed:**
+
+- `engine/pricing_invariant.py` (new): exact implied sum, exact profit percent, the three stake-rounding modes and one `rounding_summary` for exact vs realized profit.
+- `models/schemas.py`: `Surebet.raw_margin` (exact) and `realized: RoundingSummary`; `total_margin` stays the four-decimal display value.
+- `engine/arbitrage.py`: all three surebet construction paths populate `raw_margin` and `realized` from the stake rows they serve.
+- `server/api.py`: `/api/recalculate` recomputes from the served odds, accepts `rounding: exact|1|5`, and returns separate `exact` and `realized` blocks; legacy fields stay exact.
+- `frontend/js/app.js`: exact profit, realized profit and rounding effect are labelled separately; the slip recomputes the margin from `sb.stakes` and refuses to present the slip if the payload and served odds disagree.
+- `README.md`: pricing and rounding policy.
+- `tests/test_pricing_invariant.py` (new): served-odds invariant, realized block, tamper failure, recalculate contract, frontend labels.
+
+**Trust rules:** unchanged. The stake split and arbitrage decision still belong to `engine.arbitrage`; this is a consistency and disclosure layer only.
+
+**Follow-ups:** P1-6 is the only P1 task still open (24-hour wall-clock run). P2-1 (deep-link sweep) is next after it.
+
+---
 
 ### 2026-11-04 — P1-6: 24-hour soak and resource budget (partial)
 

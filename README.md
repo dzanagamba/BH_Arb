@@ -152,6 +152,28 @@ baseline is `docs/evidence/2026-11-04-opportunity-rate-baseline.md`; until a
 7-day run exists it records the public reference (1.34% crossing) and says the
 local window is still empty rather than inventing a number.
 
+## Pricing and rounding
+
+Every surebet carries the legs' served `odds` plus `raw_margin` (the exact
+`sum(1/odds)`) and `total_margin` (the same value rounded to four decimals for
+display). `profit_percent` is derived from that margin and rounded to two
+decimals. A reviewer can recompute it from the payload without trusting a
+second calculation.
+
+`POST /api/recalculate` accepts `rounding: "exact" | "1" | "5"` and returns both
+numbers separately:
+
+- `exact` — the profit if the investment were split proportionally with no
+  stake rounding;
+- `realized` — the worst actual return of the rounded stakes, minus what those
+  stakes cost, plus the `rounding_loss`;
+- `raw_margin` / `implied_sum` — the exact source value.
+
+The dashboard slip shows **exact profit** and **realized profit** side by side,
+plus the rounding effect. The realized number is never labelled as the exact
+one. Stakes round to cents (`exact`), whole units (`1`) or multiples of five
+(`5`).
+
 ## Deployment
 
 The shortest reproducible path on a fresh Linux host:

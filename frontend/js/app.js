@@ -999,6 +999,19 @@ function money(value) {
     return (Math.round(value * 100) / 100).toFixed(2);
 }
 
+// The served odds are the only source of truth for the margin. These helpers
+// let the slip check the payload's number instead of trusting a second
+// calculation silently.
+function servedMargin(sb) {
+    const stakes = sb && Array.isArray(sb.stakes) ? sb.stakes : [];
+    return stakes.reduce((sum, stake) => sum + 1 / Number(stake.odds), 0);
+}
+
+function servedProfitPercent(sb) {
+    const margin = servedMargin(sb);
+    return margin > 0 ? (1 / margin - 1) * 100 : 0;
+}
+
 // The order to place legs in: highest odds first. The long price is the one a
 // bookmaker is quickest to move or limit, so it is the one to secure while the
 // short, stable legs can still be adjusted around it.
@@ -1077,10 +1090,20 @@ function renderSlip() {
     const kickoff = parseKickoff(sb.kickoff);
     const exactProfit = sb.profit_percent;
     const roundingCost = exactProfit - plan.profitPercent;
+    const exactProfitAmount = plan.total * exactProfit / 100;
+    const roundingEffect = plan.profit - exactProfitAmount;
+    const derivedMargin = servedMargin(sb);
+    const reportedMargin = Number(sb.raw_margin ?? sb.total_margin);
+    const marginMismatch = Number.isFinite(reportedMargin)
+        && Math.abs(reportedMargin - derivedMargin) > 1e-6;
+    const profitMismatch = Math.abs(servedProfitPercent(sb) - exactProfit) > 0.01;
 
     const warnings = [];
     if (staleFeed()) {
         warnings.push('<div class="slip-alert slip-alert-bad">These are historical scan prices, not a current opportunity. Copy is disabled; use <strong>Re-check odds</strong> to establish the current prices before placing.</div>');
+    }
+    if (marginMismatch || profitMismatch) {
+        warnings.push('<div class="slip-alert slip-alert-bad">The served odds do not reproduce the payload margin. Do not use this slip; run a new scan.</div>');
     }
     if (plan.profit <= 0) {
         warnings.push(`<div class="slip-alert slip-alert-bad">With these stakes the worst outcome loses ${money(-plan.profit)} KM. ${Object.keys(state.placed).length ? 'A placed price moved — consider stopping or hedging rather than placing the rest.' : 'Raise the total stake or round to exact amounts.'}</div>`);
@@ -1177,7 +1200,7 @@ function renderSlip() {
         </div>
 
         <div class="slip-hero${plan.profit > 0 ? '' : ' is-loss'}">
-            <div class="slip-profit" data-tier="${profitTier(plan.profitPercent)}" title="Profit of the stakes below, after rounding">
+            <div class="slip-profit" data-tier="${profitTier(plan.profitPercent)}" title="Realized profit of the rounded stakes below">
                 <span class="mono">${plan.profitPercent.toFixed(2)}%</span>
                 <small>${exactProfit.toFixed(2)}% at scan, exact stakes</small>
             </div>
@@ -1192,7 +1215,9 @@ function renderSlip() {
         <div class="slip-totals">
             <span>Staked <b class="mono">${money(plan.total)}</b></span>
             <span>Worst return <b class="mono">${money(plan.worst)}</b></span>
-            <span class="${plan.profit > 0 ? 'good' : 'bad'}">Profit <b class="mono">${plan.profit >= 0 ? '+' : ''}${money(plan.profit)} KM</b></span>
+            <span>Exact profit <b class="mono">${exactProfitAmount >= 0 ? '+' : ''}${money(exactProfitAmount)} KM</b></span>
+            <span class="${plan.profit > 0 ? 'good' : 'bad'}">Realized profit <b class="mono">${plan.profit >= 0 ? '+' : ''}${money(plan.profit)} KM</b></span>
+            <span class="${roundingEffect < 0 ? 'bad' : ''}">Rounding effect <b class="mono">${roundingEffect >= 0 ? '+' : '−'}${money(Math.abs(roundingEffect))} KM</b></span>
         </div>
 
         ${renderVerifyBanner(sb, check)}
