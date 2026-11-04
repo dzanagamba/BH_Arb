@@ -403,6 +403,9 @@ python scripts/audit_deeplinks.py --check
 
 # Precision/recall over the frozen multi-day replay corpus.
 python scripts/evaluate_matching.py --check
+
+# Capture XHR/WebSocket transport metadata for a bookmaker decision.
+python scripts/discover_push_feeds.py --bookmaker mozzartbet --seconds 20
 ```
 
 ## Adding bookmakers, markets and names

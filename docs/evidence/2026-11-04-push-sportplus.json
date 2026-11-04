@@ -1,0 +1,78 @@
+{
+  "bookmaker": "sportplus",
+  "duration_seconds": 16.2,
+  "ok": true,
+  "url": "https://www.sportplus.ba/prematch/betting",
+  "websockets": [
+    {
+      "bytes": 604,
+      "frames": 1,
+      "heartbeat_like_gaps": 0,
+      "host": "api.livechatinc.com",
+      "max_gap_seconds": null,
+      "min_gap_seconds": null,
+      "opcodes": {
+        "open": 1,
+        "text": 1
+      },
+      "url": "wss://api.livechatinc.com/v3.6/customer/rtm/ws?organization_id=99a9c260-7832-44e6-9dd3-ad45fb266225&x-region=us-south1"
+    },
+    {
+      "bytes": 205,
+      "frames": 8,
+      "heartbeat_like_gaps": 1,
+      "host": "rabbit.sportplus.ba",
+      "max_gap_seconds": 6.023,
+      "min_gap_seconds": 0.0,
+      "opcodes": {
+        "binary": 8,
+        "open": 2
+      },
+      "url": "wss://rabbit.sportplus.ba:15671/ws"
+    }
+  ],
+  "xhr": [
+    {
+      "bytes": 68,
+      "kind": "xhr",
+      "status": 401,
+      "url": "https://www.sportplus.ba/api/v1/prematch/user-status"
+    },
+    {
+      "bytes": 5,
+      "kind": "xhr",
+      "status": 200,
+      "url": "https://www.sportplus.ba/api/v1/home/server-time?_=1793824595709"
+    },
+    {
+      "bytes": 68,
+      "kind": "xhr",
+      "status": 401,
+      "url": "https://www.sportplus.ba/api/v1/message/get-messages?_=1793824595711"
+    },
+    {
+      "bytes": 1860,
+      "kind": "xhr",
+      "status": 200,
+      "url": "https://www.sportplus.ba/jackpot/getjackpot/true?_=1793824595710"
+    },
+    {
+      "bytes": 0,
+      "kind": "fetch",
+      "status": 204,
+      "url": "https://www.google-analytics.com/g/collect?v=2&tid=G-PKML7M28EW&gtm=45je6b30v9121993408za20oxf1&_p=1793824596101&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=EAAI&are=1&cid=1870152487.1793824596&frm=0&ir=1&ngs=1&pscdl=noapi&rcb=16&sr=1280x720&uaa=x86&uab=64&uafvl=HeadlessChrome%3B149.0.7827.55%7CChromium%3B149.0.7827.55%7CNot)A%253BBrand%3B24.0.0.0&uam=&uamb=0&uap=Linux&uapv=&uaw=0&ul=en-us&_s=1&tag_exp=115938465~115938468~118897920~118897930~120213116~120385423~120412528~120420416~120469145~120469153~121246026~121246034~123691370~123814185~123814944&sid=1793824596&sct=1&seg=0&dl=https%3A%2F%2Fwww.sportplus.ba%2Fprematch%2Fbetting&dt=Sportska%20kladionica%20Sport%20Plus%20-%20Sportsko%20kla%C4%91enje&en=page_view&_fv=1&_nsi=1&_ss=1&tfd=1392"
+    },
+    {
+      "bytes": 201,
+      "kind": "xhr",
+      "status": 200,
+      "url": "https://accounts.livechatinc.com/v2/customer/token"
+    },
+    {
+      "bytes": 2411761,
+      "kind": "xhr",
+      "status": 200,
+      "url": "https://www.sportplus.ba/api/v1/prematch/offer"
+    }
+  ]
+}

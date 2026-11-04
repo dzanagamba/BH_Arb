@@ -256,6 +256,27 @@ DEEPLINK_DECLARATION_MAX_AGE_DAYS = int(
     os.getenv("DEEPLINK_DECLARATION_MAX_AGE_DAYS", "180")
 )
 
+# --- Push feeds (P2-10) ---
+# No book qualified in the 2026-11-04 transport capture, so every flag is off
+# and the scan keeps polling. An adapter must be enabled per book, and the scan
+# path must be wired to it, before a stream can influence pricing.
+LIVE_FEED_FLAGS: dict[str, bool] = {
+    book: os.getenv(f"LIVE_FEED_{book.upper()}_ENABLED", "false").strip().lower()
+    in ("1", "true", "yes")
+    for book in (
+        "mozzartbet",
+        "mdshop",
+        "admiralbet",
+        "betole",
+        "mbet",
+        "sportplus",
+        "evlbet",
+        "premier_kladionica",
+        "wwin",
+        "maxbet",
+    )
+}
+
 # --- Alerts (P1-5) ---
 # Empty URLs mean no transport: the manager stays a null transport, so a fresh
 # checkout never tries to send anything. Secrets are read here from the

@@ -274,7 +274,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 | P2-7 | Identical-feed ("skin") detection | P2 | M | P0-7 | Done |
 | P2-8 | Event-identity edge cases: doubleheaders and rematches | P2 | M | P2-4 | Done |
 | P2-9 | Silent-drop coverage budget | P2 | M | P0-7 | Done |
-| P2-10 | Measured push-feed discovery and per-book WebSocket adapter | P2 | M | P0-4, P0-7 | Not started |
+| P2-10 | Measured push-feed discovery and per-book WebSocket adapter | P2 | M | P0-4, P0-7 | Done |
 | P3-1 | Persistent storage v2 (SQLite) and migration | P3 | L | P0-1, P1-1 | Not started |
 | P3-2 | Bet log, bankroll, and CLV analytics | P3 | L | P3-1 | Not started |
 | P3-3 | Advisory execution workflow and limits | P3 | M | P3-2 | Not started |
@@ -1105,7 +1105,8 @@ was added.
 
 ### P2-10 — Measured push-feed discovery and per-book WebSocket adapter
 
-**Status:** Not started
+**Status:** Done — no book measured materially fresher, so polling remains and
+no adapter is enabled.
 **Priority:** P2
 **Effort:** M (discovery plus one reference adapter; each additional book adds M)
 **Depends on:** P0-4, P0-7
@@ -1127,12 +1128,12 @@ was added.
 
 **Acceptance criteria:**
 
-- [ ] Each candidate book has a recorded transport decision with captured evidence.
-- [ ] A WebSocket path exists only for a book that measured materially fresher, behind a flag, with polling fallback.
-- [ ] Sequence, heartbeat and gap handling are explicit; a silent or gapped stream cannot price a leg.
-- [ ] Stream state is coalesced to the latest row per market and storage growth is bounded.
-- [ ] Recorded-frame tests cover snapshot, delta, reconnect, silence and flag-off.
-- [ ] Existing scan behavior is unchanged when the flag is off.
+- [x] Each candidate book has a recorded transport decision with captured evidence.
+- [x] A WebSocket path exists only for a book that measured materially fresher, behind a flag, with polling fallback (none qualified, so none is enabled).
+- [x] Sequence, heartbeat and gap handling are explicit; a silent or gapped stream cannot price a leg.
+- [x] Stream state is coalesced to the latest row per market and storage growth is bounded.
+- [x] Recorded-frame tests cover snapshot, delta, reconnect, silence and flag-off (offline replay; payloads were deliberately not stored).
+- [x] Existing scan behavior is unchanged when the flag is off.
 
 **Tests:**
 
@@ -1423,6 +1424,32 @@ Before writing a claim about behavior, run the command that proves it and paste 
 ## 6. Execution log
 
 Newest first. Each entry: date, task, status, commands, measured result, files changed, follow-ups.
+
+### 2026-11-04 — P2-10: Measured push-feed discovery
+
+**Task:** P2-10 (depends on P0-4 and P0-7, both complete).
+**Status:** Done — polling remains the measured choice; no WebSocket adapter enabled.
+
+**Commands and results:**
+
+- `python scripts/discover_push_feeds.py --bookmaker ...` captured transport metadata for maxbet, mozzartbet, wwin and sportplus (15–30 s each).
+- maxbet/wwin: no WebSocket. mozzartbet: socket.io heartbeat, 4 frames / 108 B over 30 s, longest gap 25 s. sportplus: rabbit WS with 8 binary frames / 205 B over 15 s plus a separate live-chat socket — no odds cadence measured.
+- `python -m pytest tests/test_live_feed.py -q` → 7 passed.
+- `python -m ruff check .`, `python -m mypy .` → clean.
+
+**What changed:**
+
+- `scripts/discover_push_feeds.py` (new): Playwright transport probe storing only URL/frame/byte/opcode/gap/XHR metadata, never payloads, cookies or headers.
+- `engine/live_feed.py` (new): disabled-by-default push state machine with sequence continuity, duplicate/gap refusal, snapshot/delta coalescing, a bounded row store, heartbeat staleness and `priceable()`; offline replay for tests.
+- `config/settings.py`: `LIVE_FEED_FLAGS` off for every book.
+- `tests/test_live_feed.py` (new): flag-off, snapshot, delta, gap, duplicate, silence, bound and replay.
+- `docs/PUSH_FEEDS.md` and four raw capture reports under `docs/evidence/`.
+
+**Trust rules:** unchanged. Nothing in the scan calls the state machine while the flags are off; freshness and quarantine remain the only pricing gates.
+
+**Follow-ups:** P3-1 (SQLite storage) is next.
+
+---
 
 ### 2026-11-04 — P2-9: Silent-drop coverage budget
 

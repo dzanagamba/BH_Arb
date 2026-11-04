@@ -1,0 +1,135 @@
+{
+  "bookmaker": "wwin",
+  "duration_seconds": 15.8,
+  "ok": true,
+  "url": "https://wwin.ba/kladjenje/",
+  "websockets": [],
+  "xhr": [
+    {
+      "bytes": null,
+      "kind": "fetch",
+      "status": 200,
+      "url": "https://static.networkdel.com/assets/translations/wwinrsba/webcoresite/translation.bs.json?v=0.1.89"
+    },
+    {
+      "bytes": null,
+      "kind": "fetch",
+      "status": 200,
+      "url": "https://wwin.ba/bff/time/"
+    },
+    {
+      "bytes": null,
+      "kind": "fetch",
+      "status": 200,
+      "url": "https://wwin.ba/api/user/"
+    },
+    {
+      "bytes": null,
+      "kind": "fetch",
+      "status": 200,
+      "url": "https://static.networkdel.com/assets/translations/wwinrsba/websport/translation.en.json?v=3.1.0&d=1793824579733"
+    },
+    {
+      "bytes": null,
+      "kind": "fetch",
+      "status": 200,
+      "url": "https://static.networkdel.com/assets/translations/wwinrsba/websport/translation.bs.json?v=3.1.0&d=1793824579733"
+    },
+    {
+      "bytes": null,
+      "kind": "xhr",
+      "status": 204,
+      "url": "https://wwin.ba/cdn-cgi/rum?"
+    },
+    {
+      "bytes": null,
+      "kind": "xhr",
+      "status": 204,
+      "url": "https://wwin.ba/cdn-cgi/rum?"
+    },
+    {
+      "bytes": null,
+      "kind": "xhr",
+      "status": 401,
+      "url": "https://wwin.ba/bff/sport/token"
+    },
+    {
+      "bytes": null,
+      "kind": "fetch",
+      "status": 200,
+      "url": "https://wwin.ba/content/sport-livecontent/api/PrematchEvents/popular-tournaments"
+    },
+    {
+      "bytes": null,
+      "kind": "fetch",
+      "status": 200,
+      "url": "https://wwin.ba/content/sport-livecontent/api/PrematchEvents/sports"
+    },
+    {
+      "bytes": null,
+      "kind": "fetch",
+      "status": 200,
+      "url": "https://wwin.ba/content/sport-livecontent/api/PrematchEvents/staticContent?key=bs"
+    },
+    {
+      "bytes": null,
+      "kind": "fetch",
+      "status": 200,
+      "url": "https://wwin.ba/content/betting/api/content/promotions?page=4&key=bs"
+    },
+    {
+      "bytes": null,
+      "kind": "fetch",
+      "status": 200,
+      "url": "https://wwin.ba/content/sport-livecontent/api/PrematchEvents/top?key=bs&bets=95,6,99,123,126,133,170,198,182,211,746,232,251,254,258,261,280,284,287,917,291,294,438,418,440,492,544,494,1312,532,556,1097,1089,1111,1161,1162&top=50"
+    },
+    {
+      "bytes": null,
+      "kind": "xhr",
+      "status": 200,
+      "url": "https://wwin.ba/content/sport-livecontent/api/LiveEvents/events?key=bs&bets=&bet=&pbet="
+    },
+    {
+      "bytes": null,
+      "kind": "xhr",
+      "status": 200,
+      "url": "https://wwin.ba/content/sport-livecontent/api/LiveEvents/messages"
+    },
+    {
+      "bytes": null,
+      "kind": "xhr",
+      "status": 200,
+      "url": "https://wwin.ba/content/sport-livecontent/api/LiveEvents/messages"
+    },
+    {
+      "bytes": null,
+      "kind": "xhr",
+      "status": 200,
+      "url": "https://wwin.ba/content/sport-livecontent/api/LiveEvents/messages"
+    },
+    {
+      "bytes": null,
+      "kind": "xhr",
+      "status": 200,
+      "url": "https://wwin.ba/content/sport-livecontent/api/LiveEvents/messages"
+    },
+    {
+      "bytes": null,
+      "kind": "xhr",
+      "status": 200,
+      "url": "https://wwin.ba/content/sport-livecontent/api/LiveEvents/messages"
+    },
+    {
+      "bytes": null,
+      "kind": "xhr",
+      "status": 200,
+      "url": "https://wwin.ba/content/sport-livecontent/api/LiveEvents/messages"
+    },
+    {
+      "bytes": null,
+      "kind": "xhr",
+      "status": 200,
+      "url": "https://wwin.ba/content/sport-livecontent/api/LiveEvents/messages"
+    }
+  ]
+}

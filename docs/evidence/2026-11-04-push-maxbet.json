@@ -1,0 +1,57 @@
+{
+  "bookmaker": "maxbet",
+  "duration_seconds": 15.4,
+  "ok": true,
+  "url": "https://sportsbook.maxbet.ba/sport/1",
+  "websockets": [],
+  "xhr": [
+    {
+      "bytes": 272,
+      "kind": "fetch",
+      "status": 200,
+      "url": "https://sportsbook.maxbet.ba/assets/config/config.json?v=48b38382547c"
+    },
+    {
+      "bytes": 5992,
+      "kind": "xhr",
+      "status": 200,
+      "url": "https://sportsbook.maxbet.ba/assets/i18n/cnr.json?v=72b755e1d52a"
+    },
+    {
+      "bytes": 889,
+      "kind": "xhr",
+      "status": 200,
+      "url": "https://sportsbook.maxbet.ba/sportsbook/rest/v2/configurations?ln=cnr"
+    },
+    {
+      "bytes": 66,
+      "kind": "xhr",
+      "status": 401,
+      "url": "https://sportsbook.maxbet.ba/sportsbook/rest/v2/players/isPlayerAuthenticated?ln=cnr"
+    },
+    {
+      "bytes": 3608,
+      "kind": "xhr",
+      "status": 200,
+      "url": "https://sportsbook.maxbet.ba/sportsbook/rest/v2/sports/all?ln=cnr"
+    },
+    {
+      "bytes": 459,
+      "kind": "xhr",
+      "status": 200,
+      "url": "https://sportsbook.maxbet.ba/sportsbook/rest/v2/matches/filters?tag=player_props&ln=cnr"
+    },
+    {
+      "bytes": 889,
+      "kind": "xhr",
+      "status": 200,
+      "url": "https://sportsbook.maxbet.ba/sportsbook/rest/v2/configurations?ln=cnr"
+    },
+    {
+      "bytes": 889,
+      "kind": "xhr",
+      "status": 200,
+      "url": "https://sportsbook.maxbet.ba/sportsbook/rest/v2/configurations?ln=cnr"
+    }
+  ]
+}

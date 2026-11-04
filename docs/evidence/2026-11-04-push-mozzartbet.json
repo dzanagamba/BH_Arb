@@ -1,0 +1,113 @@
+{
+  "bookmaker": "mozzartbet",
+  "duration_seconds": 30.4,
+  "ok": true,
+  "url": "https://www.mozzartbet.ba/sr/kladjenje",
+  "websockets": [
+    {
+      "bytes": 108,
+      "frames": 4,
+      "heartbeat_like_gaps": 1,
+      "host": "www.mozzartbet.ba",
+      "max_gap_seconds": 25.027,
+      "min_gap_seconds": 0.0,
+      "opcodes": {
+        "open": 1,
+        "text": 4
+      },
+      "url": "wss://www.mozzartbet.ba/socket.io/?EIO=3&transport=websocket"
+    }
+  ],
+  "xhr": [
+    {
+      "bytes": 3,
+      "kind": "xhr",
+      "status": 200,
+      "url": "https://www.google-analytics.com/j/collect?v=1&_v=j102&a=1459822414&t=pageview&_s=1&dl=https%3A%2F%2Fwww.mozzartbet.ba%2Fsr%2Fkladjenje&ul=en-us&dt=Mozzart%20%7C%20Najbolje%20Kvote%20na%20Online%20Sportsko%20Kla%C4%91enje%20u%20BiH%2C%20Republici%20Srpskoj&sr=1280x720&vp=1280x720&_u=IEBAAEABAAAAACAAI~&jid=326449605&gjid=2001154902&cid=1786799591.1793824543&tid=UA-106513-33&_gid=615541122.1793824543&_r=1&_slc=1&z=1289256594"
+    },
+    {
+      "bytes": null,
+      "kind": "fetch",
+      "status": 200,
+      "url": "https://www.google.com/ccm/collect?rcb=11&frm=0&apvc=1&ae=g&auid=2139716091.1793824543&dt=Mozzart%20%7C%20Najbolje%20Kvote%20na%20Online%20Sportsko%20Kla%C4%91enje%20u%20BiH%2C%20Republici%20Srpskoj&en=page_view&dl=https%3A%2F%2Fwww.mozzartbet.ba%2Fsr%2Fkladjenje&scrsrc=www.googletagmanager.com&rnd=1652141995.1793824543&navt=n&npa=0&ep.ads_data_redaction=0&gtm=45He6b30v79892698za200zd79892698xeaxf1&gcd=13l3l3l3l1l1&dma=0&tag_exp=115938465~115938469~118897920~118897930~120385422~120412526~120420416~120469145~120469153~121191155~121246026~121246034~123691370~123814183~123814946&tft=1793824543129&tfd=611&fmt=8"
+    },
+    {
+      "bytes": null,
+      "kind": "fetch",
+      "status": 204,
+      "url": "https://ad.doubleclick.net/ccm/s/collect?auid=2139716091.1793824543&gtm=45He6b30v79892698za200zd79892698xeaxf1&fmt=8"
+    },
+    {
+      "bytes": 2,
+      "kind": "xhr",
+      "status": 200,
+      "url": "https://www.mozzartbet.ba/predefined-tickets"
+    },
+    {
+      "bytes": 28,
+      "kind": "xhr",
+      "status": 200,
+      "url": "https://www.mozzartbet.ba/get-banners-new?lang=sr&platform=DESKTOP&name=bettingPopupBanners"
+    },
+    {
+      "bytes": 14,
+      "kind": "xhr",
+      "status": 200,
+      "url": "https://www.mozzartbet.ba/maintenanceCheck"
+    },
+    {
+      "bytes": null,
+      "kind": "xhr",
+      "status": 200,
+      "url": "https://www.mozzartbet.ba/betting/get-sports"
+    },
+    {
+      "bytes": null,
+      "kind": "xhr",
+      "status": 200,
+      "url": "https://www.mozzartbet.ba/betting/get-special-offer"
+    },
+    {
+      "bytes": null,
+      "kind": "xhr",
+      "status": 200,
+      "url": "https://www.mozzartbet.ba/get-asset-v2?page=footer"
+    },
+    {
+      "bytes": 30,
+      "kind": "xhr",
+      "status": 200,
+      "url": "https://www.mozzartbet.ba/_mfp"
+    },
+    {
+      "bytes": null,
+      "kind": "xhr",
+      "status": 200,
+      "url": "https://www.mozzartbet.ba/betting/matches"
+    },
+    {
+      "bytes": null,
+      "kind": "xhr",
+      "status": 200,
+      "url": "https://www.mozzartbet.ba/betting/get-competitions"
+    },
+    {
+      "bytes": null,
+      "kind": "xhr",
+      "status": 200,
+      "url": "https://www.mozzartbet.ba/gamesConfig?id=1&matchTypeId=0"
+    },
+    {
+      "bytes": 0,
+      "kind": "fetch",
+      "status": 204,
+      "url": "https://analytics.google.com/g/collect?v=2&tid=G-94QSTNCVJF&gtm=45je6b30v894695723z879892698za20gzb79892698zd79892698xf1&_p=1793824542653&_gaz=1&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAGA&are=1&cid=1786799591.1793824543&frm=0&pscdl=noapi&rcb=19&sr=1280x720&uaa=x86&uab=64&uafvl=HeadlessChrome%3B149.0.7827.55%7CChromium%3B149.0.7827.55%7CNot)A%253BBrand%3B24.0.0.0&uam=&uamb=0&uap=Linux&uapv=&uaw=0&ul=en-us&gaf=2&_s=1&tag_exp=115938465~115938469~118897920~118897930~120213116~120385422~120412528~120420416~120469145~120469153~121246026~121246034~123691370~123814185~123814944&dl=https%3A%2F%2Fwww.mozzartbet.ba%2Fsr%2Fkladjenje&sid=1793824544&sct=1&seg=0&dt=Mozzart%20%3A%3A%20Najbolje%20kvote%20na%20kla%C4%91enje%20u%20BiH%2C%20Republici%20Srpskoj%20-%20Osvojite%20velike%20nagrade!&en=page_view&_fv=1&_ss=1&tfd=1810"
+    },
+    {
+      "bytes": null,
+      "kind": "xhr",
+      "status": 200,
+      "url": "https://www.mozzartbet.ba/betting/matches"
+    }
+  ]
+}
