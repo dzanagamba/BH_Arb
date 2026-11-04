@@ -271,7 +271,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 | P2-4 | Multi-day replay corpus and precision/recall evaluation | P2 | L | — | Done |
 | P2-5 | Sports expansion with measured admissibility | P2 | L | P2-4 | Done |
 | P2-6 | Candidate-queue quality and coverage metrics | P2 | M | P0-1, P1-1 | Done |
-| P2-7 | Identical-feed ("skin") detection | P2 | M | P0-7 | Not started |
+| P2-7 | Identical-feed ("skin") detection | P2 | M | P0-7 | Done |
 | P2-8 | Event-identity edge cases: doubleheaders and rematches | P2 | M | P2-4 | Not started |
 | P2-9 | Silent-drop coverage budget | P2 | M | P0-7 | Not started |
 | P2-10 | Measured push-feed discovery and per-book WebSocket adapter | P2 | M | P0-4, P0-7 | Not started |
@@ -998,7 +998,7 @@ was added.
 
 ### P2-7 — Identical-feed ("skin") detection
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P2
 **Effort:** M
 **Depends on:** P0-7
@@ -1018,10 +1018,10 @@ was added.
 
 **Acceptance criteria:**
 
-- [ ] The price-source rule can come from measured agreement, not only a hardcoded map.
-- [ ] A twin pair cannot manufacture an arb between its two books.
-- [ ] A pair with too little shared data is not silently classified as independent.
-- [ ] The matrix reports sample sizes.
+- [x] The price-source rule can come from measured agreement, not only a hardcoded map.
+- [x] A twin pair cannot manufacture an arb between its two books.
+- [x] A pair with too little shared data is not silently classified as independent.
+- [x] The matrix reports sample sizes.
 
 **Tests:**
 
@@ -1423,6 +1423,31 @@ Before writing a claim about behavior, run the command that proves it and paste 
 ## 6. Execution log
 
 Newest first. Each entry: date, task, status, commands, measured result, files changed, follow-ups.
+
+### 2026-11-04 — P2-7: Identical-feed ("skin") detection
+
+**Task:** P2-7 (depends on P0-7, complete).
+**Status:** Done.
+
+**Commands and results:**
+
+- `python -m pytest tests/test_skin_detection.py tests/test_arbitrage.py tests/test_multisport_arbitrage.py -q` → passed.
+- Real 2026-11-04 prematch cache (8,969 matches, 1,499 groups): 36 book pairs, one measured twin — **admiralbet/mdshop 11,796 shared outcomes, 100.00% identical**. Every other pair was independent, with sample sizes 9,556–11,604. No pair fell below the 200-outcome floor.
+- `python -m ruff check .`, `python -m mypy .` → clean.
+
+**What changed:**
+
+- `engine/skin_detection.py` (new): pairwise agreement on same event/market/settlement/period/line, `insufficient_data` below 200 shared outcomes, `twin` >= 99%, `suspicious` >= 95%, `independent` below; measured twins registered through `config.settings.register_price_source_twin`.
+- `config/settings.py`: mutable measured price-source registry behind `price_source()`; config-declared NSoft stays seeded.
+- `server/api.py`: measures after grouping and before pricing; `/api/health` exposes the matrix, summary, config-mismatch warnings and newly registered twins.
+- `tests/test_skin_detection.py` (new): identical/independent/insufficient classes, one-source arb rejection, declared-twin warning, health payload.
+- `docs/SKIN_DETECTION.md` and `docs/evidence/2026-11-04-skin-matrix.json`.
+
+**Trust rules:** unchanged in direction. A measured twin can only *remove* a false price source, never add trust; the NSoft seed remains and settlement identity is untouched.
+
+**Follow-ups:** P2-8 (identity edge cases) is next.
+
+---
 
 ### 2026-11-04 — P2-6: Candidate-queue quality and coverage metrics
 

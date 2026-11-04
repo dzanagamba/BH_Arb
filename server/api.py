@@ -83,6 +83,14 @@ from engine.pricing_invariant import (
     round_stake,
     rounding_summary,
 )
+from engine.skin_detection import (
+    apply_measured_twins,
+    declared_twin_warnings,
+    measure_price_agreement,
+)
+from engine.skin_detection import (
+    summary as skin_summary,
+)
 from models.schemas import (
     CandidateReview,
     MarketType,
@@ -415,6 +423,8 @@ _crossing_lifetimes: dict[str, dict[str, dict]] = {"prematch": {}, "live": {}}
 # P0-7: per-book integrity state, one scorecard per feed, with bounded history.
 _FEED_INTEGRITY_FILE = os.path.join(CACHE_DIR, "feed_integrity.json")
 _feed_integrity: dict[str, dict[str, dict]] = {"prematch": {}, "live": {}}
+# P2-7: the measured price-agreement matrix and its config-mismatch warnings.
+_skin_detection: dict[str, dict[str, Any]] = {"prematch": {}, "live": {}}
 # Aggregates only, one compact row per completed scan. The cap is a storage
 # bound, not a retention promise; the 7-day report filters by scan_time.
 _OPPORTUNITY_HISTORY_MAX = 2_000
@@ -1637,6 +1647,22 @@ async def run_scan(mode: str = "prematch", scheduled: bool = False):
 
         matcher = MatchMatcher()
         groups = matcher.group_matches(all_matches)
+        # P2-7: measure which books are actually one price source before the
+        # engine prices anything. The registration is intentionally after the
+        # grouping pass: a measured twin changes pricing, not event identity.
+        skin_matrix = measure_price_agreement(groups)
+        new_twins = apply_measured_twins(skin_matrix)
+        _skin_detection[mode] = {
+            "matrix": skin_matrix,
+            "summary": skin_summary(skin_matrix),
+            "warnings": declared_twin_warnings(skin_matrix),
+            "new_twins": [list(pair) for pair in new_twins],
+        }
+        if new_twins:
+            logger.warning(
+                "Measured identical price sources: %s",
+                ", ".join(f"{left}+{right}" for left, right in new_twins),
+            )
         report_cache.clear()
         report_cache.extend(matcher.get_match_report(groups))
 
@@ -2506,6 +2532,9 @@ async def health():
             "prematch": _feed_integrity_payload("prematch"),
             "live": _feed_integrity_payload("live"),
         },
+        # P2-7: measured price agreement and any config-declared twin that the
+        # scan did not reproduce. Low-sample pairs say insufficient_data.
+        "skin_detection": _skin_detection,
         "unmapped_markets": dict(unmapped_markets),
         "unmapped_markets_by_book": unmapped_by_book(),
         "verified_groups": sum(

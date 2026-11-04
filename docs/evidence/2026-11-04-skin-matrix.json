@@ -1,0 +1,335 @@
+{
+  "summary": {
+    "twin": 1,
+    "suspicious": 0,
+    "independent": 35,
+    "insufficient_data": 0
+  },
+  "matrix": {
+    "admiralbet|betole": {
+      "left": "admiralbet",
+      "right": "betole",
+      "shared_outcomes": 3549,
+      "identical_outcomes": 596,
+      "identical_rate": 0.1679,
+      "min_shared": 200,
+      "classification": "independent"
+    },
+    "admiralbet|maxbet": {
+      "left": "admiralbet",
+      "right": "maxbet",
+      "shared_outcomes": 10066,
+      "identical_outcomes": 683,
+      "identical_rate": 0.0679,
+      "min_shared": 200,
+      "classification": "independent"
+    },
+    "admiralbet|mbet": {
+      "left": "admiralbet",
+      "right": "mbet",
+      "shared_outcomes": 11320,
+      "identical_outcomes": 844,
+      "identical_rate": 0.0746,
+      "min_shared": 200,
+      "classification": "independent"
+    },
+    "admiralbet|mdshop": {
+      "left": "admiralbet",
+      "right": "mdshop",
+      "shared_outcomes": 11796,
+      "identical_outcomes": 11796,
+      "identical_rate": 1.0,
+      "min_shared": 200,
+      "classification": "twin"
+    },
+    "admiralbet|mozzartbet": {
+      "left": "admiralbet",
+      "right": "mozzartbet",
+      "shared_outcomes": 4898,
+      "identical_outcomes": 399,
+      "identical_rate": 0.0815,
+      "min_shared": 200,
+      "classification": "independent"
+    },
+    "admiralbet|premier_kladionica": {
+      "left": "admiralbet",
+      "right": "premier_kladionica",
+      "shared_outcomes": 9556,
+      "identical_outcomes": 626,
+      "identical_rate": 0.0655,
+      "min_shared": 200,
+      "classification": "independent"
+    },
+    "admiralbet|sportplus": {
+      "left": "admiralbet",
+      "right": "sportplus",
+      "shared_outcomes": 6414,
+      "identical_outcomes": 551,
+      "identical_rate": 0.0859,
+      "min_shared": 200,
+      "classification": "independent"
+    },
+    "admiralbet|wwin": {
+      "left": "admiralbet",
+      "right": "wwin",
+      "shared_outcomes": 7474,
+      "identical_outcomes": 646,
+      "identical_rate": 0.0864,
+      "min_shared": 200,
+      "classification": "independent"
+    },
+    "betole|maxbet": {
+      "left": "betole",
+      "right": "maxbet",
+      "shared_outcomes": 5361,
+      "identical_outcomes": 572,
+      "identical_rate": 0.1067,
+      "min_shared": 200,
+      "classification": "independent"
+    },
+    "betole|mbet": {
+      "left": "betole",
+      "right": "mbet",
+      "shared_outcomes": 5760,
+      "identical_outcomes": 529,
+      "identical_rate": 0.0918,
+      "min_shared": 200,
+      "classification": "independent"
+    },
+    "betole|mdshop": {
+      "left": "betole",
+      "right": "mdshop",
+      "shared_outcomes": 3549,
+      "identical_outcomes": 596,
+      "identical_rate": 0.1679,
+      "min_shared": 200,
+      "classification": "independent"
+    },
+    "betole|mozzartbet": {
+      "left": "betole",
+      "right": "mozzartbet",
+      "shared_outcomes": 3381,
+      "identical_outcomes": 377,
+      "identical_rate": 0.1115,
+      "min_shared": 200,
+      "classification": "independent"
+    },
+    "betole|premier_kladionica": {
+      "left": "betole",
+      "right": "premier_kladionica",
+      "shared_outcomes": 4981,
+      "identical_outcomes": 563,
+      "identical_rate": 0.113,
+      "min_shared": 200,
+      "classification": "independent"
+    },
+    "betole|sportplus": {
+      "left": "betole",
+      "right": "sportplus",
+      "shared_outcomes": 7579,
+      "identical_outcomes": 1052,
+      "identical_rate": 0.1388,
+      "min_shared": 200,
+      "classification": "independent"
+    },
+    "betole|wwin": {
+      "left": "betole",
+      "right": "wwin",
+      "shared_outcomes": 6851,
+      "identical_outcomes": 572,
+      "identical_rate": 0.0835,
+      "min_shared": 200,
+      "classification": "independent"
+    },
+    "maxbet|mbet": {
+      "left": "maxbet",
+      "right": "mbet",
+      "shared_outcomes": 11604,
+      "identical_outcomes": 1096,
+      "identical_rate": 0.0945,
+      "min_shared": 200,
+      "classification": "independent"
+    },
+    "maxbet|mdshop": {
+      "left": "maxbet",
+      "right": "mdshop",
+      "shared_outcomes": 10070,
+      "identical_outcomes": 684,
+      "identical_rate": 0.0679,
+      "min_shared": 200,
+      "classification": "independent"
+    },
+    "maxbet|mozzartbet": {
+      "left": "maxbet",
+      "right": "mozzartbet",
+      "shared_outcomes": 5417,
+      "identical_outcomes": 590,
+      "identical_rate": 0.1089,
+      "min_shared": 200,
+      "classification": "independent"
+    },
+    "maxbet|premier_kladionica": {
+      "left": "maxbet",
+      "right": "premier_kladionica",
+      "shared_outcomes": 11066,
+      "identical_outcomes": 993,
+      "identical_rate": 0.0897,
+      "min_shared": 200,
+      "classification": "independent"
+    },
+    "maxbet|sportplus": {
+      "left": "maxbet",
+      "right": "sportplus",
+      "shared_outcomes": 8633,
+      "identical_outcomes": 1089,
+      "identical_rate": 0.1261,
+      "min_shared": 200,
+      "classification": "independent"
+    },
+    "maxbet|wwin": {
+      "left": "maxbet",
+      "right": "wwin",
+      "shared_outcomes": 10106,
+      "identical_outcomes": 803,
+      "identical_rate": 0.0795,
+      "min_shared": 200,
+      "classification": "independent"
+    },
+    "mbet|mdshop": {
+      "left": "mbet",
+      "right": "mdshop",
+      "shared_outcomes": 11320,
+      "identical_outcomes": 844,
+      "identical_rate": 0.0746,
+      "min_shared": 200,
+      "classification": "independent"
+    },
+    "mbet|mozzartbet": {
+      "left": "mbet",
+      "right": "mozzartbet",
+      "shared_outcomes": 5454,
+      "identical_outcomes": 506,
+      "identical_rate": 0.0928,
+      "min_shared": 200,
+      "classification": "independent"
+    },
+    "mbet|premier_kladionica": {
+      "left": "mbet",
+      "right": "premier_kladionica",
+      "shared_outcomes": 10578,
+      "identical_outcomes": 1238,
+      "identical_rate": 0.117,
+      "min_shared": 200,
+      "classification": "independent"
+    },
+    "mbet|sportplus": {
+      "left": "mbet",
+      "right": "sportplus",
+      "shared_outcomes": 9006,
+      "identical_outcomes": 881,
+      "identical_rate": 0.0978,
+      "min_shared": 200,
+      "classification": "independent"
+    },
+    "mbet|wwin": {
+      "left": "mbet",
+      "right": "wwin",
+      "shared_outcomes": 10091,
+      "identical_outcomes": 1103,
+      "identical_rate": 0.1093,
+      "min_shared": 200,
+      "classification": "independent"
+    },
+    "mdshop|mozzartbet": {
+      "left": "mdshop",
+      "right": "mozzartbet",
+      "shared_outcomes": 4898,
+      "identical_outcomes": 399,
+      "identical_rate": 0.0815,
+      "min_shared": 200,
+      "classification": "independent"
+    },
+    "mdshop|premier_kladionica": {
+      "left": "mdshop",
+      "right": "premier_kladionica",
+      "shared_outcomes": 9556,
+      "identical_outcomes": 626,
+      "identical_rate": 0.0655,
+      "min_shared": 200,
+      "classification": "independent"
+    },
+    "mdshop|sportplus": {
+      "left": "mdshop",
+      "right": "sportplus",
+      "shared_outcomes": 6414,
+      "identical_outcomes": 553,
+      "identical_rate": 0.0862,
+      "min_shared": 200,
+      "classification": "independent"
+    },
+    "mdshop|wwin": {
+      "left": "mdshop",
+      "right": "wwin",
+      "shared_outcomes": 7474,
+      "identical_outcomes": 646,
+      "identical_rate": 0.0864,
+      "min_shared": 200,
+      "classification": "independent"
+    },
+    "mozzartbet|premier_kladionica": {
+      "left": "mozzartbet",
+      "right": "premier_kladionica",
+      "shared_outcomes": 5358,
+      "identical_outcomes": 761,
+      "identical_rate": 0.142,
+      "min_shared": 200,
+      "classification": "independent"
+    },
+    "mozzartbet|sportplus": {
+      "left": "mozzartbet",
+      "right": "sportplus",
+      "shared_outcomes": 4398,
+      "identical_outcomes": 913,
+      "identical_rate": 0.2076,
+      "min_shared": 200,
+      "classification": "independent"
+    },
+    "mozzartbet|wwin": {
+      "left": "mozzartbet",
+      "right": "wwin",
+      "shared_outcomes": 5293,
+      "identical_outcomes": 533,
+      "identical_rate": 0.1007,
+      "min_shared": 200,
+      "classification": "independent"
+    },
+    "premier_kladionica|sportplus": {
+      "left": "premier_kladionica",
+      "right": "sportplus",
+      "shared_outcomes": 7580,
+      "identical_outcomes": 1600,
+      "identical_rate": 0.2111,
+      "min_shared": 200,
+      "classification": "independent"
+    },
+    "premier_kladionica|wwin": {
+      "left": "premier_kladionica",
+      "right": "wwin",
+      "shared_outcomes": 8779,
+      "identical_outcomes": 878,
+      "identical_rate": 0.1,
+      "min_shared": 200,
+      "classification": "independent"
+    },
+    "sportplus|wwin": {
+      "left": "sportplus",
+      "right": "wwin",
+      "shared_outcomes": 9846,
+      "identical_outcomes": 1322,
+      "identical_rate": 0.1343,
+      "min_shared": 200,
+      "classification": "independent"
+    }
+  },
+  "seconds": 33.2
+}

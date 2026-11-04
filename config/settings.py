@@ -133,9 +133,28 @@ PREMATCH_EXPIRY_BUFFER_MINUTES = 2  # Clock tolerance after the latest member ki
 # bet at the other is not two independent prices: the engine takes at most one
 # leg per price source. MDShop and Admiralbet are both NSoft (see MARKET_MAPPING.md).
 PRICE_SOURCES = {"mdshop": "nsoft", "admiralbet": "nsoft"}
+# Measured twins are added at runtime by engine.skin_detection after a scan.
+# Seeded config stays authoritative; a measured pair only joins books that the
+# data proves quote the same prices.
+MEASURED_PRICE_SOURCES: dict[str, str] = {}
+
+
+def register_price_source_twin(left: str, right: str) -> str:
+    """Make two books one price source and return the source id."""
+    source = f"twin:{'|'.join(sorted((left, right)))}"
+    MEASURED_PRICE_SOURCES[left] = source
+    MEASURED_PRICE_SOURCES[right] = source
+    return source
+
+
+def reset_measured_price_sources() -> None:
+    """Test seam; production registration is append-only for the process."""
+    MEASURED_PRICE_SOURCES.clear()
 
 
 def price_source(bookmaker: str) -> str:
+    if bookmaker in MEASURED_PRICE_SOURCES:
+        return MEASURED_PRICE_SOURCES[bookmaker]
     return PRICE_SOURCES.get(bookmaker, bookmaker)
 
 
