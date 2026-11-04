@@ -59,6 +59,7 @@ const REASON_LABELS = Object.freeze({
     team_unresolved: 'Teams do not match',
     category_mismatch: 'Different match category',
     betradar_mismatch: 'Different Betradar match id',
+    leg_mismatch: 'Different doubleheader leg',
     kickoff_missing: 'Kickoff time missing',
     orientation_unresolved: 'Home/away order unclear',
     no_event_link: 'No event link',
@@ -1122,6 +1123,14 @@ function renderSlip() {
     }
     if (plan.legs.some(leg => !leg.placed && leg.plannedStake < 1)) {
         warnings.push('<div class="slip-alert">A stake is below 1 KM — most bookmakers will not take it.</div>');
+    }
+    const overLimit = plan.legs.filter(leg => {
+        const limit = Number(bookmakersConfig?.[leg.bookmaker]?.max_stake);
+        return !leg.placed && limit > 0 && leg.plannedStake > limit;
+    });
+    if (overLimit.length) {
+        const details = overLimit.map(leg => `${bookName(leg.bookmaker)} ${stakeFormat(leg.plannedStake)}/${stakeFormat(bookmakersConfig[leg.bookmaker].max_stake)}`).join(', ');
+        warnings.push(`<div class="slip-alert">Above the advisory book limit: ${details} KM. Split or reduce before placing.</div>`);
     }
 
     const listings = sb.listings || {};

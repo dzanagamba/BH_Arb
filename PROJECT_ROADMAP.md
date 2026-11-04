@@ -277,7 +277,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 | P2-10 | Measured push-feed discovery and per-book WebSocket adapter | P2 | M | P0-4, P0-7 | Done |
 | P3-1 | Persistent storage v2 (SQLite) and migration | P3 | L | P0-1, P1-1 | Done |
 | P3-2 | Bet log, bankroll, and CLV analytics | P3 | L | P3-1 | Done |
-| P3-3 | Advisory execution workflow and limits | P3 | M | P3-2 | Not started |
+| P3-3 | Advisory execution workflow and limits | P3 | M | P3-2 | Done |
 | P3-4 | Alerts, PWA, accessibility, and Bosnian UI | P3 | M | P1-5 | Not started |
 | P3-5 | Authentication and key management hardening | P3 | M | P1-3 | Not started |
 | P3-6 | Book risk profiles and advisory pacing | P3 | M | P1-7 | Not started |
@@ -1218,7 +1218,7 @@ no adapter is enabled.
 
 ### P3-3 — Advisory execution workflow and limits
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P3
 **Effort:** M
 **Depends on:** P3-2
@@ -1237,10 +1237,10 @@ no adapter is enabled.
 
 **Acceptance criteria:**
 
-- [ ] A partial acceptance cannot silently show the original profit.
-- [ ] The remaining stakes are recalculated from actual accepted amounts.
-- [ ] A negative worst case is clearly labeled.
-- [ ] No endpoint places a bet or logs in.
+- [x] A partial acceptance cannot silently show the original profit.
+- [x] The remaining stakes are recalculated from actual accepted amounts.
+- [x] A negative worst case is clearly labeled.
+- [x] No endpoint places a bet or logs in.
 
 **Tests:**
 
@@ -1424,6 +1424,30 @@ Before writing a claim about behavior, run the command that proves it and paste 
 ## 6. Execution log
 
 Newest first. Each entry: date, task, status, commands, measured result, files changed, follow-ups.
+
+### 2026-11-04 — P3-3: Advisory execution workflow and limits
+
+**Task:** P3-3 (depends on P3-2, complete).
+**Status:** Done.
+
+**Commands and results:**
+
+- `python -m pytest tests/test_slip_partial_acceptance.py tests/test_frontend_review.py -q` → passed.
+- `python -m ruff check .`, `python -m mypy .` → clean.
+
+**What changed:**
+
+- `config/settings.py`: `BOOK_STAKE_LIMITS` (`BOOK_MAX_STAKE_<BOOK>`, default 500).
+- `/api/config`: each book carries `max_stake`.
+- Slip: warns when a planned stake is over that book's advisory ceiling; the existing placed-leg inputs and `planStakes` already re-plan the remaining legs from accepted odds/stake; a negative worst case keeps the stop/hedge warning.
+- `tests/test_slip_partial_acceptance.py` (new): limit exposure, re-plan logic, negative warning, log-bet only, no placement path.
+- `.env.example`: limit variables.
+
+**Trust rules:** unchanged and explicitly advisory. No endpoint logs in or places a bet; a limit warning does not prevent recording what was accepted.
+
+**Follow-ups:** P3-4 (PWA/accessibility/Bosnian UI) is next.
+
+---
 
 ### 2026-11-04 — P3-2: Bet log, bankroll and CLV
 

@@ -83,6 +83,14 @@ BOOKMAKERS = {
     },
 }
 
+# --- Advisory stake limits (P3-3) ---
+# A soft, per-book ceiling shown in the slip. It never blocks a scan or a bet;
+# the operator can still record whatever was accepted.
+BOOK_STAKE_LIMITS: dict[str, int] = {
+    book: int(os.getenv(f"BOOK_MAX_STAKE_{book.upper()}", "500"))
+    for book in BOOKMAKERS
+}
+
 # --- Market Configuration ---
 ENABLED_MARKETS = [
     "1x2",

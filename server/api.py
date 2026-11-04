@@ -38,6 +38,7 @@ from config.settings import (
     AUTO_SCAN_PREMATCH_MINUTES,
     BOOK_BACKOFF_AFTER_FAILURES,
     BOOK_BACKOFF_MAX_MINUTES,
+    BOOK_STAKE_LIMITS,
     BOOKMAKERS,
     BROWSER_CONCURRENCY,
     CACHE_DIR,
@@ -2958,6 +2959,7 @@ async def get_config():
                 "name": v["name"],
                 "enabled": _is_enabled(k),
                 "color": v["color"],
+                "max_stake": BOOK_STAKE_LIMITS.get(k, 500),
             }
             for k, v in BOOKMAKERS.items()
         },
