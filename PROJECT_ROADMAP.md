@@ -1,0 +1,1494 @@
+# BH_Arb — Project Audit & Development Roadmap
+
+**Last updated:** 2026-11-04
+**Repository:** `dzanagamba/BH_Arb` (`main`)
+**Status of this document:** audit complete, implementation not started
+**Purpose:** a durable, session-by-session plan so work can resume without re-reading the whole repository.
+
+> **How to use this document**
+>
+> 1. Read the audit snapshot and the task table first.
+> 2. Pick the first task whose dependencies are `Done` and whose status is `Not started`.
+> 3. Change its status to `In progress` **before** coding.
+> 4. Do only that task. Verify it, then update the task checkboxes, status, and the execution log at the bottom.
+> 5. If a task is blocked, write the blocker in its Notes and stop; do not silently work around trust or safety rules.
+>
+> **Definition of done for every task**
+>
+> - Acceptance criteria are met and checked off.
+> - New/updated tests pass; the full offline suite, Ruff, MyPy, and the generated-market-doc check pass.
+> - User-facing or operator-facing docs are updated (README, `docs/`, or this file).
+> - The execution log has a dated entry with commands and measured results.
+> - No trust rule is weakened to make a number look better.
+
+---
+
+## 1. Audit snapshot
+
+### 1.1 What the project is
+
+BH_Arb is a **research-grade arbitrage scanner for the Bosnian bookmaker market**. It:
+
+- scrapes ten configured books (nine enabled; EVLBet is disabled because its football feed returns nothing),
+- normalizes team, league, market, and sport identity,
+- groups listings that describe the same real-world event,
+- prices only groups that pass the deterministic **certainty gate**,
+- re-checks a selected surebet against fresh odds,
+- presents the result in a static dashboard and a FastAPI API,
+- and explicitly **never logs in, moves money, or places a bet**.
+
+The central safety property is: *a surebet is shown only when the same-event claim is proven.* A false merge is treated as worse than a missed match.
+
+### 1.2 Architecture
+
+```text
+main.py / uvicorn
+  └─ server/app.py            FastAPI app, middleware, lifespan, static dashboard
+       ├─ server/api.py       routes, scan orchestration, caches, candidates, verify
+       ├─ server/scheduler.py unattended scan loop
+       └─ server/mapping_coverage.py
+
+scrapers/*.py                 one adapter per book
+  └─ scrapers/base.py         Playwright launcher, HTTP retry, page batching
+  └─ scrapers/common.py       shared parsing, NSoft helpers, deep-link declarations
+
+engine/
+  ├─ normalizer.py            canonical team/league/country/market names
+  ├─ name_identity.py         conservative name identity rules
+  ├─ sports.py                sport-specific cleaning and identity
+  ├─ team_resolver.py         transitive alias chains, contradiction splitting
+  ├─ league_resolver.py       league fuzziness resolved by team-set fingerprints
+  ├─ mapping_learner.py       learns claims from shared fixtures
+  ├─ mapping_evidence.py      durable provenance ledger
+  ├─ matcher.py               candidate scoring, grouping, orientation
+  ├─ certainty.py             the only authority that says `verified`
+  ├─ market_registry.py       per-book market IDs and label rules
+  ├─ market_discovery.py      label/structure/consensus classification
+  ├─ market_consensus.py      cross-book devig/median price checks
+  ├─ price_guard.py           drops outlier legs
+  ├─ arbitrage.py             stake split and worst-case pricing
+  ├─ destinations.py          honest deep-link ladder
+  └─ ai.py                    propose-only AI ranking
+
+models/schemas.py             Pydantic models shared by every layer
+config/                       settings, registries, mappings, evidence ledger
+frontend/                     static HTML/CSS/JS dashboard, no bundler
+scripts/                      operator tools and reproducible measurements
+tests/                        offline pytest suite + frozen fixtures
+cache/                        gitignored runtime state
+docs/                         design, acceptance, evidence, handoff
+```
+
+### 1.3 Verified baseline (2026-11-04)
+
+| Check | Command | Result |
+|---|---|---|
+| Tests | `python -m pytest` | **1,251 passed**, 1 warning, 183 s |
+| Lint | `python -m ruff check .` | clean |
+| Types | `python -m mypy .` | clean on 134 source files |
+| Generated market doc | `python scripts/generate_market_mapping_doc.py --check` | in sync |
+| Cold replay | `python scripts/replay_mappings.py tests/fixtures/replay/2026-11-03 --cold --check` | exit 0, fixed point, 0 unresolved evidence-backed pairs |
+
+Current real-data shape (from `cache/last_scan.json`, 2026-11-03):
+
+| Metric | Value |
+|---|---:|
+| Cached matches | 7,666 |
+| Cached match groups | 1,231 |
+| Cached surebets | 11 |
+| Cache file size | **218.5 MB** |
+| Matches JSON | 17.5 MB |
+| Match-group JSON | **133.1 MB** |
+| Cache parse time | 2.51 s |
+| Evidence ledger | 23.6 MB / 4,632 claims |
+| Team alias allowlist | 3,333 entries |
+| Matcher initialization | 0.72 s |
+
+### 1.4 Strengths worth preserving
+
+- **A real trust model.** `engine/certainty.py` is the only authority; every gate emits `MatchEvidence`; `verified` means zero outstanding reasons.
+- **Safety is local, not ambient.** `find_surebets` and `evaluate_market` both refuse non-`verified` groups.
+- **Documentation discipline.** `tests/test_readme_claims.py` runs the real gate against documented claims; replay and cold-start are reproducible.
+- **Offline test discipline.** 1,251 tests run without bookmaker access; captured payloads live under `tests/fixtures/markets/`.
+- **Honest deep-link ladder.** A link is never labeled "ticket" without a dated proof.
+- **Price-quality work.** Price guard, per-book margin checks, two-source high-edge rule, and cross-book consensus are materially stronger than typical hobby scanners.
+- **Security basics.** Loopback default, API-key guard on all `/api` reads, same-origin write guard, rate limits, and security headers.
+
+### 1.5 Findings, in risk order
+
+| # | Severity | Finding | Evidence | Impact |
+|---|---|---|---|---|
+| F1 | **High** | Cached group evidence embeds the entire 3,333-entry alias allowlist in every allowlisted team match. | `engine/certainty.py` records `sorted(self.alias_allowlist)` for `team_source == "allowlist"`; one group had 4 evidence entries of 97.5 KB each. | 133 MB of groups, 218 MB cache, 2.5 s parse, large `/api/debug/report`, inflated soak baseline. A pure payload bug, no trust loss. |
+| F2 | **High** | Dashboard uses inline `on*` handlers and interpolates JSON strings into them. | `frontend/js/app.js` copy buttons embed `JSON.stringify(...)` inside `onclick`; `escapeHtml` does not make a value safe inside a JavaScript string in an HTML attribute. | A team/fixture name containing a quote or `)` can break the button and may become script injection from scraped data. It also blocks a strict CSP. |
+| F3 | **High** | Runtime freshness is only enforced at scan time and only checked at startup for the restored cache. | `_load_cache` drops files older than 30 min **on startup**; a running server keeps serving `last_scan.json` until the next scan. | The dashboard can present hours-old "surebets" as current; the UI shows an age but has no hard stale state. |
+| F4 | **Medium** | README's gate-vocabulary section is stale and the test probe has a blind spot. | README says `orientation_unresolved` is never emitted; `engine/certainty.py` emits it for a Betradar-id match with an unresolved orientation, and `tests/test_certainty.py` asserts it. The README's rejected row also omits `sport_mismatch`. | Operators and future sessions are told a false fact about the safety gate. This is the project's documented recurring defect class. |
+| F5 | **Medium** | `config/bookmaker_deeplinks.json` is cached for the process lifetime. | `scrapers/common.py:_deeplink_cache` is populated once and never invalidated. | Editing a declaration requires a restart; `/api/health` can expose an old map. |
+| F6 | **Medium** | `/api/debug/report` returns every group and all evidence with no pagination. | `server/api.py:get_match_report` returns `report_cache` directly. | After F1 is fixed it is still several MB; the link in Settings can freeze a browser tab. |
+| F7 | **Medium** | No deployment, alerting, or metrics story. | No `Dockerfile`, no systemd unit, no `/metrics`, no notification transport; soak is manual. | The scanner is a local research tool, not an operable service. The docs already call operations "Partial". |
+| F8 | **Medium** | CI checks correctness but not dependency risk or coverage. | `.github/workflows/ci.yml` runs Ruff, MyPy, generated-doc check, pytest. No `pip-audit`, no Bandit, no coverage threshold, single Python version. | A vulnerable dependency or a coverage regression is invisible. |
+| F9 | **Medium** | Market identity is complete for NSoft but not for every parser. | Only the NSoft parser publishes `source_id`; `docs/PRODUCTION_READINESS.md` lists this as a blocker. | Discovery and registry coverage cannot be audited uniformly per book. |
+| F10 | **Medium** | Candidate review is dominated by pairs no human can close. | The docs record ~77% league-blocked candidates and 8,618 unresolved pairs on a real scan. | Operator attention is diluted; queue metrics can look like coverage progress when they are not. |
+| F11 | **Low/Medium** | Persistence is a fixed 50-entry JSON history; no bet log, bankroll, or CLV. | `_HISTORY_MAX = 50`; no models or endpoints for placed bets. | No longitudinal evaluation of whether the tool's edges persist. |
+| F12 | **Low** | Documentation and config are dated but not automatically freshness-checked. | Declaration notes and evidence docs carry dates but no expiry/audit test. | A stale declaration can remain load-bearing longer than intended. |
+| F13 | **High** | No opportunity-rate or arb-lifetime metric. The dashboard reports groups and surebets but not the denominator. | A public board log found only **1.34%** of 115,583 boards crossed, and only **26** of 1,553 crossings were actionable after gates. BH_Arb reports 11 surebets but no crossing rate. | A zero-surebet scan cannot be distinguished from a coverage failure. Cannot tune filters or prove the edge is real. |
+| F14 | **High** | No per-book feed-integrity score or stale-book quarantine. | Price guard drops outlier legs per surebet, but a book that is stale/suspended can still supply the "best" price on the next group. Reddit/vendor consensus names stale odds the main phantom-arb source. | Phantom arbs can survive into the list; a bad feed is invisible until a human notices. |
+| F15 | **Medium** | The only known twin-feed pair is hardcoded (MDShop/Admiralbet = NSoft). | `config/settings.py:PRICE_SOURCES`; a public project measured Ladbrokes/Neds as **99.9% identical** across 11,198 shared markets. | Two books on one feed can be treated as independent and manufacture a false edge; a real twin pair could be missed. |
+| F16 | **Medium** | Displayed margins are derived server-side and are not recomputable from the served odds. | `/api/results` and the slip use `profit_percent`/`total_margin`; the frontend does not recompute from raw prices. | A rounding or pricing bug is invisible; the UI cannot prove the number it shows. |
+| F17 | **Medium** | Event-identity edge cases are not explicitly tested. | The gate is strong on names/IDs, but there are no fixtures for same-day doubleheaders, same teams meeting twice, or kickoff near a date/bucket boundary. | A wrong merge or a split can appear in exactly the fixtures where names are identical. |
+| F18 | **Medium** | Silent data loss is only partially measured. | The pairing audit finds same-fixture misses; it cannot answer "which book/sport/market is expected but absent?" The `sports-betting` docs call this the most dangerous failure: missing odds look like a smaller dataset. | Coverage can fall without an alert, and a backtest looks clean while being incomplete. |
+| F19 | **Low/Medium** | All books are treated as one risk class. | No soft/sharp/exchange label, no per-book max-stake warning, no account-risk context. | The advisory output can recommend a leg at a book that will limit or reject it, with no warning. |
+
+### 1.6 What is already fixed and should not be re-opened
+
+These were open in `docs/HANDOFF.md` and are now implemented; keep them out of the TODO:
+
+- `MatchGroup.evidence` is persisted and served (but see F1/F6 for payload cost).
+- `group_matches` is order-insensitive and has a fall-through path.
+- `build_targets` has `settled` + `offset` and converges.
+- Prematch expiry uses the latest kickoff plus a two-minute buffer.
+- `premier_kladionica` live BTTS and the NSoft live window have regression tests.
+- `orientation_unresolved` is emitted and tested; only the README is stale.
+- The approve/reject HTTP routes are gone; Diagnostics is read-only.
+
+---
+
+## 2. Research summary and what to adopt
+
+The project already reflects most of the mature practice in this space. The research below is therefore used to choose **what to add**, not to justify a rewrite.
+
+### 2.1 Event identity and entity resolution
+
+**Consensus:** provider IDs first, reviewed/canonical aliases second, fuzzy similarity only to *find candidates*, never to confirm. A false merge is worse than a split. Keep qualifiers (`U21`, `Women`, reserve, academy, digits) that identify a different roster. Use a shared opponent to find splits, not name similarity.
+
+**Sources:**
+
+- [Dozor — matching the same esports match across 27 bookmakers](https://dev.to/dozor/matching-the-same-esports-match-across-27-bookmakers-entity-resolution-in-go-2dg5)
+- [Reep — entity resolution applied to football](https://reep.football/entity-resolution)
+- [How to normalise odds across bookmakers — OddsRelay](https://oddsrelay.io/blog/how-to-normalise-odds-across-bookmakers)
+- [How to match event names across bookmakers — Betting52](https://betting52.com/betting-tools/match-event-names-across-bookmakers/)
+
+**Adopt:**
+
+- Competition-scoped aliases where possible; a global alias for a common token is a risk.
+- A candidate-quality report that separates "actionable by an alias" from "league-blocked" (F10).
+- Keep the existing Betradar-first, ledger-second, conservative-name rules. Do not replace them with a score threshold.
+
+### 2.2 Freshness, polling, and live data
+
+**Consensus:** pre-match polling every 30–60 s is normal; live needs a push/sub-10 s path. Stale odds and event-matching errors are the two main sources of phantom arbs. Streaming removes *your* poll interval, not the book's capture interval.
+
+**Sources:**
+
+- [SharpAPI — how live is real-time odds data](https://sharpapi.io/learn/how-live-is-real-time-odds-data)
+- [Odds API — how a real-time odds feed works](https://odds-api.io/blog/odds-feed-api)
+- [PulseScore — REST vs WebSocket vs delta streams](https://pulsescore.net/blog/live-odds-rest-vs-websocket-vs-delta-streams)
+- [Sportsbook API integration guide](https://www.apibetting.com/guides/sportsbook-api-integration)
+
+**Adopt:**
+
+- A per-feed and per-book freshness budget, surfaced in `/api/results` and the dashboard (F3).
+- Do **not** raise live polling until a push path or sub-10 s capture is actually available. Keep the existing 60 s live TTL and 600 s prematch TTL.
+- Add a last-known-value / "price moved" state rather than silently re-pricing a different bet.
+
+### 2.3 Arbitrage economics and execution
+
+**Consensus:** real reachable edges are usually 0.5–5%; >5% is often stale, void, or two non-equivalent markets. Account limits and partial acceptance are the binding practical constraints. This project correctly stays advisory.
+
+**Sources:**
+
+- [Clawarbs — what arbitrage is and its risks](https://clawarbs.com/blog/what-arbitrage-betting/)
+- [OddsShopper — how books limit arbers](https://www.oddsshopper.com/articles/betting-101/arbitrage-betting-limits-getting-banned)
+- [The complete arbitrage guide 2025](https://picktheodds.app/en/blog/arbitrage-betting-the-complete-guide-in-2025)
+
+**Adopt:**
+
+- Keep the two-source high-edge cap, price guard, and consensus checks.
+- Add per-book stake-limit fields and a partial-acceptance workflow as **advisory** features (P3).
+- Do not add auto-placement. It contradicts the product's stated non-goal and the account-risk reality.
+
+### 2.4 Similar open-source scanners
+
+| Project | Useful idea | What not to copy |
+|---|---|---|
+| [cengizmandros/odds-arb-scanner](https://github.com/cengizmandros/odds-arb-scanner) | Simple FastAPI + CLI split; TTL odds cache; clear arb math. | Single-API dependency; no identity proof. |
+| [nickkatsios/BetEdge](https://github.com/nickkatsios/BetEdge) | Dockerized scraper/backend/frontend separation; scheduler. | Selenium-heavy; MySQL without the trust model. |
+| [TessaRichardson/SureBetsBot](https://github.com/TessaRichardson/SureBetsBot) | Kelly-style sizing; modular fetcher/calculator/UI. | Mock-first; no real cross-book identity. |
+| [smartworkersai/KOS](https://github.com/smartworkersai/KOS) | Supervised async tasks; state machine; alerting. | Different product (matched betting); external API dependence. |
+| [DeliciousPipe1326/edge-scanner](https://github.com/DeliciousPipe1326/edge-scanner) | Arb + middles + EV tabs; sharp-book reference. | The Odds API only; no Bosnian books. |
+| [HintikkaKimmo/surebet](https://github.com/HintikkaKimmo/surebet) | Clean odds-format conversions and stake math. | Library, not a scanner. |
+
+**Adopt:** a small CLI/daemon split already exists through `main.py` + `scripts/`; keep it. Add Docker and health checks (P1). Do not import a generic fuzzy matcher: this repo's gate is deliberately stricter.
+
+### 2.5 Operational and API practice
+
+**Consensus:** avoid returning more data than the screen needs; paginate large collections; compress or stream large responses; put blocking work off the event loop; expose metrics and health; make deployment reproducible.
+
+**Sources:**
+
+- [FastAPI response compression discussion](https://github.com/fastapi/fastapi/discussions/8571)
+- [Configuring API response compression](https://oneuptime.com/blog/post/2026-01-25-configure-api-response-compression/view)
+- FastAPI/pydantic performance guidance (orjson, response models, pagination).
+
+**Adopt:** fix F1 first (the payload is mostly duplicated data, not a transport problem), then paginate F6, then consider gzip/orjson only if measurements still justify it.
+
+### 2.6 Deep research addendum — arbitrage economics, communities, and data processing
+
+The full research record is `docs/RESEARCH_ARBITRAGE_2026-11-04.md`. It adds four findings that change the order of work:
+
+1. **A zero-surebet scan is not automatically a bug.** A public board log measured only **1.34%** of 115,583 boards crossing, and only **26** of 1,553 crossings survived profit/margin gates. BH_Arb currently reports groups and surebets but not the crossing rate, so it cannot tell "no edge today" from "the feeds are broken." This is F13 and task P0-6.
+2. **Stale books are the main phantom-arb source.** Vendor docs, the `Rijul0107` backtest, and Reddit threads all converge on stale/suspended prices and palpable errors. The existing per-surebet price guard is good, but a per-book integrity score and quarantine state are missing. This is F14 and task P0-7.
+3. **Two books can be one price source.** `Rijul0107` measured Ladbrokes/Neds as **99.9% identical** across 11,198 shared markets. BH_Arb hardcodes only the NSoft pair. A measured identical-price matrix would find both false twins and missing twins. This is F15 and task P2-7.
+4. **The community's recurring failure is maintenance, not math.** Arbusers developers warn that bookmaker sites change, IPs get blocked, and a scraper needs ongoing work; Reddit warns that a 30-second cycle across five books is already too slow for many arbs. The durable response is not more clever matching; it is a smaller, observable, testable pipeline. This is F18 and task P2-9.
+
+Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so the research doc uses search-index snippets of the named threads rather than full reads. The forum threads (Arbusers) were read directly. Do not treat any forum claim as a measured fact.
+
+**What not to copy:** auto-execution, account-longevity evasion (stake jitter, "mug betting", multi-account rotation), proxy/fingerprint evasion as a core feature, and lowering the gate to raise the count. The scanner stays advisory and public-data-only.
+
+---
+
+## 3. Roadmap overview
+
+| ID | Task | Priority | Effort | Depends on | Status |
+|---|---|---|---|---|---|
+| P0-1 | Bound the cached evidence payload | P0 | S | — | Not started |
+| P0-2 | Dashboard XSS + inline-handler + CSP hardening | P0 | M | — | Not started |
+| P0-3 | Gate-vocabulary truth audit and probe strengthening | P0 | S | — | Not started |
+| P0-4 | Runtime freshness and stale-state policy | P0 | M | — | Not started |
+| P0-5 | Reloadable deep-link declarations | P0 | S | — | Not started |
+| P0-6 | Opportunity-rate and arb-lifetime telemetry | P0 | M | P0-4 | Not started |
+| P0-7 | Feed-integrity scorecard and stale-book quarantine | P0 | M | P0-4 | Not started |
+| P1-1 | Paginated, filtered group-evidence API | P1 | M | P0-1 | Not started |
+| P1-2 | Structured logs, request IDs, metrics endpoint | P1 | M | — | Not started |
+| P1-3 | Reproducible deployment (Docker/systemd) | P1 | M | — | Not started |
+| P1-4 | CI hardening: coverage, dependency and security scans | P1 | S | — | Not started |
+| P1-5 | Alerting with dedupe and retry | P1 | M | P1-2 | Not started |
+| P1-6 | 24-hour soak and resource budget | P1 | M | P0-1, P1-2 | Not started |
+| P1-7 | Raw-price invariant and rounding audit | P1 | S | P0-4 | Not started |
+| P2-1 | Convergent deep-link sweep automation and UI | P2 | M | P1-1 | Not started |
+| P2-2 | Dated re-verification of no-event declarations | P2 | S | — | Not started |
+| P2-3 | Publish `source_id` from every parser; complete registry coverage | P2 | L | — | Not started |
+| P2-4 | Multi-day replay corpus and precision/recall evaluation | P2 | L | — | Not started |
+| P2-5 | Sports expansion with measured admissibility | P2 | L | P2-4 | Not started |
+| P2-6 | Candidate-queue quality and coverage metrics | P2 | M | P0-1, P1-1 | Not started |
+| P2-7 | Identical-feed ("skin") detection | P2 | M | P0-7 | Not started |
+| P2-8 | Event-identity edge cases: doubleheaders and rematches | P2 | M | P2-4 | Not started |
+| P2-9 | Silent-drop coverage budget | P2 | M | P0-7 | Not started |
+| P3-1 | Persistent storage v2 (SQLite) and migration | P3 | L | P0-1, P1-1 | Not started |
+| P3-2 | Bet log, bankroll, and CLV analytics | P3 | L | P3-1 | Not started |
+| P3-3 | Advisory execution workflow and limits | P3 | M | P3-2 | Not started |
+| P3-4 | Alerts, PWA, accessibility, and Bosnian UI | P3 | M | P1-5 | Not started |
+| P3-5 | Authentication and key management hardening | P3 | M | P1-3 | Not started |
+| P3-6 | Book risk profiles and advisory pacing | P3 | M | P1-7 | Not started |
+| P3-7 | Record-only / paper-trading mode | P3 | M | P3-1 | Not started |
+
+**Recommended first session:** P0-1, then P0-3 (both small, measurable, and they remove the largest payload and the most misleading documentation). Then P0-4 and the two research-driven tasks, P0-6 and P0-7: without a crossing-rate baseline and a feed-integrity score, the dashboard cannot tell "no edge" from "broken data." P0-2 is a separate hardening session.
+
+---
+
+## 4. Task details
+
+### P0-1 — Bound the cached evidence payload
+
+**Status:** Not started
+**Priority:** P0 (critical)
+**Effort:** S (one session)
+**Depends on:** none
+
+**Objective:** stop persisting the entire team-alias allowlist in every evidence record; persist only the alias entries that actually proved the pair.
+
+**Expected outcome:** one 9-book scan cache drops from ~218 MB to roughly 25–35 MB; match-group JSON drops from ~133 MB to ~8 MB; cache parse time drops from ~2.5 s to well under 1 s; `/api/debug/report` becomes usable without pagination for a moderate scan.
+
+**Steps:**
+
+1. In `engine/certainty.py`, replace `allowlist_entries=sorted(self.alias_allowlist)` with a helper that returns only the matching entries.
+2. Build the matching index once per allowlist snapshot (the existing `_allowlist_index` cache is the right place), mapping a normalized unordered pair to the original allowlist entries.
+3. Keep the evidence semantics: the record must name the entry (or entries) that proved the pairing. It must not become empty for an allowlisted proof.
+4. Add a regression test that builds an allowlisted pair, serializes the group, and asserts the evidence payload is bounded by the matched entries, not the allowlist size.
+5. Measure a real or fixture-based 9-book cache before/after and record the numbers in `docs/ACCEPTANCE.md` and the execution log.
+6. Add a guard/health metric for cache size so this cannot regress silently.
+
+**Acceptance criteria:**
+
+- [ ] No `MatchEvidence.allowlist_entries` contains the full allowlist.
+- [ ] An allowlisted group still carries the exact entry that proved it.
+- [ ] A synthetic 9-book group's serialized size is bounded by its own data, not by `len(alias_allowlist)`.
+- [ ] A real/fixture cache is under 40 MB and match-group JSON under 15 MB.
+- [ ] Cache restore remains semantically identical (same groups, same statuses, same surebets).
+- [ ] `python -m pytest`, `ruff`, `mypy`, and the generated-doc check pass.
+
+**Tests:**
+
+- New: `tests/test_certainty.py::test_allowlist_evidence_records_only_the_proving_entry`
+- New: `tests/test_cache_serialization.py::test_cached_group_payload_is_bounded`
+- Existing: `tests/test_e2e_certified.py`, `tests/test_readme_claims.py`, `tests/test_replay.py`
+- Manual measurement: `python scripts/replay_mappings.py tests/fixtures/replay/2026-11-03 --cold --check`
+
+**Notes / risks:** The gate's *decision* must not change. This is a serialization/evidence-cardinality fix only. Do not remove `allowlist_entries`; reviewers need the proof.
+
+---
+
+### P0-2 — Dashboard XSS + inline-handler + CSP hardening
+
+**Status:** Not started
+**Priority:** P0
+**Effort:** M
+**Depends on:** none
+
+**Objective:** remove inline event handlers, stop building JavaScript string literals inside HTML attributes, and adopt a strict nonce-based CSP.
+
+**Expected outcome:** a team or league name containing `'`, `"`, backtick, `)`, or `</script>` cannot break a copy button or execute code; `script-src` no longer needs `'unsafe-inline'`.
+
+**Steps:**
+
+1. Inventory every `onclick=`, `oninput=`, and other inline handler in `frontend/index.html` and `frontend/js/app.js`.
+2. Replace them with delegated or directly attached `addEventListener` handlers and `data-*` attributes.
+3. Replace `copyText(${escapeHtml(JSON.stringify(...))})` patterns with a data attribute plus a listener that reads the value from the dataset.
+4. Add a small `escapeAttr`/dataset helper if needed; never interpolate JSON into an attribute.
+5. Generate a per-request nonce in `server/app.py`, put it on the page's script tags, and set `script-src 'self' 'nonce-…'`; remove `'unsafe-inline'` from `script-src`.
+6. Keep `style-src` as-is only if no nonce path is practical; document the remaining gap if any.
+7. Add tests for quoted/malicious names and header assertions.
+
+**Acceptance criteria:**
+
+- [ ] No `on*=` attributes in shipped HTML or JS.
+- [ ] A fixture team name such as `O'Brien "X" <img src=x onerror=alert(1)>` renders as text and its copy button still works.
+- [ ] CSP response contains a nonce and no `script-src 'unsafe-inline'`.
+- [ ] Existing dashboard behavior and keyboard navigation are unchanged.
+- [ ] `tests/test_security_headers.py` and `tests/test_frontend_*.py` pass.
+
+**Tests:**
+
+- New: `tests/test_frontend_xss.py` (Node-run DOM assertions or string-level checks for the shipped source)
+- New: `tests/test_csp_nonce.py`
+- Existing: `tests/test_security_headers.py`, `tests/test_frontend_review.py`, `tests/test_frontend_empty_state.py`
+
+**Notes / risks:** The dashboard is a static file; a nonce requires injecting a placeholder or serving the HTML through a small response builder. Do not add a bundler for this.
+
+---
+
+### P0-3 — Gate-vocabulary truth audit and probe strengthening
+
+**Status:** Not started
+**Priority:** P0
+**Effort:** S
+**Depends on:** none
+
+**Objective:** make the README's status/reason table and `HARD_REJECT_REASONS` agree with what the gate actually emits, and make the probe exercise every emitted reason.
+
+**Expected outcome:** a reader can trust the table; the test fails if a reason is added, removed, or misclassified.
+
+**Steps:**
+
+1. Extend `_observed_reasons()` in `tests/test_readme_claims.py` with the Betradar-id orientation tie (`orientation_unresolved`) and a cross-sport pair (`sport_mismatch`).
+2. Decide where `sport_mismatch` belongs in the vocabulary: it is an explicit `rejected` result, not a member of `HARD_REJECT_REASONS`.
+3. Update README's `rejected` row to include `orientation_unresolved` and `sport_mismatch`, and delete the "never emits" wrinkle.
+4. Add a test that asserts the documented reason vocabulary is exactly the observed vocabulary (no hand-maintained "dead" exceptions unless the code truly has one).
+5. Search for other comments/docs that describe the gate's behavior and reconcile them.
+
+**Acceptance criteria:**
+
+- [ ] `_observed_reasons()` produces `orientation_unresolved` and `sport_mismatch`.
+- [ ] README's table lists every observed reason under the correct status.
+- [ ] No documentation claims a reason is unreachable when `tests/test_certainty.py` proves otherwise.
+- [ ] The test suite fails if a new reason is added without documentation.
+
+**Tests:**
+
+- `tests/test_readme_claims.py::test_status_reason_vocabulary_matches_what_the_gate_emits`
+- `tests/test_readme_claims.py::test_dead_hard_reject_vocabulary_is_documented_as_dead` (rewrite or remove)
+- `tests/test_certainty.py::test_same_betradar_id_without_an_orientation_is_not_verified`
+
+**Notes / risks:** This is the project's documented recurring defect class. Prefer an exact observed-vocabulary check over prose assertions.
+
+---
+
+### P0-4 — Runtime freshness and stale-state policy
+
+**Status:** Not started
+**Priority:** P0
+**Effort:** M
+**Depends on:** none
+
+**Objective:** make staleness a first-class runtime state, not a startup-only cache check.
+
+**Expected outcome:** the API and dashboard can say "this feed is stale" and refuse to present an old surebet as current. A scan older than the configured TTL has an explicit state, and every leg carries its age.
+
+**Steps:**
+
+1. Add a `freshness` block to `/api/results` (mode, scan age, TTL, stale flag, per-book oldest/newest `fetched_at`, stale books).
+2. Define the policy in `config/settings.py` (prematch and live TTLs already exist; add a per-book budget if useful).
+3. In the dashboard, show a prominent stale banner and disable copy/verify actions that imply current prices when the feed is stale.
+4. Keep the cached data visible for diagnosis, but label it as historical.
+5. Add API and frontend tests for fresh, near-expiry, and stale feeds.
+6. Document the policy in README and `docs/ACCEPTANCE.md`.
+
+**Acceptance criteria:**
+
+- [ ] `/api/results` reports `stale`, `age_sec`, `ttl_sec`, and per-book freshness.
+- [ ] A stale feed is visually distinct and cannot be mistaken for a live opportunity.
+- [ ] The verify endpoint remains the only path that can re-establish a leg's current price.
+- [ ] Existing cache/restore behavior is unchanged for fresh data.
+
+**Tests:**
+
+- New: `tests/test_freshness_api.py`
+- New: frontend test for the stale banner and disabled actions
+- Existing: `tests/test_cache_serialization.py`, `tests/test_verify_surebet.py`
+
+**Notes / risks:** Do not delete stale data; diagnosis needs it. The goal is labeling and action-gating, not hiding.
+
+---
+
+### P0-5 — Reloadable deep-link declarations
+
+**Status:** Not started
+**Priority:** P0
+**Effort:** S
+**Depends on:** none
+
+**Objective:** make an edit to `config/bookmaker_deeplinks.json` take effect without a process restart.
+
+**Expected outcome:** `/api/health` reports the declaration file's load time/hash; the gate uses the new map after the file changes; a malformed file fails safe and says so.
+
+**Steps:**
+
+1. Track the declaration file's mtime/size (or a content hash) alongside `_deeplink_cache`.
+2. On each `_load_deeplink_config()` (or a cheap `maybe_reload`), reload when the signature changes.
+3. Keep the fail-safe behavior for a missing/malformed declaration.
+4. Expose `loaded_at`, `source_mtime`, and a `stale` flag in `effective_deeplink_declarations`.
+5. Add tests that rewrite a temp config and observe the new declaration without restarting.
+
+**Acceptance criteria:**
+
+- [ ] A changed declaration is visible to the gate on the next call.
+- [ ] A malformed file does not crash a scan; it fails safe and is visible in health.
+- [ ] Existing declaration tests still pass.
+
+**Tests:**
+
+- New: `tests/test_deeplinks.py::test_declaration_change_is_picked_up_without_restart`
+- New: malformed-file test in `tests/test_deeplinks.py`
+
+**Notes / risks:** Keep the reload cheap; do not read the file on every pair evaluation. Check at scan start and on health/verify entry points.
+
+---
+
+### P0-6 — Opportunity-rate and arb-lifetime telemetry
+
+**Status:** Not started
+**Priority:** P0
+**Effort:** M
+**Depends on:** P0-4
+
+**Objective:** measure the denominator, not just the result: how many boards were seen, how many crossed, how many were actionable, and how long each opportunity survived.
+
+**Expected outcome:** `/api/results` and `/api/health` report crossing rate, actionable rate, median margin, best margin, and p50/p90 arb lifetime. A zero-surebet scan says whether it saw no crossing, saw crossings that failed the gates, or saw only stale data.
+
+**Steps:**
+
+1. Define a compact per-scan summary from the groups: events, markets priced, boards, crossings at 0% and at the profit floor, actionable after all guards, median implied margin, best margin.
+2. Compute it from the same pricing path `find_surebets` uses; do not create a second arb formula.
+3. Track lifetime by a stable key (event identity + market + line + period + settlement): `first_crossed_at`, `last_crossed_at`, `last_seen_at`, `disappeared_at`.
+4. Persist only aggregates and crossing keys per scan, not the full board (the full board is already in the cache; do not duplicate it).
+5. Expose the summary in `/api/results`, `/api/health`, and a dashboard tile; add a 7-day baseline report under `docs/evidence/`.
+6. Add tests with synthetic boards: no crossing, crossing below floor, crossing above floor, stale book, and a crossing that disappears on the next scan.
+
+**Acceptance criteria:**
+
+- [ ] A scan reports boards, crossings, and actionable opportunities with explicit denominators.
+- [ ] A zero-surebet result distinguishes “no crossing” from “crossing below floor” from “all crossings stale/guarded.”
+- [ ] Arb lifetime is reported as a distribution, not a single anecdote.
+- [ ] The metric is computed from raw odds, not from a precomputed count.
+- [ ] Storage growth is bounded per scan.
+
+**Tests:**
+
+- New: `tests/test_opportunity_metrics.py`
+- Existing: `tests/test_arbitrage.py`, `tests/test_scan_quality.py`, `tests/test_soak.py`
+
+**Notes / risks:** Do not store every board snapshot in the JSON cache. Aggregate counters plus crossing keys are enough. The public board-log measurement is 1.34% crossing and 26 actionable out of 1,553 crossings; use it as a sanity range, not a target.
+
+---
+
+### P0-7 — Feed-integrity scorecard and stale-book quarantine
+
+**Status:** Not started
+**Priority:** P0
+**Effort:** M
+**Depends on:** P0-4
+
+**Objective:** make a bad book a visible, priced-out state instead of a silent source of phantom arbs.
+
+**Expected outcome:** each book has a per-scan integrity score (freshness, missing rate, own-margin sanity, outlier rate, parse errors), and a book below threshold is quarantined from pricing until it recovers.
+
+**Steps:**
+
+1. Define per-book metrics: scan age of the oldest leg, missing-market rate, own-complete-set margin below 1.0, outlier rate against the peer median, parse/empty rate, and last successful scan.
+2. Compute a state: `healthy`, `degraded`, `quarantined`, with the reason and the evidence.
+3. Teach the pricing path to refuse a leg from a quarantined book and to say why; this is a price-source restriction, not a trust-rule change.
+4. Persist the last N states; recover after N consecutive healthy scans, not after a single lucky one.
+5. Expose the scorecard in `/api/health`, `/api/results`, and a dashboard badge; show the reason next to a refused leg.
+6. Add tests: a stale book cannot supply a leg; a book with a broken set is quarantined; recovery requires healthy scans; a quarantine does not change the certainty gate.
+
+**Acceptance criteria:**
+
+- [ ] Every enabled book has an integrity state and a reason.
+- [ ] A quarantined book never contributes a priced leg.
+- [ ] Recovery is automatic but not immediate.
+- [ ] The dashboard shows which book is unhealthy and why.
+- [ ] The certainty gate's identity decisions are untouched.
+
+**Tests:**
+
+- New: `tests/test_feed_integrity.py`
+- Existing: `tests/test_price_guard.py`, `tests/test_market_consensus.py`, `tests/test_health_api.py` (or `tests/test_candidates_api.py` patterns)
+
+**Notes / risks:** Quarantine is not a proof of badness; it is a temporary price-source restriction. Do not silently drop a book from the scan; show it as unhealthy.
+
+---
+
+### P1-1 — Paginated, filtered group-evidence API
+
+**Status:** Not started
+**Priority:** P1
+**Effort:** M
+**Depends on:** P0-1
+
+**Objective:** replace the unbounded `/api/debug/report` with a bounded, filterable evidence API and a small dashboard drill-down.
+
+**Expected outcome:** an operator can inspect a group's evidence without downloading the whole report; the default response is small and paginated.
+
+**Steps:**
+
+1. Add `GET /api/groups?mode=&status=&sport=&limit=&offset=` returning summaries.
+2. Add `GET /api/groups/{group_id}?mode=` returning one group's full evidence.
+3. Keep `/api/debug/report` as a compatibility alias with a low default limit and a deprecation note.
+4. Add a dashboard link from a group/row to the evidence view; show the gate reasons and link evidence.
+5. Add response-size and pagination tests.
+
+**Acceptance criteria:**
+
+- [ ] Default `/api/groups` response is bounded by `limit` (default ≤ 100).
+- [ ] A group lookup returns exactly that group and 404s for an unknown id.
+- [ ] `/api/debug/report` no longer returns every group by default.
+- [ ] Dashboard navigation works on a phone.
+
+**Tests:**
+
+- New: `tests/test_groups_api.py`
+- Existing: `tests/test_frontend_review.py`, `tests/test_api_key.py`
+
+**Notes / risks:** Preserve the evidence trail; do not truncate it. The problem is unbounded listing, not evidence detail.
+
+---
+
+### P1-2 — Structured logs, request IDs, metrics endpoint
+
+**Status:** Not started
+**Priority:** P1
+**Effort:** M
+**Depends on:** none
+
+**Objective:** make the scanner observable during unattended operation.
+
+**Expected outcome:** every request and scan has a correlation id; `/api/metrics` exposes counters/gauges in Prometheus text format; logs are JSON-capable; a failed book is visible without reading stderr.
+
+**Steps:**
+
+1. Add request-id middleware (accept `X-Request-ID`, generate otherwise) and include it in logs.
+2. Add counters: scans started/completed/failed, per-book successes/empties/errors, surebets found/dropped, link checks, candidate queue size, cache size, scan duration.
+3. Add gauges: last scan age per feed, RSS (where available), open browser count.
+4. Add `GET /api/metrics` (API-key protected) in Prometheus text format.
+5. Add a JSON log formatter option controlled by `LOG_FORMAT`.
+6. Test counters and the endpoint without a live server.
+
+**Acceptance criteria:**
+
+- [ ] A scan emits one structured completion log with duration, books, groups, surebets, drops, and cache size.
+- [ ] `/api/metrics` exposes the counters and is protected like other `/api` routes.
+- [ ] No secret or full odds payload is logged.
+
+**Tests:**
+
+- New: `tests/test_metrics.py`
+- New: `tests/test_request_id.py`
+
+**Notes / risks:** Prometheus client is an optional dependency; a tiny text renderer avoids adding a heavy package if the project prefers minimal dependencies.
+
+---
+
+### P1-3 — Reproducible deployment (Docker/systemd)
+
+**Status:** Not started
+**Priority:** P1
+**Effort:** M
+**Depends on:** none
+
+**Objective:** make a clean deployment repeatable on a fresh Linux host.
+
+**Expected outcome:** `docker compose up` (or a documented systemd unit) starts the scanner with a persistent `cache/` volume, a health check, and a non-root user; the README has a deployment section.
+
+**Steps:**
+
+1. Add `Dockerfile` (Python 3.11-slim, Playwright Chromium install, non-root user, health check).
+2. Add `.dockerignore` (exclude `.venv`, `cache`, `.git`, test caches).
+3. Add `docker-compose.yml` with a bind mount for `cache/` and environment passthrough.
+4. Add a systemd unit example for bare-metal deployments.
+5. Document backup/restore of `cache/`, `config/generated/mapping_evidence.json`, and the decision stores.
+6. Add a smoke test that builds the image and hits `/api/health`.
+
+**Acceptance criteria:**
+
+- [ ] Fresh clone + `docker compose up` serves the dashboard and `/api/health`.
+- [ ] Cache survives a container restart.
+- [ ] The container runs as a non-root user.
+- [ ] README has copy-paste deployment steps.
+
+**Tests:**
+
+- CI job: `docker build` (can be a separate optional job).
+- Manual: `curl -fsS http://127.0.0.1:8000/api/health`.
+
+**Notes / risks:** Playwright's Chromium download is the image-size driver; document the build time.
+
+---
+
+### P1-4 — CI hardening: coverage, dependency and security scans
+
+**Status:** Not started
+**Priority:** P1
+**Effort:** S
+**Depends on:** none
+
+**Objective:** catch dependency and security regressions automatically.
+
+**Expected outcome:** CI reports coverage, runs `pip-audit`, and runs Bandit; a high-severity finding fails the job (with a documented allowlist for accepted findings).
+
+**Steps:**
+
+1. Add `pytest-cov`, `pip-audit`, and `bandit` to `requirements-dev.txt`.
+2. Add a coverage report and a conservative threshold (start at current coverage, raise over time).
+3. Add a security job with a small, explicit allowlist.
+4. Consider a Python 3.11 + 3.12 matrix; keep 3.11 as the required version.
+5. Document how to reproduce the jobs locally.
+
+**Acceptance criteria:**
+
+- [ ] CI publishes a coverage summary.
+- [ ] `pip-audit` and `bandit` run on every push/PR.
+- [ ] A known false positive is documented, not silently ignored.
+
+**Tests:** the CI workflow itself; no application test changes required.
+
+**Notes / risks:** Do not set an arbitrary high coverage threshold that forces low-value tests. Use the current measured baseline.
+
+---
+
+### P1-5 — Alerting with dedupe and retry
+
+**Status:** Not started
+**Priority:** P1
+**Effort:** M
+**Depends on:** P1-2
+
+**Objective:** notify an operator when a new surebet above a threshold appears, when a feed goes stale, or when a book consistently fails.
+
+**Expected outcome:** a Telegram and/or generic webhook transport sends at most one alert per event per dedupe window, retries transient failures, and never blocks a scan.
+
+**Steps:**
+
+1. Add an `alerts` module with a transport interface and a null transport by default.
+2. Add env settings: `ALERT_WEBHOOK_URL`, `ALERT_TELEGRAM_BOT_TOKEN`, `ALERT_TELEGRAM_CHAT_ID`, `ALERT_MIN_PROFIT_PERCENT`, `ALERT_DEDUPE_MINUTES`.
+3. Dedupe by a stable signature (match + market + legs + profit bucket).
+4. Retry with exponential backoff; send from a background task so a failure cannot fail a scan.
+5. Add a health counter for sent/failed/suppressed alerts.
+6. Test with a fake transport; no network in CI.
+
+**Acceptance criteria:**
+
+- [ ] A repeated scan does not re-alert the same event inside the dedupe window.
+- [ ] A failed alert is logged and counted, and does not fail the scan.
+- [ ] Secrets are read from env only, never logged.
+
+**Tests:**
+
+- New: `tests/test_alerts.py`
+
+**Notes / risks:** Do not include full odds payloads or API keys in alert bodies. Use the existing user-facing labels.
+
+---
+
+### P1-6 — 24-hour soak and resource budget
+
+**Status:** Not started
+**Priority:** P1
+**Effort:** M
+**Depends on:** P0-1, P1-2
+
+**Objective:** prove the service survives a day of scheduled scans without unbounded memory, leaked browsers, or stale-book blindness.
+
+**Expected outcome:** a 24 h `scripts/soak.py --minutes 1440 --check` run with a plateau, zero surviving browsers, and a written report in `docs/`.
+
+**Steps:**
+
+1. Run the soak with scheduled prematch scans and, if enabled, live scans.
+2. Record the RSS series, browser count, per-book errors, group/surebet counts, and cache size.
+3. Add a soft alert when RSS exceeds a configured budget or the cache exceeds a size budget.
+4. Fix any leak found; do not mask it by restarting the process.
+5. Publish the report and link it from `docs/ACCEPTANCE.md`.
+
+**Acceptance criteria:**
+
+- [ ] 24 h run completes with no browser process surviving a scan.
+- [ ] Memory plateaus below the documented budget.
+- [ ] No book is silently absent for the whole run without an alert/error entry.
+- [ ] The report is reproducible from the command and environment recorded in it.
+
+**Tests:** `scripts/soak.py` unit tests plus the manual run.
+
+**Notes / risks:** A short run is a smoke test, not acceptance. The project already has a 6- and 10-cycle plateau; the gap is duration.
+
+---
+
+### P1-7 — Raw-price invariant and rounding audit
+
+**Status:** Not started
+**Priority:** P1
+**Effort:** S
+**Depends on:** P0-4
+
+**Objective:** make every displayed margin recomputable from the prices the API actually served, and show the profit that survives stake rounding.
+
+**Expected outcome:** a reviewer can take the served odds, compute `sum(1/odds)` themselves, and get the displayed margin; the slip reports both the exact and the realized (rounded) profit.
+
+**Steps:**
+
+1. Ensure each served leg carries the raw `odds`, `outcome_label`, `line`, and `settlement` (already mostly true).
+2. Add `raw_margin`/`implied_sum` to the surebet payload and assert it equals `total_margin` within a tolerance.
+3. Add a `realized` block to the slip/API: exact profit, rounded stakes, worst-case return, realized profit.
+4. Add a server-side invariant test over a fixture scan: for every surebet, `abs(sum(1/odds) - total_margin) < 1e-6`.
+5. Add a frontend check that the copy/displayed numbers come from the same payload, not a second calculation.
+6. Document the rounding policy in README.
+
+**Acceptance criteria:**
+
+- [ ] Every surebet's displayed margin is reproducible from its served odds.
+- [ ] The slip shows exact and realized profit, and never presents the exact margin as the realized one.
+- [ ] A rounding loss is visible, not hidden.
+- [ ] A test fails if a derived value is changed without its source odds.
+
+**Tests:**
+
+- New: `tests/test_pricing_invariant.py`
+- Existing: `tests/test_arbitrage.py`, `tests/test_frontend_review.py`, `tests/test_surebet_api.py`
+
+**Notes / risks:** This is a consistency feature, not a new pricing model. Do not change stake math while adding it.
+
+---
+
+### P2-1 — Convergent deep-link sweep automation and UI
+
+**Status:** Not started
+**Priority:** P2
+**Effort:** M
+**Depends on:** P1-1
+
+**Objective:** make a full per-book link sweep a one-click / scheduled operation that provably converges.
+
+**Expected outcome:** an operator can start a sweep for MaxBet/Mozzartbet, see checked/verified/failed/remaining, stop when `remaining: 0`, and read the resulting proof/decision stores.
+
+**Steps:**
+
+1. Add a sweep runner that calls `POST /api/verify-links` until `remaining == 0` or a budget is exhausted.
+2. Respect the existing rate limit; do not bypass it.
+3. Add a small dashboard control and a status display.
+4. Persist a sweep report per book/mode with timestamps and counts.
+5. Add tests for convergence, partial failure, and resume.
+
+**Acceptance criteria:**
+
+- [ ] A sweep over a fixture cache terminates with `remaining: 0`.
+- [ ] A failed event does not prevent other events from being checked.
+- [ ] The report distinguishes verified, failed, errored, and undecided.
+
+**Tests:**
+
+- New: `tests/test_link_sweep.py`
+- Existing: `tests/test_verify_links.py`
+
+**Notes / risks:** Keep the existing "a proof must stay re-checkable" behavior. Do not make a proof settle an event permanently.
+
+---
+
+### P2-2 — Dated re-verification of no-event declarations
+
+**Status:** Not started
+**Priority:** P2
+**Effort:** S
+**Depends on:** none
+
+**Objective:** prevent a six-book trust assumption from going stale silently.
+
+**Expected outcome:** every `supports_event_id: false` declaration has a `verified_at` date and a note; an audit test fails or warns when a declaration is older than the policy.
+
+**Steps:**
+
+1. Add `verified_at` and a short evidence note to each declaration in `config/bookmaker_deeplinks.json` (or a companion audit file).
+2. Add a test that every configured book has a declaration and a date.
+3. Add a script to print declarations older than N days.
+4. Record the manual re-check in `docs/` with the date and method.
+5. Add the audit to the operator checklist.
+
+**Acceptance criteria:**
+
+- [ ] Every book has a dated declaration.
+- [ ] An expired declaration is visible via a script/health field.
+- [ ] The README's reproduction command still works.
+
+**Tests:**
+
+- New: `tests/test_deeplinks.py::test_every_book_has_a_dated_declaration`
+
+**Notes / risks:** This is a human check; automate the reminder, not the conclusion.
+
+---
+
+### P2-3 — Publish `source_id` from every parser; complete registry coverage
+
+**Status:** Not started
+**Priority:** P2
+**Effort:** L
+**Depends on:** none
+
+**Objective:** make market identity auditable for every book, not only NSoft.
+
+**Expected outcome:** every parser emits the book's own market/source id; discovery can attribute a mapping; `unmapped_markets` is actionable per book; every registry row has a captured fixture or a dated absence proof.
+
+**Steps:**
+
+1. Audit each scraper for the source market id and wire it into `Market.source_id`.
+2. Run `scripts/discover_markets.py` / `scripts/capture_market_fixtures.py` against captured payloads.
+3. Add a coverage test: every registry row has a fixture or an explicit `_excluded`/absence entry.
+4. Add per-book `unmapped_markets` counters and a health summary.
+5. Regenerate `MARKET_MAPPING.md`.
+
+**Acceptance criteria:**
+
+- [ ] Every parser sets `source_id` where the feed provides one.
+- [ ] Every enabled registry row has test evidence.
+- [ ] Unmapped IDs are counted per book, not just globally.
+- [ ] `generate_market_mapping_doc.py --check` passes.
+
+**Tests:**
+
+- Extend `tests/test_market_mapping.py`, `tests/test_market_fixtures.py`, `tests/test_registry_parser_consistency.py`
+- New per-book coverage test
+
+**Notes / risks:** Do not guess an ID. A documented absence is better than a false mapping.
+
+---
+
+### P2-4 — Multi-day replay corpus and precision/recall evaluation
+
+**Status:** Not started
+**Priority:** P2
+**Effort:** L
+**Depends on:** none
+
+**Objective:** move from one-scan snapshots to a repeatable evaluation set.
+
+**Expected outcome:** a corpus of several days of scans with labelled pairs, plus a script that reports precision, recall, strict miss rate, false-merge rate, and coverage by book/sport.
+
+**Steps:**
+
+1. Capture and freeze scans for several days (respect size and privacy; no secrets).
+2. Build a labelled set of same/different fixture pairs from the evidence ledger and manual review.
+3. Add `scripts/evaluate_matching.py` with precision/recall and calibration by league/sport.
+4. Add regression thresholds and a report under `docs/evidence/`.
+5. Wire the report into the roadmap log.
+
+**Acceptance criteria:**
+
+- [ ] The corpus has at least 3 distinct days and both prematch and live where possible.
+- [ ] Precision/recall are reported with denominators.
+- [ ] A regression below the agreed threshold fails the script.
+- [ ] The report states what the labels cover and what they do not.
+
+**Tests:**
+
+- New: `tests/test_evaluate_matching.py`
+- Existing: `tests/test_replay.py`, `tests/test_pairing_audit.py`
+
+**Notes / risks:** A missed pair is cheaper than a false merge; weight the metrics accordingly. Do not optimize precision by dropping coverage without recording it.
+
+---
+
+### P2-5 — Sports expansion with measured admissibility
+
+**Status:** Not started
+**Priority:** P2
+**Effort:** L
+**Depends on:** P2-4
+
+**Objective:** add a sport only when the measured feed supports at least three comparable families across at least three books with the same settlement.
+
+**Expected outcome:** ice hockey or the next sport is either implemented with evidence or recorded as blocked with exact reasons.
+
+**Steps:**
+
+1. Re-run `scripts/measure_sports.py` for the candidate sport.
+2. Record per-book families and settlement mismatches.
+3. Add parser support only for proven families.
+4. Add cross-sport non-merge tests.
+5. Update `docs/MULTISPORT_EVIDENCE.md`.
+
+**Acceptance criteria:**
+
+- [ ] The admissibility rule is applied before code.
+- [ ] No settlement mismatch is priced.
+- [ ] A blocked sport has a dated evidence entry, not a TODO.
+- [ ] Cross-sport pairing remains a hard reject.
+
+**Tests:**
+
+- Extend `tests/test_sports.py`, `tests/test_multisport_arbitrage.py`, `tests/test_market_fixtures.py`
+
+**Notes / risks:** Do not lower the three-book threshold to make a sport fit.
+
+---
+
+### P2-6 — Candidate-queue quality and coverage metrics
+
+**Status:** Not started
+**Priority:** P2
+**Effort:** M
+**Depends on:** P0-1, P1-1
+
+**Objective:** make the Diagnostics queue a measure of resolvable work, not a dump of every near-miss.
+
+**Expected outcome:** the queue reports actionable vs league-blocked vs link-blocked counts; the league-blocked share is explained; actionable candidates are prioritized; the queue size trend is visible.
+
+**Steps:**
+
+1. Add queue breakdown by reason to `/api/candidates` and `/api/health`.
+2. Separate "an alias can close this" from "a league mapping can close this" from "no human action can close this".
+3. Add a dedupe/decay policy for repeated scans.
+4. Add a coverage trend chart to the dashboard.
+5. Measure before/after on a real scan.
+
+**Acceptance criteria:**
+
+- [ ] The queue payload has counts by blocker class.
+- [ ] A reviewer can filter to actionable candidates.
+- [ ] The dashboard does not present informational entries as work.
+- [ ] The before/after numbers are recorded.
+
+**Tests:**
+
+- New: `tests/test_candidate_quality.py`
+- Existing: `tests/test_candidates_api.py`, `tests/test_frontend_review.py`
+
+**Notes / risks:** Do not hide blocked candidates; label them. Suppression must remain premise-aware.
+
+---
+
+### P2-7 — Identical-feed ("skin") detection
+
+**Status:** Not started
+**Priority:** P2
+**Effort:** M
+**Depends on:** P0-7
+
+**Objective:** replace the single hardcoded NSoft assumption with a measured matrix of which books are actually separate price sources.
+
+**Expected outcome:** the scanner measures exact price agreement between every book pair over shared markets; a pair above a high threshold over enough shared markets is treated as one price source; the matrix is visible in health/diagnostics.
+
+**Steps:**
+
+1. Build a pairwise comparison from a scan: for each shared event/market/outcome, record whether both books quote exactly the same decimal price.
+2. Require a minimum sample (e.g. ≥200 shared markets) before drawing a conclusion; report the sample size.
+3. Classify pairs: `independent`, `twin` (≥99% identical), `suspicious` (between thresholds), `insufficient data`.
+4. Feed the twin set into the price-source rule (keep MDShop/Admiralbet as a seeded/known pair).
+5. Expose the matrix and any newly detected twins in `/api/health`; add a warning when a config-declared twin is not measured as one.
+6. Add tests with synthetic identical and independent books.
+
+**Acceptance criteria:**
+
+- [ ] The price-source rule can come from measured agreement, not only a hardcoded map.
+- [ ] A twin pair cannot manufacture an arb between its two books.
+- [ ] A pair with too little shared data is not silently classified as independent.
+- [ ] The matrix reports sample sizes.
+
+**Tests:**
+
+- New: `tests/test_skin_detection.py`
+- Existing: `tests/test_arbitrage.py` (one-leg-per-price-source), `tests/test_multisport_arbitrage.py`
+
+**Notes / risks:** Identical prices are not a trust signal; they are a “same source” signal. A pair that is merely correlated is still independent for arb purposes. The public reference measured Ladbrokes/Neds at 99.9% across 11,198 shared markets.
+
+---
+
+### P2-8 — Event-identity edge cases: doubleheaders and rematches
+
+**Status:** Not started
+**Priority:** P2
+**Effort:** M
+**Depends on:** P2-4
+
+**Objective:** prove the gate handles the cases where names and dates are identical but the fixtures are not.
+
+**Expected outcome:** explicit fixtures and tests for same-day doubleheaders, the same two teams meeting twice in a short window, kickoff near a date boundary, postponed/rescheduled matches, and neutral venues. The gate either distinguishes them or refuses; it never merges them by name.
+
+**Steps:**
+
+1. Add captured/synthetic fixtures for each case across at least two books.
+2. Test the matcher and gate directly: same names, same date, different kickoff or different provider IDs; same names, different competition; same names, different leg.
+3. Add a stable key component for the case if the existing signals cannot separate them (e.g. provider id, competition round, or an explicit `leg` field); do not guess.
+4. Document the resolution rule in `engine/certainty.py` and README.
+5. Add a regression test per case.
+
+**Acceptance criteria:**
+
+- [ ] Two different fixtures with identical team names are never one verified group.
+- [ ] A legitimate doubleheader can still group across books when the provider ID or kickoff proves it.
+- [ ] The behavior is documented and test-pinned.
+- [ ] No new fuzzy rule is introduced.
+
+**Tests:**
+
+- New: `tests/test_identity_edge_cases.py`
+- Existing: `tests/test_certainty.py`, `tests/test_matcher.py`, `tests/test_e2e_certified.py`
+
+**Notes / risks:** The SharpAPI canonical-ID docs document both a 6-hour bucket-boundary split and a doubleheader `_g{N}` suffix mismatch. BH_Arb’s Betradar-first rule is stronger, but the no-ID case still needs proof.
+
+---
+
+### P2-9 — Silent-drop coverage budget
+
+**Status:** Not started
+**Priority:** P2
+**Effort:** M
+**Depends on:** P0-7
+
+**Objective:** make “a book returned less data” visible before it becomes a clean-looking, wrong dataset.
+
+**Expected outcome:** per book/sport/market, the scanner compares observed counts with a rolling expected baseline and flags a material drop; a book returning zero while peers have events is an error, not a quiet day.
+
+**Steps:**
+
+1. Define a baseline from the last N scans (median or trimmed mean) per book/sport/market family.
+2. Compare the current scan; flag a drop beyond a configured absolute and relative threshold.
+3. Distinguish “genuinely empty” (e.g. no live games at night) from “expected but absent” using peer books and the time of day.
+4. Expose the budget in `/api/health` and the dashboard; include it in the soak report.
+5. Add tests with synthetic scans: stable, a 90% drop, a zero while peers are populated, and a legitimate seasonal empty.
+6. Record the first real baseline in `docs/evidence/`.
+
+**Acceptance criteria:**
+
+- [ ] A book that silently returns zero is flagged.
+- [ ] A market family that disappears while peers still publish it is flagged.
+- [ ] A legitimate empty feed does not create a false alarm.
+- [ ] The baseline and thresholds are documented.
+
+**Tests:**
+
+- New: `tests/test_coverage_budget.py`
+- Existing: `tests/test_pairing_audit.py`, `tests/test_probe_feeds.py`
+
+**Notes / risks:** This is the complement to the pairing audit: the audit asks “did we miss a pair?”, the budget asks “did we miss a whole feed?”
+
+---
+
+### P3-1 — Persistent storage v2 (SQLite) and migration
+
+**Status:** Not started
+**Priority:** P3
+**Effort:** L
+**Depends on:** P0-1, P1-1
+
+**Objective:** replace the ad-hoc JSON stores for runtime state with a transactional store that supports history, queries, and safe concurrent writes.
+
+**Expected outcome:** scans, groups, candidates, link proofs, decisions, and history live in SQLite with migrations; the JSON files remain importable and are migrated once.
+
+**Steps:**
+
+1. Define a schema and migration tool.
+2. Move scan history and candidate/decision stores first; keep `last_scan.json` as a compatibility export until the dashboard is migrated.
+3. Add indexes for book, event id, status, kickoff, and scan.
+4. Add a vacuum/retention policy.
+5. Add backup/restore docs.
+6. Run a migration dry run on the current cache.
+
+**Acceptance criteria:**
+
+- [ ] No data loss on migration; counts match the JSON source.
+- [ ] A scan writes transactionally.
+- [ ] A 30-day history is queryable without loading a 200 MB JSON file.
+- [ ] Rollback instructions exist.
+
+**Tests:**
+
+- New: `tests/test_storage_migration.py`
+- Existing: `tests/test_cache_serialization.py`, `tests/test_replay.py`
+
+**Notes / risks:** This is a large change; do it only after P0-1 proves the JSON path is bounded and the API is paginated. Do not combine it with a trust-rule change.
+
+---
+
+### P3-2 — Bet log, bankroll, and CLV analytics
+
+**Status:** Not started
+**Priority:** P3
+**Effort:** L
+**Depends on:** P3-1
+
+**Objective:** let an operator record what was actually placed and measure whether the edges are real.
+
+**Expected outcome:** a bet log with stakes, accepted odds, book, timestamp, and settlement; bankroll and ROI; closing-line value where a closing price is captured; export to CSV.
+
+**Steps:**
+
+1. Add bet/leg models and storage.
+2. Add "log this surebet" from the slip, with actual accepted odds and partial stakes.
+3. Add settlement entry and P/L calculation.
+4. Capture a closing price when available and compute CLV.
+5. Add dashboard summaries and CSV export.
+6. Keep it manual; no account integration.
+
+**Acceptance criteria:**
+
+- [ ] A logged bet does not change the scanner's trust model.
+- [ ] ROI and CLV have explicit denominators and date ranges.
+- [ ] Partial acceptance and a missing leg are representable.
+- [ ] Export round-trips.
+
+**Tests:**
+
+- New: `tests/test_bet_log.py`, `tests/test_clv.py`
+
+**Notes / risks:** This is the strongest long-term value feature, but it depends on honest manual entry. Do not fake settlement data.
+
+---
+
+### P3-3 — Advisory execution workflow and limits
+
+**Status:** Not started
+**Priority:** P3
+**Effort:** M
+**Depends on:** P3-2
+
+**Objective:** help an operator place a surebet safely without automating the bet.
+
+**Expected outcome:** per-book max stake, partial acceptance, "price moved" state, and a leg-by-leg checklist that re-plans after each accepted stake.
+
+**Steps:**
+
+1. Add per-book stake limits from config.
+2. Extend the slip to record accepted stake and odds per leg.
+3. If a leg is partially accepted or the price moves, re-plan the remaining legs and show the new worst case.
+4. Add a "stop/hedge" recommendation when the worst case turns negative.
+5. Test the planner with partial acceptance and missing legs.
+
+**Acceptance criteria:**
+
+- [ ] A partial acceptance cannot silently show the original profit.
+- [ ] The remaining stakes are recalculated from actual accepted amounts.
+- [ ] A negative worst case is clearly labeled.
+- [ ] No endpoint places a bet or logs in.
+
+**Tests:**
+
+- Extend `tests/test_arbitrage.py`, `tests/test_frontend_review.py`
+- New: `tests/test_slip_partial_acceptance.py`
+
+**Notes / risks:** Keep the project's non-goal: the scanner never moves money.
+
+---
+
+### P3-4 — Alerts, PWA, accessibility, and Bosnian UI
+
+**Status:** Not started
+**Priority:** P3
+**Effort:** M
+**Depends on:** P1-5
+
+**Objective:** make the dashboard usable away from the desk and accessible to Bosnian-speaking operators.
+
+**Expected outcome:** optional PWA install, push/webhook alerts, keyboard/screen-reader checks, and a language toggle (BS/EN) for the main labels.
+
+**Steps:**
+
+1. Add a web app manifest and service worker for installability (no offline betting data).
+2. Add notification permission and a push/webhook preference.
+3. Audit focus order, labels, contrast, and live regions.
+4. Extract user-facing strings into a small dictionary; add Bosnian translations.
+5. Add accessibility tests where practical.
+
+**Acceptance criteria:**
+
+- [ ] The app is installable and opens without a bundler.
+- [ ] Alerts respect the dedupe policy.
+- [ ] A keyboard-only user can scan, filter, open a slip, and copy a stake.
+- [ ] The language toggle persists.
+
+**Tests:**
+
+- Frontend tests for the language dictionary and focus behavior
+- Manual accessibility pass documented
+
+**Notes / risks:** Do not cache live odds in the service worker; stale odds are dangerous.
+
+---
+
+### P3-5 — Authentication and key management hardening
+
+**Status:** Not started
+**Priority:** P3
+**Effort:** M
+**Depends on:** P1-3
+
+**Objective:** make an exposed deployment safer than a single shared env key.
+
+**Expected outcome:** multiple named keys with hashed storage and rotation, per-key rate limits, and an audit log of privileged actions.
+
+**Steps:**
+
+1. Add a key file/store with hashed keys and labels.
+2. Add rotation and revocation.
+3. Scope keys to read/scan/admin where useful.
+4. Add an audit log for toggles, shutdown, and link checks.
+5. Keep the env `API_KEY` as a bootstrap/admin key.
+
+**Acceptance criteria:**
+
+- [ ] A revoked key fails immediately.
+- [ ] Keys are never stored or logged in plaintext.
+- [ ] Privileged actions are attributable.
+- [ ] The default remains loopback-only.
+
+**Tests:**
+
+- New: `tests/test_auth_keys.py`
+- Existing: `tests/test_api_key.py`, `tests/test_csrf.py`
+
+**Notes / risks:** Do not add a public signup flow. This is a single-operator tool.
+
+---
+
+### P3-6 — Book risk profiles and advisory pacing
+
+**Status:** Not started
+**Priority:** P3
+**Effort:** M
+**Depends on:** P1-7
+
+**Objective:** tell the operator what kind of book a leg is at, and whether the stake is realistic, without implementing account evasion.
+
+**Expected outcome:** every book has a `risk_profile` (sharp / soft / exchange / unknown), a typical max-stake note, and a limit-risk note; the slip shows a warning when a leg is at a soft book with a stake above its advisory limit. No auto-placement, no jitter, no multi-account logic.
+
+**Steps:**
+
+1. Add risk-profile fields to `config/settings.py` or a new `config/bookmaker_risk.json`.
+2. Show a label and a warning on the slip; keep it advisory.
+3. Add a per-book advisory max stake and a “stake exceeds advisory limit” flag.
+4. Add a test that a profile cannot change the certainty gate or the price source.
+5. Document the policy: the scanner does not evade limits or manage accounts.
+
+**Acceptance criteria:**
+
+- [ ] Every enabled book has a risk profile or an explicit `unknown`.
+- [ ] The dashboard shows the profile and an advisory warning.
+- [ ] A high stake at a soft book is visibly flagged.
+- [ ] No evasion, multi-account, or auto-placement feature is added.
+
+**Tests:**
+
+- New: `tests/test_book_risk_profiles.py`
+- Existing: `tests/test_frontend_review.py`, `tests/test_arbitrage.py`
+
+**Notes / risks:** The research on account limits is descriptive, not a playbook. The product's stance is transparency and advisory warnings.
+
+---
+
+### P3-7 — Record-only / paper-trading mode
+
+**Status:** Not started
+**Priority:** P3
+**Effort:** M
+**Depends on:** P3-1
+
+**Objective:** let the operator run the scanner without presenting anything as a live opportunity, and measure what a strategy would have done on recorded boards.
+
+**Expected outcome:** a `record-only` mode stores compact board snapshots and simulated outcomes; a `paper` mode tracks a virtual bankroll and produces ROI/CLV statistics. Neither places a bet.
+
+**Steps:**
+
+1. Add a mode flag to the scan/API; record-only never writes to the live surebet list.
+2. Store compact snapshots (event key, market, line, best odds, book, timestamp) and the gate verdict.
+3. Add a paper bankroll that takes a recorded opportunity at the recorded odds and marks it to the next available price or settlement.
+4. Report simulated ROI, hit rate, and CLV with explicit denominators.
+5. Keep the live advisory path unchanged.
+6. Document the limitations: simulated fills, no stake limits, no account effects.
+
+**Acceptance criteria:**
+
+- [ ] Record-only mode cannot show a live surebet as current.
+- [ ] Paper results state that no bet was placed.
+- [ ] ROI and CLV are computed only where the data supports them.
+- [ ] The live path's behavior is unchanged when the mode is off.
+
+**Tests:**
+
+- New: `tests/test_record_only.py`, `tests/test_paper_bankroll.py`
+- Existing: `tests/test_arbitrage.py`, `tests/test_replay.py`
+
+**Notes / risks:** Do not let a simulated fill assume a bet was accepted at the displayed price; model rejection and partial acceptance explicitly.
+
+---
+
+## 5. Cross-cutting decisions and non-goals
+
+### 5.1 Non-goals
+
+- **Automated bet placement or bookmaker login.** The product is advisory; this is both a trust boundary and an account-risk boundary.
+- **Lowering the certainty gate to increase surebet count.** A missed match is cheaper than a false merge.
+- **Adding a book or market without a capture or dated absence proof.**
+- **Raising live polling without a push/sub-10 s feed.** It would add load without improving the actual capture latency.
+- **Treating AI as an approver.** AI may rank candidates only.
+
+### 5.2 Trust invariants
+
+These must hold after every task:
+
+1. Only `verified` groups reach `engine/arbitrage.py`.
+2. `verified` means zero outstanding reasons, including the link half.
+3. A human or AI action cannot set `deep_link_verified`; only a browser check can.
+4. A missing declaration fails safe.
+5. A false merge is worse than a split; no fuzzy score alone may confirm identity.
+6. `sport` is a hard identity gate; no cross-sport pricing.
+7. Settlement is part of market identity; regulation vs overtime never pair.
+8. One leg per bookmaker and one leg per price source.
+
+### 5.3 Measurement discipline
+
+Before writing a claim about behavior, run the command that proves it and paste the output. Update `docs/ACCEPTANCE.md` for any number that changes the project's readiness story. Regenerate `MARKET_MAPPING.md`; never hand-edit the generated table.
+
+---
+
+## 6. Execution log
+
+Newest first. Each entry: date, task, status, commands, measured result, files changed, follow-ups.
+
+### 2026-11-04 — Deep research pass
+
+**Task:** deeper online research on arbitrage economics and scraped-data processing.
+**Status:** Done (research only; no application code changed).
+
+**Sources read:**
+
+- Open-source projects: `Rijul0107/sports-arbitrage-scanner`, `cengizmandros/odds-arb-scanner`,
+  `smartworkersai/KOS`, `Habeel-Shamsudeen/sportsbook-scraper`,
+  `declanwalpole/sportsbook-odds-scraper`, `enesmertcetin/surebet-scanner`,
+  `georgedouzas/sports-betting`.
+- Vendor docs/blogs: OddsJam, BetBurger, RebelBetting, ClawArbs, SharpAPI, The Odds API,
+  SportsGameOdds provider comparison, OddsPapi.
+- Forums: two Arbusers threads (build-your-own software, legality of scraping).
+- Reddit: direct fetch was blocked (HTTP 403), so search-index snippets were used for the
+  “build your own scanner”, “how does OddsJam work so quickly”, “odds scraping and storage”,
+  “best odds APIs”, “how to not get banned”, “3 years of arbing”, “93.62% NHL arb”, and
+  “technical guide to scraping betting odds” threads.
+
+**Key results:**
+
+- Public board log: **1.34%** of 115,583 boards crossed; only **26** of 1,553 crossings were
+  actionable after gates; median board margin **−3.60%**; 3 boards above 10% were treated as
+  data errors.
+- Twin books: Ladbrokes/Neds posted identical prices **99.9%** of the time across 11,198
+  shared markets. BH_Arb hardcodes only the NSoft pair.
+- Community consensus: stale/suspended prices and palpable errors are the main phantom-arb
+  sources; account limits are the binding practical constraint; a 30-second cycle across five
+  books is often too slow for live arbs.
+- Vendor consensus: raw feed > HTML; WebSocket/push for live; canonical IDs first, aliases
+  second, fuzzy only for candidates; missing data looks like a smaller dataset.
+
+**Files changed:** `docs/RESEARCH_ARBITRAGE_2026-11-04.md` (new); `PROJECT_ROADMAP.md`
+(findings F13–F19, tasks P0-6, P0-7, P1-7, P2-7, P2-8, P2-9, P3-6, P3-7).
+
+**Follow-ups:** P0-1/P0-3 remain the first implementation tasks. P0-6 and P0-7 should follow
+P0-4 because they depend on a coherent freshness state. Do not start P2-7 until there is a
+scan-level price-agreement matrix to feed it.
+
+---
+
+### 2026-11-04 — Audit and roadmap
+
+**Task:** repository audit, external research, roadmap creation.
+**Status:** Done (implementation not started).
+
+**Commands and results:**
+
+- `python -m pytest` → 1,251 passed, 1 warning, 183 s.
+- `python -m ruff check .` → clean.
+- `python -m mypy .` → clean on 134 source files.
+- `python scripts/generate_market_mapping_doc.py --check` → in sync.
+- `python scripts/replay_mappings.py tests/fixtures/replay/2026-11-03 --cold --check` → exit 0, fixed point, 0 unresolved evidence-backed pairs.
+- Cache measurement: `cache/last_scan.json` = 218.5 MB; matches = 17.5 MB; groups = 133.1 MB; parse = 2.51 s.
+- Evidence measurement: one group held 4 allowlist evidence entries of 97.5 KB each; trimming to 5 entries reduced the simulated group JSON from 133.1 MB to 8.0 MB.
+- Ledger measurement: 23.6 MB, 4,632 claims, 0.43 s load; matcher init 0.72 s.
+
+**Findings:** F1–F12 above. The roadmap prioritizes the payload bug, the frontend injection/CSP issue, the stale documentation, runtime staleness, and declaration reload before coverage or product work.
+
+**Files changed:** `PROJECT_ROADMAP.md` (new).
+
+**Follow-ups:** start with P0-1 and P0-3. Do not start P1-6 until P0-1 is measured.
+
+---
+
+## 7. Quick reference
+
+### Run the same checks as CI
+
+```bash
+python -m pytest
+python -m ruff check .
+python -m mypy .
+python scripts/generate_market_mapping_doc.py --check
+python scripts/replay_mappings.py tests/fixtures/replay/2026-11-03 --cold --check
+```
+
+### Useful measurements
+
+```bash
+# Cache shape and size
+python - <<'PY'
+import json, os
+p = 'cache/last_scan.json'
+d = json.load(open(p, encoding='utf-8'))
+print('MB', round(os.path.getsize(p) / 1e6, 1))
+print('matches', len(d['matches']), 'groups', len(d['match_groups']))
+print('matches JSON MB', round(len(json.dumps(d['matches'])) / 1e6, 1))
+print('groups JSON MB', round(len(json.dumps(d['match_groups'])) / 1e6, 1))
+PY
+
+# Pairing quality
+python scripts/pairing_audit.py --check
+
+# One real scan, recorded as evidence
+python scripts/record_scan.py prematch --out docs/evidence/prematch-scan.json
+```
+
+### Where to look
+
+| Concern | File |
+|---|---|
+| The gate | `engine/certainty.py` |
+| Grouping | `engine/matcher.py` |
+| Pricing | `engine/arbitrage.py` |
+| API routes and caches | `server/api.py` |
+| Security middleware | `server/app.py` |
+| Deep-link declarations | `config/bookmaker_deeplinks.json` |
+| Market registry | `config/bookmaker_markets.json` |
+| Evidence ledger | `config/generated/mapping_evidence.json` |
+| Dashboard | `frontend/index.html`, `frontend/js/app.js` |
+| Tests and fixtures | `tests/`, `tests/fixtures/` |
+| Prior design record | `docs/HANDOFF.md`, `docs/PRODUCTION_READINESS.md`, `docs/ACCEPTANCE.md` |
