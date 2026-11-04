@@ -69,7 +69,7 @@ from engine.feed_integrity import (
 )
 from engine.mapping_evidence import MappingLedger
 from engine.mapping_learner import learn
-from engine.market_registry import unmapped_markets
+from engine.market_registry import unmapped_by_book, unmapped_markets
 from engine.matcher import MatchMatcher, swap_match_teams_and_odds
 from engine.opportunity_metrics import (
     ScanMetrics,
@@ -2503,6 +2503,7 @@ async def health():
             "live": _feed_integrity_payload("live"),
         },
         "unmapped_markets": dict(unmapped_markets),
+        "unmapped_markets_by_book": unmapped_by_book(),
         "verified_groups": sum(
             1
             for report in cached_match_groups_report

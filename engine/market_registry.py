@@ -60,6 +60,20 @@ def record_unmapped(
     unmapped_markets[key] = unmapped_markets.get(key, 0) + 1
 
 
+def unmapped_by_book() -> dict[str, dict[str, int]]:
+    """Group the process-wide unmapped IDs by bookmaker.
+
+    The flat counter is what the scraper writes; this view answers the health
+    question "which book's market coverage is actually failing?" without making
+    the operator parse `book:id` strings.
+    """
+    grouped: dict[str, dict[str, int]] = {}
+    for key, count in unmapped_markets.items():
+        book, _, source_id = key.partition(":")
+        grouped.setdefault(book or "unknown", {})[source_id] = count
+    return dict(sorted(grouped.items()))
+
+
 _DEFAULT_LABELS: dict[MarketType, set[str]] = {
     MarketType.MATCH_RESULT: {"1", "X", "2"},
     MarketType.DOUBLE_CHANCE: {"1X", "12", "X2"},

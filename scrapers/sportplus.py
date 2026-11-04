@@ -393,10 +393,26 @@ class SportPlusScraper:
                         out.append((str(alias), value))
                 return out
 
-            def append_market(market_type: MarketType, odds: list[OddsValue]) -> None:
+            raw_id = market.get("id")
+
+            def append_market(
+                market_type: MarketType,
+                odds: list[OddsValue],
+                _source_id: object = raw_id,
+            ) -> None:
                 if any(m.market_type == market_type for m in result):
                     return
-                result.append(Market(market_type=market_type, odds=odds))
+                result.append(
+                    Market(
+                        market_type=market_type,
+                        odds=odds,
+                        source_id=(
+                            str(_source_id)
+                            if isinstance(_source_id, int | str)
+                            else ""
+                        ),
+                    )
+                )
 
             if name == "Pobjednik":
                 spec = _registered_spec("live", "POBJEDNIK", MarketType.MATCH_RESULT)
@@ -782,6 +798,7 @@ class SportPlusScraper:
                 Market(
                     market_type=market_type,
                     odds=list(odds_by_label.values()),
+                    source_id=str(context.get("market_id") or ""),
                     source_context={
                         "sportplus_market_code": str(context.get("market_code") or ""),
                         "sportplus_market_id": str(context.get("market_id") or ""),

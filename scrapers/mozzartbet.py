@@ -270,7 +270,9 @@ def _parse_markets(
         and len({o.label for o in mr_odds}) >= mr_spec.min_legs
         and {o.label for o in mr_odds}.issubset(mr_spec.labels)
     ):
-        markets.append(Market(market_type=MarketType.MATCH_RESULT, odds=mr_odds))
+        markets.append(
+            Market(market_type=MarketType.MATCH_RESULT, odds=mr_odds, source_id="1")
+        )
 
     dc_spec = MARKET_REGISTRY.lookup_type(bookmaker, mode, 2, MarketType.DOUBLE_CHANCE)
     if (
@@ -278,7 +280,9 @@ def _parse_markets(
         and len({o.label for o in dc_odds}) >= dc_spec.min_legs
         and {o.label for o in dc_odds}.issubset(dc_spec.labels)
     ):
-        markets.append(Market(market_type=MarketType.DOUBLE_CHANCE, odds=dc_odds))
+        markets.append(
+            Market(market_type=MarketType.DOUBLE_CHANCE, odds=dc_odds, source_id="2")
+        )
 
     btts_spec = MARKET_REGISTRY.lookup_type(bookmaker, mode, 130, MarketType.BTTS)
     btts_odds = [
@@ -292,7 +296,9 @@ def _parse_markets(
         and len(actual) >= btts_spec.min_legs
         and actual.issubset(btts_spec.labels)
     ):
-        markets.append(Market(market_type=MarketType.BTTS, odds=btts_odds))
+        markets.append(
+            Market(market_type=MarketType.BTTS, odds=btts_odds, source_id="130")
+        )
 
     mt_map = {
         "1.5": MarketType.OVER_UNDER_1_5,
@@ -319,7 +325,9 @@ def _parse_markets(
             and len(actual) >= spec.min_legs
             and actual.issubset(spec.labels)
         ):
-            markets.append(Market(market_type=market_type, odds=ou_odds))
+            markets.append(
+                Market(market_type=market_type, odds=ou_odds, source_id="3")
+            )
 
     return markets
 

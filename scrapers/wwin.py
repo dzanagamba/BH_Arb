@@ -135,6 +135,7 @@ def _build_markets_from_bets(bets: list, mode: str = "prematch") -> list[Market]
                 markets.append(Market(
                     market_type=MarketType.MATCH_RESULT,
                     odds=[by_label[label] for label in ("1", "X", "2") if label in by_label],
+                    source_id=str(bet_id),
                 ))
         elif bet_id == 6:
             spec = registered_spec(bet_id, MarketType.DOUBLE_CHANCE)
@@ -145,6 +146,7 @@ def _build_markets_from_bets(bets: list, mode: str = "prematch") -> list[Market]
                 markets.append(Market(
                     market_type=MarketType.DOUBLE_CHANCE,
                     odds=[by_label[label] for label in ("1X", "12", "X2") if label in by_label],
+                    source_id=str(bet_id),
                 ))
         elif bet_id == 3:
             spec = registered_spec(bet_id, MarketType.BTTS)
@@ -166,7 +168,9 @@ def _build_markets_from_bets(bets: list, mode: str = "prematch") -> list[Market]
                 and len(actual) >= spec.min_legs
                 and actual.issubset(spec.labels)
             ):
-                markets.append(Market(market_type=MarketType.BTTS, odds=btts_odds))
+                markets.append(
+                    Market(market_type=MarketType.BTTS, odds=btts_odds, source_id=str(bet_id))
+                )
         elif bet_id == 2 and mode == "prematch":
             # First-half 1X2 is an experimental market retained outside the
             # core registry; keep the historical payload support.
@@ -175,6 +179,7 @@ def _build_markets_from_bets(bets: list, mode: str = "prematch") -> list[Market]
                 markets.append(Market(
                     market_type=MarketType.FIRST_HALF_1X2,
                     odds=[by_label[label] for label in ("1", "X", "2")],
+                    source_id=str(bet_id),
                 ))
         elif bet_id == 11:
             raw_spec = str(bet.get("spec") or "")
@@ -217,7 +222,9 @@ def _build_markets_from_bets(bets: list, mode: str = "prematch") -> list[Market]
                 and len(actual) >= spec.min_legs
                 and actual.issubset(spec.labels)
             ):
-                markets.append(Market(market_type=market_type, odds=ou_odds))
+                markets.append(
+                    Market(market_type=market_type, odds=ou_odds, source_id=str(bet_id))
+                )
         else:
             if bet_id is not None:
                 record_unmapped("wwin", bet_id)

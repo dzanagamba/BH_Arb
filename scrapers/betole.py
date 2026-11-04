@@ -75,11 +75,13 @@ def _parse_betole_markets(raw_odds: dict, mode: str = "prematch") -> list[Market
         line: float | None = None,
     ) -> Market | None:
         spec = None
+        matched_code = ""
         odds: list[OddsValue] = []
         for code, label in code_to_label.items():
             candidate = registered_spec(code, market_type, line=line)
             if candidate is not None:
                 spec = candidate
+                matched_code = code
             value = read_odd(code)
             if value is not None and candidate is not None and label in candidate.labels:
                 odds.append(OddsValue(label=label, value=value))
@@ -87,7 +89,7 @@ def _parse_betole_markets(raw_odds: dict, mode: str = "prematch") -> list[Market
             return None
         if not {o.label for o in odds}.issubset(spec.labels):
             return None
-        return Market(market_type=market_type, odds=odds)
+        return Market(market_type=market_type, odds=odds, source_id=matched_code)
 
     markets: list[Market] = []
     mappings = [
@@ -108,7 +110,9 @@ def _parse_betole_markets(raw_odds: dict, mode: str = "prematch") -> list[Market
                 if (value := read_odd(code)) is not None
             ]
             if len(odds) == 3:
-                markets.append(Market(market_type=market_type, odds=odds))
+                markets.append(
+                    Market(market_type=market_type, odds=odds, source_id=str(next(iter(code_to_label))))
+                )
             continue
         market = build_market(market_type, code_to_label, line=line)
         if market is not None:

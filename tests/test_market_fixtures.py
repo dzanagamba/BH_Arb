@@ -296,6 +296,26 @@ def test_captured_payload_emits_exactly_the_declared_markets(path: Path):
 
 
 @pytest.mark.parametrize("path", FIXTURES, ids=lambda p: p.stem)
+def test_parser_publishes_the_feed_source_id(path: Path):
+    """Every captured feed provides an id, and the parser must keep it.
+
+    A parser that resolves the registry correctly but drops the source id makes
+    a discovered mapping unattributable. The captures are the proof: if the
+    feed did not provide an id, the row belongs in a dated absence entry
+    instead of a silent empty string.
+    """
+    data = _load(path)
+    book, mode = data["bookmaker"], data["mode"]
+    markets = _run_parser(data)
+
+    assert markets, f"{book}/{mode}: fixture emitted no markets"
+    missing = [
+        market.market_type.value for market in markets if not market.source_id
+    ]
+    assert not missing, f"{book}/{mode}: missing source_id for {missing}"
+
+
+@pytest.mark.parametrize("path", FIXTURES, ids=lambda p: p.stem)
 def test_every_emitted_market_obeys_its_registry_label_rule(path: Path):
     """ID match is not enough: the label set and leg count must hold too."""
     data = _load(path)
@@ -595,3 +615,17 @@ def test_an_unregistered_id_is_counted_not_dropped():
         f"admiralbet:{fake_id} is not in the registry and not excluded, so parsing "
         "must have recorded it in engine.market_registry.unmapped_markets"
     )
+
+
+def test_unmapped_ids_are_grouped_by_book(monkeypatch):
+    from engine.market_registry import record_unmapped, unmapped_by_book, unmapped_markets
+
+    monkeypatch.setattr("engine.market_registry.unmapped_markets", {})
+    record_unmapped("maxbet", "999")
+    record_unmapped("maxbet", "999")
+    record_unmapped("wwin", "888")
+
+    grouped = unmapped_by_book()
+
+    assert grouped == {"maxbet": {"999": 2}, "wwin": {"888": 1}}
+    assert unmapped_markets  # the flat counter remains the scraper-facing view

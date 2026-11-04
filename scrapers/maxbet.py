@@ -156,6 +156,7 @@ def parse_maxbet_odds(odds: list, mode: str = "prematch") -> list[Market]:
             markets.append(Market(
                 market_type=spec.market_type,
                 odds=[OddsValue(label=label, value=value) for label, value in values.items()],
+                source_id=str(odd_type_id),
             ))
     return markets
 

@@ -662,27 +662,51 @@ class MBetScraper:
                 if live
                 else _resolve_mbet_market(raw_sport_id, raw_odds)
             )
+            source_ids = (
+                {
+                    "1X2": "lfb:ft",
+                    "DC": "lfb:dc",
+                    "BTTS": "lfb:bttsny",
+                    "over_under_1_5": "lfb:tg",
+                    "over_under_2_5": "lfb:tg",
+                    "over_under_3_5": "lfb:tg",
+                }
+                if live
+                else {
+                    "1X2": "ofb:fs",
+                    "DC": "ofb:dc",
+                    "BTTS": "ofb:gg",
+                    "first_half_1x2": "ofb:ht",
+                    "asian_handicap": "ofb:hc",
+                    "over_under_1_5": "ofb:tg",
+                    "over_under_2_5": "ofb:tg",
+                    "over_under_3_5": "ofb:tg",
+                    "over_under_4_5": "ofb:tg",
+                    "over_under_5_5": "ofb:tg",
+                }
+            )
             for key, odds_list in market_dicts.items():
+                source_id = source_ids.get(key, "")
                 if key == "1X2":
-                    markets.append(Market(market_type=MarketType.MATCH_RESULT, odds=odds_list))
+                    markets.append(Market(market_type=MarketType.MATCH_RESULT, odds=odds_list, source_id=source_id))
                 elif key == "DC":
-                    markets.append(Market(market_type=MarketType.DOUBLE_CHANCE, odds=odds_list))
+                    markets.append(Market(market_type=MarketType.DOUBLE_CHANCE, odds=odds_list, source_id=source_id))
                 elif key == "BTTS":
-                    markets.append(Market(market_type=MarketType.BTTS, odds=odds_list))
+                    markets.append(Market(market_type=MarketType.BTTS, odds=odds_list, source_id=source_id))
                 elif key == "first_half_1x2":
-                    markets.append(Market(market_type=MarketType.FIRST_HALF_1X2, odds=odds_list))
+                    markets.append(Market(market_type=MarketType.FIRST_HALF_1X2, odds=odds_list, source_id=source_id))
                 elif key == "asian_handicap":
-                    markets.append(Market(market_type=MarketType.ASIAN_HANDICAP, odds=odds_list))
+                    markets.append(Market(market_type=MarketType.ASIAN_HANDICAP, odds=odds_list, source_id=source_id))
                 elif key == "over_under_1_5":
-                    markets.append(Market(market_type=MarketType.OVER_UNDER_1_5, odds=odds_list))
+                    markets.append(Market(market_type=MarketType.OVER_UNDER_1_5, odds=odds_list, source_id=source_id))
                 elif key == "over_under_2_5":
-                    markets.append(Market(market_type=MarketType.OVER_UNDER_2_5, odds=odds_list))
+                    markets.append(Market(market_type=MarketType.OVER_UNDER_2_5, odds=odds_list, source_id=source_id))
                 elif key == "over_under_3_5":
-                    markets.append(Market(market_type=MarketType.OVER_UNDER_3_5, odds=odds_list))
+                    markets.append(Market(market_type=MarketType.OVER_UNDER_3_5, odds=odds_list, source_id=source_id))
                 elif key == "over_under_4_5":
-                    markets.append(Market(market_type=MarketType.OVER_UNDER_4_5, odds=odds_list))
+                    markets.append(Market(market_type=MarketType.OVER_UNDER_4_5, odds=odds_list, source_id=source_id))
                 elif key == "over_under_5_5":
-                    markets.append(Market(market_type=MarketType.OVER_UNDER_5_5, odds=odds_list))
+                    markets.append(Market(market_type=MarketType.OVER_UNDER_5_5, odds=odds_list, source_id=source_id))
         else:
             for entries in _resolve_mbet_sport_market(raw_sport_id, raw_odds, live=live).values():
                 for market_type, odds_list, settlement in entries:

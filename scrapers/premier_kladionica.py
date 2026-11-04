@@ -299,10 +299,14 @@ class PremierKladionicaScraper:
 
         markets: list[Market] = []
 
-        def add_market(market_type: MarketType, odds: list[OddsValue]) -> None:
+        def add_market(
+            market_type: MarketType, odds: list[OddsValue], source_id: str = ""
+        ) -> None:
             if any(m.market_type == market_type for m in markets):
                 return
-            markets.append(Market(market_type=market_type, odds=odds))
+            markets.append(
+                Market(market_type=market_type, odds=odds, source_id=source_id)
+            )
 
         for set_tip_id, vars_map in grouped.items():
             name = _norm_name(set_tip.get((FOOTBALL_SPORT_ID, set_tip_id), ""))
@@ -333,7 +337,7 @@ class PremierKladionicaScraper:
                             len(match_result) >= mr_spec.min_legs
                             and {o.label for o in match_result}.issubset(mr_spec.labels)
                         ):
-                            add_market(MarketType.MATCH_RESULT, match_result)
+                            add_market(MarketType.MATCH_RESULT, match_result, str(set_tip_id))
                     if dc_spec is not None:
                         dc = [
                             OddsValue(label=label, value=by_kod[label])
@@ -341,7 +345,7 @@ class PremierKladionicaScraper:
                             if by_kod.get(label) and label in dc_spec.labels
                         ]
                         if len(dc) >= dc_spec.min_legs:
-                            add_market(MarketType.DOUBLE_CHANCE, dc)
+                            add_market(MarketType.DOUBLE_CHANCE, dc, str(set_tip_id))
                 elif base_name == (NAME_BTTS_LIVE if live else NAME_BTTS):
                     source_id = "LIVE_OBA_DAJU_GOL" if live else "OBA_DAJU_GOL"
                     spec = _registered_spec(
@@ -362,7 +366,7 @@ class PremierKladionicaScraper:
                         and len(actual) >= spec.min_legs
                         and actual.issubset(spec.labels)
                     ):
-                        add_market(MarketType.BTTS, btts_odds)
+                        add_market(MarketType.BTTS, btts_odds, str(set_tip_id))
                 elif base_name == NAME_FH_1X2 and not live:
                     by_kod = {str(set_tip_tip.get((FOOTBALL_SPORT_ID, set_tip_id, tip_id), "?")): koef
                               for tip_id, koef, _n in tips}
@@ -370,7 +374,7 @@ class PremierKladionicaScraper:
                                  [("1", by_kod.get("1")), ("X", by_kod.get("X")), ("2", by_kod.get("2"))]
                                  if v]
                     if len(fh_result) == 3 and {o.label for o in fh_result} == {"1", "X", "2"}:
-                        add_market(MarketType.FIRST_HALF_1X2, fh_result)
+                        add_market(MarketType.FIRST_HALF_1X2, fh_result, str(set_tip_id))
                 elif _is_fh_ou_name(base_name) and not live:
                     line = _parse_line_generic(
                         str(set_tip_var.get((FOOTBALL_SPORT_ID, set_tip_id, var_id), "")),
@@ -386,7 +390,7 @@ class PremierKladionicaScraper:
                         add_market(MarketType.FIRST_HALF_OU, [
                             OddsValue(label=f"Over {line}", value=over),
                             OddsValue(label=f"Under {line}", value=under),
-                        ])
+                        ], str(set_tip_id))
                 elif base_name == NAME_OU:
                     line = _parse_line(str(set_tip_var.get((FOOTBALL_SPORT_ID, set_tip_id, var_id), "")))
                     if line is None:
@@ -421,6 +425,7 @@ class PremierKladionicaScraper:
                                 OddsValue(label=f"{odd.label} {line}", value=odd.value)
                                 for odd in ou_odds
                             ],
+                            str(set_tip_id),
                         )
                 else:
                     record_unmapped(

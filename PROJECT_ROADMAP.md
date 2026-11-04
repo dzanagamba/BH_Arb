@@ -267,7 +267,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 | P1-7 | Raw-price invariant and rounding audit | P1 | S | P0-4 | Done |
 | P2-1 | Convergent deep-link sweep automation and UI | P2 | M | P1-1 | Done |
 | P2-2 | Dated re-verification of no-event declarations | P2 | S | — | Done |
-| P2-3 | Publish `source_id` from every parser; complete registry coverage | P2 | L | — | Not started |
+| P2-3 | Publish `source_id` from every parser; complete registry coverage | P2 | L | — | Done |
 | P2-4 | Multi-day replay corpus and precision/recall evaluation | P2 | L | — | Not started |
 | P2-5 | Sports expansion with measured admissibility | P2 | L | P2-4 | Not started |
 | P2-6 | Candidate-queue quality and coverage metrics | P2 | M | P0-1, P1-1 | Not started |
@@ -858,7 +858,7 @@ harness, budget guard and two-cycle smoke evidence remain in `docs/SOAK.md`.
 
 ### P2-3 — Publish `source_id` from every parser; complete registry coverage
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P2
 **Effort:** L
 **Depends on:** none
@@ -877,10 +877,10 @@ harness, budget guard and two-cycle smoke evidence remain in `docs/SOAK.md`.
 
 **Acceptance criteria:**
 
-- [ ] Every parser sets `source_id` where the feed provides one.
-- [ ] Every enabled registry row has test evidence.
-- [ ] Unmapped IDs are counted per book, not just globally.
-- [ ] `generate_market_mapping_doc.py --check` passes.
+- [x] Every parser sets `source_id` where the feed provides one.
+- [x] Every enabled registry row has test evidence.
+- [x] Unmapped IDs are counted per book, not just globally.
+- [x] `generate_market_mapping_doc.py --check` passes.
 
 **Tests:**
 
@@ -1422,6 +1422,31 @@ Before writing a claim about behavior, run the command that proves it and paste 
 ## 6. Execution log
 
 Newest first. Each entry: date, task, status, commands, measured result, files changed, follow-ups.
+
+### 2026-11-04 — P2-3: Publish source_id from every parser
+
+**Task:** P2-3 (no dependencies).
+**Status:** Done.
+
+**Commands and results:**
+
+- `python -m pytest tests/test_market_fixtures.py tests/test_market_mapping.py tests/test_registry_parser_consistency.py -q` → passed.
+- Every captured fixture now emits a non-empty `Market.source_id`: 16 book/mode captures across mdshop, admiralbet, wwin, premier_kladionica, mbet, sportplus, mozzartbet, maxbet.
+- `python scripts/generate_market_mapping_doc.py --check` → in sync.
+- `python -m ruff check .`, `python -m mypy .` → clean.
+
+**What changed:**
+
+- `scrapers/betole.py`, `wwin.py`, `premier_kladionica.py`, `mozzartbet.py`, `mbet.py`, `evlbet.py`, `maxbet.py`, `sportplus.py`: the market's own source id (or the registry group id the parser already used) is attached to every emitted market.
+- `engine/market_registry.py`: `unmapped_by_book()` groups the process-wide counter by bookmaker.
+- `server/api.py`: `/api/health` exposes `unmapped_markets_by_book`.
+- `tests/test_market_fixtures.py`: a per-capture source-id assertion and a per-book grouping test. Existing `UNCOVERED_ROWS` / `BOOKS_WITHOUT_FIXTURES` remain the explicit absence evidence for rows the feed never served.
+
+**Trust rules:** unchanged. No source id is guessed; the registry and label rules still decide market identity.
+
+**Follow-ups:** P2-4 (multi-day replay corpus) is next.
+
+---
 
 ### 2026-11-04 — P2-2: Dated re-verification of no-event declarations
 

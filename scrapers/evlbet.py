@@ -168,7 +168,13 @@ class EvlbetScraper:
         if len(actual) < spec.min_legs or not actual.issubset(spec.labels):
             return None
 
-        markets = [Market(market_type=MarketType.MATCH_RESULT, odds=mr_odds)]
+        markets = [
+            Market(
+                market_type=MarketType.MATCH_RESULT,
+                odds=mr_odds,
+                source_id=str(source_id),
+            )
+        ]
 
         return Match(
             bookmaker=BOOKMAKER_ID,
