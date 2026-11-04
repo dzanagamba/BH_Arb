@@ -86,3 +86,8 @@ Per-book feed states across the two samples:
 This is a smoke test: 2 scans over 112 seconds cannot prove a day-long plateau.
 The 940 MB sample is also above the older 767 MB ten-cycle plateau, which is
 exactly why the 24-hour series is still required before calling P1-6 done.
+
+The live scans also write learned aliases into the gitignored
+`config/generated/mapping_evidence.json`. The full test suite is verified with a
+clean ledger, as CI runs it; keep a copy of the learned ledger if those aliases
+matter, and do not assume a populated runtime ledger is the test baseline.
