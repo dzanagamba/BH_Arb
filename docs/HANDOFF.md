@@ -332,4 +332,4 @@ behaviour. Whole-branch review is not optional on this kind of work.
 | Link checker | `scripts/verify_deeplinks.py` |
 | Fixture regenerator | `scripts/capture_market_fixtures.py` |
 | Generated market doc | `MARKET_MAPPING.md` (between `<!-- GENERATED ... -->` markers) |
-| User-facing docs | `README.md` §"Match & mapping certainty", `PLAN.md` §3 |
+| User-facing docs | `README.md` §"Match & mapping certainty" |

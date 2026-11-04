@@ -1,4 +1,4 @@
-"""Every checkable claim in README.md and PLAN.md, compared to the code it describes.
+"""Every checkable claim in README.md, compared to the code it describes.
 
 WHY THIS FILE EXISTS
 --------------------
@@ -61,7 +61,6 @@ pytestmark = pytest.mark.real_deeplinks
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 README = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
-PLAN = (REPO_ROOT / "PLAN.md").read_text(encoding="utf-8")
 
 # A backticked bare identifier. The tables legitimately enumerate paths, URLs,
 # numbers and prose as well, and only these can be a claim about a name.
@@ -1103,47 +1102,8 @@ def test_defect_check_fails_when_the_readme_drops_a_fix():
 
 
 # ===========================================================================
-# 10. PLAN.md, and the pointer that makes the headline reproducible
+# 10. The pointers that make the headline reproducible
 # ===========================================================================
-
-# The new PLAN.md is the autonomy contract, not the Muse 12 phase log. These
-# checks read the contract itself, so a rewrite that drops the autonomy goal or
-# reintroduces a human-review hard stop fails here.
-
-def _plan_contract_defects(plan: str) -> list[str]:
-    """Defects in PLAN.md's autonomy contract and its acceptance surface."""
-    problems: list[str] = []
-    lowered = plan.lower()
-    for token in ("no human review", "evidence", "replay", "acceptance"):
-        if token not in lowered:
-            problems.append(f"PLAN.md no longer states {token!r}")
-    if "Baseline (2026-11-03" not in plan or ".venv" not in plan:
-        problems.append("PLAN.md no longer records a reproducible baseline")
-    if "Never make the certainty gate accept a pair it refuses today" in plan:
-        problems.append("PLAN.md still carries the old human-review hard stop")
-    for token in (
-        "false_merges",
-        "pairs_unresolved",
-        "market_rows_unmapped",
-        "manual_steps",
-    ):
-        if token not in plan:
-            problems.append(f"PLAN.md's acceptance metrics omit {token!r}")
-    return problems
-
-
-def test_plan_states_the_autonomy_contract():
-    assert _plan_contract_defects(PLAN) == [], "; ".join(_plan_contract_defects(PLAN))
-
-
-def test_plan_contract_check_fails_when_the_goal_is_removed():
-    """Proves the predicate reads the contract, not just any long document."""
-    broken = PLAN.replace("no human review", "human review", 1)
-    assert broken != PLAN, "the mutation did not apply; untested"
-    problems = _plan_contract_defects(broken)
-    assert problems, "a PLAN.md without the zero-human goal passed the check"
-    assert any("no human review" in problem for problem in problems)
-
 
 # The pointers the headline claim must carry, and why each one matters.
 _POINTERS = (
@@ -1189,7 +1149,6 @@ def test_pointer_check_fails_when_the_callout_loses_a_pointer():
 # ===========================================================================
 # 11. The guard on the guard
 # ===========================================================================
-
 
 def _predicates() -> dict[str, object]:
     """Every ``*_problems`` predicate defined in this module, by name."""
