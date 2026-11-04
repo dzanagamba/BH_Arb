@@ -212,6 +212,13 @@ Verdicts go to `cache/deep_link_verifications.json`; the next scan reads that
 store. The check is deliberately not part of a scan because each event costs a
 navigation.
 
+Declaration edits in `config/bookmaker_deeplinks.json` are picked up without a
+restart: the loader tracks the file's mtime and size and reloads when they
+change. `/api/health` exposes `deep_link_declaration_source` with `loaded_at`,
+`source_mtime`, `stale` and `error`, and each declaration entry carries the same
+provenance. A malformed file clears the map and fails safe (every book blocks);
+health says why instead of silently continuing with the old map.
+
 **A sweep advances; it is not a one-shot operation.** `build_targets` takes
 `settled` (event ids the caller has already decided) and `offset` (a positional
 resume, for a caller with no store of its own — which is the CLI), and the

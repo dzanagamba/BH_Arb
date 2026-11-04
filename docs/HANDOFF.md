@@ -277,8 +277,9 @@ entry as a hard rule; this is the one enabled book that does not meet it.
   markets."* The filters are not the cause — the link gate is. The data to say so is already
   shipped and unused (`group_statuses` on `/api/results`, `verified_groups` / `unverified_links`
   on `/api/health`).
-- `_deeplink_cache` is populated once and never invalidated. Editing a declaration needs a
-  process restart. It is now observable via `/api/health` (`deep_link_declarations`).
+- ~~`_deeplink_cache` is populated once and never invalidated~~ (fixed: the loader reloads when the
+  declaration file's mtime/size changes, and `/api/health` exposes `deep_link_declaration_source`
+  plus per-entry `loaded_at`/`source_mtime`/`stale`).
 - `unverified_links` was switched to `not declares_no_event_id(...)` so it matches the gate's own
   predicate — correct now, but the guarantee rests on a test that every configured book is
   declared.

@@ -81,6 +81,27 @@ missing timestamps, and per-leg fetch times.
 
 Tests: `tests/test_freshness_api.py`, `tests/test_frontend_freshness.py`.
 
+## Reloadable deep-link declarations (P0-5, 2026-11-04)
+
+F5 was an operator trap: `_deeplink_cache` was populated once and never
+invalidated, so editing `config/bookmaker_deeplinks.json` had no effect until a
+process restart, and the gate kept using the old declarations invisibly.
+
+The loader now keeps the file's `(mtime_ns, size)` signature. It reloads on the
+next declaration lookup when the signature changes, so a scan, a verify, or a
+health call uses the edited map without a restart. The fallback direction is
+unchanged: a missing or malformed file clears the cache, which makes every book
+block rather than inherit trust from a stale map.
+
+`/api/health` reports `deep_link_declaration_source` with `loaded_at`,
+`source_mtime`, `current_mtime`, `source_size`, `stale` and `error`. Each entry
+in `deep_link_declarations` also carries `loaded_at`, `source_mtime` and `stale`,
+so the map the gate is using is distinguishable from the file on disk.
+
+Tests: `tests/test_deeplinks.py` (change without restart, malformed fail-safe,
+recovery after fixing the file, health reporting) and
+`tests/test_candidates_api.py` (health source fields).
+
 ## Browser hardening
 
 `server/app.py` sets `Content-Security-Policy` (`default-src 'self'`,

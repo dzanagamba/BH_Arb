@@ -30,6 +30,15 @@ EXAMPLE_ROUTE_BOOKS = {
 }
 
 
+def _reset_deeplink_state() -> None:
+    """Clear the declaration cache and the provenance of its last file read."""
+    common._deeplink_cache = None
+    common._deeplink_cache_signature = None
+    common._deeplink_source_mtime = None
+    common._deeplink_loaded_at = None
+    common._deeplink_load_error = None
+
+
 def pytest_configure(config):
     config.addinivalue_line(
         "markers", "real_deeplinks: run against the shipped config/bookmaker_deeplinks.json"
@@ -38,13 +47,15 @@ def pytest_configure(config):
 
 @pytest.fixture(autouse=True)
 def _example_route_books(request, monkeypatch):
-    common._deeplink_cache = None
+    _reset_deeplink_state()
     if request.node.get_closest_marker("real_deeplinks"):
         yield
-        common._deeplink_cache = None
+        _reset_deeplink_state()
         return
     declared = dict(common._load_deeplink_config())
     declared.update(EXAMPLE_ROUTE_BOOKS)
+    # Inject a synthetic map; with loaded_at left unset the file cannot replace
+    # it, which is the seam these tests rely on.
     monkeypatch.setattr(common, "_deeplink_cache", declared)
     yield
-    common._deeplink_cache = None
+    _reset_deeplink_state()

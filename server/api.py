@@ -77,6 +77,7 @@ from scrapers.betole import BetoleScraper
 from scrapers.common import (
     declares_no_event_id,
     declares_route_pattern_verified,
+    deeplink_declaration_source,
     effective_deeplink_declarations,
 )
 from scrapers.evlbet import EvlbetScraper
@@ -2080,13 +2081,13 @@ async def health():
         "unverified_links": _unverified_link_count(cached_matches),
         "live_unverified_links": _unverified_link_count(cached_live_matches),
         # The declaration map the gate is actually reading, not the one in the
-        # file on disk. `scrapers.common._deeplink_cache` is populated once per
-        # process, so an operator who edits
-        # `config/bookmaker_deeplinks.json` and does not restart sees the old
-        # answer here; that used to be invisible. `configured: false` marks a
+        # file on disk. The map reloads when the file's mtime/size changes, and
+        # `deep_link_declaration_source` carries loaded_at/source_mtime/stale so
+        # a failed reload or a file edit is visible. `configured: false` marks a
         # book the gate is silently failing safe on, which is the other thing
         # this map has to be able to say.
         "deep_link_declarations": effective_deeplink_declarations(BOOKMAKERS),
+        "deep_link_declaration_source": deeplink_declaration_source(),
         "scheduler": {
             "prematch_minutes": AUTO_SCAN_PREMATCH_MINUTES,
             "live_minutes": AUTO_SCAN_LIVE_MINUTES,

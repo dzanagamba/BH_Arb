@@ -233,13 +233,12 @@ def test_health_counts_an_undeclared_books_link_as_a_blocker(monkeypatch):
 def test_health_echoes_the_declaration_map_the_gate_is_using():
     """The operative configuration has to be observable, not just the file on disk.
 
-    `scrapers.common._deeplink_cache` is populated on first use and never
-    invalidated, and it is now load-bearing for a safety gate. Editing
-    `config/bookmaker_deeplinks.json` therefore needs a process restart — which
-    used to be nowhere stated and nowhere visible. The map below is built from the
-    same cache the gate reads, so an operator can see the value in force.
+    `scrapers.common._deeplink_cache` is load-bearing for a safety gate, so the
+    map the gate is using has to be observable. The declaration file now reloads
+    when its mtime/size changes; the source fields say when the map was read and
+    whether it still matches the file. The map below is built from the same cache
+    the gate reads, so an operator can see the value in force.
 
-    Each entry carries three fields, and the third is the reason there are three:
     `supports_event_id` and `declared_no_event_id` are not complements, because a
     book that declares neither must fail safe — and `declared_no_event_id` alone
     cannot express "unconfigured", which is the state a removed declaration puts
@@ -253,7 +252,17 @@ def test_health_echoes_the_declaration_map_the_gate_is_using():
         "cover, or a removed declaration is invisible"
     )
     for bookmaker, entry in declarations.items():
-        assert set(entry) == {"configured", "supports_event_id", "declared_no_event_id"}, entry
+        assert set(entry) == {
+            "loaded_at",
+            "source_mtime",
+            "stale",
+            "configured",
+            "supports_event_id",
+            "declared_no_event_id",
+        }, entry
+        assert entry["loaded_at"] is not None
+        assert entry["source_mtime"] is not None
+        assert entry["stale"] is False
         assert entry["configured"] is True, f"{bookmaker} is configured and must say so"
         assert entry["supports_event_id"] in (True, False, None)
         if entry["supports_event_id"] is True:
@@ -267,12 +276,19 @@ def test_health_echoes_the_declaration_map_the_gate_is_using():
         assert entry["supports_event_id"] is (bookmaker in _route_books()), bookmaker
 
     # And the effective map, not the file: a book the gate cannot see is reported
-    # as unconfigured rather than silently omitted.
-    unseen = effective_deeplink_declarations(["never-declared-book"])
-    assert unseen["never-declared-book"] == {
-        "configured": False,
-        "supports_event_id": None,
-        "declared_no_event_id": False,
+    # as unconfigured rather than silently omitted, with the source provenance
+    # attached to every entry.
+    unseen = effective_deeplink_declarations(["never-declared-book"])["never-declared-book"]
+    assert unseen["configured"] is False
+    assert unseen["supports_event_id"] is None
+    assert unseen["declared_no_event_id"] is False
+    assert set(unseen) == {
+        "loaded_at",
+        "source_mtime",
+        "stale",
+        "configured",
+        "supports_event_id",
+        "declared_no_event_id",
     }
 
 

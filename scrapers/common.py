@@ -691,18 +691,95 @@ def parse_nsoft_live_bets(
 
 _DEEPLINK_CONFIG_PATH = os.path.join(os.path.dirname(__file__), "..", "config", "bookmaker_deeplinks.json")
 _deeplink_cache: dict | None = None
+# The file signature the cached map was loaded from. A cache injected directly
+# by a test has no loaded_at, and is treated as an explicit override rather than
+# something the file is allowed to overwrite.
+_DeeplinkSignature = tuple[int, int]
+_deeplink_cache_signature: _DeeplinkSignature | None = None
+_deeplink_source_mtime: float | None = None
+_deeplink_loaded_at: datetime | None = None
+_deeplink_load_error: str | None = None
+
+
+def _deeplink_file_signature() -> tuple[_DeeplinkSignature | None, float | None]:
+    """Return ((mtime_ns, size), mtime_seconds) for the declaration file.
+
+    A missing/unreadable file has no signature. That is different from a file
+    that is present but empty: the first is a config that cannot be trusted, the
+    second is a valid (if useless) declaration map.
+    """
+    try:
+        stat = os.stat(_DEEPLINK_CONFIG_PATH)
+    except OSError:
+        return None, None
+    return (stat.st_mtime_ns, stat.st_size), stat.st_mtime
+
+
+def _reload_deeplink_config(
+    signature: _DeeplinkSignature | None,
+    mtime: float | None,
+) -> None:
+    """Read the declaration file and replace the cache, failing safe on error."""
+    global _deeplink_cache, _deeplink_cache_signature
+    global _deeplink_source_mtime, _deeplink_loaded_at, _deeplink_load_error
+    data: dict = {}
+    error: str | None = None
+    try:
+        with open(_DEEPLINK_CONFIG_PATH, encoding="utf-8") as f:
+            loaded = json.load(f)
+        if not isinstance(loaded, dict):
+            raise ValueError("declaration file must contain a JSON object")
+        data = loaded
+    except (OSError, ValueError) as exc:
+        # A malformed or missing file grants no declarations. That is the safe
+        # direction: every book blocks until the file is fixed, rather than
+        # continuing to trust a map that no longer matches the file.
+        error = f"{type(exc).__name__}: {exc}"
+        logger.warning("Deep-link declaration config could not be loaded: %s", error)
+    _deeplink_cache = data
+    _deeplink_cache_signature = signature
+    _deeplink_source_mtime = mtime
+    _deeplink_loaded_at = datetime.now(UTC)
+    _deeplink_load_error = error
 
 
 def _load_deeplink_config() -> dict:
+    """Return the declaration map, reloading when the file signature changes.
+
+    The file is read only on first use and when its mtime/size changes, so a
+    declaration edit takes effect on the next gate lookup or health call without
+    a process restart. A map injected directly (no ``loaded_at``) is left alone;
+    that is the seam tests use to exercise a synthetic declaration set.
+    """
     global _deeplink_cache
-    if _deeplink_cache is None:
-        try:
-            with open(_DEEPLINK_CONFIG_PATH, encoding="utf-8") as f:
-                data = json.load(f)
-        except (OSError, ValueError):
-            data = {}
-        _deeplink_cache = data if isinstance(data, dict) else {}
-    return _deeplink_cache
+    signature, mtime = _deeplink_file_signature()
+    if _deeplink_cache is None or (
+        _deeplink_loaded_at is not None and signature != _deeplink_cache_signature
+    ):
+        _reload_deeplink_config(signature, mtime)
+    return _deeplink_cache if _deeplink_cache is not None else {}
+
+
+def deeplink_declaration_source() -> dict:
+    """Describe the declaration file the gate is currently reading.
+
+    ``stale`` means the loaded map is not the map on disk: the file changed
+    since the last successful read, the last read failed, or no file could be
+    read at all. ``loaded_at`` and ``source_mtime`` make a restart-free edit
+    observable in `/api/health`.
+    """
+    _load_deeplink_config()
+    current_signature, current_mtime = _deeplink_file_signature()
+    stale = _deeplink_load_error is not None or current_signature != _deeplink_cache_signature
+    return {
+        "path": os.path.abspath(_DEEPLINK_CONFIG_PATH),
+        "loaded_at": _deeplink_loaded_at.isoformat() if _deeplink_loaded_at else None,
+        "source_mtime": _deeplink_source_mtime,
+        "current_mtime": current_mtime,
+        "source_size": _deeplink_cache_signature[1] if _deeplink_cache_signature else None,
+        "stale": stale,
+        "error": _deeplink_load_error,
+    }
 
 
 def _declared_config(bookmaker: str) -> dict:
@@ -751,17 +828,24 @@ def effective_deeplink_declarations(bookmakers: Iterable[str] | None = None) -> 
     """Return the declaration each book's link question is actually answered by.
 
     Built from the same cached config the certainty gate reads, so it reports
-    what the gate is *using* rather than what the file on disk says. The two can
-    differ: ``_deeplink_cache`` is populated on first use and never invalidated,
-    so editing ``config/bookmaker_deeplinks.json`` needs a process restart, and
-    without this map nothing said so.
+    what the gate is *using* rather than what the file on disk says. A file edit
+    is picked up when its mtime/size changes, and the ``stale``/``loaded_at``
+    fields say whether the map in force still matches the file.
 
     ``bookmakers`` defaults to the keys of the loaded config. A book the config
     holds but the caller did not ask about is added anyway: a caller that names
     some books and silently loses a configured one is the mistake worth surfacing.
 
-    Each entry carries three fields:
+    Each entry carries the declaration fields plus the provenance of the file
+    the map came from:
 
+    * ``loaded_at`` — when the current map was read (ISO UTC, or ``None`` for a
+      synthetic map injected without a file load).
+    * ``source_mtime`` — the declaration file's mtime at that read, in epoch
+      seconds.
+    * ``stale`` — whether the map in force differs from the file on disk (the
+      file changed, or the last read failed). A stale map is still the map the
+      gate uses; the flag makes the restart-free reload visible.
     * ``configured`` — whether the config holds a declaration for this book at
       all. It is the only field that can distinguish "declares no per-event
       route" from "declares nothing", and those two land on opposite sides of the
@@ -780,6 +864,7 @@ def effective_deeplink_declarations(bookmakers: Iterable[str] | None = None) -> 
     declares nothing.
     """
     config = _load_deeplink_config()
+    source = deeplink_declaration_source()
     names = list(bookmakers) if bookmakers is not None else list(config)
     for name in config:
         if name not in names:
@@ -789,6 +874,9 @@ def effective_deeplink_declarations(bookmakers: Iterable[str] | None = None) -> 
         declared = config.get(name)
         raw = declared.get("supports_event_id") if isinstance(declared, dict) else None
         result[name] = {
+            "loaded_at": source["loaded_at"],
+            "source_mtime": source["source_mtime"],
+            "stale": source["stale"],
             "configured": isinstance(declared, dict),
             # `isinstance(raw, bool)` and not `raw is True`, because the
             # declared-false case has to come back as False: mapping it to None

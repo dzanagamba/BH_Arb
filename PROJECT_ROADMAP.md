@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-11-04
 **Repository:** `dzanagamba/BH_Arb` (`main`)
-**Status of this document:** audit complete; P0-1 through P0-4 done, implementation continuing
+**Status of this document:** audit complete; P0-1 through P0-5 done, implementation continuing
 **Purpose:** a durable, session-by-session plan so work can resume without re-reading the whole repository.
 
 > **How to use this document**
@@ -255,7 +255,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 | P0-2 | Dashboard XSS + inline-handler + CSP hardening | P0 | M | — | Done |
 | P0-3 | Gate-vocabulary truth audit and probe strengthening | P0 | S | — | Done |
 | P0-4 | Runtime freshness and stale-state policy | P0 | M | — | Done |
-| P0-5 | Reloadable deep-link declarations | P0 | S | — | Not started |
+| P0-5 | Reloadable deep-link declarations | P0 | S | — | Done |
 | P0-6 | Opportunity-rate and arb-lifetime telemetry | P0 | M | P0-4 | Not started |
 | P0-7 | Feed-integrity scorecard and stale-book quarantine | P0 | M | P0-4 | Not started |
 | P1-1 | Paginated, filtered group-evidence API | P1 | M | P0-1 | Not started |
@@ -443,7 +443,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 
 ### P0-5 — Reloadable deep-link declarations
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P0
 **Effort:** S
 **Depends on:** none
@@ -462,9 +462,9 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 
 **Acceptance criteria:**
 
-- [ ] A changed declaration is visible to the gate on the next call.
-- [ ] A malformed file does not crash a scan; it fails safe and is visible in health.
-- [ ] Existing declaration tests still pass.
+- [x] A changed declaration is visible to the gate on the next call.
+- [x] A malformed file does not crash a scan; it fails safe and is visible in health.
+- [x] Existing declaration tests still pass.
 
 **Tests:**
 
@@ -1421,6 +1421,34 @@ Before writing a claim about behavior, run the command that proves it and paste 
 ## 6. Execution log
 
 Newest first. Each entry: date, task, status, commands, measured result, files changed, follow-ups.
+
+### 2026-11-04 — P0-5: Reloadable deep-link declarations
+
+**Task:** P0-5 (first eligible task after P0-4; no dependencies).
+**Status:** Done.
+
+**Commands and results:**
+
+- `python -m pytest` → **1,278 passed**, 1 warning, 190.98 s (was 1,275; +3 tests).
+- `python -m ruff check .` → clean.
+- `python -m mypy .` → clean on 138 source files.
+- `python scripts/generate_market_mapping_doc.py --check` → in sync.
+- `python scripts/replay_mappings.py tests/fixtures/replay/2026-11-03 --cold --check` → exit 0, fixed point, 0 false merges, 0 unresolved evidence-backed pairs.
+- New tests cover: a temp declaration edit visible on the next call without restart; a malformed file clearing the map and failing safe; recovery after the file is fixed; `/api/health` reporting `loaded_at`, `source_mtime`, `stale` and `error`.
+
+**What changed:**
+
+- `scrapers/common.py`: the declaration loader tracks `(mtime_ns, size)`, reloads on change, records `loaded_at`/`source_mtime`/`load_error`, and exposes `deeplink_declaration_source()`. `effective_deeplink_declarations()` entries now carry `loaded_at`, `source_mtime` and `stale`.
+- `server/api.py`: `/api/health` adds `deep_link_declaration_source` next to `deep_link_declarations`.
+- `tests/conftest.py`: resets the new loader provenance between tests.
+- `tests/test_deeplinks.py`, `tests/test_candidates_api.py`: reload, fail-safe and health coverage.
+- `README.md`, `docs/ACCEPTANCE.md`, `docs/HANDOFF.md` document the reload behavior; F5 is closed.
+
+**Trust rules:** a missing or malformed declaration still grants nothing. The change removes a restart requirement; it does not make an absent or invalid declaration prove anything.
+
+**Follow-ups:** P0-6 (opportunity-rate and arb-lifetime telemetry) and P0-7 (feed-integrity scorecard) are both unblocked by P0-4. P0-6 comes first in table order.
+
+---
 
 ### 2026-11-04 — P0-4: Runtime freshness and stale-state policy
 

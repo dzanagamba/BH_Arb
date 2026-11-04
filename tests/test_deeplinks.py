@@ -280,3 +280,102 @@ def test_the_declared_no_route_url_check_ignores_books_that_claim_a_route():
         },
     ]
     assert _declared_false_url_drift(corpus, declarations) == []
+
+
+# ===========================================================================
+# P0-5: declarations reload without a process restart
+# ===========================================================================
+
+
+def _point_at(monkeypatch, path: Path) -> None:
+    """Point the loader at a temp file and clear the previous load's state."""
+    monkeypatch.setattr(common, "_DEEPLINK_CONFIG_PATH", str(path))
+    common._deeplink_cache = None
+    common._deeplink_cache_signature = None
+    common._deeplink_source_mtime = None
+    common._deeplink_loaded_at = None
+    common._deeplink_load_error = None
+
+
+def _write(path: Path, payload: dict) -> None:
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+
+def test_declaration_change_is_picked_up_without_restart(tmp_path, monkeypatch):
+    path = tmp_path / "bookmaker_deeplinks.json"
+    _write(path, {"demo": {"supports_event_id": False, "template": "https://demo.test/"}})
+    _point_at(monkeypatch, path)
+
+    assert common.supports_event_id("demo") is False
+    first = common.deeplink_declaration_source()
+    assert first["stale"] is False
+    assert first["loaded_at"] is not None
+    assert first["source_mtime"] is not None
+
+    _write(
+        path,
+        {
+            "demo": {
+                "supports_event_id": True,
+                "template": "https://demo.test/event/{event_id}",
+            }
+        },
+    )
+
+    # No restart, no second loader instance: the next lookup sees the edit.
+    assert common.supports_event_id("demo") is True
+    effective = common.effective_deeplink_declarations(["demo"])["demo"]
+    assert effective["supports_event_id"] is True
+    assert effective["declared_no_event_id"] is False
+    assert effective["stale"] is False
+    assert effective["loaded_at"] is not None
+    assert effective["source_mtime"] is not None
+
+
+def test_a_malformed_file_fails_safe_and_says_so(tmp_path, monkeypatch):
+    path = tmp_path / "bookmaker_deeplinks.json"
+    _write(path, {"demo": {"supports_event_id": False, "template": "https://demo.test/"}})
+    _point_at(monkeypatch, path)
+    assert common.declares_no_event_id("demo") is True
+
+    path.write_text('{"demo": ', encoding="utf-8")
+
+    assert common._load_deeplink_config() == {}, (
+        "a malformed declaration file must not preserve trust from the old map"
+    )
+    assert common.declares_no_event_id("demo") is False
+    source = common.deeplink_declaration_source()
+    assert source["stale"] is True
+    assert source["error"]
+
+    # Fixing the file is picked up on the next call, without a restart.
+    _write(path, {"demo": {"supports_event_id": False, "template": "https://demo.test/"}})
+    assert common.declares_no_event_id("demo") is True
+    assert common.deeplink_declaration_source()["stale"] is False
+
+
+def test_health_reports_the_declaration_source_and_a_bad_file_safely(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from server.app import app
+
+    path = tmp_path / "bookmaker_deeplinks.json"
+    _write(path, {"demo": {"supports_event_id": False, "template": "https://demo.test/"}})
+    _point_at(monkeypatch, path)
+    client = TestClient(app)
+
+    body = client.get("/api/health").json()
+    source = body["deep_link_declaration_source"]
+    assert source["stale"] is False
+    assert source["loaded_at"] is not None
+    assert source["source_mtime"] is not None
+    assert body["deep_link_declarations"]["demo"]["loaded_at"] == source["loaded_at"]
+
+    path.write_text("not json", encoding="utf-8")
+    body = client.get("/api/health").json()
+    source = body["deep_link_declaration_source"]
+    assert source["stale"] is True
+    assert source["error"]
+    # The malformed file is visible and grants nothing; health still answers.
+    assert body["deep_link_declarations"]["wwin"]["configured"] is False
+    assert body["deep_link_declarations"]["wwin"]["declared_no_event_id"] is False
