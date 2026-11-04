@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-11-04
 **Repository:** `dzanagamba/BH_Arb` (`main`)
-**Status of this document:** audit complete; P0-1 through P0-7 and P1-1 through P1-5 and P1-7 done; P1-6 code complete, 24-hour acceptance run pending; implementation continuing
+**Status of this document:** audit complete; P0-1 through P0-7 and P1-1 through P1-5 and P1-7 done; P1-6 waived by operator; P2/P3 implementation continuing
 **Purpose:** a durable, session-by-session plan so work can resume without re-reading the whole repository.
 
 > **How to use this document**
@@ -263,7 +263,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 | P1-3 | Reproducible deployment (Docker/systemd) | P1 | M | — | Done |
 | P1-4 | CI hardening: coverage, dependency and security scans | P1 | S | — | Done |
 | P1-5 | Alerting with dedupe and retry | P1 | M | P1-2 | Done |
-| P1-6 | 24-hour soak and resource budget | P1 | M | P0-1, P1-2 | In progress |
+| P1-6 | 24-hour soak and resource budget | P1 | M | P0-1, P1-2 | Waived |
 | P1-7 | Raw-price invariant and rounding audit | P1 | S | P0-4 | Done |
 | P2-1 | Convergent deep-link sweep automation and UI | P2 | M | P1-1 | Not started |
 | P2-2 | Dated re-verification of no-event declarations | P2 | S | — | Not started |
@@ -722,7 +722,8 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 
 ### P1-6 — 24-hour soak and resource budget
 
-**Status:** In progress
+**Status:** Waived — the operator skipped the 24-hour run on 2026-11-04. The
+harness, budget guard and two-cycle smoke evidence remain in `docs/SOAK.md`.
 **Priority:** P1
 **Effort:** M
 **Depends on:** P0-1, P1-2
@@ -1456,7 +1457,7 @@ Newest first. Each entry: date, task, status, commands, measured result, files c
 ### 2026-11-04 — P1-6: 24-hour soak and resource budget (partial)
 
 **Task:** P1-6 (depends on P0-1 and P1-2, both complete).
-**Status:** In progress — harness and budget guard are done; the 24-hour acceptance run is not.
+**Status:** Waived — the operator chose to skip the 24-hour run on 2026-11-04.
 
 **Commands and results:**
 
