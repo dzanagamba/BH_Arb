@@ -268,7 +268,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 | P2-1 | Convergent deep-link sweep automation and UI | P2 | M | P1-1 | Done |
 | P2-2 | Dated re-verification of no-event declarations | P2 | S | — | Done |
 | P2-3 | Publish `source_id` from every parser; complete registry coverage | P2 | L | — | Done |
-| P2-4 | Multi-day replay corpus and precision/recall evaluation | P2 | L | — | Not started |
+| P2-4 | Multi-day replay corpus and precision/recall evaluation | P2 | L | — | Done |
 | P2-5 | Sports expansion with measured admissibility | P2 | L | P2-4 | Not started |
 | P2-6 | Candidate-queue quality and coverage metrics | P2 | M | P0-1, P1-1 | Not started |
 | P2-7 | Identical-feed ("skin") detection | P2 | M | P0-7 | Not started |
@@ -893,7 +893,7 @@ harness, budget guard and two-cycle smoke evidence remain in `docs/SOAK.md`.
 
 ### P2-4 — Multi-day replay corpus and precision/recall evaluation
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P2
 **Effort:** L
 **Depends on:** none
@@ -912,10 +912,10 @@ harness, budget guard and two-cycle smoke evidence remain in `docs/SOAK.md`.
 
 **Acceptance criteria:**
 
-- [ ] The corpus has at least 3 distinct days and both prematch and live where possible.
-- [ ] Precision/recall are reported with denominators.
-- [ ] A regression below the agreed threshold fails the script.
-- [ ] The report states what the labels cover and what they do not.
+- [x] The corpus has at least 3 distinct days and both prematch and live where possible.
+- [x] Precision/recall are reported with denominators.
+- [x] A regression below the agreed threshold fails the script.
+- [x] The report states what the labels cover and what they do not.
 
 **Tests:**
 
@@ -1422,6 +1422,31 @@ Before writing a claim about behavior, run the command that proves it and paste 
 ## 6. Execution log
 
 Newest first. Each entry: date, task, status, commands, measured result, files changed, follow-ups.
+
+### 2026-11-04 — P2-4: Multi-day replay corpus and evaluation
+
+**Task:** P2-4 (no dependencies).
+**Status:** Done.
+
+**Commands and results:**
+
+- `python scripts/evaluate_matching.py --check` → **3 days**, 4 scans, both modes, 413 same / 60 different labels, precision **100%**, recall **100%**, strict miss **0%**, false merges **0**.
+- `python -m pytest tests/test_evaluate_matching.py tests/test_replay.py -q` → 10 passed.
+- `python -m ruff check .`, `python -m mypy .` → clean.
+
+**What changed:**
+
+- `tests/fixtures/replay/2026-09-25/` (reviewed e2e capture), `tests/fixtures/replay/2026-11-03/` (existing replay) and `tests/fixtures/replay/2026-11-04/` (bounded real prematch + live extracts) with explicit same/different label pairs under each `labels/` directory.
+- `scripts/evaluate_matching.py` (new): runs the real matcher, reports precision, recall, strict miss rate, false-merge rate, denominators, books/sports/modes, and fails `--check` below the thresholds or below 3 days / both modes.
+- `tests/test_evaluate_matching.py` (new): corpus shape, denominators, zero false merges, and the failure path.
+- `docs/evidence/2026-11-04-matching-eval.{md,json}`: the report and its honesty limits.
+- `README.md`: the evaluator command.
+
+**Trust rules:** unchanged. The corpus is a regression snapshot; the report says the 2026-11-04 labels are gate-reviewed, not independent ground truth.
+
+**Follow-ups:** P2-5 (sports admissibility) is next and can now use the corpus.
+
+---
 
 ### 2026-11-04 — P2-3: Publish source_id from every parser
 

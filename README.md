@@ -395,6 +395,9 @@ python scripts/sweep_links.py --bookmaker mozzartbet --mode prematch --check
 
 # Show dated no-event declarations; --check fails when one is overdue.
 python scripts/audit_deeplinks.py --check
+
+# Precision/recall over the frozen multi-day replay corpus.
+python scripts/evaluate_matching.py --check
 ```
 
 ## Adding bookmakers, markets and names

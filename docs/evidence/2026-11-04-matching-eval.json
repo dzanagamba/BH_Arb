@@ -1,0 +1,171 @@
+{
+  "corpus": "/home/nedim/BH_Arb/tests/fixtures/replay",
+  "days": [
+    {
+      "books": [
+        "mbet",
+        "sportplus",
+        "wwin"
+      ],
+      "day": "2026-09-25",
+      "false_merge_rate": 0.0,
+      "false_negative": 0,
+      "false_positive": 0,
+      "groups": 1,
+      "label_source": "/home/nedim/BH_Arb/tests/fixtures/replay/2026-09-25/labels/labels.json",
+      "labels": {
+        "different": 0,
+        "same": 3
+      },
+      "matches": 3,
+      "mode": "prematch",
+      "note": "Five books, one reviewed fixture; all pairs positive. No independent negatives in this day.",
+      "precision": 1.0,
+      "recall": 1.0,
+      "source": "/home/nedim/BH_Arb/tests/fixtures/replay/2026-09-25/scan.json",
+      "sports": [
+        "football"
+      ],
+      "strict_miss_rate": 0.0,
+      "true_negative": 0,
+      "true_positive": 3,
+      "verified_groups": 1
+    },
+    {
+      "books": [
+        "mbet",
+        "sportplus",
+        "wwin"
+      ],
+      "day": "2026-11-03",
+      "false_merge_rate": 0.0,
+      "false_negative": 0,
+      "false_positive": 0,
+      "groups": 1,
+      "label_source": "/home/nedim/BH_Arb/tests/fixtures/replay/2026-11-03/labels/labels.json",
+      "labels": {
+        "different": 0,
+        "same": 3
+      },
+      "matches": 3,
+      "mode": "prematch",
+      "note": "Kickoffs are frozen at 2030-01-01T18:00; the replay harness shifts them to now.",
+      "precision": 1.0,
+      "recall": 1.0,
+      "source": "/home/nedim/BH_Arb/tests/fixtures/replay/2026-11-03/scan.json",
+      "sports": [
+        "football"
+      ],
+      "strict_miss_rate": 0.0,
+      "true_negative": 0,
+      "true_positive": 3,
+      "verified_groups": 1
+    },
+    {
+      "books": [
+        "admiralbet",
+        "maxbet",
+        "mbet",
+        "mdshop",
+        "premier_kladionica",
+        "wwin"
+      ],
+      "day": "2026-11-04",
+      "false_merge_rate": 0.0,
+      "false_negative": 0,
+      "false_positive": 0,
+      "groups": 12,
+      "label_source": "/home/nedim/BH_Arb/tests/fixtures/replay/2026-11-04/labels/live.json",
+      "labels": {
+        "different": 30,
+        "same": 99
+      },
+      "matches": 52,
+      "mode": "live",
+      "note": "Bounded extract from a real scan; labels are gate-reviewed pairs from that scan, not independent ground truth.",
+      "precision": 1.0,
+      "recall": 1.0,
+      "source": "/home/nedim/BH_Arb/tests/fixtures/replay/2026-11-04/live.json",
+      "sports": [
+        "football"
+      ],
+      "strict_miss_rate": 0.0,
+      "true_negative": 30,
+      "true_positive": 99,
+      "verified_groups": 12
+    },
+    {
+      "books": [
+        "admiralbet",
+        "betole",
+        "maxbet",
+        "mbet",
+        "mdshop",
+        "mozzartbet",
+        "premier_kladionica",
+        "sportplus",
+        "wwin"
+      ],
+      "day": "2026-11-04",
+      "false_merge_rate": 0.0,
+      "false_negative": 0,
+      "false_positive": 0,
+      "groups": 9,
+      "label_source": "/home/nedim/BH_Arb/tests/fixtures/replay/2026-11-04/labels/prematch.json",
+      "labels": {
+        "different": 30,
+        "same": 308
+      },
+      "matches": 79,
+      "mode": "prematch",
+      "note": "Bounded extract from a real scan; labels are gate-reviewed pairs from that scan, not independent ground truth.",
+      "precision": 1.0,
+      "recall": 1.0,
+      "source": "/home/nedim/BH_Arb/tests/fixtures/replay/2026-11-04/prematch.json",
+      "sports": [
+        "football"
+      ],
+      "strict_miss_rate": 0.0,
+      "true_negative": 30,
+      "true_positive": 308,
+      "verified_groups": 9
+    }
+  ],
+  "thresholds": {
+    "max_false_merge_rate": 0.0,
+    "min_days": 3,
+    "min_precision": 0.99,
+    "min_recall": 0.8
+  },
+  "totals": {
+    "books": [
+      "admiralbet",
+      "betole",
+      "maxbet",
+      "mbet",
+      "mdshop",
+      "mozzartbet",
+      "premier_kladionica",
+      "sportplus",
+      "wwin"
+    ],
+    "days": 3,
+    "false_merge_rate": 0.0,
+    "false_negative": 0,
+    "false_positive": 0,
+    "labels": {
+      "different": 60,
+      "same": 413
+    },
+    "modes": [
+      "live",
+      "prematch"
+    ],
+    "precision": 1.0,
+    "recall": 1.0,
+    "scans": 4,
+    "strict_miss_rate": 0.0,
+    "true_negative": 60,
+    "true_positive": 413
+  }
+}

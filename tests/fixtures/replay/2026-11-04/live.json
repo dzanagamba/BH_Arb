@@ -1,0 +1,5235 @@
+{
+  "schema": 1,
+  "captured_at": "2026-11-04T19:41:00",
+  "source": "cache/last_live_scan.json",
+  "mode": "live",
+  "note": "Bounded extract from a real scan; labels are gate-reviewed pairs from that scan, not independent ground truth.",
+  "matches": [
+    {
+      "bookmaker": "mbet",
+      "home_team": "East Bengal",
+      "away_team": "Al Seeb",
+      "home_team_normalized": "east bengal",
+      "away_team_normalized": "al seeb",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "AFC Champions League 2",
+      "league_normalized": "auto_afc_champions_league_2",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T13:45:00",
+      "markets": [
+        {
+          "market_type": "1x2",
+          "odds": [
+            {
+              "label": "1",
+              "value": 2.2
+            },
+            {
+              "label": "X",
+              "value": 2.5
+            },
+            {
+              "label": "2",
+              "value": 3.7
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "double_chance",
+          "odds": [
+            {
+              "label": "1X",
+              "value": 1.24
+            },
+            {
+              "label": "X2",
+              "value": 1.59
+            },
+            {
+              "label": "12",
+              "value": 1.43
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "btts",
+          "odds": [
+            {
+              "label": "GG",
+              "value": 2.95
+            },
+            {
+              "label": "NG",
+              "value": 1.34
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_1_5",
+          "odds": [
+            {
+              "label": "Over 1.5",
+              "value": 1.91
+            },
+            {
+              "label": "Under 1.5",
+              "value": 1.73
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_2_5",
+          "odds": [
+            {
+              "label": "Over 2.5",
+              "value": 3.8
+            },
+            {
+              "label": "Under 2.5",
+              "value": 1.21
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_3_5",
+          "odds": [
+            {
+              "label": "Over 3.5",
+              "value": 9.0
+            },
+            {
+              "label": "Under 3.5",
+              "value": 1.05
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        }
+      ],
+      "url": "https://mbet.ba/",
+      "bet_url": "",
+      "match_code": "e:fb:eas-als:0004",
+      "event_id": "e:fb:eas-als:0004",
+      "betradar_id": "",
+      "source_context": {},
+      "deep_link_verified": false,
+      "category_tags": [],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:43.776519"
+    },
+    {
+      "bookmaker": "mdshop",
+      "home_team": "East Bengal",
+      "away_team": "Al Seeb",
+      "home_team_normalized": "east bengal",
+      "away_team_normalized": "al seeb",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "AFC liga šampiona 2",
+      "league_normalized": "afc liga sampiona 2",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T13:45:00",
+      "markets": [
+        {
+          "market_type": "over_under_3_5",
+          "odds": [
+            {
+              "label": "Over 3.5",
+              "value": 8.2
+            },
+            {
+              "label": "Under 3.5",
+              "value": 1.08
+            }
+          ],
+          "source_id": "22",
+          "source_context": {
+            "sport_id": "1",
+            "region_id": "104",
+            "region_name": "Međunarodne klupske",
+            "competition_id": "38662",
+            "competition_name": "AFC liga šampiona 2",
+            "event_id": "7030855",
+            "event_name": "East Bengal - Al Seeb",
+            "bet_id": "642063174"
+          },
+          "outcome_ids": {
+            "Over 3.5": "2010061121",
+            "Under 3.5": "2010061122"
+          }
+        },
+        {
+          "market_type": "over_under_1_5",
+          "odds": [
+            {
+              "label": "Over 1.5",
+              "value": 1.88
+            },
+            {
+              "label": "Under 1.5",
+              "value": 1.94
+            }
+          ],
+          "source_id": "22",
+          "source_context": {
+            "sport_id": "1",
+            "region_id": "104",
+            "region_name": "Međunarodne klupske",
+            "competition_id": "38662",
+            "competition_name": "AFC liga šampiona 2",
+            "event_id": "7030855",
+            "event_name": "East Bengal - Al Seeb",
+            "bet_id": "642063217"
+          },
+          "outcome_ids": {
+            "Over 1.5": "2010061217",
+            "Under 1.5": "2010061218"
+          }
+        },
+        {
+          "market_type": "over_under_2_5",
+          "odds": [
+            {
+              "label": "Over 2.5",
+              "value": 3.75
+            },
+            {
+              "label": "Under 2.5",
+              "value": 1.28
+            }
+          ],
+          "source_id": "22",
+          "source_context": {
+            "sport_id": "1",
+            "region_id": "104",
+            "region_name": "Međunarodne klupske",
+            "competition_id": "38662",
+            "competition_name": "AFC liga šampiona 2",
+            "event_id": "7030855",
+            "event_name": "East Bengal - Al Seeb",
+            "bet_id": "642063236"
+          },
+          "outcome_ids": {
+            "Over 2.5": "2010061297",
+            "Under 2.5": "2010061298"
+          }
+        }
+      ],
+      "url": "https://www.mdshop.ba/sport-live",
+      "bet_url": "",
+      "match_code": "7030855",
+      "event_id": "7030855",
+      "betradar_id": "73835248",
+      "source_context": {
+        "sport_id": "1",
+        "region_id": "104",
+        "region_name": "Međunarodne klupske",
+        "competition_id": "38662",
+        "competition_name": "AFC liga šampiona 2",
+        "event_id": "7030855",
+        "event_name": "East Bengal - Al Seeb"
+      },
+      "deep_link_verified": false,
+      "category_tags": [],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:43.472484"
+    },
+    {
+      "bookmaker": "maxbet",
+      "home_team": "Quess East Bengal",
+      "away_team": "Al Seeb",
+      "home_team_normalized": "quess east bengal",
+      "away_team_normalized": "al seeb",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "International Clubs - Asia AFC Champions League 2",
+      "league_normalized": "international clubs - asia afc champions league 2",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T13:45:00",
+      "markets": [
+        {
+          "market_type": "over_under_1_5",
+          "odds": [
+            {
+              "label": "Under 1.5",
+              "value": 1.75
+            },
+            {
+              "label": "Over 1.5",
+              "value": 1.95
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_2_5",
+          "odds": [
+            {
+              "label": "Under 2.5",
+              "value": 1.2
+            },
+            {
+              "label": "Over 2.5",
+              "value": 4.0
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_3_5",
+          "odds": [
+            {
+              "label": "Under 3.5",
+              "value": 1.0303
+            },
+            {
+              "label": "Over 3.5",
+              "value": 9.0
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "1x2",
+          "odds": [
+            {
+              "label": "1",
+              "value": 2.25
+            },
+            {
+              "label": "X",
+              "value": 2.6
+            },
+            {
+              "label": "2",
+              "value": 3.8
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "double_chance",
+          "odds": [
+            {
+              "label": "1X",
+              "value": 1.23
+            },
+            {
+              "label": "12",
+              "value": 1.45
+            },
+            {
+              "label": "X2",
+              "value": 1.59
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "btts",
+          "odds": [
+            {
+              "label": "GG",
+              "value": 2.9
+            },
+            {
+              "label": "NG",
+              "value": 1.32
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        }
+      ],
+      "url": "https://sportsbook.maxbet.ba/match/1006507",
+      "bet_url": "",
+      "match_code": "660",
+      "event_id": "1006507",
+      "betradar_id": "73835248",
+      "source_context": {},
+      "deep_link_verified": false,
+      "category_tags": [],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:43.494335"
+    },
+    {
+      "bookmaker": "premier_kladionica",
+      "home_team": "East Bengal",
+      "away_team": "Al Seeb",
+      "home_team_normalized": "east bengal",
+      "away_team_normalized": "al seeb",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "LIGA PRVAKA AZIJA 2 - GRUPA D",
+      "league_normalized": "liga prvaka azija 2 - grupa d",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T13:45:00",
+      "markets": [
+        {
+          "market_type": "1x2",
+          "odds": [
+            {
+              "label": "1",
+              "value": 2.25
+            },
+            {
+              "label": "X",
+              "value": 2.6
+            },
+            {
+              "label": "2",
+              "value": 4.0
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "double_chance",
+          "odds": [
+            {
+              "label": "1X",
+              "value": 1.2
+            },
+            {
+              "label": "X2",
+              "value": 1.57
+            },
+            {
+              "label": "12",
+              "value": 1.45
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_1_5",
+          "odds": [
+            {
+              "label": "Over 1.5",
+              "value": 1.9
+            },
+            {
+              "label": "Under 1.5",
+              "value": 1.8
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_2_5",
+          "odds": [
+            {
+              "label": "Over 2.5",
+              "value": 3.8
+            },
+            {
+              "label": "Under 2.5",
+              "value": 1.22
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_3_5",
+          "odds": [
+            {
+              "label": "Over 3.5",
+              "value": 7.75
+            },
+            {
+              "label": "Under 3.5",
+              "value": 1.05
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "btts",
+          "odds": [
+            {
+              "label": "GG",
+              "value": 2.95
+            },
+            {
+              "label": "NG",
+              "value": 1.35
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        }
+      ],
+      "url": "https://www.premier-kladionica.com/ponuda/",
+      "bet_url": "",
+      "match_code": "4581854",
+      "event_id": "4581854",
+      "betradar_id": "",
+      "source_context": {},
+      "deep_link_verified": false,
+      "category_tags": [],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:45.725649"
+    },
+    {
+      "bookmaker": "wwin",
+      "home_team": "East Bengal",
+      "away_team": "Al Seeb",
+      "home_team_normalized": "east bengal",
+      "away_team_normalized": "al seeb",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "Međunarodne - AFC Liga Šampiona 2",
+      "league_normalized": "medjunarodne - afc liga sampiona 2",
+      "country": "Međunarodne",
+      "country_normalized": "medjunarodne",
+      "kickoff": "2026-11-03T13:45:00",
+      "markets": [
+        {
+          "market_type": "1x2",
+          "odds": [
+            {
+              "label": "1",
+              "value": 2.23
+            },
+            {
+              "label": "X",
+              "value": 2.62
+            },
+            {
+              "label": "2",
+              "value": 3.99
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "double_chance",
+          "odds": [
+            {
+              "label": "1X",
+              "value": 1.2
+            },
+            {
+              "label": "12",
+              "value": 1.43
+            },
+            {
+              "label": "X2",
+              "value": 1.58
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "btts",
+          "odds": [
+            {
+              "label": "GG",
+              "value": 2.95
+            },
+            {
+              "label": "NG",
+              "value": 1.35
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_2_5",
+          "odds": [
+            {
+              "label": "Over 2.5",
+              "value": 3.8
+            },
+            {
+              "label": "Under 2.5",
+              "value": 1.22
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_1_5",
+          "odds": [
+            {
+              "label": "Over 1.5",
+              "value": 1.92
+            },
+            {
+              "label": "Under 1.5",
+              "value": 1.79
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        }
+      ],
+      "url": "https://wwin.ba/kladjenje-uzivo/",
+      "bet_url": "",
+      "match_code": "4713055",
+      "event_id": "4713055",
+      "betradar_id": "73835248",
+      "source_context": {},
+      "deep_link_verified": false,
+      "category_tags": [],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:50.512339"
+    },
+    {
+      "bookmaker": "admiralbet",
+      "home_team": "East Bengal",
+      "away_team": "Al Seeb",
+      "home_team_normalized": "east bengal",
+      "away_team_normalized": "al seeb",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "Međunarodne Klubovi - AFC Liga Šampiona 2",
+      "league_normalized": "medjunarodne klubovi - afc liga sampiona 2",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T13:45:00",
+      "markets": [
+        {
+          "market_type": "over_under_3_5",
+          "odds": [
+            {
+              "label": "Over 3.5",
+              "value": 8.2
+            },
+            {
+              "label": "Under 3.5",
+              "value": 1.08
+            }
+          ],
+          "source_id": "22",
+          "source_context": {
+            "sport_id": "1",
+            "region_id": "104",
+            "region_name": "Međunarodne Klubovi",
+            "competition_id": "38662",
+            "competition_name": "AFC Liga Šampiona 2",
+            "event_id": "7030855",
+            "event_name": "East Bengal - Al Seeb",
+            "bet_id": "642063174"
+          },
+          "outcome_ids": {
+            "Over 3.5": "2010061121",
+            "Under 3.5": "2010061122"
+          }
+        },
+        {
+          "market_type": "over_under_1_5",
+          "odds": [
+            {
+              "label": "Over 1.5",
+              "value": 1.88
+            },
+            {
+              "label": "Under 1.5",
+              "value": 1.93
+            }
+          ],
+          "source_id": "22",
+          "source_context": {
+            "sport_id": "1",
+            "region_id": "104",
+            "region_name": "Međunarodne Klubovi",
+            "competition_id": "38662",
+            "competition_name": "AFC Liga Šampiona 2",
+            "event_id": "7030855",
+            "event_name": "East Bengal - Al Seeb",
+            "bet_id": "642063217"
+          },
+          "outcome_ids": {
+            "Over 1.5": "2010061217",
+            "Under 1.5": "2010061218"
+          }
+        },
+        {
+          "market_type": "over_under_2_5",
+          "odds": [
+            {
+              "label": "Over 2.5",
+              "value": 3.75
+            },
+            {
+              "label": "Under 2.5",
+              "value": 1.28
+            }
+          ],
+          "source_id": "22",
+          "source_context": {
+            "sport_id": "1",
+            "region_id": "104",
+            "region_name": "Međunarodne Klubovi",
+            "competition_id": "38662",
+            "competition_name": "AFC Liga Šampiona 2",
+            "event_id": "7030855",
+            "event_name": "East Bengal - Al Seeb",
+            "bet_id": "642063236"
+          },
+          "outcome_ids": {
+            "Over 2.5": "2010061297",
+            "Under 2.5": "2010061298"
+          }
+        }
+      ],
+      "url": "https://www.admiralbet.ba/sport-live",
+      "bet_url": "",
+      "match_code": "7030855",
+      "event_id": "7030855",
+      "betradar_id": "73835248",
+      "source_context": {
+        "sport_id": "1",
+        "region_id": "104",
+        "region_name": "Međunarodne Klubovi",
+        "competition_id": "38662",
+        "competition_name": "AFC Liga Šampiona 2",
+        "event_id": "7030855",
+        "event_name": "East Bengal - Al Seeb"
+      },
+      "deep_link_verified": false,
+      "category_tags": [],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:55.015565"
+    },
+    {
+      "bookmaker": "mdshop",
+      "home_team": "Mladost Zdralovi",
+      "away_team": "Slaven Belupo",
+      "home_team_normalized": "mladost zdralovi",
+      "away_team_normalized": "slaven belupo",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "Hrvatska kup",
+      "league_normalized": "auto_hrvatska_kup_1_8_finala",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T13:00:00",
+      "markets": [
+        {
+          "market_type": "over_under_2_5",
+          "odds": [
+            {
+              "label": "Under 2.5",
+              "value": 2.08
+            },
+            {
+              "label": "Over 2.5",
+              "value": 1.71
+            }
+          ],
+          "source_id": "22",
+          "source_context": {
+            "sport_id": "1",
+            "region_id": "11",
+            "region_name": "Hrvatska",
+            "competition_id": "674",
+            "competition_name": "Hrvatska kup",
+            "event_id": "7030852",
+            "event_name": "Mladost Zdralovi - Slaven Belupo",
+            "bet_id": "642050339"
+          },
+          "outcome_ids": {
+            "Under 2.5": "2010026989",
+            "Over 2.5": "2010026990"
+          }
+        },
+        {
+          "market_type": "over_under_3_5",
+          "odds": [
+            {
+              "label": "Under 3.5",
+              "value": 1.18
+            },
+            {
+              "label": "Over 3.5",
+              "value": 4.4
+            }
+          ],
+          "source_id": "22",
+          "source_context": {
+            "sport_id": "1",
+            "region_id": "11",
+            "region_name": "Hrvatska",
+            "competition_id": "674",
+            "competition_name": "Hrvatska kup",
+            "event_id": "7030852",
+            "event_name": "Mladost Zdralovi - Slaven Belupo",
+            "bet_id": "642050340"
+          },
+          "outcome_ids": {
+            "Under 3.5": "2010026991",
+            "Over 3.5": "2010026992"
+          }
+        }
+      ],
+      "url": "https://www.mdshop.ba/sport-live",
+      "bet_url": "",
+      "match_code": "7030852",
+      "event_id": "7030852",
+      "betradar_id": "75401200",
+      "source_context": {
+        "sport_id": "1",
+        "region_id": "11",
+        "region_name": "Hrvatska",
+        "competition_id": "674",
+        "competition_name": "Hrvatska kup",
+        "event_id": "7030852",
+        "event_name": "Mladost Zdralovi - Slaven Belupo"
+      },
+      "deep_link_verified": false,
+      "category_tags": [],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:43.465869"
+    },
+    {
+      "bookmaker": "admiralbet",
+      "home_team": "Mladost Zdralovi",
+      "away_team": "Slaven Belupo",
+      "home_team_normalized": "mladost zdralovi",
+      "away_team_normalized": "slaven belupo",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "Hrvatska - Kup",
+      "league_normalized": "auto_hrvatska_kup_1_8_finala",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T13:00:00",
+      "markets": [
+        {
+          "market_type": "over_under_2_5",
+          "odds": [
+            {
+              "label": "Under 2.5",
+              "value": 2.08
+            },
+            {
+              "label": "Over 2.5",
+              "value": 1.71
+            }
+          ],
+          "source_id": "22",
+          "source_context": {
+            "sport_id": "1",
+            "region_id": "11",
+            "region_name": "Hrvatska",
+            "competition_id": "674",
+            "competition_name": "Kup",
+            "event_id": "7030852",
+            "event_name": "Mladost Zdralovi - Slaven Belupo",
+            "bet_id": "642050339"
+          },
+          "outcome_ids": {
+            "Under 2.5": "2010026989",
+            "Over 2.5": "2010026990"
+          }
+        },
+        {
+          "market_type": "over_under_3_5",
+          "odds": [
+            {
+              "label": "Under 3.5",
+              "value": 1.18
+            },
+            {
+              "label": "Over 3.5",
+              "value": 4.4
+            }
+          ],
+          "source_id": "22",
+          "source_context": {
+            "sport_id": "1",
+            "region_id": "11",
+            "region_name": "Hrvatska",
+            "competition_id": "674",
+            "competition_name": "Kup",
+            "event_id": "7030852",
+            "event_name": "Mladost Zdralovi - Slaven Belupo",
+            "bet_id": "642050340"
+          },
+          "outcome_ids": {
+            "Under 3.5": "2010026991",
+            "Over 3.5": "2010026992"
+          }
+        }
+      ],
+      "url": "https://www.admiralbet.ba/sport-live",
+      "bet_url": "",
+      "match_code": "7030852",
+      "event_id": "7030852",
+      "betradar_id": "75401200",
+      "source_context": {
+        "sport_id": "1",
+        "region_id": "11",
+        "region_name": "Hrvatska",
+        "competition_id": "674",
+        "competition_name": "Kup",
+        "event_id": "7030852",
+        "event_name": "Mladost Zdralovi - Slaven Belupo"
+      },
+      "deep_link_verified": false,
+      "category_tags": [],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:55.012255"
+    },
+    {
+      "bookmaker": "mbet",
+      "home_team": "Mladost Zdralovi",
+      "away_team": "Slaven Belupo",
+      "home_team_normalized": "mladost zdralovi",
+      "away_team_normalized": "slaven belupo",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "CROATIA Cup",
+      "league_normalized": "auto_hrvatska_kup_1_8_finala",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T13:00:00",
+      "markets": [
+        {
+          "market_type": "1x2",
+          "odds": [
+            {
+              "label": "1",
+              "value": 1.02
+            },
+            {
+              "label": "X",
+              "value": 12.0
+            },
+            {
+              "label": "2",
+              "value": 41.0
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "double_chance",
+          "odds": [
+            {
+              "label": "X2",
+              "value": 12.0
+            },
+            {
+              "label": "12",
+              "value": 1.03
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "btts",
+          "odds": [
+            {
+              "label": "GG",
+              "value": 2.45
+            },
+            {
+              "label": "NG",
+              "value": 1.48
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_2_5",
+          "odds": [
+            {
+              "label": "Over 2.5",
+              "value": 1.77
+            },
+            {
+              "label": "Under 2.5",
+              "value": 1.91
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_3_5",
+          "odds": [
+            {
+              "label": "Over 3.5",
+              "value": 5.0
+            },
+            {
+              "label": "Under 3.5",
+              "value": 1.13
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        }
+      ],
+      "url": "https://mbet.ba/",
+      "bet_url": "",
+      "match_code": "e:fb:mla-sla:0009",
+      "event_id": "e:fb:mla-sla:0009",
+      "betradar_id": "",
+      "source_context": {},
+      "deep_link_verified": false,
+      "category_tags": [],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:43.755674"
+    },
+    {
+      "bookmaker": "premier_kladionica",
+      "home_team": "Mladost Ždralovi",
+      "away_team": "Slaven",
+      "home_team_normalized": "mladost zdralovi",
+      "away_team_normalized": "slaven",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "HRVATSKI KUP",
+      "league_normalized": "auto_hrvatska_kup_1_8_finala",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T13:00:00",
+      "markets": [
+        {
+          "market_type": "1x2",
+          "odds": [
+            {
+              "label": "1",
+              "value": 1.03
+            },
+            {
+              "label": "X",
+              "value": 10.5
+            },
+            {
+              "label": "2",
+              "value": 50.0
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "double_chance",
+          "odds": [
+            {
+              "label": "X2",
+              "value": 9.0
+            },
+            {
+              "label": "12",
+              "value": 1.02
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_2_5",
+          "odds": [
+            {
+              "label": "Over 2.5",
+              "value": 1.75
+            },
+            {
+              "label": "Under 2.5",
+              "value": 1.95
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_3_5",
+          "odds": [
+            {
+              "label": "Over 3.5",
+              "value": 4.65
+            },
+            {
+              "label": "Under 3.5",
+              "value": 1.16
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "btts",
+          "odds": [
+            {
+              "label": "GG",
+              "value": 2.45
+            },
+            {
+              "label": "NG",
+              "value": 1.47
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        }
+      ],
+      "url": "https://www.premier-kladionica.com/ponuda/",
+      "bet_url": "",
+      "match_code": "4581930",
+      "event_id": "4581930",
+      "betradar_id": "",
+      "source_context": {},
+      "deep_link_verified": false,
+      "category_tags": [],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:45.732190"
+    },
+    {
+      "bookmaker": "wwin",
+      "home_team": "Mladost Ždralovi",
+      "away_team": "NK Slaven",
+      "home_team_normalized": "mladost zdralovi",
+      "away_team_normalized": "slaven",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "Hrvatska - Kup",
+      "league_normalized": "auto_hrvatska_kup_1_8_finala",
+      "country": "Hrvatska",
+      "country_normalized": "hrvatska",
+      "kickoff": "2026-11-03T13:00:00",
+      "markets": [
+        {
+          "market_type": "double_chance",
+          "odds": [
+            {
+              "label": "12",
+              "value": 1.02
+            },
+            {
+              "label": "X2",
+              "value": 8.99
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "btts",
+          "odds": [
+            {
+              "label": "GG",
+              "value": 2.47
+            },
+            {
+              "label": "NG",
+              "value": 1.48
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_2_5",
+          "odds": [
+            {
+              "label": "Over 2.5",
+              "value": 1.77
+            },
+            {
+              "label": "Under 2.5",
+              "value": 1.94
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_3_5",
+          "odds": [
+            {
+              "label": "Over 3.5",
+              "value": 4.63
+            },
+            {
+              "label": "Under 3.5",
+              "value": 1.16
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        }
+      ],
+      "url": "https://wwin.ba/kladjenje-uzivo/",
+      "bet_url": "",
+      "match_code": "4713183",
+      "event_id": "4713183",
+      "betradar_id": "75401200",
+      "source_context": {},
+      "deep_link_verified": false,
+      "category_tags": [],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:50.512179"
+    },
+    {
+      "bookmaker": "maxbet",
+      "home_team": "Mladost Zdralovi",
+      "away_team": "Slaven Belupo",
+      "home_team_normalized": "mladost zdralovi",
+      "away_team_normalized": "slaven belupo",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "Croatia Cup",
+      "league_normalized": "auto_hrvatska_kup_1_8_finala",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T13:00:00",
+      "markets": [
+        {
+          "market_type": "over_under_2_5",
+          "odds": [
+            {
+              "label": "Under 2.5",
+              "value": 1.83
+            },
+            {
+              "label": "Over 2.5",
+              "value": 1.83
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_3_5",
+          "odds": [
+            {
+              "label": "Under 3.5",
+              "value": 1.12
+            },
+            {
+              "label": "Over 3.5",
+              "value": 5.2
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "1x2",
+          "odds": [
+            {
+              "label": "1",
+              "value": 1.02
+            },
+            {
+              "label": "X",
+              "value": 15.0
+            },
+            {
+              "label": "2",
+              "value": 81.0
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "double_chance",
+          "odds": [
+            {
+              "label": "12",
+              "value": 1.02
+            },
+            {
+              "label": "X2",
+              "value": 14.0
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "btts",
+          "odds": [
+            {
+              "label": "GG",
+              "value": 2.5
+            },
+            {
+              "label": "NG",
+              "value": 1.37
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        }
+      ],
+      "url": "https://sportsbook.maxbet.ba/match/1006751",
+      "bet_url": "",
+      "match_code": "619",
+      "event_id": "1006751",
+      "betradar_id": "75401200",
+      "source_context": {},
+      "deep_link_verified": false,
+      "category_tags": [],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:43.494335"
+    },
+    {
+      "bookmaker": "mdshop",
+      "home_team": "Feyenoord U19",
+      "away_team": "Inter Milano U19",
+      "home_team_normalized": "feyenoord u19",
+      "away_team_normalized": "inter_milan",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "Liga šampiona mladi",
+      "league_normalized": "auto_medjunarodne_mladi_uefa_liga_mladi",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T13:00:00",
+      "markets": [
+        {
+          "market_type": "over_under_3_5",
+          "odds": [
+            {
+              "label": "Under 3.5",
+              "value": 3.1
+            },
+            {
+              "label": "Over 3.5",
+              "value": 1.38
+            }
+          ],
+          "source_id": "22",
+          "source_context": {
+            "sport_id": "1",
+            "region_id": "103",
+            "region_name": "Međunarodne mladi",
+            "competition_id": "27677",
+            "competition_name": "Liga šampiona mladi",
+            "event_id": "7030851",
+            "event_name": "Feyenoord U19 - Inter Milano U19",
+            "bet_id": "642050387"
+          },
+          "outcome_ids": {
+            "Under 3.5": "2010027167",
+            "Over 3.5": "2010027168"
+          }
+        }
+      ],
+      "url": "https://www.mdshop.ba/sport-live",
+      "bet_url": "",
+      "match_code": "7030851",
+      "event_id": "7030851",
+      "betradar_id": "74560610",
+      "source_context": {
+        "sport_id": "1",
+        "region_id": "103",
+        "region_name": "Međunarodne mladi",
+        "competition_id": "27677",
+        "competition_name": "Liga šampiona mladi",
+        "event_id": "7030851",
+        "event_name": "Feyenoord U19 - Inter Milano U19"
+      },
+      "deep_link_verified": false,
+      "category_tags": [
+        "U19"
+      ],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:43.468744"
+    },
+    {
+      "bookmaker": "admiralbet",
+      "home_team": "Feyenoord U19",
+      "away_team": "Inter Milano U19",
+      "home_team_normalized": "feyenoord u19",
+      "away_team_normalized": "inter_milan",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "Međunarodne Mladi - UEFA Liga Mladi",
+      "league_normalized": "auto_medjunarodne_mladi_uefa_liga_mladi",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T13:00:00",
+      "markets": [
+        {
+          "market_type": "over_under_3_5",
+          "odds": [
+            {
+              "label": "Under 3.5",
+              "value": 3.0
+            },
+            {
+              "label": "Over 3.5",
+              "value": 1.39
+            }
+          ],
+          "source_id": "22",
+          "source_context": {
+            "sport_id": "1",
+            "region_id": "103",
+            "region_name": "Međunarodne Mladi",
+            "competition_id": "27677",
+            "competition_name": "UEFA Liga Mladi ",
+            "event_id": "7030851",
+            "event_name": "Feyenoord U19 - Inter Milano U19",
+            "bet_id": "642050387"
+          },
+          "outcome_ids": {
+            "Under 3.5": "2010027167",
+            "Over 3.5": "2010027168"
+          }
+        }
+      ],
+      "url": "https://www.admiralbet.ba/sport-live",
+      "bet_url": "",
+      "match_code": "7030851",
+      "event_id": "7030851",
+      "betradar_id": "74560610",
+      "source_context": {
+        "sport_id": "1",
+        "region_id": "103",
+        "region_name": "Međunarodne Mladi",
+        "competition_id": "27677",
+        "competition_name": "UEFA Liga Mladi ",
+        "event_id": "7030851",
+        "event_name": "Feyenoord U19 - Inter Milano U19"
+      },
+      "deep_link_verified": false,
+      "category_tags": [
+        "U19"
+      ],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:55.013569"
+    },
+    {
+      "bookmaker": "premier_kladionica",
+      "home_team": "Feyenoord U19",
+      "away_team": "Inter U19",
+      "home_team_normalized": "feyenoord u19",
+      "away_team_normalized": "inter u19",
+      "home_team_source": "ML/Feyenoord",
+      "away_team_source": "Inter",
+      "league": "UEFA LIGA MLADI",
+      "league_normalized": "auto_medunarodne_mladi_uefa_omladinska_liga",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T13:00:00",
+      "markets": [
+        {
+          "market_type": "1x2",
+          "odds": [
+            {
+              "label": "1",
+              "value": 1.22
+            },
+            {
+              "label": "X",
+              "value": 4.8
+            },
+            {
+              "label": "2",
+              "value": 19.5
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "double_chance",
+          "odds": [
+            {
+              "label": "X2",
+              "value": 3.85
+            },
+            {
+              "label": "12",
+              "value": 1.15
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_3_5",
+          "odds": [
+            {
+              "label": "Over 3.5",
+              "value": 1.4
+            },
+            {
+              "label": "Under 3.5",
+              "value": 2.7
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        }
+      ],
+      "url": "https://www.premier-kladionica.com/ponuda/",
+      "bet_url": "",
+      "match_code": "4581537",
+      "event_id": "4581537",
+      "betradar_id": "",
+      "source_context": {},
+      "deep_link_verified": false,
+      "category_tags": [
+        "U19"
+      ],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:45.733187"
+    },
+    {
+      "bookmaker": "maxbet",
+      "home_team": "Feyenoord U19",
+      "away_team": "Inter U19",
+      "home_team_normalized": "feyenoord u19",
+      "away_team_normalized": "inter u19",
+      "home_team_source": "Feyenoord Youth",
+      "away_team_source": "",
+      "league": "International Clubs - UEFA Youth League",
+      "league_normalized": "international clubs - uefa youth league",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T13:00:00",
+      "markets": [
+        {
+          "market_type": "over_under_3_5",
+          "odds": [
+            {
+              "label": "Under 3.5",
+              "value": 2.85
+            },
+            {
+              "label": "Over 3.5",
+              "value": 1.36
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "1x2",
+          "odds": [
+            {
+              "label": "1",
+              "value": 1.23
+            },
+            {
+              "label": "X",
+              "value": 4.8
+            },
+            {
+              "label": "2",
+              "value": 14.0
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "double_chance",
+          "odds": [
+            {
+              "label": "1X",
+              "value": 1.02
+            },
+            {
+              "label": "12",
+              "value": 1.15
+            },
+            {
+              "label": "X2",
+              "value": 3.8
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        }
+      ],
+      "url": "https://sportsbook.maxbet.ba/match/1006872",
+      "bet_url": "",
+      "match_code": "622",
+      "event_id": "1006872",
+      "betradar_id": "74560610",
+      "source_context": {},
+      "deep_link_verified": false,
+      "category_tags": [
+        "U19"
+      ],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:43.494335"
+    },
+    {
+      "bookmaker": "mdshop",
+      "home_team": "Manchester United U19",
+      "away_team": "AS Roma U19",
+      "home_team_normalized": "manchester_united",
+      "away_team_normalized": "roma u19",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "Liga šampiona mladi",
+      "league_normalized": "auto_medjunarodne_mladi_uefa_liga_mladi",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T13:00:00",
+      "markets": [
+        {
+          "market_type": "over_under_1_5",
+          "odds": [
+            {
+              "label": "Under 1.5",
+              "value": 2.28
+            },
+            {
+              "label": "Over 1.5",
+              "value": 1.63
+            }
+          ],
+          "source_id": "22",
+          "source_context": {
+            "sport_id": "1",
+            "region_id": "103",
+            "region_name": "Međunarodne mladi",
+            "competition_id": "27677",
+            "competition_name": "Liga šampiona mladi",
+            "event_id": "7030853",
+            "event_name": "Manchester United U19 - AS Roma U19",
+            "bet_id": "642050449"
+          },
+          "outcome_ids": {
+            "Under 1.5": "2010027403",
+            "Over 1.5": "2010027404"
+          }
+        },
+        {
+          "market_type": "over_under_2_5",
+          "odds": [
+            {
+              "label": "Under 2.5",
+              "value": 1.24
+            },
+            {
+              "label": "Over 2.5",
+              "value": 4.1
+            }
+          ],
+          "source_id": "22",
+          "source_context": {
+            "sport_id": "1",
+            "region_id": "103",
+            "region_name": "Međunarodne mladi",
+            "competition_id": "27677",
+            "competition_name": "Liga šampiona mladi",
+            "event_id": "7030853",
+            "event_name": "Manchester United U19 - AS Roma U19",
+            "bet_id": "642050450"
+          },
+          "outcome_ids": {
+            "Under 2.5": "2010027405",
+            "Over 2.5": "2010027406"
+          }
+        }
+      ],
+      "url": "https://www.mdshop.ba/sport-live",
+      "bet_url": "",
+      "match_code": "7030853",
+      "event_id": "7030853",
+      "betradar_id": "74560608",
+      "source_context": {
+        "sport_id": "1",
+        "region_id": "103",
+        "region_name": "Međunarodne mladi",
+        "competition_id": "27677",
+        "competition_name": "Liga šampiona mladi",
+        "event_id": "7030853",
+        "event_name": "Manchester United U19 - AS Roma U19"
+      },
+      "deep_link_verified": false,
+      "category_tags": [
+        "U19"
+      ],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:43.469681"
+    },
+    {
+      "bookmaker": "admiralbet",
+      "home_team": "Manchester United U19",
+      "away_team": "AS Roma U19",
+      "home_team_normalized": "manchester_united",
+      "away_team_normalized": "roma u19",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "Međunarodne Mladi - UEFA Liga Mladi",
+      "league_normalized": "auto_medjunarodne_mladi_uefa_liga_mladi",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T13:00:00",
+      "markets": [
+        {
+          "market_type": "over_under_1_5",
+          "odds": [
+            {
+              "label": "Under 1.5",
+              "value": 2.26
+            },
+            {
+              "label": "Over 1.5",
+              "value": 1.64
+            }
+          ],
+          "source_id": "22",
+          "source_context": {
+            "sport_id": "1",
+            "region_id": "103",
+            "region_name": "Međunarodne Mladi",
+            "competition_id": "27677",
+            "competition_name": "UEFA Liga Mladi ",
+            "event_id": "7030853",
+            "event_name": "Manchester United U19 - AS Roma U19",
+            "bet_id": "642050449"
+          },
+          "outcome_ids": {
+            "Under 1.5": "2010027403",
+            "Over 1.5": "2010027404"
+          }
+        },
+        {
+          "market_type": "over_under_2_5",
+          "odds": [
+            {
+              "label": "Under 2.5",
+              "value": 1.23
+            },
+            {
+              "label": "Over 2.5",
+              "value": 4.2
+            }
+          ],
+          "source_id": "22",
+          "source_context": {
+            "sport_id": "1",
+            "region_id": "103",
+            "region_name": "Međunarodne Mladi",
+            "competition_id": "27677",
+            "competition_name": "UEFA Liga Mladi ",
+            "event_id": "7030853",
+            "event_name": "Manchester United U19 - AS Roma U19",
+            "bet_id": "642050450"
+          },
+          "outcome_ids": {
+            "Under 2.5": "2010027405",
+            "Over 2.5": "2010027406"
+          }
+        }
+      ],
+      "url": "https://www.admiralbet.ba/sport-live",
+      "bet_url": "",
+      "match_code": "7030853",
+      "event_id": "7030853",
+      "betradar_id": "74560608",
+      "source_context": {
+        "sport_id": "1",
+        "region_id": "103",
+        "region_name": "Međunarodne Mladi",
+        "competition_id": "27677",
+        "competition_name": "UEFA Liga Mladi ",
+        "event_id": "7030853",
+        "event_name": "Manchester United U19 - AS Roma U19"
+      },
+      "deep_link_verified": false,
+      "category_tags": [
+        "U19"
+      ],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:55.014086"
+    },
+    {
+      "bookmaker": "premier_kladionica",
+      "home_team": "Man Utd U19",
+      "away_team": "Roma U19",
+      "home_team_normalized": "man utd u19",
+      "away_team_normalized": "roma u19",
+      "home_team_source": "ML/Man Utd",
+      "away_team_source": "Roma",
+      "league": "UEFA LIGA MLADI",
+      "league_normalized": "auto_medunarodne_mladi_uefa_omladinska_liga",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T13:00:00",
+      "markets": [
+        {
+          "market_type": "1x2",
+          "odds": [
+            {
+              "label": "1",
+              "value": 1.16
+            },
+            {
+              "label": "X",
+              "value": 5.2
+            },
+            {
+              "label": "2",
+              "value": 30.0
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "double_chance",
+          "odds": [
+            {
+              "label": "X2",
+              "value": 4.45
+            },
+            {
+              "label": "12",
+              "value": 1.12
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_1_5",
+          "odds": [
+            {
+              "label": "Over 1.5",
+              "value": 1.65
+            },
+            {
+              "label": "Under 1.5",
+              "value": 2.1
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_2_5",
+          "odds": [
+            {
+              "label": "Over 2.5",
+              "value": 4.1
+            },
+            {
+              "label": "Under 2.5",
+              "value": 1.2
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "btts",
+          "odds": [
+            {
+              "label": "GG",
+              "value": 3.15
+            },
+            {
+              "label": "NG",
+              "value": 1.3
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        }
+      ],
+      "url": "https://www.premier-kladionica.com/ponuda/",
+      "bet_url": "",
+      "match_code": "4581538",
+      "event_id": "4581538",
+      "betradar_id": "",
+      "source_context": {},
+      "deep_link_verified": false,
+      "category_tags": [
+        "U19"
+      ],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:45.734319"
+    },
+    {
+      "bookmaker": "maxbet",
+      "home_team": "Man Utd U19",
+      "away_team": "Roma U19",
+      "home_team_normalized": "man utd u19",
+      "away_team_normalized": "roma u19",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "International Clubs - UEFA Youth League",
+      "league_normalized": "international clubs - uefa youth league",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T13:00:00",
+      "markets": [
+        {
+          "market_type": "over_under_1_5",
+          "odds": [
+            {
+              "label": "Under 1.5",
+              "value": 2.5
+            },
+            {
+              "label": "Over 1.5",
+              "value": 1.5
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_2_5",
+          "odds": [
+            {
+              "label": "Under 2.5",
+              "value": 1.25
+            },
+            {
+              "label": "Over 2.5",
+              "value": 3.5
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_3_5",
+          "odds": [
+            {
+              "label": "Under 3.5",
+              "value": 1.04
+            },
+            {
+              "label": "Over 3.5",
+              "value": 9.5
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "1x2",
+          "odds": [
+            {
+              "label": "1",
+              "value": 1.17
+            },
+            {
+              "label": "X",
+              "value": 5.3
+            },
+            {
+              "label": "2",
+              "value": 21.0
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "double_chance",
+          "odds": [
+            {
+              "label": "1X",
+              "value": 1.01
+            },
+            {
+              "label": "12",
+              "value": 1.13
+            },
+            {
+              "label": "X2",
+              "value": 4.5
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "btts",
+          "odds": [
+            {
+              "label": "GG",
+              "value": 2.55
+            },
+            {
+              "label": "NG",
+              "value": 1.35
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        }
+      ],
+      "url": "https://sportsbook.maxbet.ba/match/1006420",
+      "bet_url": "",
+      "match_code": "620",
+      "event_id": "1006420",
+      "betradar_id": "74560608",
+      "source_context": {},
+      "deep_link_verified": false,
+      "category_tags": [
+        "U19"
+      ],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:43.494335"
+    },
+    {
+      "bookmaker": "mdshop",
+      "home_team": "LASK Linz U19",
+      "away_team": "Slovan Bratislava U19",
+      "home_team_normalized": "lask linz u19",
+      "away_team_normalized": "slovan bratislava u19",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "Liga šampiona mladi",
+      "league_normalized": "auto_medjunarodne_mladi_uefa_liga_mladi",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T14:00:00",
+      "markets": [
+        {
+          "market_type": "over_under_3_5",
+          "odds": [
+            {
+              "label": "Over 3.5",
+              "value": 1.88
+            },
+            {
+              "label": "Under 3.5",
+              "value": 1.93
+            }
+          ],
+          "source_id": "22",
+          "source_context": {
+            "sport_id": "1",
+            "region_id": "103",
+            "region_name": "Međunarodne mladi",
+            "competition_id": "27677",
+            "competition_name": "Liga šampiona mladi",
+            "event_id": "7030856",
+            "event_name": "LASK Linz U19 - Slovan Bratislava U19",
+            "bet_id": "642067483"
+          },
+          "outcome_ids": {
+            "Over 3.5": "2010074761",
+            "Under 3.5": "2010074762"
+          }
+        },
+        {
+          "market_type": "over_under_2_5",
+          "odds": [
+            {
+              "label": "Over 2.5",
+              "value": 1.3
+            },
+            {
+              "label": "Under 2.5",
+              "value": 3.55
+            }
+          ],
+          "source_id": "22",
+          "source_context": {
+            "sport_id": "1",
+            "region_id": "103",
+            "region_name": "Međunarodne mladi",
+            "competition_id": "27677",
+            "competition_name": "Liga šampiona mladi",
+            "event_id": "7030856",
+            "event_name": "LASK Linz U19 - Slovan Bratislava U19",
+            "bet_id": "642067536"
+          },
+          "outcome_ids": {
+            "Over 2.5": "2010074923",
+            "Under 2.5": "2010074924"
+          }
+        }
+      ],
+      "url": "https://www.mdshop.ba/sport-live",
+      "bet_url": "",
+      "match_code": "7030856",
+      "event_id": "7030856",
+      "betradar_id": "74560612",
+      "source_context": {
+        "sport_id": "1",
+        "region_id": "103",
+        "region_name": "Međunarodne mladi",
+        "competition_id": "27677",
+        "competition_name": "Liga šampiona mladi",
+        "event_id": "7030856",
+        "event_name": "LASK Linz U19 - Slovan Bratislava U19"
+      },
+      "deep_link_verified": false,
+      "category_tags": [
+        "U19"
+      ],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:43.471212"
+    },
+    {
+      "bookmaker": "admiralbet",
+      "home_team": "LASK Linz U19",
+      "away_team": "Slovan Bratislava U19",
+      "home_team_normalized": "lask linz u19",
+      "away_team_normalized": "slovan bratislava u19",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "Međunarodne Mladi - UEFA Liga Mladi",
+      "league_normalized": "auto_medjunarodne_mladi_uefa_liga_mladi",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T14:00:00",
+      "markets": [
+        {
+          "market_type": "over_under_3_5",
+          "odds": [
+            {
+              "label": "Over 3.5",
+              "value": 1.95
+            },
+            {
+              "label": "Under 3.5",
+              "value": 1.86
+            }
+          ],
+          "source_id": "22",
+          "source_context": {
+            "sport_id": "1",
+            "region_id": "103",
+            "region_name": "Međunarodne Mladi",
+            "competition_id": "27677",
+            "competition_name": "UEFA Liga Mladi ",
+            "event_id": "7030856",
+            "event_name": "LASK Linz U19 - Slovan Bratislava U19",
+            "bet_id": "642067483"
+          },
+          "outcome_ids": {
+            "Over 3.5": "2010074761",
+            "Under 3.5": "2010074762"
+          }
+        },
+        {
+          "market_type": "over_under_2_5",
+          "odds": [
+            {
+              "label": "Over 2.5",
+              "value": 1.32
+            },
+            {
+              "label": "Under 2.5",
+              "value": 3.4
+            }
+          ],
+          "source_id": "22",
+          "source_context": {
+            "sport_id": "1",
+            "region_id": "103",
+            "region_name": "Međunarodne Mladi",
+            "competition_id": "27677",
+            "competition_name": "UEFA Liga Mladi ",
+            "event_id": "7030856",
+            "event_name": "LASK Linz U19 - Slovan Bratislava U19",
+            "bet_id": "642067536"
+          },
+          "outcome_ids": {
+            "Over 2.5": "2010074923",
+            "Under 2.5": "2010074924"
+          }
+        }
+      ],
+      "url": "https://www.admiralbet.ba/sport-live",
+      "bet_url": "",
+      "match_code": "7030856",
+      "event_id": "7030856",
+      "betradar_id": "74560612",
+      "source_context": {
+        "sport_id": "1",
+        "region_id": "103",
+        "region_name": "Međunarodne Mladi",
+        "competition_id": "27677",
+        "competition_name": "UEFA Liga Mladi ",
+        "event_id": "7030856",
+        "event_name": "LASK Linz U19 - Slovan Bratislava U19"
+      },
+      "deep_link_verified": false,
+      "category_tags": [
+        "U19"
+      ],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:55.014898"
+    },
+    {
+      "bookmaker": "premier_kladionica",
+      "home_team": "LASK U19",
+      "away_team": "Slovan B U19",
+      "home_team_normalized": "lask u19",
+      "away_team_normalized": "slovan b u19",
+      "home_team_source": "ML/LASK",
+      "away_team_source": "Slovan B",
+      "league": "UEFA LIGA MLADI",
+      "league_normalized": "auto_medunarodne_mladi_uefa_omladinska_liga",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T14:00:00",
+      "markets": [
+        {
+          "market_type": "1x2",
+          "odds": [
+            {
+              "label": "1",
+              "value": 1.42
+            },
+            {
+              "label": "X",
+              "value": 4.35
+            },
+            {
+              "label": "2",
+              "value": 7.0
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "double_chance",
+          "odds": [
+            {
+              "label": "1X",
+              "value": 1.07
+            },
+            {
+              "label": "X2",
+              "value": 2.7
+            },
+            {
+              "label": "12",
+              "value": 1.18
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_1_5",
+          "odds": [
+            {
+              "label": "Over 1.5",
+              "value": 1.05
+            },
+            {
+              "label": "Under 1.5",
+              "value": 7.75
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_2_5",
+          "odds": [
+            {
+              "label": "Over 2.5",
+              "value": 1.32
+            },
+            {
+              "label": "Under 2.5",
+              "value": 3.1
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_3_5",
+          "odds": [
+            {
+              "label": "Over 3.5",
+              "value": 1.95
+            },
+            {
+              "label": "Under 3.5",
+              "value": 1.75
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "btts",
+          "odds": [
+            {
+              "label": "GG",
+              "value": 1.37
+            },
+            {
+              "label": "NG",
+              "value": 2.85
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        }
+      ],
+      "url": "https://www.premier-kladionica.com/ponuda/",
+      "bet_url": "",
+      "match_code": "4581539",
+      "event_id": "4581539",
+      "betradar_id": "",
+      "source_context": {},
+      "deep_link_verified": false,
+      "category_tags": [
+        "U19"
+      ],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:45.737524"
+    },
+    {
+      "bookmaker": "wwin",
+      "home_team": "LASK Linz U19",
+      "away_team": "Slovan Brat. U19",
+      "home_team_normalized": "lask linz u19",
+      "away_team_normalized": "slovan brat u19",
+      "home_team_source": "LASK Linz/19",
+      "away_team_source": "Slovan Brat./19",
+      "league": "Medunarodne - Mladi - UEFA Omladinska liga",
+      "league_normalized": "auto_medunarodne_mladi_uefa_omladinska_liga",
+      "country": "Medunarodne - Mladi",
+      "country_normalized": "medunarodne - mladi",
+      "kickoff": "2026-11-03T14:00:00",
+      "markets": [
+        {
+          "market_type": "1x2",
+          "odds": [
+            {
+              "label": "1",
+              "value": 1.42
+            },
+            {
+              "label": "X",
+              "value": 4.32
+            },
+            {
+              "label": "2",
+              "value": 6.86
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "double_chance",
+          "odds": [
+            {
+              "label": "1X",
+              "value": 1.07
+            },
+            {
+              "label": "12",
+              "value": 1.18
+            },
+            {
+              "label": "X2",
+              "value": 2.65
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "btts",
+          "odds": [
+            {
+              "label": "GG",
+              "value": 1.38
+            },
+            {
+              "label": "NG",
+              "value": 2.81
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_3_5",
+          "odds": [
+            {
+              "label": "Over 3.5",
+              "value": 2.03
+            },
+            {
+              "label": "Under 3.5",
+              "value": 1.7
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_2_5",
+          "odds": [
+            {
+              "label": "Over 2.5",
+              "value": 1.35
+            },
+            {
+              "label": "Under 2.5",
+              "value": 2.96
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        }
+      ],
+      "url": "https://wwin.ba/kladjenje-uzivo/",
+      "bet_url": "",
+      "match_code": "4713121",
+      "event_id": "4713121",
+      "betradar_id": "74560612",
+      "source_context": {},
+      "deep_link_verified": false,
+      "category_tags": [
+        "U19"
+      ],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:50.513230"
+    },
+    {
+      "bookmaker": "maxbet",
+      "home_team": "LASK Linz U19",
+      "away_team": "Slovan Bratislava U19",
+      "home_team_normalized": "lask linz u19",
+      "away_team_normalized": "slovan bratislava u19",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "International Clubs - UEFA Youth League",
+      "league_normalized": "international clubs - uefa youth league",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T14:00:00",
+      "markets": [
+        {
+          "market_type": "over_under_1_5",
+          "odds": [
+            {
+              "label": "Under 1.5",
+              "value": 9.0
+            },
+            {
+              "label": "Over 1.5",
+              "value": 1.04
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_2_5",
+          "odds": [
+            {
+              "label": "Under 2.5",
+              "value": 3.2
+            },
+            {
+              "label": "Over 2.5",
+              "value": 1.3
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_3_5",
+          "odds": [
+            {
+              "label": "Under 3.5",
+              "value": 1.72
+            },
+            {
+              "label": "Over 3.5",
+              "value": 2.0
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "1x2",
+          "odds": [
+            {
+              "label": "1",
+              "value": 1.36
+            },
+            {
+              "label": "X",
+              "value": 4.7
+            },
+            {
+              "label": "2",
+              "value": 7.0
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "double_chance",
+          "odds": [
+            {
+              "label": "1X",
+              "value": 1.08
+            },
+            {
+              "label": "12",
+              "value": 1.16
+            },
+            {
+              "label": "X2",
+              "value": 2.95
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        }
+      ],
+      "url": "https://sportsbook.maxbet.ba/match/1006512",
+      "bet_url": "",
+      "match_code": "662",
+      "event_id": "1006512",
+      "betradar_id": "74560612",
+      "source_context": {},
+      "deep_link_verified": false,
+      "category_tags": [
+        "U19"
+      ],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:43.494335"
+    },
+    {
+      "bookmaker": "mbet",
+      "home_team": "AS Kigali",
+      "away_team": "Mukura Victory Sports",
+      "home_team_normalized": "kigali",
+      "away_team_normalized": "mukura victory sports",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "RWANDA 1",
+      "league_normalized": "auto_ruanda_1_liga",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T14:00:00",
+      "markets": [
+        {
+          "market_type": "1x2",
+          "odds": [
+            {
+              "label": "1",
+              "value": 2.9
+            },
+            {
+              "label": "X",
+              "value": 2.5
+            },
+            {
+              "label": "2",
+              "value": 2.5
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "double_chance",
+          "odds": [
+            {
+              "label": "1X",
+              "value": 1.43
+            },
+            {
+              "label": "X2",
+              "value": 1.34
+            },
+            {
+              "label": "12",
+              "value": 1.45
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "btts",
+          "odds": [
+            {
+              "label": "GG",
+              "value": 2.8
+            },
+            {
+              "label": "NG",
+              "value": 1.37
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_1_5",
+          "odds": [
+            {
+              "label": "Over 1.5",
+              "value": 1.85
+            },
+            {
+              "label": "Under 1.5",
+              "value": 1.8
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_2_5",
+          "odds": [
+            {
+              "label": "Over 2.5",
+              "value": 3.6
+            },
+            {
+              "label": "Under 2.5",
+              "value": 1.24
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_3_5",
+          "odds": [
+            {
+              "label": "Over 3.5",
+              "value": 8.0
+            },
+            {
+              "label": "Under 3.5",
+              "value": 1.06
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        }
+      ],
+      "url": "https://mbet.ba/",
+      "bet_url": "",
+      "match_code": "e:fb:ask-muk:0003",
+      "event_id": "e:fb:ask-muk:0003",
+      "betradar_id": "",
+      "source_context": {},
+      "deep_link_verified": false,
+      "category_tags": [],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:43.784081"
+    },
+    {
+      "bookmaker": "maxbet",
+      "home_team": "As Kigali",
+      "away_team": "Mukura Victory Sports",
+      "home_team_normalized": "kigali",
+      "away_team_normalized": "mukura victory sports",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "Rwanda 1",
+      "league_normalized": "auto_ruanda_1_liga",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T14:00:00",
+      "markets": [
+        {
+          "market_type": "over_under_1_5",
+          "odds": [
+            {
+              "label": "Under 1.5",
+              "value": 1.8
+            },
+            {
+              "label": "Over 1.5",
+              "value": 1.9
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_2_5",
+          "odds": [
+            {
+              "label": "Under 2.5",
+              "value": 1.22
+            },
+            {
+              "label": "Over 2.5",
+              "value": 3.7
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_3_5",
+          "odds": [
+            {
+              "label": "Under 3.5",
+              "value": 1.05
+            },
+            {
+              "label": "Over 3.5",
+              "value": 8.5
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "1x2",
+          "odds": [
+            {
+              "label": "1",
+              "value": 3.1
+            },
+            {
+              "label": "X",
+              "value": 2.55
+            },
+            {
+              "label": "2",
+              "value": 2.65
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "double_chance",
+          "odds": [
+            {
+              "label": "1X",
+              "value": 1.44
+            },
+            {
+              "label": "12",
+              "value": 1.46
+            },
+            {
+              "label": "X2",
+              "value": 1.33
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "btts",
+          "odds": [
+            {
+              "label": "GG",
+              "value": 2.55
+            },
+            {
+              "label": "NG",
+              "value": 1.35
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        }
+      ],
+      "url": "https://sportsbook.maxbet.ba/match/1006508",
+      "bet_url": "",
+      "match_code": "661",
+      "event_id": "1006508",
+      "betradar_id": "73806098",
+      "source_context": {},
+      "deep_link_verified": false,
+      "category_tags": [],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:43.494335"
+    },
+    {
+      "bookmaker": "wwin",
+      "home_team": "Kigali",
+      "away_team": "Mukura",
+      "home_team_normalized": "kigali",
+      "away_team_normalized": "mukura",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "Ruanda - Premier League",
+      "league_normalized": "ruanda - premier league",
+      "country": "Ruanda",
+      "country_normalized": "ruanda",
+      "kickoff": "2026-11-03T14:00:00",
+      "markets": [
+        {
+          "market_type": "1x2",
+          "odds": [
+            {
+              "label": "1",
+              "value": 2.88
+            },
+            {
+              "label": "X",
+              "value": 2.6
+            },
+            {
+              "label": "2",
+              "value": 2.65
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "double_chance",
+          "odds": [
+            {
+              "label": "1X",
+              "value": 1.37
+            },
+            {
+              "label": "12",
+              "value": 1.38
+            },
+            {
+              "label": "X2",
+              "value": 1.31
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "btts",
+          "odds": [
+            {
+              "label": "GG",
+              "value": 2.58
+            },
+            {
+              "label": "NG",
+              "value": 1.39
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_1_5",
+          "odds": [
+            {
+              "label": "Over 1.5",
+              "value": 1.78
+            },
+            {
+              "label": "Under 1.5",
+              "value": 1.83
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_2_5",
+          "odds": [
+            {
+              "label": "Over 2.5",
+              "value": 3.31
+            },
+            {
+              "label": "Under 2.5",
+              "value": 1.24
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        }
+      ],
+      "url": "https://wwin.ba/kladjenje-uzivo/",
+      "bet_url": "",
+      "match_code": "4713052",
+      "event_id": "4713052",
+      "betradar_id": "73806098",
+      "source_context": {},
+      "deep_link_verified": false,
+      "category_tags": [],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:50.512425"
+    },
+    {
+      "bookmaker": "mbet",
+      "home_team": "Damac",
+      "away_team": "Al Akhdoud",
+      "home_team_normalized": "damac",
+      "away_team_normalized": "al akhdoud",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "SAUDI ARABIA 2",
+      "league_normalized": "auto_saudijska_arabija_division_1",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T12:35:00",
+      "markets": [
+        {
+          "market_type": "1x2",
+          "odds": [
+            {
+              "label": "1",
+              "value": 4.9
+            },
+            {
+              "label": "X",
+              "value": 1.23
+            },
+            {
+              "label": "2",
+              "value": 8.0
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "double_chance",
+          "odds": [
+            {
+              "label": "X2",
+              "value": 1.05
+            },
+            {
+              "label": "12",
+              "value": 3.35
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        }
+      ],
+      "url": "https://mbet.ba/",
+      "bet_url": "",
+      "match_code": "e:fb:dam-ala:0005",
+      "event_id": "e:fb:dam-ala:0005",
+      "betradar_id": "",
+      "source_context": {},
+      "deep_link_verified": false,
+      "category_tags": [],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:43.725153"
+    },
+    {
+      "bookmaker": "premier_kladionica",
+      "home_team": "Dhamk",
+      "away_team": "Al Akhdoud",
+      "home_team_normalized": "dhamk",
+      "away_team_normalized": "al akhdoud",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "SAUDIJSKA ARABIJA 2.LIGA",
+      "league_normalized": "auto_saudijska_arabija_division_1",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T12:35:00",
+      "markets": [
+        {
+          "market_type": "1x2",
+          "odds": [
+            {
+              "label": "1",
+              "value": 5.7
+            },
+            {
+              "label": "X",
+              "value": 1.25
+            },
+            {
+              "label": "2",
+              "value": 9.8
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "double_chance",
+          "odds": [
+            {
+              "label": "1X",
+              "value": 1.07
+            },
+            {
+              "label": "X2",
+              "value": 1.14
+            },
+            {
+              "label": "12",
+              "value": 3.9
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        }
+      ],
+      "url": "https://www.premier-kladionica.com/ponuda/",
+      "bet_url": "",
+      "match_code": "4581901",
+      "event_id": "4581901",
+      "betradar_id": "",
+      "source_context": {},
+      "deep_link_verified": false,
+      "category_tags": [],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:45.723564"
+    },
+    {
+      "bookmaker": "wwin",
+      "home_team": "Damac",
+      "away_team": "AL Akhdood",
+      "home_team_normalized": "damac",
+      "away_team_normalized": "al akhdood",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "Saudijska Arabija - Division 1",
+      "league_normalized": "auto_saudijska_arabija_division_1",
+      "country": "Saudijska Arabija",
+      "country_normalized": "saudijska arabija",
+      "kickoff": "2026-11-03T12:35:00",
+      "markets": [
+        {
+          "market_type": "1x2",
+          "odds": [
+            {
+              "label": "1",
+              "value": 5.25
+            },
+            {
+              "label": "X",
+              "value": 1.22
+            },
+            {
+              "label": "2",
+              "value": 9.91
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        }
+      ],
+      "url": "https://wwin.ba/kladjenje-uzivo/",
+      "bet_url": "",
+      "match_code": "4713438",
+      "event_id": "4713438",
+      "betradar_id": "73206566",
+      "source_context": {},
+      "deep_link_verified": false,
+      "category_tags": [],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:50.511337"
+    },
+    {
+      "bookmaker": "maxbet",
+      "home_team": "Dhamk",
+      "away_team": "Al-Akhdoud",
+      "home_team_normalized": "dhamk",
+      "away_team_normalized": "al-akhdoud",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "Saudi Arabia 2",
+      "league_normalized": "auto_saudijska_arabija_division_1",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T12:35:00",
+      "markets": [
+        {
+          "market_type": "1x2",
+          "odds": [
+            {
+              "label": "1",
+              "value": 6.0
+            },
+            {
+              "label": "X",
+              "value": 1.18
+            },
+            {
+              "label": "2",
+              "value": 12.5
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "double_chance",
+          "odds": [
+            {
+              "label": "1X",
+              "value": 1.03
+            },
+            {
+              "label": "12",
+              "value": 4.4
+            },
+            {
+              "label": "X2",
+              "value": 1.1
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        }
+      ],
+      "url": "https://sportsbook.maxbet.ba/match/1006448",
+      "bet_url": "",
+      "match_code": "617",
+      "event_id": "1006448",
+      "betradar_id": "73206566",
+      "source_context": {},
+      "deep_link_verified": false,
+      "category_tags": [],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:43.494335"
+    },
+    {
+      "bookmaker": "mbet",
+      "home_team": "Mbeya City",
+      "away_team": "Singida BS FC",
+      "home_team_normalized": "mbeya city",
+      "away_team_normalized": "singida bs",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "TANZANIA 1",
+      "league_normalized": "auto_tanzanija_1_liga",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T13:00:00",
+      "markets": [
+        {
+          "market_type": "1x2",
+          "odds": [
+            {
+              "label": "1",
+              "value": 1.78
+            },
+            {
+              "label": "X",
+              "value": 2.65
+            },
+            {
+              "label": "2",
+              "value": 4.9
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "double_chance",
+          "odds": [
+            {
+              "label": "1X",
+              "value": 1.13
+            },
+            {
+              "label": "X2",
+              "value": 1.88
+            },
+            {
+              "label": "12",
+              "value": 1.42
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "btts",
+          "odds": [
+            {
+              "label": "GG",
+              "value": 1.67
+            },
+            {
+              "label": "NG",
+              "value": 2.05
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_1_5",
+          "odds": [
+            {
+              "label": "Over 1.5",
+              "value": 1.43
+            },
+            {
+              "label": "Under 1.5",
+              "value": 2.3
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_2_5",
+          "odds": [
+            {
+              "label": "Over 2.5",
+              "value": 3.2
+            },
+            {
+              "label": "Under 2.5",
+              "value": 1.23
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_3_5",
+          "odds": [
+            {
+              "label": "Over 3.5",
+              "value": 10.0
+            },
+            {
+              "label": "Under 3.5",
+              "value": 1.02
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        }
+      ],
+      "url": "https://mbet.ba/",
+      "bet_url": "",
+      "match_code": "e:fb:mbe-sin:0000",
+      "event_id": "e:fb:mbe-sin:0000",
+      "betradar_id": "",
+      "source_context": {},
+      "deep_link_verified": false,
+      "category_tags": [],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:43.751613"
+    },
+    {
+      "bookmaker": "premier_kladionica",
+      "home_team": "Mbeya City",
+      "away_team": "Singida Black Stars",
+      "home_team_normalized": "mbeya city",
+      "away_team_normalized": "singida black stars",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "TANZANIJSKA 1.LIGA",
+      "league_normalized": "auto_tanzanija_1_liga",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T13:00:00",
+      "markets": [
+        {
+          "market_type": "1x2",
+          "odds": [
+            {
+              "label": "1",
+              "value": 1.8
+            },
+            {
+              "label": "X",
+              "value": 2.7
+            },
+            {
+              "label": "2",
+              "value": 6.0
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "double_chance",
+          "odds": [
+            {
+              "label": "1X",
+              "value": 1.09
+            },
+            {
+              "label": "X2",
+              "value": 1.9
+            },
+            {
+              "label": "12",
+              "value": 1.4
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_1_5",
+          "odds": [
+            {
+              "label": "Over 1.5",
+              "value": 1.52
+            },
+            {
+              "label": "Under 1.5",
+              "value": 2.35
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_2_5",
+          "odds": [
+            {
+              "label": "Over 2.5",
+              "value": 3.65
+            },
+            {
+              "label": "Under 2.5",
+              "value": 1.25
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "btts",
+          "odds": [
+            {
+              "label": "GG",
+              "value": 1.7
+            },
+            {
+              "label": "NG",
+              "value": 2.0
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        }
+      ],
+      "url": "https://www.premier-kladionica.com/ponuda/",
+      "bet_url": "",
+      "match_code": "4580864",
+      "event_id": "4580864",
+      "betradar_id": "",
+      "source_context": {},
+      "deep_link_verified": false,
+      "category_tags": [],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:45.741198"
+    },
+    {
+      "bookmaker": "mdshop",
+      "home_team": "BUL",
+      "away_team": "Villa",
+      "home_team_normalized": "bul",
+      "away_team_normalized": "aston_villa",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "Uganda 1",
+      "league_normalized": "auto_uganda_premijer_liga",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T13:00:00",
+      "markets": [
+        {
+          "market_type": "over_under_3_5",
+          "odds": [
+            {
+              "label": "Under 3.5",
+              "value": 1.7
+            },
+            {
+              "label": "Over 3.5",
+              "value": 2.0
+            }
+          ],
+          "source_id": "22",
+          "source_context": {
+            "sport_id": "1",
+            "region_id": "318",
+            "region_name": "Uganda",
+            "competition_id": "3229",
+            "competition_name": "Uganda 1",
+            "event_id": "7033506",
+            "event_name": "BUL - Villa",
+            "bet_id": "642049888"
+          },
+          "outcome_ids": {
+            "Under 3.5": "2010026001",
+            "Over 3.5": "2010026002"
+          }
+        }
+      ],
+      "url": "https://www.mdshop.ba/sport-live",
+      "bet_url": "",
+      "match_code": "7033506",
+      "event_id": "7033506",
+      "betradar_id": "73961714",
+      "source_context": {
+        "sport_id": "1",
+        "region_id": "318",
+        "region_name": "Uganda",
+        "competition_id": "3229",
+        "competition_name": "Uganda 1",
+        "event_id": "7033506",
+        "event_name": "BUL - Villa"
+      },
+      "deep_link_verified": false,
+      "category_tags": [],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:43.474478"
+    },
+    {
+      "bookmaker": "admiralbet",
+      "home_team": "BUL",
+      "away_team": "Villa",
+      "home_team_normalized": "bul",
+      "away_team_normalized": "aston_villa",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "Uganda - Premijer Liga",
+      "league_normalized": "auto_uganda_premijer_liga",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T13:00:00",
+      "markets": [
+        {
+          "market_type": "over_under_3_5",
+          "odds": [
+            {
+              "label": "Under 3.5",
+              "value": 1.7
+            },
+            {
+              "label": "Over 3.5",
+              "value": 2.0
+            }
+          ],
+          "source_id": "22",
+          "source_context": {
+            "sport_id": "1",
+            "region_id": "318",
+            "region_name": "Uganda",
+            "competition_id": "3229",
+            "competition_name": "Premijer Liga",
+            "event_id": "7033506",
+            "event_name": "BUL - Villa",
+            "bet_id": "642049888"
+          },
+          "outcome_ids": {
+            "Under 3.5": "2010026001",
+            "Over 3.5": "2010026002"
+          }
+        }
+      ],
+      "url": "https://www.admiralbet.ba/sport-live",
+      "bet_url": "",
+      "match_code": "7033506",
+      "event_id": "7033506",
+      "betradar_id": "73961714",
+      "source_context": {
+        "sport_id": "1",
+        "region_id": "318",
+        "region_name": "Uganda",
+        "competition_id": "3229",
+        "competition_name": "Premijer Liga",
+        "event_id": "7033506",
+        "event_name": "BUL - Villa"
+      },
+      "deep_link_verified": false,
+      "category_tags": [],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:55.016543"
+    },
+    {
+      "bookmaker": "mbet",
+      "home_team": "BUL",
+      "away_team": "Villa",
+      "home_team_normalized": "bul",
+      "away_team_normalized": "aston_villa",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "UGANDA 1",
+      "league_normalized": "auto_uganda_premijer_liga",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T13:00:00",
+      "markets": [
+        {
+          "market_type": "1x2",
+          "odds": [
+            {
+              "label": "1",
+              "value": 1.17
+            },
+            {
+              "label": "X",
+              "value": 4.5
+            },
+            {
+              "label": "2",
+              "value": 21.0
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "double_chance",
+          "odds": [
+            {
+              "label": "X2",
+              "value": 4.17
+            },
+            {
+              "label": "12",
+              "value": 1.15
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_3_5",
+          "odds": [
+            {
+              "label": "Over 3.5",
+              "value": 1.98
+            },
+            {
+              "label": "Under 3.5",
+              "value": 1.71
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        }
+      ],
+      "url": "https://mbet.ba/",
+      "bet_url": "",
+      "match_code": "e:fb:bul-vil:0002",
+      "event_id": "e:fb:bul-vil:0002",
+      "betradar_id": "",
+      "source_context": {},
+      "deep_link_verified": false,
+      "category_tags": [],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:43.738109"
+    },
+    {
+      "bookmaker": "wwin",
+      "home_team": "Bul FC",
+      "away_team": "Villa",
+      "home_team_normalized": "bul",
+      "away_team_normalized": "aston_villa",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "Uganda - Premier Liga",
+      "league_normalized": "auto_uganda_premijer_liga",
+      "country": "Uganda",
+      "country_normalized": "uganda",
+      "kickoff": "2026-11-03T13:00:00",
+      "markets": [
+        {
+          "market_type": "1x2",
+          "odds": [
+            {
+              "label": "1",
+              "value": 1.17
+            },
+            {
+              "label": "X",
+              "value": 4.5
+            },
+            {
+              "label": "2",
+              "value": 29.41
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "double_chance",
+          "odds": [
+            {
+              "label": "12",
+              "value": 1.13
+            },
+            {
+              "label": "X2",
+              "value": 3.9
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_3_5",
+          "odds": [
+            {
+              "label": "Over 3.5",
+              "value": 2.02
+            },
+            {
+              "label": "Under 3.5",
+              "value": 1.63
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        }
+      ],
+      "url": "https://wwin.ba/kladjenje-uzivo/",
+      "bet_url": "",
+      "match_code": "4714298",
+      "event_id": "4714298",
+      "betradar_id": "73961714",
+      "source_context": {},
+      "deep_link_verified": false,
+      "category_tags": [],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:50.511608"
+    },
+    {
+      "bookmaker": "maxbet",
+      "home_team": "Bul FC",
+      "away_team": "SC Villa",
+      "home_team_normalized": "bul",
+      "away_team_normalized": "aston_villa",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "Uganda 1",
+      "league_normalized": "auto_uganda_premijer_liga",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T13:00:00",
+      "markets": [
+        {
+          "market_type": "over_under_3_5",
+          "odds": [
+            {
+              "label": "Under 3.5",
+              "value": 1.6
+            },
+            {
+              "label": "Over 3.5",
+              "value": 2.2
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "1x2",
+          "odds": [
+            {
+              "label": "1",
+              "value": 1.19
+            },
+            {
+              "label": "X",
+              "value": 4.9
+            },
+            {
+              "label": "2",
+              "value": 23.0
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "double_chance",
+          "odds": [
+            {
+              "label": "1X",
+              "value": 1.01
+            },
+            {
+              "label": "12",
+              "value": 1.15
+            },
+            {
+              "label": "X2",
+              "value": 4.25
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        }
+      ],
+      "url": "https://sportsbook.maxbet.ba/match/1006919",
+      "bet_url": "",
+      "match_code": "624",
+      "event_id": "1006919",
+      "betradar_id": "73961714",
+      "source_context": {},
+      "deep_link_verified": false,
+      "category_tags": [],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:43.494335"
+    },
+    {
+      "bookmaker": "premier_kladionica",
+      "home_team": "Bul FC",
+      "away_team": "SC Villa",
+      "home_team_normalized": "bul",
+      "away_team_normalized": "aston_villa",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "UGANDA 1.LIGA",
+      "league_normalized": "uganda 1.liga",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T13:00:00",
+      "markets": [
+        {
+          "market_type": "1x2",
+          "odds": [
+            {
+              "label": "1",
+              "value": 1.2
+            },
+            {
+              "label": "X",
+              "value": 4.8
+            },
+            {
+              "label": "2",
+              "value": 31.0
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "double_chance",
+          "odds": [
+            {
+              "label": "X2",
+              "value": 4.15
+            },
+            {
+              "label": "12",
+              "value": 1.15
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_3_5",
+          "odds": [
+            {
+              "label": "Over 3.5",
+              "value": 2.05
+            },
+            {
+              "label": "Under 3.5",
+              "value": 1.7
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        }
+      ],
+      "url": "https://www.premier-kladionica.com/ponuda/",
+      "bet_url": "",
+      "match_code": "4581955",
+      "event_id": "4581955",
+      "betradar_id": "",
+      "source_context": {},
+      "deep_link_verified": false,
+      "category_tags": [],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:45.739404"
+    },
+    {
+      "bookmaker": "mdshop",
+      "home_team": "NEC FC Bugolobi",
+      "away_team": "UPDF",
+      "home_team_normalized": "nec fc bugolobi",
+      "away_team_normalized": "updf",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "Uganda 1",
+      "league_normalized": "auto_uganda_premijer_liga",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T13:00:00",
+      "markets": [
+        {
+          "market_type": "over_under_1_5",
+          "odds": [
+            {
+              "label": "Under 1.5",
+              "value": 1.95
+            },
+            {
+              "label": "Over 1.5",
+              "value": 1.73
+            }
+          ],
+          "source_id": "22",
+          "source_context": {
+            "sport_id": "1",
+            "region_id": "318",
+            "region_name": "Uganda",
+            "competition_id": "3229",
+            "competition_name": "Uganda 1",
+            "event_id": "7033507",
+            "event_name": "NEC FC Bugolobi - UPDF",
+            "bet_id": "642049799"
+          },
+          "outcome_ids": {
+            "Under 1.5": "2010025767",
+            "Over 1.5": "2010025768"
+          }
+        },
+        {
+          "market_type": "over_under_2_5",
+          "odds": [
+            {
+              "label": "Under 2.5",
+              "value": 1.12
+            },
+            {
+              "label": "Over 2.5",
+              "value": 4.9
+            }
+          ],
+          "source_id": "22",
+          "source_context": {
+            "sport_id": "1",
+            "region_id": "318",
+            "region_name": "Uganda",
+            "competition_id": "3229",
+            "competition_name": "Uganda 1",
+            "event_id": "7033507",
+            "event_name": "NEC FC Bugolobi - UPDF",
+            "bet_id": "642049800"
+          },
+          "outcome_ids": {
+            "Under 2.5": "2010025769",
+            "Over 2.5": "2010025770"
+          }
+        }
+      ],
+      "url": "https://www.mdshop.ba/sport-live",
+      "bet_url": "",
+      "match_code": "7033507",
+      "event_id": "7033507",
+      "betradar_id": "73961718",
+      "source_context": {
+        "sport_id": "1",
+        "region_id": "318",
+        "region_name": "Uganda",
+        "competition_id": "3229",
+        "competition_name": "Uganda 1",
+        "event_id": "7033507",
+        "event_name": "NEC FC Bugolobi - UPDF"
+      },
+      "deep_link_verified": false,
+      "category_tags": [],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:43.475755"
+    },
+    {
+      "bookmaker": "admiralbet",
+      "home_team": "NEC FC Bugolobi",
+      "away_team": "UPDF",
+      "home_team_normalized": "nec fc bugolobi",
+      "away_team_normalized": "updf",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "Uganda - Premijer Liga",
+      "league_normalized": "auto_uganda_premijer_liga",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T13:00:00",
+      "markets": [
+        {
+          "market_type": "over_under_1_5",
+          "odds": [
+            {
+              "label": "Under 1.5",
+              "value": 1.95
+            },
+            {
+              "label": "Over 1.5",
+              "value": 1.73
+            }
+          ],
+          "source_id": "22",
+          "source_context": {
+            "sport_id": "1",
+            "region_id": "318",
+            "region_name": "Uganda",
+            "competition_id": "3229",
+            "competition_name": "Premijer Liga",
+            "event_id": "7033507",
+            "event_name": "NEC FC Bugolobi - UPDF",
+            "bet_id": "642049799"
+          },
+          "outcome_ids": {
+            "Under 1.5": "2010025767",
+            "Over 1.5": "2010025768"
+          }
+        },
+        {
+          "market_type": "over_under_2_5",
+          "odds": [
+            {
+              "label": "Under 2.5",
+              "value": 1.12
+            },
+            {
+              "label": "Over 2.5",
+              "value": 4.9
+            }
+          ],
+          "source_id": "22",
+          "source_context": {
+            "sport_id": "1",
+            "region_id": "318",
+            "region_name": "Uganda",
+            "competition_id": "3229",
+            "competition_name": "Premijer Liga",
+            "event_id": "7033507",
+            "event_name": "NEC FC Bugolobi - UPDF",
+            "bet_id": "642049800"
+          },
+          "outcome_ids": {
+            "Under 2.5": "2010025769",
+            "Over 2.5": "2010025770"
+          }
+        }
+      ],
+      "url": "https://www.admiralbet.ba/sport-live",
+      "bet_url": "",
+      "match_code": "7033507",
+      "event_id": "7033507",
+      "betradar_id": "73961718",
+      "source_context": {
+        "sport_id": "1",
+        "region_id": "318",
+        "region_name": "Uganda",
+        "competition_id": "3229",
+        "competition_name": "Premijer Liga",
+        "event_id": "7033507",
+        "event_name": "NEC FC Bugolobi - UPDF"
+      },
+      "deep_link_verified": false,
+      "category_tags": [],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:55.017149"
+    },
+    {
+      "bookmaker": "wwin",
+      "home_team": "NEC",
+      "away_team": "UPDF",
+      "home_team_normalized": "nec",
+      "away_team_normalized": "updf",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "Uganda - Premier Liga",
+      "league_normalized": "auto_uganda_premijer_liga",
+      "country": "Uganda",
+      "country_normalized": "uganda",
+      "kickoff": "2026-11-03T13:00:00",
+      "markets": [
+        {
+          "market_type": "1x2",
+          "odds": [
+            {
+              "label": "1",
+              "value": 1.13
+            },
+            {
+              "label": "X",
+              "value": 5.08
+            },
+            {
+              "label": "2",
+              "value": 30.0
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "double_chance",
+          "odds": [
+            {
+              "label": "12",
+              "value": 1.1
+            },
+            {
+              "label": "X2",
+              "value": 4.38
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "btts",
+          "odds": [
+            {
+              "label": "GG",
+              "value": 3.22
+            },
+            {
+              "label": "NG",
+              "value": 1.25
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_1_5",
+          "odds": [
+            {
+              "label": "Over 1.5",
+              "value": 1.66
+            },
+            {
+              "label": "Under 1.5",
+              "value": 1.98
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_2_5",
+          "odds": [
+            {
+              "label": "Over 2.5",
+              "value": 4.01
+            },
+            {
+              "label": "Under 2.5",
+              "value": 1.16
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        }
+      ],
+      "url": "https://wwin.ba/kladjenje-uzivo/",
+      "bet_url": "",
+      "match_code": "4714319",
+      "event_id": "4714319",
+      "betradar_id": "73961718",
+      "source_context": {},
+      "deep_link_verified": false,
+      "category_tags": [],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:50.511789"
+    },
+    {
+      "bookmaker": "maxbet",
+      "home_team": "NEC FC",
+      "away_team": "UPDF FC",
+      "home_team_normalized": "nec",
+      "away_team_normalized": "updf",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "Uganda 1",
+      "league_normalized": "auto_uganda_premijer_liga",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T13:00:00",
+      "markets": [
+        {
+          "market_type": "over_under_1_5",
+          "odds": [
+            {
+              "label": "Under 1.5",
+              "value": 1.9
+            },
+            {
+              "label": "Over 1.5",
+              "value": 1.8
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_2_5",
+          "odds": [
+            {
+              "label": "Under 2.5",
+              "value": 1.12
+            },
+            {
+              "label": "Over 2.5",
+              "value": 5.2
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "1x2",
+          "odds": [
+            {
+              "label": "1",
+              "value": 1.11
+            },
+            {
+              "label": "X",
+              "value": 6.25
+            },
+            {
+              "label": "2",
+              "value": 34.0
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "double_chance",
+          "odds": [
+            {
+              "label": "12",
+              "value": 1.09
+            },
+            {
+              "label": "X2",
+              "value": 5.8
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "btts",
+          "odds": [
+            {
+              "label": "GG",
+              "value": 3.4
+            },
+            {
+              "label": "NG",
+              "value": 1.2
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        }
+      ],
+      "url": "https://sportsbook.maxbet.ba/match/1006875",
+      "bet_url": "",
+      "match_code": "623",
+      "event_id": "1006875",
+      "betradar_id": "73961718",
+      "source_context": {},
+      "deep_link_verified": false,
+      "category_tags": [],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:43.494335"
+    },
+    {
+      "bookmaker": "mdshop",
+      "home_team": "Uganda Police FC",
+      "away_team": "Kitara",
+      "home_team_normalized": "uganda police",
+      "away_team_normalized": "kitara",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "Uganda 1",
+      "league_normalized": "auto_uganda_premijer_liga",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T13:00:00",
+      "markets": [
+        {
+          "market_type": "over_under_1_5",
+          "odds": [
+            {
+              "label": "Under 1.5",
+              "value": 1.65
+            },
+            {
+              "label": "Over 1.5",
+              "value": 2.07
+            }
+          ],
+          "source_id": "22",
+          "source_context": {
+            "sport_id": "1",
+            "region_id": "318",
+            "region_name": "Uganda",
+            "competition_id": "3229",
+            "competition_name": "Uganda 1",
+            "event_id": "7033508",
+            "event_name": "Uganda Police FC - Kitara",
+            "bet_id": "642049975"
+          },
+          "outcome_ids": {
+            "Under 1.5": "2010026233",
+            "Over 1.5": "2010026234"
+          }
+        },
+        {
+          "market_type": "over_under_2_5",
+          "odds": [
+            {
+              "label": "Under 2.5",
+              "value": 1.06
+            },
+            {
+              "label": "Over 2.5",
+              "value": 7.0
+            }
+          ],
+          "source_id": "22",
+          "source_context": {
+            "sport_id": "1",
+            "region_id": "318",
+            "region_name": "Uganda",
+            "competition_id": "3229",
+            "competition_name": "Uganda 1",
+            "event_id": "7033508",
+            "event_name": "Uganda Police FC - Kitara",
+            "bet_id": "642049976"
+          },
+          "outcome_ids": {
+            "Under 2.5": "2010026235",
+            "Over 2.5": "2010026236"
+          }
+        }
+      ],
+      "url": "https://www.mdshop.ba/sport-live",
+      "bet_url": "",
+      "match_code": "7033508",
+      "event_id": "7033508",
+      "betradar_id": "73961716",
+      "source_context": {
+        "sport_id": "1",
+        "region_id": "318",
+        "region_name": "Uganda",
+        "competition_id": "3229",
+        "competition_name": "Uganda 1",
+        "event_id": "7033508",
+        "event_name": "Uganda Police FC - Kitara"
+      },
+      "deep_link_verified": false,
+      "category_tags": [],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:43.476958"
+    },
+    {
+      "bookmaker": "admiralbet",
+      "home_team": "Uganda Police FC",
+      "away_team": "Kitara",
+      "home_team_normalized": "uganda police",
+      "away_team_normalized": "kitara",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "Uganda - Premijer Liga",
+      "league_normalized": "auto_uganda_premijer_liga",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T13:00:00",
+      "markets": [
+        {
+          "market_type": "over_under_1_5",
+          "odds": [
+            {
+              "label": "Under 1.5",
+              "value": 1.65
+            },
+            {
+              "label": "Over 1.5",
+              "value": 2.07
+            }
+          ],
+          "source_id": "22",
+          "source_context": {
+            "sport_id": "1",
+            "region_id": "318",
+            "region_name": "Uganda",
+            "competition_id": "3229",
+            "competition_name": "Premijer Liga",
+            "event_id": "7033508",
+            "event_name": "Uganda Police FC - Kitara",
+            "bet_id": "642049975"
+          },
+          "outcome_ids": {
+            "Under 1.5": "2010026233",
+            "Over 1.5": "2010026234"
+          }
+        },
+        {
+          "market_type": "over_under_2_5",
+          "odds": [
+            {
+              "label": "Under 2.5",
+              "value": 1.06
+            },
+            {
+              "label": "Over 2.5",
+              "value": 7.0
+            }
+          ],
+          "source_id": "22",
+          "source_context": {
+            "sport_id": "1",
+            "region_id": "318",
+            "region_name": "Uganda",
+            "competition_id": "3229",
+            "competition_name": "Premijer Liga",
+            "event_id": "7033508",
+            "event_name": "Uganda Police FC - Kitara",
+            "bet_id": "642049976"
+          },
+          "outcome_ids": {
+            "Under 2.5": "2010026235",
+            "Over 2.5": "2010026236"
+          }
+        }
+      ],
+      "url": "https://www.admiralbet.ba/sport-live",
+      "bet_url": "",
+      "match_code": "7033508",
+      "event_id": "7033508",
+      "betradar_id": "73961716",
+      "source_context": {
+        "sport_id": "1",
+        "region_id": "318",
+        "region_name": "Uganda",
+        "competition_id": "3229",
+        "competition_name": "Premijer Liga",
+        "event_id": "7033508",
+        "event_name": "Uganda Police FC - Kitara"
+      },
+      "deep_link_verified": false,
+      "category_tags": [],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:55.017695"
+    },
+    {
+      "bookmaker": "mbet",
+      "home_team": "Police FC",
+      "away_team": "Kitara",
+      "home_team_normalized": "police",
+      "away_team_normalized": "kitara",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "UGANDA 1",
+      "league_normalized": "auto_uganda_premijer_liga",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T13:00:00",
+      "markets": [
+        {
+          "market_type": "1x2",
+          "odds": [
+            {
+              "label": "1",
+              "value": 19.0
+            },
+            {
+              "label": "X",
+              "value": 4.1
+            },
+            {
+              "label": "2",
+              "value": 1.2
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "double_chance",
+          "odds": [
+            {
+              "label": "1X",
+              "value": 3.88
+            },
+            {
+              "label": "12",
+              "value": 1.17
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "btts",
+          "odds": [
+            {
+              "label": "GG",
+              "value": 3.1
+            },
+            {
+              "label": "NG",
+              "value": 1.31
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_1_5",
+          "odds": [
+            {
+              "label": "Over 1.5",
+              "value": 2.0
+            },
+            {
+              "label": "Under 1.5",
+              "value": 1.71
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_2_5",
+          "odds": [
+            {
+              "label": "Over 2.5",
+              "value": 6.5
+            },
+            {
+              "label": "Under 2.5",
+              "value": 1.09
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        }
+      ],
+      "url": "https://mbet.ba/",
+      "bet_url": "",
+      "match_code": "e:fb:pol-kit:0000",
+      "event_id": "e:fb:pol-kit:0000",
+      "betradar_id": "",
+      "source_context": {},
+      "deep_link_verified": false,
+      "category_tags": [],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:43.763778"
+    },
+    {
+      "bookmaker": "wwin",
+      "home_team": "Uganda Police",
+      "away_team": "Airtel Kitara",
+      "home_team_normalized": "uganda police",
+      "away_team_normalized": "airtel kitara",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "Uganda - Premier Liga",
+      "league_normalized": "auto_uganda_premijer_liga",
+      "country": "Uganda",
+      "country_normalized": "uganda",
+      "kickoff": "2026-11-03T13:00:00",
+      "markets": [
+        {
+          "market_type": "1x2",
+          "odds": [
+            {
+              "label": "1",
+              "value": 25.61
+            },
+            {
+              "label": "X",
+              "value": 4.33
+            },
+            {
+              "label": "2",
+              "value": 1.19
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "double_chance",
+          "odds": [
+            {
+              "label": "1X",
+              "value": 3.7
+            },
+            {
+              "label": "12",
+              "value": 1.14
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "btts",
+          "odds": [
+            {
+              "label": "GG",
+              "value": 3.09
+            },
+            {
+              "label": "NG",
+              "value": 1.27
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_1_5",
+          "odds": [
+            {
+              "label": "Over 1.5",
+              "value": 1.96
+            },
+            {
+              "label": "Under 1.5",
+              "value": 1.66
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        }
+      ],
+      "url": "https://wwin.ba/kladjenje-uzivo/",
+      "bet_url": "",
+      "match_code": "4714318",
+      "event_id": "4714318",
+      "betradar_id": "73961716",
+      "source_context": {},
+      "deep_link_verified": false,
+      "category_tags": [],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:50.511696"
+    },
+    {
+      "bookmaker": "maxbet",
+      "home_team": "Uganda Police",
+      "away_team": "Airtel Kitara FC",
+      "home_team_normalized": "uganda police",
+      "away_team_normalized": "airtel kitara",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "Uganda 1",
+      "league_normalized": "auto_uganda_premijer_liga",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T13:00:00",
+      "markets": [
+        {
+          "market_type": "over_under_1_5",
+          "odds": [
+            {
+              "label": "Under 1.5",
+              "value": 1.6
+            },
+            {
+              "label": "Over 1.5",
+              "value": 2.2
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_2_5",
+          "odds": [
+            {
+              "label": "Under 2.5",
+              "value": 1.06
+            },
+            {
+              "label": "Over 2.5",
+              "value": 7.5
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "1x2",
+          "odds": [
+            {
+              "label": "1",
+              "value": 31.0
+            },
+            {
+              "label": "X",
+              "value": 5.25
+            },
+            {
+              "label": "2",
+              "value": 1.16
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "double_chance",
+          "odds": [
+            {
+              "label": "1X",
+              "value": 4.75
+            },
+            {
+              "label": "12",
+              "value": 1.13
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "btts",
+          "odds": [
+            {
+              "label": "GG",
+              "value": 3.4
+            },
+            {
+              "label": "NG",
+              "value": 1.2
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        }
+      ],
+      "url": "https://sportsbook.maxbet.ba/match/1006973",
+      "bet_url": "",
+      "match_code": "625",
+      "event_id": "1006973",
+      "betradar_id": "73961716",
+      "source_context": {},
+      "deep_link_verified": false,
+      "category_tags": [],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:43.494335"
+    },
+    {
+      "bookmaker": "premier_kladionica",
+      "home_team": "Uganda Police FC",
+      "away_team": "Kitara FC",
+      "home_team_normalized": "uganda police",
+      "away_team_normalized": "kitara",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "UGANDA 1.LIGA",
+      "league_normalized": "uganda 1.liga",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T13:00:00",
+      "markets": [
+        {
+          "market_type": "1x2",
+          "odds": [
+            {
+              "label": "1",
+              "value": 28.0
+            },
+            {
+              "label": "X",
+              "value": 4.65
+            },
+            {
+              "label": "2",
+              "value": 1.2
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "double_chance",
+          "odds": [
+            {
+              "label": "1X",
+              "value": 3.95
+            },
+            {
+              "label": "12",
+              "value": 1.16
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_1_5",
+          "odds": [
+            {
+              "label": "Over 1.5",
+              "value": 2.05
+            },
+            {
+              "label": "Under 1.5",
+              "value": 1.7
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_2_5",
+          "odds": [
+            {
+              "label": "Over 2.5",
+              "value": 6.0
+            },
+            {
+              "label": "Under 2.5",
+              "value": 1.09
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "btts",
+          "odds": [
+            {
+              "label": "GG",
+              "value": 3.25
+            },
+            {
+              "label": "NG",
+              "value": 1.3
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        }
+      ],
+      "url": "https://www.premier-kladionica.com/ponuda/",
+      "bet_url": "",
+      "match_code": "4581956",
+      "event_id": "4581956",
+      "betradar_id": "",
+      "source_context": {},
+      "deep_link_verified": false,
+      "category_tags": [],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:45.740064"
+    },
+    {
+      "bookmaker": "maxbet",
+      "home_team": "Ittihad Al-Ramtha U20",
+      "away_team": "Al-Baqa'a U20",
+      "home_team_normalized": "ittihad al-ramtha u20",
+      "away_team_normalized": "al-baqaa u20",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "Jordan - Youth League",
+      "league_normalized": "jordan - youth league",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T14:00:00",
+      "markets": [
+        {
+          "market_type": "over_under_1_5",
+          "odds": [
+            {
+              "label": "Under 1.5",
+              "value": 3.5
+            },
+            {
+              "label": "Over 1.5",
+              "value": 1.2
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_2_5",
+          "odds": [
+            {
+              "label": "Under 2.5",
+              "value": 1.83
+            },
+            {
+              "label": "Over 2.5",
+              "value": 1.77
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_3_5",
+          "odds": [
+            {
+              "label": "Under 3.5",
+              "value": 1.27
+            },
+            {
+              "label": "Over 3.5",
+              "value": 3.1
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "1x2",
+          "odds": [
+            {
+              "label": "1",
+              "value": 1.7
+            },
+            {
+              "label": "X",
+              "value": 3.4
+            },
+            {
+              "label": "2",
+              "value": 4.5
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "double_chance",
+          "odds": [
+            {
+              "label": "1X",
+              "value": 1.15
+            },
+            {
+              "label": "12",
+              "value": 1.22
+            },
+            {
+              "label": "X2",
+              "value": 2.1
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "btts",
+          "odds": [
+            {
+              "label": "GG",
+              "value": 1.78
+            },
+            {
+              "label": "NG",
+              "value": 1.82
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        }
+      ],
+      "url": "https://sportsbook.maxbet.ba/match/1009679",
+      "bet_url": "",
+      "match_code": "2589",
+      "event_id": "1009679",
+      "betradar_id": "",
+      "source_context": {},
+      "deep_link_verified": false,
+      "category_tags": [
+        "U20"
+      ],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:43.494335"
+    },
+    {
+      "bookmaker": "mbet",
+      "home_team": "Ittihad AL Ramtha U20",
+      "away_team": "Al Baqaa Amman U20",
+      "home_team_normalized": "ittihad al ramtha u20",
+      "away_team_normalized": "al baqaa amman u20",
+      "home_team_source": "",
+      "away_team_source": "",
+      "league": "JORDAN U20 League ",
+      "league_normalized": "jordan u20 league",
+      "country": "",
+      "country_normalized": "",
+      "kickoff": "2026-11-03T14:00:00",
+      "markets": [
+        {
+          "market_type": "1x2",
+          "odds": [
+            {
+              "label": "1",
+              "value": 1.71
+            },
+            {
+              "label": "X",
+              "value": 3.4
+            },
+            {
+              "label": "2",
+              "value": 3.9
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "double_chance",
+          "odds": [
+            {
+              "label": "1X",
+              "value": 1.22
+            },
+            {
+              "label": "X2",
+              "value": 1.98
+            },
+            {
+              "label": "12",
+              "value": 1.27
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "btts",
+          "odds": [
+            {
+              "label": "GG",
+              "value": 1.77
+            },
+            {
+              "label": "NG",
+              "value": 1.93
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_1_5",
+          "odds": [
+            {
+              "label": "Over 1.5",
+              "value": 1.25
+            },
+            {
+              "label": "Under 1.5",
+              "value": 3.2
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_2_5",
+          "odds": [
+            {
+              "label": "Over 2.5",
+              "value": 1.8
+            },
+            {
+              "label": "Under 2.5",
+              "value": 1.78
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        },
+        {
+          "market_type": "over_under_3_5",
+          "odds": [
+            {
+              "label": "Over 3.5",
+              "value": 3.0
+            },
+            {
+              "label": "Under 3.5",
+              "value": 1.29
+            }
+          ],
+          "source_id": "",
+          "source_context": {},
+          "outcome_ids": {}
+        }
+      ],
+      "url": "https://mbet.ba/",
+      "bet_url": "",
+      "match_code": "e:fb:itt-alb:0004",
+      "event_id": "e:fb:itt-alb:0004",
+      "betradar_id": "",
+      "source_context": {},
+      "deep_link_verified": false,
+      "category_tags": [
+        "U20"
+      ],
+      "is_swapped": false,
+      "is_live": true,
+      "fetched_at": "2026-11-03T14:27:43.787471"
+    }
+  ]
+}
