@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-11-04
 **Repository:** `dzanagamba/BH_Arb` (`main`)
-**Status of this document:** audit complete; P0-1 through P0-6 done, implementation continuing
+**Status of this document:** audit complete; P0-1 through P0-7 done, implementation continuing
 **Purpose:** a durable, session-by-session plan so work can resume without re-reading the whole repository.
 
 > **How to use this document**
@@ -257,7 +257,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 | P0-4 | Runtime freshness and stale-state policy | P0 | M | — | Done |
 | P0-5 | Reloadable deep-link declarations | P0 | S | — | Done |
 | P0-6 | Opportunity-rate and arb-lifetime telemetry | P0 | M | P0-4 | Done |
-| P0-7 | Feed-integrity scorecard and stale-book quarantine | P0 | M | P0-4 | Not started |
+| P0-7 | Feed-integrity scorecard and stale-book quarantine | P0 | M | P0-4 | Done |
 | P1-1 | Paginated, filtered group-evidence API | P1 | M | P0-1 | Not started |
 | P1-2 | Structured logs, request IDs, metrics endpoint | P1 | M | — | Not started |
 | P1-3 | Reproducible deployment (Docker/systemd) | P1 | M | — | Not started |
@@ -514,7 +514,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 
 ### P0-7 — Feed-integrity scorecard and stale-book quarantine
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P0
 **Effort:** M
 **Depends on:** P0-4
@@ -534,11 +534,11 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 
 **Acceptance criteria:**
 
-- [ ] Every enabled book has an integrity state and a reason.
-- [ ] A quarantined book never contributes a priced leg.
-- [ ] Recovery is automatic but not immediate.
-- [ ] The dashboard shows which book is unhealthy and why.
-- [ ] The certainty gate's identity decisions are untouched.
+- [x] Every enabled book has an integrity state and a reason.
+- [x] A quarantined book never contributes a priced leg.
+- [x] Recovery is automatic but not immediate.
+- [x] The dashboard shows which book is unhealthy and why.
+- [x] The certainty gate's identity decisions are untouched.
 
 **Tests:**
 
@@ -1421,6 +1421,36 @@ Before writing a claim about behavior, run the command that proves it and paste 
 ## 6. Execution log
 
 Newest first. Each entry: date, task, status, commands, measured result, files changed, follow-ups.
+
+### 2026-11-04 — P0-7: Feed-integrity scorecard and stale-book quarantine
+
+**Task:** P0-7 (first eligible task after P0-6; depends on P0-4, which is Done).
+**Status:** Done.
+
+**Commands and results:**
+
+- `python -m pytest` → **1,292 passed**, 1 warning, 192.91 s (was 1,286; +6 tests).
+- `python -m ruff check .` → clean.
+- `python -m mypy .` → clean on 143 source files.
+- `python scripts/generate_market_mapping_doc.py --check` → in sync.
+- `python scripts/replay_mappings.py tests/fixtures/replay/2026-11-03 --cold --check` → exit 0, fixed point, 0 false merges, 0 unresolved evidence-backed pairs.
+- New tests prove a stale book cannot supply a priced leg, a below-1.0 own set is quarantined, recovery needs three clean scans, the gate's group is unchanged, and both APIs expose the scorecard.
+
+**What changed:**
+
+- `engine/feed_integrity.py` (new): per-book freshness, empty/parse, missing-market, own-margin and outlier metrics; healthy/degraded/quarantined states; bounded last-20 history; three-clean-scan recovery; `priceable_groups()` removes quarantined legs from pricing copies only.
+- `engine/market_consensus.py`: exposes `complete_market_spec()` for the integrity scorer.
+- `config/settings.py`: integrity thresholds and recovery/history policy.
+- `server/api.py`: computes the scorecard after grouping, prices from the filtered groups, passes the same groups to the price guard, persists `cache/feed_integrity.json`, and exposes `feed_integrity` in `/api/results` and `/api/health`.
+- `frontend/index.html`, `frontend/css/style.css`, `frontend/js/app.js`: an unhealthy-book strip with state and reason, including `not priced` for quarantine.
+- `tests/test_feed_integrity.py` (new).
+- `README.md`, `docs/ACCEPTANCE.md`, `docs/PRODUCTION_READINESS.md` document the scorecard and the price-source restriction.
+
+**Trust rules:** quarantine is applied only to pricing copies. The certainty gate, its evidence, settlement and link decisions are untouched; a subset of a verified group remains the same event. Outlier quarantine needs at least 10 comparable markets so a genuine three-book edge is not mistaken for a bad feed.
+
+**Follow-ups:** P1-1 (paginated, filtered group-evidence API) is the next eligible task. P1-2, P1-3 and P1-4 are also unblocked.
+
+---
 
 ### 2026-11-04 — P0-6: Opportunity-rate and arb-lifetime telemetry
 

@@ -339,6 +339,37 @@ kbd {
 body.feed-stale .sb-row { border-style: dashed; }
 body.feed-stale .row-profit b { color: var(--warn); }
 
+/* P0-7: a quarantined book is not a certainty-gate failure. It is a price
+   source that is out of service for this scan, so the reason sits beside the
+   book's name rather than inside a bet-slip leg. */
+.feed-integrity {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin: 8px 0 0;
+    font-size: 12px;
+}
+.feed-integrity-title {
+    color: var(--muted);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+}
+.feed-integrity-badge {
+    padding: 3px 8px;
+    border-radius: 99px;
+    border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--line));
+    background: color-mix(in srgb, var(--warn) 8%, var(--panel));
+    color: var(--warn);
+}
+.feed-integrity-badge[data-state="quarantined"] {
+    border-color: color-mix(in srgb, var(--bad) 50%, var(--line));
+    background: color-mix(in srgb, var(--bad) 9%, var(--panel));
+    color: var(--bad);
+}
+.feed-integrity-badge b { color: var(--text); }
+
 /* ─── Tabs ─────────────────────────────────────────────────────────────── */
 .main { max-width: 1520px; margin: 0 auto; padding: 0 24px 32px; }
 

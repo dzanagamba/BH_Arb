@@ -37,6 +37,11 @@ _COMPLETE: dict[MarketType, tuple[frozenset[str], int]] = {
 }
 
 
+def complete_market_spec(market_type: MarketType) -> tuple[frozenset[str], int] | None:
+    """The required labels and winner count for a complete market, if defined."""
+    return _COMPLETE.get(market_type)
+
+
 def devigged(market: Market) -> dict[str, float] | None:
     """True probability per outcome, or None when the set is not complete."""
     spec = _COMPLETE.get(market.market_type)

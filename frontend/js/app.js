@@ -74,6 +74,18 @@ const ZERO_RESULT_LABELS = Object.freeze({
     no_priced_boards: 'no boards priced',
 });
 
+// P0-7: plain-language versions of the deterministic integrity reasons.
+const FEED_REASON_LABELS = Object.freeze({
+    parse_error: 'parse error',
+    empty_feed: 'returned no data',
+    skipped_backoff: 'skipped by back-off',
+    stale_prices: 'stale prices',
+    own_margin_below_one: 'own margin below 1.0',
+    outlier_rate: 'outlier rate',
+    missing_markets: 'missing markets',
+    recovering: 'recovering',
+});
+
 const SUREBET_STATUS_LABELS = Object.freeze({
     verified: { label: 'Verified pairing', ariaLabel: 'Verified match pairing' },
     suggested: { label: 'Suggested pairing', ariaLabel: 'Suggested match pairing' },
@@ -581,6 +593,7 @@ async function loadResults(silent = false) {
         resultsSnapshot = data;
         freshnessSnapshot = data.freshness || null;
         renderFreshnessBanner();
+        renderFeedIntegrity();
 
         setText('stat-matches', data.total_matches != null ? data.total_matches.toLocaleString() : '—');
         setText('stat-groups', data.match_groups != null ? Number(data.match_groups).toLocaleString() : '—');
@@ -664,6 +677,29 @@ function renderFreshnessBanner() {
     }
     banner.innerHTML = `${message} These odds are not current — re-check a slip or run a new scan.
         <button type="button" class="btn btn-primary btn-small" data-action="scan-now">Scan now</button>`;
+}
+
+// P0-7: only unhealthy books are shown here. A healthy feed needs no badge,
+// and a quarantined one must say which book is out and why it is not priced.
+function renderFeedIntegrity() {
+    const strip = document.getElementById('feed-integrity');
+    if (!strip) return;
+    const payload = resultsSnapshot?.feed_integrity || {};
+    const books = Object.values(payload.books || {});
+    const unhealthy = books.filter(book => book.state && book.state !== 'healthy');
+    strip.hidden = unhealthy.length === 0;
+    if (!unhealthy.length) { strip.innerHTML = ''; return; }
+    const badges = unhealthy.map(book => {
+        const state = book.state === 'quarantined' ? 'quarantined' : 'degraded';
+        const reasons = (book.reasons || []).map(reason => FEED_REASON_LABELS[reason] || reason);
+        const reasonText = reasons.join(', ') || book.reason || 'unhealthy';
+        const label = book.name || bookName(book.bookmaker);
+        return `<span class="feed-integrity-badge" data-state="${escapeHtml(state)}" title="${escapeHtml(book.reason || reasonText)}">`
+            + `<b>${escapeHtml(label)}</b> ${escapeHtml(state)} — ${escapeHtml(reasonText)}`
+            + (state === 'quarantined' ? ' · not priced' : '')
+            + '</span>';
+    }).join('');
+    strip.innerHTML = `<span class="feed-integrity-title">Feed integrity</span>${badges}`;
 }
 
 function surebetSignature(sb) {

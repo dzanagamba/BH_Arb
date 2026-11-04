@@ -109,6 +109,14 @@ POST /api/scan
   board crossed", "crossed below floor", "all crossings guarded", and stale or
   unverified feeds. Crossing lifetimes are kept as a bounded key store and
   summarized as p50/p90. The dashboard shows a crossing-rate tile.
+- **Every enabled book has a feed-integrity state.** The scorecard checks
+  freshness, empty/parse failures, missing markets, a complete set whose own
+  margin is below 1.0, and outlier rate against the peer median. `healthy`,
+  `degraded` and `quarantined` are exposed in `feed_integrity` in
+  `/api/results` and `/api/health`. A quarantined book is removed from the
+  copies used for pricing, with its reason shown in the dashboard; recovery
+  needs three consecutive clean scans. This is a price-source restriction, not
+  a change to the certainty gate.
 
 ## Dashboard
 
@@ -121,7 +129,9 @@ POST /api/scan
   used. This view is read-only.
 - **History** — per-scan counts and errors for both feeds.
 - **Settings** — stake, rounding, auto-rescan, alert sound, enabled bookmakers,
-  experimental markets and the health line.
+  experimental markets and the health line. Unhealthy books also appear in a
+  feed-integrity strip above the tabs, with the reason they are degraded or
+  quarantined from pricing.
 
 `python scripts/opportunity_baseline.py --days 7` prints the aggregate
 opportunity-rate baseline for the recorded scan history. The first local

@@ -216,6 +216,16 @@ DEEP_LINK_VERIFY_RATE_LIMIT = int(os.getenv("DEEP_LINK_VERIFY_RATE_LIMIT", "2"))
 # cannot silently move another's. It is NOT a per-endpoint knob.
 RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
 
+# --- Feed integrity (P0-7) ---
+# A book is quarantined from pricing when its feed cannot be trusted for this
+# scan. Recovery is deliberately slower than failure: a book must produce this
+# many consecutive clean scans before it is priced again.
+FEED_INTEGRITY_RECOVERY_SCANS = int(os.getenv("FEED_INTEGRITY_RECOVERY_SCANS", "3"))
+FEED_INTEGRITY_HISTORY = int(os.getenv("FEED_INTEGRITY_HISTORY", "20"))
+FEED_INTEGRITY_MISSING_DEGRADED_RATE = 0.35
+FEED_INTEGRITY_OUTLIER_DEGRADED_RATE = 0.10
+FEED_INTEGRITY_OUTLIER_QUARANTINE_RATE = 0.25
+
 # --- Cache ---
 CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "cache")
 # P0-1 guard: a nine-book scan cache was 218 MB because every allowlisted team

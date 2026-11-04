@@ -142,6 +142,47 @@ Tests: `tests/test_opportunity_metrics.py` (no crossing, below-floor crossing,
 above-floor actionable, stale group, disappearance, bounded keys, API exposure,
 and aggregate-only persistence).
 
+## Feed integrity and stale-book quarantine (P0-7, 2026-11-04)
+
+F14 was the phantom-arb path the per-surebet price guard could not close: a book
+can be stale, suspended or internally broken and still quote the "best" price on
+the next group.
+
+Every enabled book now gets a per-scan scorecard in `feed_integrity` on
+`/api/results` and `/api/health`:
+
+| Metric | Evidence |
+|---|---|
+| Freshness | Oldest `fetched_at` for the book against the feed TTL |
+| Empty/parse failure | Scraper progress and per-book error text |
+| Missing markets | Market families at least two peer price sources publish but the book omits |
+| Own-margin sanity | Complete sets whose own implied sum is below 1.0 |
+| Outlier rate | Outlier rows from `find_outliers` over comparable complete markets |
+| Last success | Last scan in which the book returned data without a parse failure |
+
+States are `healthy`, `degraded` and `quarantined`, with machine-readable
+`reasons` and the metric evidence. A stale, empty, parse-failed, below-1.0 or
+high-outlier-rate book is quarantined. Outlier-rate quarantine needs at least 10
+comparable markets, because in a three-book group the book supplying a real edge
+is always the median "outlier"; below that sample it is a degradation warning,
+not a quarantine.
+
+Quarantine is enforced by removing that book from the group copies passed to
+`find_surebets` and the price guard. The original group, its evidence and the
+certainty verdict are untouched: a subset of a proved group is still the same
+event, and identity decisions never consult integrity state. The dashboard
+shows the unhealthy book and its reason and marks a quarantined book
+`not priced`.
+
+Recovery is automatic but not immediate: a quarantined book remains out of
+pricing until three consecutive fully healthy scans. The scorecard keeps a
+bounded last-20-state history per book in `cache/feed_integrity.json`.
+
+Tests: `tests/test_feed_integrity.py` (stale book cannot supply a leg, a broken
+own set is quarantined, recovery needs consecutive clean scans, the gate's group
+is unchanged, every enabled book has a state/reason, and both APIs expose the
+scorecard).
+
 ## Browser hardening
 
 `server/app.py` sets `Content-Security-Policy` (`default-src 'self'`,

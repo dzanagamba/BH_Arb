@@ -58,6 +58,11 @@ from config.settings import (
 from engine.ai import MatchAI, PairProposal
 from engine.arbitrage import ArbitrageEngine
 from engine.certainty import CertaintyGate
+from engine.feed_integrity import (
+    compute_feed_integrity,
+    priceable_groups,
+    quarantined_books,
+)
 from engine.mapping_evidence import MappingLedger
 from engine.mapping_learner import learn
 from engine.market_registry import unmapped_markets
@@ -378,6 +383,9 @@ _LIVE_CACHE_FILE = os.path.join(CACHE_DIR, "last_live_scan.json")
 _OPPORTUNITY_METRICS_FILE = os.path.join(CACHE_DIR, "opportunity_metrics.json")
 _opportunity_by_mode: dict[str, dict] = {}
 _crossing_lifetimes: dict[str, dict[str, dict]] = {"prematch": {}, "live": {}}
+# P0-7: per-book integrity state, one scorecard per feed, with bounded history.
+_FEED_INTEGRITY_FILE = os.path.join(CACHE_DIR, "feed_integrity.json")
+_feed_integrity: dict[str, dict[str, dict]] = {"prematch": {}, "live": {}}
 # Aggregates only, one compact row per completed scan. The cap is a storage
 # bound, not a retention promise; the 7-day report filters by scan_time.
 _OPPORTUNITY_HISTORY_MAX = 2_000
@@ -1548,6 +1556,36 @@ async def run_scan(mode: str = "prematch", scheduled: bool = False):
         report_cache.clear()
         report_cache.extend(matcher.get_match_report(groups))
 
+        # P0-7: score every enabled book before pricing. A quarantined book is
+        # removed from the copies used by the engine and price guard; the full
+        # group stays available for diagnostics and evidence.
+        status.current_bookmaker = "Checking feed integrity..."
+        integrity_now = datetime.now(UTC).replace(tzinfo=None)
+        enabled_bookmakers = {
+            bookmaker: str(config["name"])
+            for bookmaker, config in BOOKMAKERS.items()
+            if _is_enabled(bookmaker)
+        }
+        _feed_integrity[mode] = compute_feed_integrity(
+            mode=mode,
+            bookmakers=enabled_bookmakers,
+            matches=all_matches,
+            groups=groups,
+            progress=dict(status.bookmaker_progress),
+            counts=dict(per_bookie),
+            errors=list(status.errors),
+            previous=_feed_integrity.get(mode) or {},
+            now=integrity_now,
+            ttl_sec=LIVE_ODDS_TTL_SECONDS if is_live else ODDS_TTL_SECONDS,
+        )
+        quarantined = quarantined_books(_feed_integrity[mode])
+        pricing_groups = priceable_groups(groups, quarantined)
+        if quarantined:
+            logger.warning(
+                "Quarantined from pricing: %s",
+                ", ".join(sorted(quarantined)),
+            )
+
         # Ambiguous pairings the gate refused become review items. The queue is
         # rebuilt every scan so it only ever mirrors the current feed.
         status.current_bookmaker = "Collecting review candidates..."
@@ -1567,7 +1605,7 @@ async def run_scan(mode: str = "prematch", scheduled: bool = False):
         scan_metrics = ScanMetrics()
         # P1-6: include dust (0.2%) — frontend filters/highlights by tier
         surebets = engine.find_surebets(
-            groups,
+            pricing_groups,
             min_profit=DUST_PROFIT_PERCENT,
             investment=DEFAULT_INVESTMENT,
             allow_past_kickoffs=is_live,
@@ -1577,7 +1615,7 @@ async def run_scan(mode: str = "prematch", scheduled: bool = False):
         )
         price_dropped = []
         if PRICE_GUARD_ENABLED:
-            surebets, price_dropped = filter_price_outliers(surebets, groups)
+            surebets, price_dropped = filter_price_outliers(surebets, pricing_groups)
         if price_dropped:
             detail = ", ".join(
                 f"{item['surebet'].home_team}-{item['surebet'].away_team} "
@@ -1619,6 +1657,7 @@ async def run_scan(mode: str = "prematch", scheduled: bool = False):
         # Persist to cache file
         _save_cache(mode)
         _save_opportunity_metrics()
+        _save_feed_integrity()
         _append_history(len(groups), mode)
 
         _refresh_pairing_summary(mode, matches_cache, report_cache)
@@ -1835,6 +1874,66 @@ def _save_opportunity_metrics() -> None:
         logger.warning("Opportunity metrics save failed: %s", exc)
 
 
+def _load_feed_integrity() -> None:
+    """Restore the per-book scorecards and their bounded recent history."""
+    global _feed_integrity
+    try:
+        with open(_FEED_INTEGRITY_FILE, encoding="utf-8") as file:
+            data = json.load(file)
+    except (OSError, ValueError):
+        return
+    if not isinstance(data, dict):
+        return
+    restored: dict[str, dict[str, dict]] = {"prematch": {}, "live": {}}
+    for mode in ("prematch", "live"):
+        books = data.get(mode)
+        if isinstance(books, dict):
+            restored[mode] = {
+                book: entry
+                for book, entry in books.items()
+                if isinstance(book, str) and isinstance(entry, dict)
+            }
+    _feed_integrity = restored
+
+
+def _save_feed_integrity() -> None:
+    """Persist the scorecard; history is already bounded per book."""
+    try:
+        _atomic_write_json(
+            _FEED_INTEGRITY_FILE,
+            _feed_integrity,
+            "feed_integrity",
+            indent=None,
+        )
+    except Exception as exc:  # a metric must never stop a scan
+        logger.warning("Feed integrity save failed: %s", exc)
+
+
+def _feed_integrity_payload(mode: str) -> dict[str, Any]:
+    """Compact scorecard for one feed plus the books that are priced out."""
+    books = _feed_integrity.get(mode) or {}
+    quarantined = sorted(quarantined_books(books))
+    return {
+        "mode": mode,
+        "books": books,
+        "quarantined": quarantined,
+        "healthy": sorted(
+            book for book, entry in books.items() if entry.get("state") == "healthy"
+        ),
+        "degraded": sorted(
+            book for book, entry in books.items() if entry.get("state") == "degraded"
+        ),
+        "checked_at": max(
+            (
+                str(entry.get("scan_time"))
+                for entry in books.values()
+                if entry.get("scan_time")
+            ),
+            default=None,
+        ),
+    }
+
+
 def _save_cache(mode: str = "prematch"):
     """Persist last scan results to JSON cache files (with TTL metadata P0-6).
 
@@ -1960,6 +2059,7 @@ def _restorable_match_groups(report: object, mode: str) -> list[dict]:
 def _load_cache():
     """Restore last scan results from the JSON cache files on startup (TTL 30min P0-6)."""
     _load_opportunity_metrics()
+    _load_feed_integrity()
     for mode, cache_file, state_fields in (
         ("prematch", _PREMATCH_CACHE_FILE,
          (scan_status, cached_surebets, cached_matches, cached_match_groups_report)),
@@ -2162,6 +2262,10 @@ async def health():
             "prematch": _opportunity_by_mode.get("prematch") or {},
             "live": _opportunity_by_mode.get("live") or {},
         },
+        "feed_integrity": {
+            "prematch": _feed_integrity_payload("prematch"),
+            "live": _feed_integrity_payload("live"),
+        },
         "unmapped_markets": dict(unmapped_markets),
         "verified_groups": sum(
             1
@@ -2320,6 +2424,9 @@ async def get_results(mode: str = "prematch"):
         # P0-6: the denominator behind the surebet count, plus the bounded
         # lifetime distribution. Empty before the first scan of a mode.
         "opportunity_metrics": _opportunity_by_mode.get(mode) or {},
+        # P0-7: which books were priced this scan, and why a refused book was
+        # refused. The certainty gate's identity verdicts are separate.
+        "feed_integrity": _feed_integrity_payload(mode),
     }
 
 
