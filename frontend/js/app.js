@@ -17,7 +17,7 @@
 // ─── State ────────────────────────────────────────────────────────────────────
 let currentMode = 'prematch';       // 'prematch' (upcoming) | 'live' (in-play)
 let activeScanMode = null;          // mode of the currently running scan
-let activeTab = 'surebets';         // 'surebets' | 'other' | 'review' | 'history'
+let activeTab = 'surebets';         // 'surebets' | 'other' | 'review' | 'history' | 'evidence'
 let otherSportFilter = 'all';       // sport id or 'all' for the Other sports tab
 let configuredSports = [];          // sports the backend says it scans
 let candidateApiKey = (() => { try { return sessionStorage.getItem('apiKey') || ''; } catch (e) { return ''; } })();
@@ -40,6 +40,9 @@ let freshnessSnapshot = null;       // P0-4: scan age, TTL and per-book freshnes
 let freshnessBannerSignature = null; // avoids rebuilding the banner's button every tick
 let noSurebetReasons = null;        // the diagnostic copy table, fetched once at start-up
 let currentCandidates = [];         // the review page on screen
+let evidenceOffset = 0;             // group-evidence page offset
+let evidenceTotal = 0;
+const EVIDENCE_PAGE_SIZE = 50;
 const verifyState = {};             // surebet id -> {state, at, data}
 const slipState = {};               // surebet id -> {investment, placed: {label: {odds, stake}}}
 
@@ -200,6 +203,10 @@ function handleDataAction(event) {
         case 'unmark-placed': unmarkPlaced(element.dataset.slipId, element.dataset.outcomeLabel); break;
         case 'verify-surebet': verifySurebet(element.dataset.slipId); break;
         case 'copy-surebet': copySurebetDetails(element.dataset.slipId); break;
+        case 'evidence-prev': setEvidenceOffset(evidenceOffset - EVIDENCE_PAGE_SIZE); break;
+        case 'evidence-next': setEvidenceOffset(evidenceOffset + EVIDENCE_PAGE_SIZE); break;
+        case 'evidence-open': loadEvidenceDetail(element.dataset.groupId); break;
+        case 'evidence-close': showEvidenceList(); break;
     }
 }
 
@@ -210,6 +217,8 @@ function handleDataInput(event) {
         applyFilters();
     } else if (element.id === 'other-search' || element.id === 'other-profit') {
         renderOtherSports();
+    } else if (element.id === 'evidence-search') {
+        loadEvidence(true);
     } else if (element.id === 'filter-investment') {
         recalculateAll(element.value);
     } else if (element.matches('[data-slip-investment-input]')) {
@@ -224,6 +233,8 @@ function handleDataChange(event) {
         applyFilters();
     } else if (element.id === 'other-sport-filter') {
         setOtherSportFilter(element.value);
+    } else if (element.id === 'evidence-status' || element.id === 'evidence-sport') {
+        loadEvidence(true);
     } else if (element.id === 'filter-rounding') {
         setStakeRounding(element.value);
     } else if (element.id === 'filter-autorescan') {
@@ -292,7 +303,7 @@ async function loadConfig() {
 
 // ─── Navigation ───────────────────────────────────────────────────────────────
 function switchTab(tab) {
-    const target = ['review', 'history', 'other'].includes(tab) ? tab : 'surebets';
+    const target = ['review', 'history', 'evidence', 'other'].includes(tab) ? tab : 'surebets';
     activeTab = target;
     document.querySelectorAll('.results-tabs [role="tab"]').forEach(button => {
         const isActive = button.dataset.tab === target;
@@ -307,6 +318,7 @@ function switchTab(tab) {
     });
     if (target === 'review') loadCandidates();
     if (target === 'history') loadHistory();
+    if (target === 'evidence') loadEvidence(true);
     if (target === 'other') renderOtherSports();
 }
 
@@ -350,6 +362,7 @@ function switchMode(mode) {
     selectedSurebetId = null;
     loadResults(true);
     if (activeTab === 'review') loadCandidates();
+    if (activeTab === 'evidence') loadEvidence(true);
 }
 
 // System → light → dark. The choice is applied before first paint by an inline
@@ -1683,6 +1696,123 @@ function fixtureSearchUrl(candidate) {
     const date = candidate.kickoff ? String(candidate.kickoff).slice(0, 10) : '';
     const query = [teams, candidate.league || '', date].filter(Boolean).join(' ');
     return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+}
+
+// ─── Group evidence (P1-1) ───────────────────────────────────────────────────
+// The list is always bounded by `/api/groups`; the detail call is the only
+// place a full evidence trail is downloaded.
+async function loadEvidence(reset = false) {
+    if (reset) evidenceOffset = 0;
+    const list = document.getElementById('evidence-list');
+    const detail = document.getElementById('evidence-detail');
+    if (!list) return;
+    if (detail) detail.hidden = true;
+    list.hidden = false;
+
+    const status = document.getElementById('evidence-status')?.value || '';
+    const sport = document.getElementById('evidence-sport')?.value || '';
+    const search = (document.getElementById('evidence-search')?.value || '').trim();
+    let query = `mode=${encodeURIComponent(currentMode)}&limit=${EVIDENCE_PAGE_SIZE}&offset=${evidenceOffset}`;
+    if (status) query += `&status=${encodeURIComponent(status)}`;
+    if (sport) query += `&sport=${encodeURIComponent(sport)}`;
+    if (search) query += `&search=${encodeURIComponent(search)}`;
+
+    try {
+        const response = await apiFetch(`/api/groups?${query}`);
+        if (!response.ok) throw new Error(`groups responded ${response.status}`);
+        const payload = await response.json();
+        evidenceTotal = Number(payload.total) || 0;
+        evidenceOffset = Number(payload.offset) || 0;
+        renderEvidenceList(payload);
+    } catch (error) {
+        console.error('Group evidence load failed:', error);
+        list.innerHTML = '<div class="empty-state"><h2 class="empty-state-title">Could not load group evidence.</h2><p class="empty-state-desc">The API did not return a group page.</p></div>';
+        setText('evidence-page', '—');
+    }
+}
+
+function renderEvidenceList(payload) {
+    const list = document.getElementById('evidence-list');
+    if (!list) return;
+    const groups = payload.groups || [];
+    const total = Number(payload.total) || 0;
+    const offset = Number(payload.offset) || 0;
+    const count = Number(payload.count) || groups.length;
+    setText('evidence-page', total ? `${offset + 1}–${offset + count} of ${total}` : '0 groups');
+    if (!groups.length) {
+        list.innerHTML = '<div class="empty-state"><h2 class="empty-state-title">No matching groups.</h2><p class="empty-state-desc">Change the filters or run a scan for this feed.</p></div>';
+        return;
+    }
+    list.innerHTML = groups.map(group => {
+        const bookmakers = (group.bookmakers || []).map(book => bookName(book.bookmaker)).join(' · ');
+        const reasons = (group.reasons || []).slice(0, 4).map(reason => REASON_LABELS[reason] || reason).join(', ');
+        return `<button type="button" class="evidence-row" data-action="evidence-open" data-group-id="${escapeHtml(group.group_id)}">
+            <span class="evidence-row-title">${escapeHtml(group.canonical_match || 'unknown fixture')}</span>
+            <span class="evidence-row-status" data-state="${escapeHtml(group.status || '')}">${escapeHtml(group.status || 'unknown')}</span>
+            <span class="evidence-row-meta">${escapeHtml(formatLeague(group.league))} · ${escapeHtml(String(group.sport || 'football'))} · ${escapeHtml(bookmakers || 'no books')}</span>
+            <span class="evidence-row-meta">${escapeHtml(reasons || 'no gate reasons')}</span>
+        </button>`;
+    }).join('');
+}
+
+function setEvidenceOffset(offset) {
+    const lastPageStart = evidenceTotal
+        ? Math.floor((evidenceTotal - 1) / EVIDENCE_PAGE_SIZE) * EVIDENCE_PAGE_SIZE
+        : 0;
+    evidenceOffset = Math.max(0, Math.min(offset, lastPageStart));
+    loadEvidence();
+}
+
+function showEvidenceList() {
+    const list = document.getElementById('evidence-list');
+    const detail = document.getElementById('evidence-detail');
+    if (list) list.hidden = false;
+    if (detail) { detail.hidden = true; detail.innerHTML = ''; }
+}
+
+async function loadEvidenceDetail(groupId) {
+    const list = document.getElementById('evidence-list');
+    const detail = document.getElementById('evidence-detail');
+    if (!list || !detail || groupId == null) return;
+    try {
+        const response = await apiFetch(`/api/groups/${encodeURIComponent(groupId)}?mode=${encodeURIComponent(currentMode)}`);
+        if (!response.ok) throw new Error(`group responded ${response.status}`);
+        const payload = await response.json();
+        renderEvidenceDetail(payload.group);
+        list.hidden = true;
+        detail.hidden = false;
+    } catch (error) {
+        console.error('Group detail load failed:', error);
+        list.hidden = true;
+        detail.hidden = false;
+        detail.innerHTML = '<div class="empty-state"><h2 class="empty-state-title">Could not load this group.</h2><p class="empty-state-desc">The group may have been replaced by a new scan.</p></div>';
+    }
+}
+
+function renderEvidenceDetail(group) {
+    const detail = document.getElementById('evidence-detail');
+    if (!detail || !group) return;
+    const books = (group.bookmakers || []).map(book =>
+        `<li><b>${escapeHtml(bookName(book.bookmaker))}</b> · event ${escapeHtml(book.event_id || '—')} · ${escapeHtml(String(book.num_markets || 0))} markets</li>`
+    ).join('');
+    const evidence = (group.evidence || []).map(item => {
+        const confidence = Number(item.confidence);
+        const confidenceText = Number.isFinite(confidence) ? ` · confidence ${confidence.toFixed(2)}` : '';
+        const league = (item.league_pair || []).length ? ` · league ${item.league_pair.join(' / ')}` : '';
+        return `<li><b>${escapeHtml(item.rule || 'evidence')}</b> <span class="evidence-reason">${escapeHtml(item.reason || '')}${escapeHtml(confidenceText)}${escapeHtml(league)}</span></li>`;
+    }).join('');
+    detail.innerHTML = `
+        <div class="evidence-detail-head">
+            <button type="button" class="btn btn-small btn-secondary" data-action="evidence-close">← All groups</button>
+            <h3>${escapeHtml(group.canonical_match || 'unknown fixture')}</h3>
+            <span class="evidence-row-status" data-state="${escapeHtml(group.status || '')}">${escapeHtml(group.status || 'unknown')}</span>
+        </div>
+        <div class="evidence-row-meta">${escapeHtml(formatLeague(group.league))} · ${escapeHtml(String(group.sport || 'football'))} · ${escapeHtml(group.kickoff || 'kickoff unknown')}</div>
+        <h4>Bookmakers</h4>
+        <ul>${books || '<li>none</li>'}</ul>
+        <h4>Gate evidence</h4>
+        <ul>${evidence || '<li>none recorded</li>'}</ul>
+    `;
 }
 
 function renderCandidatesMessage(message) {

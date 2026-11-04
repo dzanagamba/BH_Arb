@@ -127,6 +127,9 @@ POST /api/scan
   disabled until you re-check or scan again.
 - **Diagnostics** — pairings the gate could not prove, with the evidence it
   used. This view is read-only.
+- **Evidence** — a bounded list of group summaries filtered by status, sport or
+  search. Opening one group fetches its full gate evidence and bookmaker legs;
+  the list never downloads every group's evidence at once.
 - **History** — per-scan counts and errors for both feeds.
 - **Settings** — stake, rounding, auto-rescan, alert sound, enabled bookmakers,
   experimental markets and the health line. Unhealthy books also appear in a

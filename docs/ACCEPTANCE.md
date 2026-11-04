@@ -183,6 +183,30 @@ own set is quarantined, recovery needs consecutive clean scans, the gate's group
 is unchanged, every enabled book has a state/reason, and both APIs expose the
 scorecard).
 
+## Bounded group-evidence API and dashboard drill-down (P1-1, 2026-11-04)
+
+`/api/debug/report` used to return every group and every evidence record. After
+P0-1 the payload was no longer 179 MB, but it was still unbounded and could
+freeze a browser tab.
+
+The evidence API is now split:
+
+| Endpoint | Behaviour |
+|---|---|
+| `GET /api/groups?mode=&status=&sport=&search=&limit=&offset=` | Bounded summaries (default 50, max 200); evidence stripped, reason codes kept |
+| `GET /api/groups/{group_id}?mode=` | Exactly one group with its full evidence and bookmaker legs; 404 for an unknown id |
+| `GET /api/debug/report?mode=&limit=&offset=` | Compatibility alias with the same low default limit, plus a `deprecated` note |
+
+The dashboard adds an **Evidence** tab: filters and paging call `/api/groups`,
+and selecting a row fetches only `/api/groups/{id}`. The layout wraps on narrow
+screens. No dedicated URL or history entry is created, so the Diagnostics tab's
+"no dedicated URL" contract is unchanged.
+
+Tests: `tests/test_groups_api.py` (default page size, filters, offset, exact
+detail and 404, summary size without evidence, compatibility alias, live mode)
+and `tests/test_frontend_evidence.py` (tab, endpoints, filter reload, narrow
+layout hooks).
+
 ## Browser hardening
 
 `server/app.py` sets `Content-Security-Policy` (`default-src 'self'`,

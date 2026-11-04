@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-11-04
 **Repository:** `dzanagamba/BH_Arb` (`main`)
-**Status of this document:** audit complete; P0-1 through P0-7 done, implementation continuing
+**Status of this document:** audit complete; P0-1 through P0-7 and P1-1 done, implementation continuing
 **Purpose:** a durable, session-by-session plan so work can resume without re-reading the whole repository.
 
 > **How to use this document**
@@ -258,7 +258,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 | P0-5 | Reloadable deep-link declarations | P0 | S | — | Done |
 | P0-6 | Opportunity-rate and arb-lifetime telemetry | P0 | M | P0-4 | Done |
 | P0-7 | Feed-integrity scorecard and stale-book quarantine | P0 | M | P0-4 | Done |
-| P1-1 | Paginated, filtered group-evidence API | P1 | M | P0-1 | Not started |
+| P1-1 | Paginated, filtered group-evidence API | P1 | M | P0-1 | Done |
 | P1-2 | Structured logs, request IDs, metrics endpoint | P1 | M | — | Not started |
 | P1-3 | Reproducible deployment (Docker/systemd) | P1 | M | — | Not started |
 | P1-4 | CI hardening: coverage, dependency and security scans | P1 | S | — | Not started |
@@ -551,7 +551,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 
 ### P1-1 — Paginated, filtered group-evidence API
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P1
 **Effort:** M
 **Depends on:** P0-1
@@ -570,10 +570,10 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 
 **Acceptance criteria:**
 
-- [ ] Default `/api/groups` response is bounded by `limit` (default ≤ 100).
-- [ ] A group lookup returns exactly that group and 404s for an unknown id.
-- [ ] `/api/debug/report` no longer returns every group by default.
-- [ ] Dashboard navigation works on a phone.
+- [x] Default `/api/groups` response is bounded by `limit` (default ≤ 100).
+- [x] A group lookup returns exactly that group and 404s for an unknown id.
+- [x] `/api/debug/report` no longer returns every group by default.
+- [x] Dashboard navigation works on a phone.
 
 **Tests:**
 
@@ -1421,6 +1421,33 @@ Before writing a claim about behavior, run the command that proves it and paste 
 ## 6. Execution log
 
 Newest first. Each entry: date, task, status, commands, measured result, files changed, follow-ups.
+
+### 2026-11-04 — P1-1: Paginated, filtered group-evidence API
+
+**Task:** P1-1 (first eligible task after P0-7; depends on P0-1, which is Done).
+**Status:** Done.
+
+**Commands and results:**
+
+- `python -m pytest` → **1,302 passed**, 1 warning, 183.33 s (was 1,292; +10 tests).
+- `python -m ruff check .` → clean.
+- `python -m mypy .` → clean on 145 source files.
+- `python scripts/generate_market_mapping_doc.py --check` → in sync.
+- `python scripts/replay_mappings.py tests/fixtures/replay/2026-11-03 --cold --check` → exit 0, fixed point, 0 false merges, 0 unresolved evidence-backed pairs.
+- New tests prove the default page is 50 (max 200), filters/offset work, detail returns exactly one group and 404s unknown ids, summaries omit the evidence trail and stay under 100 KB for 100 groups, the compatibility alias is bounded, and the dashboard has the Evidence tab hooks.
+
+**What changed:**
+
+- `server/api.py`: `GET /api/groups` returns bounded summaries with status/sport/search filters and limit/offset; `GET /api/groups/{group_id}` returns one group's full evidence or 404; `/api/debug/report` is now a bounded compatibility alias with a deprecation note.
+- `frontend/index.html`, `frontend/js/app.js`, `frontend/css/style.css`: Evidence tab with filters, paging, summary rows and a one-group detail view.
+- `tests/test_groups_api.py`, `tests/test_frontend_evidence.py` (new); `tests/test_other_sports_frontend.py` updated for the expanded tab list.
+- `README.md`, `docs/ACCEPTANCE.md`, `docs/PRODUCTION_READINESS.md` document the endpoints and drill-down.
+
+**Trust rules:** the evidence trail is not truncated in the detail response; only the list endpoint strips it. No gate, link, settlement or price-source rule changed.
+
+**Follow-ups:** P1-2 (structured logs, request IDs, metrics endpoint) is the next eligible task; P1-3 and P1-4 are also unblocked.
+
+---
 
 ### 2026-11-04 — P0-7: Feed-integrity scorecard and stale-book quarantine
 

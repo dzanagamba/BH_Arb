@@ -2366,6 +2366,85 @@ async def get_status(mode: str = "prematch"):
     return status.model_dump(mode="json")
 
 
+GROUP_PAGE_SIZE = 50
+GROUP_PAGE_MAX = 200
+
+
+def _group_summary(row: dict) -> dict:
+    """One report row without the potentially large evidence trail."""
+    evidence = row.get("evidence")
+    evidence_rows = evidence if isinstance(evidence, list) else []
+    reasons = sorted(
+        {
+            str(item.get("reason"))
+            for item in evidence_rows
+            if isinstance(item, dict) and item.get("reason")
+        }
+    )
+    bookmakers = row.get("bookmakers")
+    legs = bookmakers if isinstance(bookmakers, list) else []
+    return {
+        "group_id": row.get("group_id"),
+        "sport": row.get("sport", "football"),
+        "canonical_match": row.get("canonical_match", ""),
+        "league": row.get("league", ""),
+        "kickoff": row.get("kickoff", ""),
+        "status": row.get("status", ""),
+        "bookmakers": [
+            {
+                "bookmaker": leg.get("bookmaker", ""),
+                "event_id": leg.get("event_id", ""),
+                "num_markets": leg.get("num_markets", 0),
+            }
+            for leg in legs
+            if isinstance(leg, dict)
+        ],
+        "evidence_count": len(evidence_rows),
+        "reasons": reasons,
+    }
+
+
+def _group_page(
+    mode: str,
+    *,
+    status: str,
+    sport: str,
+    search: str,
+    limit: int,
+    offset: int,
+) -> dict:
+    """Filter and page the cached report, never returning the whole list by default."""
+    _, _, _, report_cache, _ = _state_for(mode)
+    rows = list(report_cache)
+    if status:
+        rows = [row for row in rows if str(row.get("status", "")) == status]
+    if sport:
+        rows = [
+            row for row in rows if str(row.get("sport") or "football") == sport
+        ]
+    if search:
+        needle = search.casefold()
+        rows = [
+            row
+            for row in rows
+            if needle
+            in f"{row.get('canonical_match', '')} {row.get('league', '')}".casefold()
+        ]
+    page = max(1, min(limit, GROUP_PAGE_MAX))
+    start = max(0, offset)
+    total = len(rows)
+    window = rows[start : start + page]
+    return {
+        "mode": mode,
+        "total": total,
+        "count": len(window),
+        "limit": page,
+        "offset": start,
+        "has_more": start + len(window) < total,
+        "groups": [_group_summary(row) for row in window],
+    }
+
+
 def _sport_summary(
     matches: list[dict], report: list[dict], surebets: list[dict]
 ) -> dict[str, dict[str, int]]:
@@ -2529,14 +2608,59 @@ async def get_matches_breakdown(mode: str = "prematch"):
     }
 
 
-@router.get("/debug/report")
-async def get_match_report(mode: str = "prematch"):
-    """Get match grouping debug report — verify correct cross-bookmaker pairings."""
+@router.get("/groups")
+async def get_groups(
+    mode: ScanMode = "prematch",
+    status: str = "",
+    sport: str = "",
+    search: str = "",
+    limit: int = GROUP_PAGE_SIZE,
+    offset: int = 0,
+):
+    """List bounded group summaries; use `/api/groups/{group_id}` for evidence."""
+    return _group_page(
+        mode,
+        status=status,
+        sport=sport,
+        search=search,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get("/groups/{group_id}")
+async def get_group(group_id: int, mode: ScanMode = "prematch"):
+    """Return exactly one group's full evidence trail, or 404."""
     _, _, _, report_cache, _ = _state_for(mode)
+    for row in report_cache:
+        try:
+            if int(row.get("group_id", -1)) == group_id:
+                return {"mode": mode, "group": row}
+        except (TypeError, ValueError):
+            continue
+    raise HTTPException(status_code=404, detail=f"Unknown group_id {group_id}")
+
+
+@router.get("/debug/report")
+async def get_match_report(
+    mode: ScanMode = "prematch",
+    limit: int = GROUP_PAGE_SIZE,
+    offset: int = 0,
+):
+    """Deprecated compatibility alias for the bounded group list.
+
+    It no longer returns every group by default. New callers should use
+    `/api/groups` and `/api/groups/{group_id}` for the full evidence.
+    """
+    page = _group_page(
+        mode, status="", sport="", search="", limit=limit, offset=offset
+    )
     return {
-        "mode": mode,
-        "total_groups": len(report_cache),
-        "groups": report_cache,
+        **page,
+        "total_groups": page["total"],
+        "deprecated": (
+            "use /api/groups for summaries and /api/groups/{group_id} for evidence"
+        ),
     }
 
 

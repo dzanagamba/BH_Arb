@@ -891,6 +891,40 @@ body.feed-stale .row-profit b { color: var(--warn); }
 .candidate-actions { display: flex; flex-direction: column; gap: 6px; }
 .candidate-action-error { grid-column: 1 / -1; color: var(--bad); font-size: 12px; }
 
+/* ─── Group evidence ───────────────────────────────────────────────────── */
+.evidence-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.evidence-head .filters { margin: 0; }
+.evidence-pager { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+.evidence-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.evidence-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 12px;
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    background: var(--panel);
+    color: var(--text);
+    text-align: left;
+    font: inherit;
+    cursor: pointer;
+}
+.evidence-row:hover { border-color: var(--line-strong); background: var(--panel-2); }
+.evidence-row-title { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.evidence-row-meta { color: var(--muted); font-size: 12px; }
+.evidence-row-status { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+.evidence-row-status[data-state="verified"] { color: var(--accent); }
+.evidence-row-status[data-state="suggested"] { color: var(--warn); }
+.evidence-row-status[data-state="rejected"] { color: var(--bad); }
+.evidence-detail { margin-top: 12px; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); }
+.evidence-detail-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.evidence-detail h3 { margin: 0; font-size: 18px; }
+.evidence-detail h4 { margin: 16px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.evidence-detail ul { margin: 0; padding-left: 18px; }
+.evidence-detail li { margin: 4px 0; font-size: 13px; }
+.evidence-reason { color: var(--muted); }
+
 /* ─── History ──────────────────────────────────────────────────────────── */
 .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); box-shadow: var(--shadow); }
 .history-table { width: 100%; border-collapse: collapse; }

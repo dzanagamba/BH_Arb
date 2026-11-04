@@ -76,6 +76,9 @@
         <button class="tab-btn" id="history-tab" data-tab="history" role="tab"
                 aria-selected="false" aria-controls="history-panel" tabindex="-1"
                 data-action="switch-tab">History</button>
+        <button class="tab-btn" id="evidence-tab" data-tab="evidence" role="tab"
+                aria-selected="false" aria-controls="evidence-panel" tabindex="-1"
+                data-action="switch-tab">Evidence</button>
         <button class="tab-btn" id="other-tab" data-tab="other" role="tab"
                 aria-selected="false" aria-controls="other-panel" tabindex="-1"
                 data-action="switch-tab">Other sports <span id="other-count" class="tab-count">0</span></button>
@@ -198,6 +201,45 @@
             </table>
         </div>
     </section>
+    <!-- Group evidence: bounded summaries, then one group's full gate trail. -->
+    <section id="evidence-panel" class="tab-panel" role="tabpanel" aria-labelledby="evidence-tab"
+             aria-hidden="true" data-tab-panel="evidence" hidden>
+        <div class="evidence-head">
+            <div class="filters">
+                <label class="inline-field"><span>Status</span>
+                    <select class="input" id="evidence-status" aria-label="Group status">
+                        <option value="">All</option>
+                        <option value="verified">Verified</option>
+                        <option value="suggested">Suggested</option>
+                        <option value="rejected">Rejected</option>
+                    </select></label>
+                <label class="inline-field"><span>Sport</span>
+                    <select class="input" id="evidence-sport" aria-label="Sport">
+                        <option value="">All</option>
+                        <option value="football">Football</option>
+                        <option value="basketball">Basketball</option>
+                        <option value="tennis">Tennis</option>
+                    </select></label>
+                <label class="search">
+                    <input class="input search-input" type="search" id="evidence-search"
+                           placeholder="Search team or league" aria-label="Search groups">
+                </label>
+            </div>
+            <div class="evidence-pager">
+                <button type="button" class="btn btn-small btn-secondary" data-action="evidence-prev">Previous</button>
+                <span id="evidence-page" class="mono">—</span>
+                <button type="button" class="btn btn-small btn-secondary" data-action="evidence-next">Next</button>
+            </div>
+        </div>
+        <div id="evidence-list" class="evidence-list">
+            <div class="empty-state">
+                <h2 class="empty-state-title">No groups loaded.</h2>
+                <p class="empty-state-desc">Open this tab to read the current scan's group summaries.</p>
+            </div>
+        </div>
+        <div id="evidence-detail" class="evidence-detail" hidden></div>
+    </section>
+
     <!-- Other sports: separate from football, with its own sport filter. -->
     <section id="other-panel" class="tab-panel" role="tabpanel" aria-labelledby="other-tab"
              aria-hidden="true" data-tab-panel="other" hidden>
