@@ -275,7 +275,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 | P2-8 | Event-identity edge cases: doubleheaders and rematches | P2 | M | P2-4 | Done |
 | P2-9 | Silent-drop coverage budget | P2 | M | P0-7 | Done |
 | P2-10 | Measured push-feed discovery and per-book WebSocket adapter | P2 | M | P0-4, P0-7 | Done |
-| P3-1 | Persistent storage v2 (SQLite) and migration | P3 | L | P0-1, P1-1 | Not started |
+| P3-1 | Persistent storage v2 (SQLite) and migration | P3 | L | P0-1, P1-1 | Done |
 | P3-2 | Bet log, bankroll, and CLV analytics | P3 | L | P3-1 | Not started |
 | P3-3 | Advisory execution workflow and limits | P3 | M | P3-2 | Not started |
 | P3-4 | Alerts, PWA, accessibility, and Bosnian UI | P3 | M | P1-5 | Not started |
@@ -1147,7 +1147,7 @@ no adapter is enabled.
 
 ### P3-1 — Persistent storage v2 (SQLite) and migration
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P3
 **Effort:** L
 **Depends on:** P0-1, P1-1
@@ -1167,10 +1167,10 @@ no adapter is enabled.
 
 **Acceptance criteria:**
 
-- [ ] No data loss on migration; counts match the JSON source.
-- [ ] A scan writes transactionally.
-- [ ] A 30-day history is queryable without loading a 200 MB JSON file.
-- [ ] Rollback instructions exist.
+- [x] No data loss on migration; counts match the JSON source.
+- [x] A scan writes transactionally.
+- [x] A 30-day history is queryable without loading a 200 MB JSON file.
+- [x] Rollback instructions exist.
 
 **Tests:**
 
@@ -1424,6 +1424,31 @@ Before writing a claim about behavior, run the command that proves it and paste 
 ## 6. Execution log
 
 Newest first. Each entry: date, task, status, commands, measured result, files changed, follow-ups.
+
+### 2026-11-04 — P3-1: Persistent storage v2 (SQLite)
+
+**Task:** P3-1 (depends on P0-1 and P1-1, both complete).
+**Status:** Done.
+
+**Commands and results:**
+
+- `python -m pytest tests/test_storage_migration.py tests/test_candidates_api.py tests/test_scan_candidates.py tests/test_metrics.py -q` → passed.
+- Migration test: 3 scans + 2 decisions from JSON → identical SQLite counts; second migration is a no-op; 30-day window excludes a 45-day row; prune removes it; a SQLite backup restores the row.
+- `python -m ruff check .`, `python -m mypy .` → clean.
+
+**What changed:**
+
+- `server/storage.py` (new): SQLite schema (`meta`, `scans`, `decisions`, `link_sweeps`), WAL mode, one-shot JSON migration, idempotent markers, 30-day/limited queries, transactional scan append, decision mirror, prune, vacuum and `backup()`.
+- `server/api.py`: initializes and migrates storage on startup; `_append_history` writes SQLite plus the JSON export; `/api/history` accepts `days`/`mode` and queries SQLite; decision writes are mirrored and the default decision store prefers SQLite after migration.
+- `.gitignore`: SQLite/WAL files.
+- `docs/STORAGE.md` (new) and `docs/DEPLOYMENT.md`: schema, migration, query, retention, backup/restore and rollback.
+- `tests/test_storage_migration.py` (new): counts, idempotence, 30-day query, prune, transactional append and backup.
+
+**Trust rules:** unchanged. This is runtime storage, not mapping/price evidence. JSON files remain compatibility exports and the rollback path.
+
+**Follow-ups:** P3-2 (bet log/bankroll/CLV) is next.
+
+---
 
 ### 2026-11-04 — P2-10: Measured push-feed discovery
 

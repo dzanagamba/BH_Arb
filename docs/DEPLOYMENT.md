@@ -137,7 +137,8 @@ Back up these paths (stop the service first, or at least a scan, so a JSON file
 is not being replaced mid-copy):
 
 - `cache/` — scan caches, history, opportunity metrics, feed integrity,
-  deep-link verification and decision stores, runtime toggles.
+  deep-link verification and decision stores, runtime toggles, and
+  `cache/bh_arb.sqlite3` (the P3-1 query store).
 - `config/generated/mapping_evidence.json` — the learned mapping ledger. It is
   gitignored and rebuilt only by scans; losing it loses learned aliases.
 - `config/team_alias_allowlist.json` — human-approved aliases.

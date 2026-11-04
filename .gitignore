@@ -23,6 +23,10 @@ env/
 
 # Cache directory (runtime)
 cache/*.json
+cache/*.sqlite3
+cache/*.sqlite3-*
+cache/*.db
+cache/*.db-*
 
 # IDE
 .vscode/

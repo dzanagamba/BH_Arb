@@ -144,6 +144,7 @@ from server.observability import (
     reset_scan_id,
     set_scan_id,
 )
+from server.storage import Storage, default_storage_path
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -350,8 +351,23 @@ def _save_allowlist(aliases: set[str]) -> None:
     _atomic_write_json(ALLOWLIST_FILE, {"aliases": sorted(aliases)}, "team_alias_allowlist")
 
 
+def _using_default_decision_store() -> bool:
+    """True when the process uses the shipped decision file, not a test temp."""
+    return _storage is not None and os.path.abspath(SUPPRESSED_CANDIDATES_FILE) == os.path.abspath(
+        os.path.join(CACHE_DIR, "suppressed_candidates.json")
+    )
+
+
 def _load_suppressed_candidates() -> dict[str, str]:
     """Return decided candidate ids mapped to the decision ("approved"/"rejected")."""
+    if _using_default_decision_store():
+        try:
+            stored = _storage.decisions() if _storage is not None else {}
+        except Exception as exc:
+            logger.warning("Decision SQLite read failed: %s", exc)
+        else:
+            if stored:
+                return stored
     try:
         with open(SUPPRESSED_CANDIDATES_FILE, encoding="utf-8") as file:
             data = json.load(file)
@@ -376,6 +392,14 @@ def _load_suppressed_premises() -> dict[str, str]:
     Empty for a file written before premises existed, and such a record is then
     honoured exactly as it was written.
     """
+    if _using_default_decision_store():
+        try:
+            stored = _storage.decision_premises() if _storage is not None else {}
+        except Exception as exc:
+            logger.warning("Decision premise SQLite read failed: %s", exc)
+        else:
+            if stored:
+                return stored
     try:
         with open(SUPPRESSED_CANDIDATES_FILE, encoding="utf-8") as file:
             data = json.load(file)
@@ -415,11 +439,18 @@ def _suppress_candidate(candidate_id: str, decision: str, premise: str = "") -> 
             _suppressed_premises[candidate_id] = premise
         else:
             _suppressed_premises.pop(candidate_id, None)
+        if _using_default_decision_store() and _storage is not None:
+            try:
+                _storage.upsert_decision(candidate_id, decision, premise)
+            except Exception as exc:  # the JSON export remains authoritative
+                logger.warning("Decision SQLite write failed: %s", exc)
         _save_suppressed_candidates()
 
 
 _HISTORY_FILE = os.path.join(CACHE_DIR, "scan_history.json")
 _HISTORY_MAX = 50
+# P3-1: SQLite is the query store; the JSON files stay compatibility exports.
+_storage: Storage | None = None
 _LINK_SWEEP_FILE = os.path.join(CACHE_DIR, "link_sweeps.json")
 _LINK_SWEEP_MAX = 200
 _PREMATCH_CACHE_FILE = os.path.join(CACHE_DIR, "last_scan.json")
@@ -793,19 +824,36 @@ async def _run_link_verification(
 
 
 def _load_history() -> None:
-    """Restore scan history from disk on startup."""
-    global scan_history
+    """Restore scan history, migrating the JSON store into SQLite once."""
+    global scan_history, _storage
     try:
-        if os.path.exists(_HISTORY_FILE):
-            with open(_HISTORY_FILE, encoding="utf-8") as f:
-                scan_history = json.load(f)
-            logger.info(f"Loaded {len(scan_history)} scan history entries")
+        if _storage is None:
+            _storage = Storage(default_storage_path())
+            _storage.initialize()
+            migrated = _storage.migrate_json(
+                history_path=_HISTORY_FILE,
+                decisions_path=SUPPRESSED_CANDIDATES_FILE,
+            )
+            logger.info(
+                "Storage ready: %s scan rows, %s decisions migrated",
+                migrated["scans"],
+                migrated["decisions"],
+            )
+        rows = _storage.list_scans(limit=_HISTORY_MAX)
+        if rows:
+            scan_history = rows
+        elif os.path.exists(_HISTORY_FILE):
+            with open(_HISTORY_FILE, encoding="utf-8") as file:
+                loaded = json.load(file)
+            if isinstance(loaded, list):
+                scan_history = loaded
+        logger.info("Loaded %s scan history entries", len(scan_history))
     except Exception as e:
         logger.warning(f"History load failed: {e}")
 
 
 def _save_history() -> None:
-    """Persist scan history to disk."""
+    """Persist the JSON compatibility export."""
     try:
         _atomic_write_json(_HISTORY_FILE, scan_history, "scan_history")
     except Exception as e:
@@ -830,6 +878,11 @@ def _append_history(num_groups: int, mode: str) -> None:
     }
     scan_history.insert(0, entry)
     del scan_history[_HISTORY_MAX:]
+    if _storage is not None:
+        try:
+            _storage.append_scan(entry)
+        except Exception as exc:  # the JSON export still carries the row
+            logger.warning("Scan history SQLite append failed: %s", exc)
     _save_history()
 
 SCRAPERS: dict[str, Any] = {
@@ -3326,9 +3379,24 @@ async def reject_candidate(
 
 
 @router.get("/history")
-async def get_history(_auth: None = Depends(_require_api_key)):
-    """Recent scan history (newest first)."""
-    return {"count": len(scan_history), "entries": scan_history}
+async def get_history(
+    days: int = 30,
+    mode: str = "",
+    limit: int = _HISTORY_MAX,
+    _auth: None = Depends(_require_api_key),
+):
+    """Scan history queried from SQLite (newest first).
+
+    ``days=0`` returns the in-memory recent list; a positive window answers the
+    P3-1 question without reading a large JSON file.
+    """
+    if days > 0 and _storage is not None:
+        entries = _storage.list_scans(days=days, mode=mode, limit=limit)
+    else:
+        entries = [
+            row for row in scan_history if not mode or row.get("mode") == mode
+        ][: max(1, min(limit, _HISTORY_MAX))]
+    return {"count": len(entries), "entries": entries, "days": days}
 
 
 def _find_surebet_group(
