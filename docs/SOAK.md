@@ -91,3 +91,11 @@ The live scans also write learned aliases into the gitignored
 `config/generated/mapping_evidence.json`. The full test suite is verified with a
 clean ledger, as CI runs it; keep a copy of the learned ledger if those aliases
 matter, and do not assume a populated runtime ledger is the test baseline.
+
+## Coverage budget (P2-9)
+
+`/api/health` now also reports `coverage_budget` for each feed: per
+book/sport/market counts against the rolling median, with `silent_zero` and
+`material_drop` flags only when peers are still populated. The soak run should
+record `flag_count` and `baseline_scans`; the full rule and thresholds are in
+`docs/COVERAGE_BUDGET.md`.

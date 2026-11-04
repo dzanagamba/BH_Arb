@@ -62,6 +62,15 @@ from config.settings import (
 from engine.ai import MatchAI, PairProposal
 from engine.arbitrage import ArbitrageEngine
 from engine.certainty import CertaintyGate
+from engine.coverage_budget import (
+    evaluate as evaluate_coverage_budget,
+)
+from engine.coverage_budget import (
+    push_history as push_coverage_history,
+)
+from engine.coverage_budget import (
+    snapshot as coverage_snapshot,
+)
 from engine.feed_integrity import (
     compute_feed_integrity,
     priceable_groups,
@@ -422,6 +431,13 @@ _opportunity_by_mode: dict[str, dict] = {}
 _crossing_lifetimes: dict[str, dict[str, dict]] = {"prematch": {}, "live": {}}
 # P0-7: per-book integrity state, one scorecard per feed, with bounded history.
 _FEED_INTEGRITY_FILE = os.path.join(CACHE_DIR, "feed_integrity.json")
+_COVERAGE_BUDGET_FILE = os.path.join(CACHE_DIR, "coverage_budget.json")
+_coverage_budget: dict[str, dict[str, Any]] = {"prematch": {}, "live": {}}
+_coverage_history: dict[str, list[dict[str, int]]] = {
+    "prematch": [],
+    "live": [],
+}
+_COVERAGE_HISTORY_MAX = 20
 _feed_integrity: dict[str, dict[str, dict]] = {"prematch": {}, "live": {}}
 # P2-7: the measured price-agreement matrix and its config-mismatch warnings.
 _skin_detection: dict[str, dict[str, Any]] = {"prematch": {}, "live": {}}
@@ -1602,6 +1618,26 @@ async def run_scan(mode: str = "prematch", scheduled: bool = False):
                     logger.warning(f"Odds age spread {spread:.0f}s exceeds 90s — results may be stale")
                     status.errors.append(f"Odds age spread {spread:.0f}s — verify before betting")
 
+        # P2-9: a whole feed can disappear while the remaining books still
+        # price a clean-looking scan. Compare with the rolling median before
+        # the matcher runs; a peer-populated zero is a flag, not a quiet day.
+        coverage_counts = coverage_snapshot(all_matches)
+        coverage_report = evaluate_coverage_budget(
+            coverage_counts, _coverage_history[mode]
+        )
+        _coverage_budget[mode] = coverage_report
+        _coverage_history[mode] = push_coverage_history(
+            _coverage_history[mode],
+            coverage_counts,
+        )
+        _save_coverage_budget()
+        if coverage_report["flag_count"]:
+            logger.warning(
+                "Coverage budget: %s material drop(s) in %s",
+                coverage_report["flag_count"],
+                mode,
+            )
+
         # --- Match and find surebets ---
         status.current_bookmaker = "Analysing matches..."
         logger.info(f"Total {'live' if is_live else 'prematch'} matches collected: {len(all_matches)}. Running matcher...")
@@ -2134,6 +2170,51 @@ def _save_feed_integrity() -> None:
         logger.warning("Feed integrity save failed: %s", exc)
 
 
+def _load_coverage_budget() -> None:
+    """Restore the rolling per-book/sport/market counts for P2-9."""
+    global _coverage_budget, _coverage_history
+    try:
+        with open(_COVERAGE_BUDGET_FILE, encoding="utf-8") as file:
+            data = json.load(file)
+    except (OSError, ValueError):
+        return
+    if not isinstance(data, dict):
+        return
+    last = data.get("last")
+    if isinstance(last, dict):
+        _coverage_budget = {
+            mode: last[mode]
+            for mode in ("prematch", "live")
+            if isinstance(last.get(mode), dict)
+        }
+    history = data.get("history")
+    if isinstance(history, dict):
+        _coverage_history = {
+            mode: [
+                {
+                    str(key): int(value)
+                    for key, value in sample.items()
+                    if isinstance(value, int)
+                }
+                for sample in history.get(mode, [])
+                if isinstance(sample, dict)
+            ][-_COVERAGE_HISTORY_MAX:]
+            for mode in ("prematch", "live")
+        }
+
+
+def _save_coverage_budget() -> None:
+    try:
+        _atomic_write_json(
+            _COVERAGE_BUDGET_FILE,
+            {"last": _coverage_budget, "history": _coverage_history},
+            "coverage_budget",
+            indent=None,
+        )
+    except Exception as exc:  # diagnostics must never stop a scan
+        logger.warning("Coverage budget save failed: %s", exc)
+
+
 def _feed_integrity_payload(mode: str) -> dict[str, Any]:
     """Compact scorecard for one feed plus the books that are priced out."""
     books = _feed_integrity.get(mode) or {}
@@ -2285,6 +2366,7 @@ def _load_cache():
     """Restore last scan results from the JSON cache files on startup (TTL 30min P0-6)."""
     _load_opportunity_metrics()
     _load_feed_integrity()
+    _load_coverage_budget()
     for mode, cache_file, state_fields in (
         ("prematch", _PREMATCH_CACHE_FILE,
          (scan_status, cached_surebets, cached_matches, cached_match_groups_report)),
@@ -2535,6 +2617,7 @@ async def health():
         # P2-7: measured price agreement and any config-declared twin that the
         # scan did not reproduce. Low-sample pairs say insufficient_data.
         "skin_detection": _skin_detection,
+        "coverage_budget": _coverage_budget,
         "unmapped_markets": dict(unmapped_markets),
         "unmapped_markets_by_book": unmapped_by_book(),
         "verified_groups": sum(

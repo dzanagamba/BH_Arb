@@ -2306,10 +2306,17 @@ async function loadHealth() {
         const pairing = Number.isFinite(missRate)
             ? `Pairing ${(missRate * 100).toFixed(2)}% miss`
             : 'Pairing —';
-        bar.innerHTML = `Health — Prematch ${fmtAge(data.prematch?.last_scan_age_sec)} [${fmtPer(data.prematch?.per_bookie)}] | Live ${fmtAge(data.live?.last_scan_age_sec)} [${fmtPer(data.live?.per_bookie)}] | TTL ${data.odds_ttl_sec}s | ${pairing}`;
-        if (data.prematch?.errors?.length || data.live?.errors?.length) {
-            bar.title = [...(data.prematch?.errors||[]), ...(data.live?.errors||[])].join(' | ');
+        const coverageFlags = (Number(data.coverage_budget?.prematch?.flag_count) || 0)
+            + (Number(data.coverage_budget?.live?.flag_count) || 0);
+        const coverageText = coverageFlags ? ` | Coverage ${coverageFlags} flag(s)` : '';
+        bar.innerHTML = `Health — Prematch ${fmtAge(data.prematch?.last_scan_age_sec)} [${fmtPer(data.prematch?.per_bookie)}] | Live ${fmtAge(data.live?.last_scan_age_sec)} [${fmtPer(data.live?.per_bookie)}] | TTL ${data.odds_ttl_sec}s | ${pairing}${coverageText}`;
+        const titles = [...(data.prematch?.errors||[]), ...(data.live?.errors||[])];
+        for (const mode of ['prematch', 'live']) {
+            for (const flag of (data.coverage_budget?.[mode]?.flags || [])) {
+                titles.push(`${mode} ${flag.bookmaker}/${flag.sport}/${flag.market}: ${flag.kind} ${flag.observed}/${flag.baseline}`);
+            }
         }
+        if (titles.length) bar.title = titles.join(' | ');
         refreshNoSurebetState();
     } catch (e) { /* ignore */ }
 }

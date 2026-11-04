@@ -273,7 +273,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 | P2-6 | Candidate-queue quality and coverage metrics | P2 | M | P0-1, P1-1 | Done |
 | P2-7 | Identical-feed ("skin") detection | P2 | M | P0-7 | Done |
 | P2-8 | Event-identity edge cases: doubleheaders and rematches | P2 | M | P2-4 | Done |
-| P2-9 | Silent-drop coverage budget | P2 | M | P0-7 | Not started |
+| P2-9 | Silent-drop coverage budget | P2 | M | P0-7 | Done |
 | P2-10 | Measured push-feed discovery and per-book WebSocket adapter | P2 | M | P0-4, P0-7 | Not started |
 | P3-1 | Persistent storage v2 (SQLite) and migration | P3 | L | P0-1, P1-1 | Not started |
 | P3-2 | Bet log, bankroll, and CLV analytics | P3 | L | P3-1 | Not started |
@@ -1069,7 +1069,7 @@ was added.
 
 ### P2-9 — Silent-drop coverage budget
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P2
 **Effort:** M
 **Depends on:** P0-7
@@ -1089,10 +1089,10 @@ was added.
 
 **Acceptance criteria:**
 
-- [ ] A book that silently returns zero is flagged.
-- [ ] A market family that disappears while peers still publish it is flagged.
-- [ ] A legitimate empty feed does not create a false alarm.
-- [ ] The baseline and thresholds are documented.
+- [x] A book that silently returns zero is flagged.
+- [x] A market family that disappears while peers still publish it is flagged.
+- [x] A legitimate empty feed does not create a false alarm.
+- [x] The baseline and thresholds are documented.
 
 **Tests:**
 
@@ -1423,6 +1423,30 @@ Before writing a claim about behavior, run the command that proves it and paste 
 ## 6. Execution log
 
 Newest first. Each entry: date, task, status, commands, measured result, files changed, follow-ups.
+
+### 2026-11-04 — P2-9: Silent-drop coverage budget
+
+**Task:** P2-9 (depends on P0-7, complete).
+**Status:** Done.
+
+**Commands and results:**
+
+- `python -m pytest tests/test_coverage_budget.py -q` → 7 passed.
+- `python -m ruff check .`, `python -m mypy .` → clean.
+
+**What changed:**
+
+- `engine/coverage_budget.py` (new): per `bookmaker|sport|market` row counts, a rolling median baseline (last 20 scans), and `silent_zero` / `material_drop` flags only when a peer is still populated.
+- `server/api.py`: evaluates the budget before matching on every scan, persists `cache/coverage_budget.json`, restores it on startup, and exposes `coverage_budget` in `/api/health`.
+- Dashboard health line: `Coverage N flag(s)` plus each flag in the tooltip.
+- `tests/test_coverage_budget.py` (new): snapshot, 90% drop, peer-populated zero, legitimate all-zero night, short baseline, bounded history, frontend hook.
+- `docs/COVERAGE_BUDGET.md` and the soak report section.
+
+**Trust rules:** unchanged. The budget is diagnostic; it does not drop a book or change pricing. Baseline requires 3 scans before it can flag.
+
+**Follow-ups:** P2-10 (push-feed discovery) is the last P2 task.
+
+---
 
 ### 2026-11-04 — P2-8: Event-identity edge cases
 
