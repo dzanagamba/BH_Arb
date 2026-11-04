@@ -1,0 +1,287 @@
+{
+  "book_states": {
+    "admiralbet": {
+      "degraded": 0,
+      "healthy": 2,
+      "quarantined": 0,
+      "unknown": 0
+    },
+    "betole": {
+      "degraded": 2,
+      "healthy": 0,
+      "quarantined": 0,
+      "unknown": 0
+    },
+    "maxbet": {
+      "degraded": 0,
+      "healthy": 2,
+      "quarantined": 0,
+      "unknown": 0
+    },
+    "mbet": {
+      "degraded": 0,
+      "healthy": 2,
+      "quarantined": 0,
+      "unknown": 0
+    },
+    "mdshop": {
+      "degraded": 0,
+      "healthy": 2,
+      "quarantined": 0,
+      "unknown": 0
+    },
+    "mozzartbet": {
+      "degraded": 2,
+      "healthy": 0,
+      "quarantined": 0,
+      "unknown": 0
+    },
+    "premier_kladionica": {
+      "degraded": 0,
+      "healthy": 2,
+      "quarantined": 0,
+      "unknown": 0
+    },
+    "sportplus": {
+      "degraded": 0,
+      "healthy": 2,
+      "quarantined": 0,
+      "unknown": 0
+    },
+    "wwin": {
+      "degraded": 0,
+      "healthy": 2,
+      "quarantined": 0,
+      "unknown": 0
+    }
+  },
+  "books_without_healthy": [
+    "betole",
+    "mozzartbet"
+  ],
+  "browsers_max": 0,
+  "cache_bytes_last": 31199999,
+  "cache_bytes_max": 31214717,
+  "first": {
+    "at": "2026-11-04T19:41:01",
+    "books": {
+      "admiralbet": {
+        "reasons": [],
+        "state": "healthy"
+      },
+      "betole": {
+        "reasons": [
+          "missing_markets"
+        ],
+        "state": "degraded"
+      },
+      "maxbet": {
+        "reasons": [],
+        "state": "healthy"
+      },
+      "mbet": {
+        "reasons": [],
+        "state": "healthy"
+      },
+      "mdshop": {
+        "reasons": [],
+        "state": "healthy"
+      },
+      "mozzartbet": {
+        "reasons": [
+          "missing_markets"
+        ],
+        "state": "degraded"
+      },
+      "premier_kladionica": {
+        "reasons": [],
+        "state": "healthy"
+      },
+      "sportplus": {
+        "reasons": [],
+        "state": "healthy"
+      },
+      "wwin": {
+        "reasons": [],
+        "state": "healthy"
+      }
+    },
+    "browsers": 0,
+    "cache_bytes": 31214717,
+    "errors": 1,
+    "groups": 1498,
+    "matches": 8975,
+    "rss_mb": 940.4,
+    "surebets": 3
+  },
+  "history": [
+    {
+      "at": "2026-11-04T19:41:01",
+      "books": {
+        "admiralbet": {
+          "reasons": [],
+          "state": "healthy"
+        },
+        "betole": {
+          "reasons": [
+            "missing_markets"
+          ],
+          "state": "degraded"
+        },
+        "maxbet": {
+          "reasons": [],
+          "state": "healthy"
+        },
+        "mbet": {
+          "reasons": [],
+          "state": "healthy"
+        },
+        "mdshop": {
+          "reasons": [],
+          "state": "healthy"
+        },
+        "mozzartbet": {
+          "reasons": [
+            "missing_markets"
+          ],
+          "state": "degraded"
+        },
+        "premier_kladionica": {
+          "reasons": [],
+          "state": "healthy"
+        },
+        "sportplus": {
+          "reasons": [],
+          "state": "healthy"
+        },
+        "wwin": {
+          "reasons": [],
+          "state": "healthy"
+        }
+      },
+      "browsers": 0,
+      "cache_bytes": 31214717,
+      "errors": 1,
+      "groups": 1498,
+      "matches": 8975,
+      "rss_mb": 940.4,
+      "surebets": 3
+    },
+    {
+      "at": "2026-11-04T19:42:53",
+      "books": {
+        "admiralbet": {
+          "reasons": [],
+          "state": "healthy"
+        },
+        "betole": {
+          "reasons": [
+            "missing_markets"
+          ],
+          "state": "degraded"
+        },
+        "maxbet": {
+          "reasons": [],
+          "state": "healthy"
+        },
+        "mbet": {
+          "reasons": [],
+          "state": "healthy"
+        },
+        "mdshop": {
+          "reasons": [],
+          "state": "healthy"
+        },
+        "mozzartbet": {
+          "reasons": [
+            "missing_markets"
+          ],
+          "state": "degraded"
+        },
+        "premier_kladionica": {
+          "reasons": [],
+          "state": "healthy"
+        },
+        "sportplus": {
+          "reasons": [],
+          "state": "healthy"
+        },
+        "wwin": {
+          "reasons": [],
+          "state": "healthy"
+        }
+      },
+      "browsers": 0,
+      "cache_bytes": 31199999,
+      "errors": 1,
+      "groups": 1499,
+      "matches": 8969,
+      "rss_mb": 924.4,
+      "surebets": 3
+    }
+  ],
+  "last": {
+    "at": "2026-11-04T19:42:53",
+    "books": {
+      "admiralbet": {
+        "reasons": [],
+        "state": "healthy"
+      },
+      "betole": {
+        "reasons": [
+          "missing_markets"
+        ],
+        "state": "degraded"
+      },
+      "maxbet": {
+        "reasons": [],
+        "state": "healthy"
+      },
+      "mbet": {
+        "reasons": [],
+        "state": "healthy"
+      },
+      "mdshop": {
+        "reasons": [],
+        "state": "healthy"
+      },
+      "mozzartbet": {
+        "reasons": [
+          "missing_markets"
+        ],
+        "state": "degraded"
+      },
+      "premier_kladionica": {
+        "reasons": [],
+        "state": "healthy"
+      },
+      "sportplus": {
+        "reasons": [],
+        "state": "healthy"
+      },
+      "wwin": {
+        "reasons": [],
+        "state": "healthy"
+      }
+    },
+    "browsers": 0,
+    "cache_bytes": 31199999,
+    "errors": 1,
+    "groups": 1499,
+    "matches": 8969,
+    "rss_mb": 924.4,
+    "surebets": 3
+  },
+  "max_growth": 0.5,
+  "memory_growth": -0.017,
+  "ok": true,
+  "problems": [],
+  "rss_budget_mb": 1024,
+  "rss_max_mb": 940.4,
+  "rss_peak_growth": 0.0,
+  "rss_series": [
+    940.4,
+    924.4
+  ],
+  "samples": 2
+}

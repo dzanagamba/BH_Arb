@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-11-04
 **Repository:** `dzanagamba/BH_Arb` (`main`)
-**Status of this document:** audit complete; P0-1 through P0-7, P1-1 through P1-5 done, implementation continuing
+**Status of this document:** audit complete; P0-1 through P0-7 and P1-1 through P1-5 done; P1-6 code complete, 24-hour acceptance run pending; implementation continuing
 **Purpose:** a durable, session-by-session plan so work can resume without re-reading the whole repository.
 
 > **How to use this document**
@@ -263,7 +263,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 | P1-3 | Reproducible deployment (Docker/systemd) | P1 | M | — | Done |
 | P1-4 | CI hardening: coverage, dependency and security scans | P1 | S | — | Done |
 | P1-5 | Alerting with dedupe and retry | P1 | M | P1-2 | Done |
-| P1-6 | 24-hour soak and resource budget | P1 | M | P0-1, P1-2 | Not started |
+| P1-6 | 24-hour soak and resource budget | P1 | M | P0-1, P1-2 | In progress |
 | P1-7 | Raw-price invariant and rounding audit | P1 | S | P0-4 | Not started |
 | P2-1 | Convergent deep-link sweep automation and UI | P2 | M | P1-1 | Not started |
 | P2-2 | Dated re-verification of no-event declarations | P2 | S | — | Not started |
@@ -722,7 +722,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 
 ### P1-6 — 24-hour soak and resource budget
 
-**Status:** Not started
+**Status:** In progress
 **Priority:** P1
 **Effort:** M
 **Depends on:** P0-1, P1-2
@@ -1421,6 +1421,31 @@ Before writing a claim about behavior, run the command that proves it and paste 
 ## 6. Execution log
 
 Newest first. Each entry: date, task, status, commands, measured result, files changed, follow-ups.
+
+### 2026-11-04 — P1-6: 24-hour soak and resource budget (partial)
+
+**Task:** P1-6 (depends on P0-1 and P1-2, both complete).
+**Status:** In progress — harness and budget guard are done; the 24-hour acceptance run is not.
+
+**Commands and results:**
+
+- `python -m pytest tests/test_soak.py tests/test_alerts.py -q` → 23 passed.
+- Live two-cycle smoke against a local server on port 18080: `ok: true`, RSS **940.4 → 924.4 MB** (-1.7%), peak **940.4 MB** below the 1024 MB budget, cache **31.2 MB** below the 40 MB budget, **0** browser processes at both samples, 3 surebets per scan.
+- Per-book states: seven books healthy in both samples; `betole` and `mozzartbet` degraded in both with `missing_markets`, named in the report rather than silently dropped.
+- The 24-hour `--minutes 1440` run is **not done**; the session cannot hold a 24-hour wall clock. No leak was found or masked in the short run.
+
+**What changed:**
+
+- `scripts/soak.py`: `--cycles 0` now means "until `--minutes`" (the old default silently ran one scan for a 1440-minute invocation); samples now include cache bytes and per-book feed states; summarization fails on any leaked browser, an unavailable browser probe, peak RSS over `--rss-budget-mb`, or growth over `--max-growth`, and reports `books_without_healthy`.
+- Resource guard: `config/settings.py` adds `RSS_BUDGET_MB`; `server/api.py` queues cache/RSS budget alerts and `/api/health` reports `memory.rss_mb`, `memory.budget_mb` and `memory.over_budget`.
+- `tests/test_soak.py`: budget, any-sample browser leak, probe-unavailable, cache/per-book reporting and cycle-limit tests.
+- `docs/SOAK.md` (new): the exact 24-hour command and environment, plus the smoke-run table and its limits.
+
+**Acceptance:** unchecked. The 24-hour criteria (duration, plateau, no book silently absent for a day) require the real run in `docs/SOAK.md`; the report must be replaced with its output before this task is marked Done.
+
+**Follow-ups:** run `python scripts/soak.py --minutes 1440 --interval 300 --pid <server-pid> --rss-budget-mb 1024 --check --out docs/evidence/...` on the deployment host, then publish the report and mark the boxes.
+
+---
 
 ### 2026-11-04 — P1-5: Alerting with dedupe and retry
 

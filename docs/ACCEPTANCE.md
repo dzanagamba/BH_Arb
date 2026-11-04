@@ -440,7 +440,10 @@ A ten-cycle run on the final matching code produced this RSS curve:
 It **plateaued at about 767 MB after cycle 7**, with 29.45% growth from the first
 sample (limit 50%), 0 surviving browsers, 0 errors and 10–12 surebets per cycle.
 The plateau is the important result: growth is not linear. The 24-hour run
-remains open. On the six-cycle soak's nine surebets, seven
+remains open. `docs/SOAK.md` records the P1-6 harness changes and a two-cycle
+smoke run (RSS 940.4 → 924.4 MB, cache 31.2 MB, 0 browsers, both below budget);
+P1-6 stays `In progress` until the 24-hour `--minutes 1440` run is published.
+On the six-cycle soak's nine surebets, seven
 re-verified at a fresh price (Najran–Jubbah, Anaitasuna–Alaves,
 Zakynthos–Niki Volou, Manchester United–Roma, Roma–Sassuolo, Villarreal–PSG and
 Mainz–Bayern); the two Boston United–Leicester U21 legs were gone on re-check and
