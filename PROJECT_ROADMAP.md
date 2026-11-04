@@ -276,7 +276,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 | P2-9 | Silent-drop coverage budget | P2 | M | P0-7 | Done |
 | P2-10 | Measured push-feed discovery and per-book WebSocket adapter | P2 | M | P0-4, P0-7 | Done |
 | P3-1 | Persistent storage v2 (SQLite) and migration | P3 | L | P0-1, P1-1 | Done |
-| P3-2 | Bet log, bankroll, and CLV analytics | P3 | L | P3-1 | Not started |
+| P3-2 | Bet log, bankroll, and CLV analytics | P3 | L | P3-1 | Done |
 | P3-3 | Advisory execution workflow and limits | P3 | M | P3-2 | Not started |
 | P3-4 | Alerts, PWA, accessibility, and Bosnian UI | P3 | M | P1-5 | Not started |
 | P3-5 | Authentication and key management hardening | P3 | M | P1-3 | Not started |
@@ -1183,7 +1183,7 @@ no adapter is enabled.
 
 ### P3-2 — Bet log, bankroll, and CLV analytics
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P3
 **Effort:** L
 **Depends on:** P3-1
@@ -1203,10 +1203,10 @@ no adapter is enabled.
 
 **Acceptance criteria:**
 
-- [ ] A logged bet does not change the scanner's trust model.
-- [ ] ROI and CLV have explicit denominators and date ranges.
-- [ ] Partial acceptance and a missing leg are representable.
-- [ ] Export round-trips.
+- [x] A logged bet does not change the scanner's trust model.
+- [x] ROI and CLV have explicit denominators and date ranges.
+- [x] Partial acceptance and a missing leg are representable.
+- [x] Export round-trips.
 
 **Tests:**
 
@@ -1424,6 +1424,29 @@ Before writing a claim about behavior, run the command that proves it and paste 
 ## 6. Execution log
 
 Newest first. Each entry: date, task, status, commands, measured result, files changed, follow-ups.
+
+### 2026-11-04 — P3-2: Bet log, bankroll and CLV
+
+**Task:** P3-2 (depends on P3-1, complete).
+**Status:** Done.
+
+**Commands and results:**
+
+- `python -m pytest tests/test_bet_log.py tests/test_clv.py -q` → 9 passed.
+- `python -m ruff check .`, `python -m mypy .` → clean.
+
+**What changed:**
+
+- `server/bets.py` (new): SQLite `bets` table and create/list/settle/closing/summary/CSV methods. Accepted stake/odds and void legs are explicit; P/L stays open until every leg is settled.
+- `server/api.py`: `/api/bets` create/list, `/api/bets/{id}/settle`, `/api/bets/{id}/closing`, `/api/bets/summary`, `/api/bets/export.csv`, initialized on startup.
+- Slip: **Log bet** action posts the current plan; Settings/Diagnostics shows the 30-day bankroll/ROI/CLV line.
+- `tests/test_bet_log.py`, `tests/test_clv.py`; `docs/BET_LOG.md`.
+
+**Trust rules:** unchanged. This is a manual record; no account integration, no placement, no trust input.
+
+**Follow-ups:** P3-3 (advisory execution workflow) is next.
+
+---
 
 ### 2026-11-04 — P3-1: Persistent storage v2 (SQLite)
 

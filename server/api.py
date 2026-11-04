@@ -137,6 +137,7 @@ from server.alerts import (
     resource_alerts,
     surebet_alert,
 )
+from server.bets import BetStore
 from server.mapping_coverage import build_coverage
 from server.observability import (
     metrics,
@@ -451,6 +452,7 @@ _HISTORY_FILE = os.path.join(CACHE_DIR, "scan_history.json")
 _HISTORY_MAX = 50
 # P3-1: SQLite is the query store; the JSON files stay compatibility exports.
 _storage: Storage | None = None
+_bet_store: BetStore | None = None
 _LINK_SWEEP_FILE = os.path.join(CACHE_DIR, "link_sweeps.json")
 _LINK_SWEEP_MAX = 200
 _PREMATCH_CACHE_FILE = os.path.join(CACHE_DIR, "last_scan.json")
@@ -825,8 +827,11 @@ async def _run_link_verification(
 
 def _load_history() -> None:
     """Restore scan history, migrating the JSON store into SQLite once."""
-    global scan_history, _storage
+    global scan_history, _storage, _bet_store
     try:
+        if _bet_store is None:
+            _bet_store = BetStore(default_storage_path())
+            _bet_store.initialize()
         if _storage is None:
             _storage = Storage(default_storage_path())
             _storage.initialize()
@@ -3097,6 +3102,46 @@ class VerifyRequest(BaseModel):
     mode: str = "prematch"
 
 
+class BetLegPayload(BaseModel):
+    bookmaker: str
+    outcome_label: str
+    odds: float
+    stake: float
+    accepted_odds: float | None = None
+    accepted_stake: float | None = None
+    closing_odds: float | None = None
+    result: str = ""
+
+
+class BetCreateRequest(BaseModel):
+    surebet_id: str = ""
+    mode: str = "prematch"
+    home_team: str = ""
+    away_team: str = ""
+    market_type: str = ""
+    investment: float
+    legs: list[BetLegPayload]
+    notes: str = ""
+
+
+class BetSettlementLeg(BaseModel):
+    outcome_label: str
+    result: Literal["won", "lost", "void"]
+
+
+class BetSettlementRequest(BaseModel):
+    legs: list[BetSettlementLeg]
+
+
+class BetClosingLeg(BaseModel):
+    outcome_label: str
+    closing_odds: float
+
+
+class BetClosingRequest(BaseModel):
+    legs: list[BetClosingLeg]
+
+
 class LinkSweepReport(BaseModel):
     """One completed sweep, as written by scripts/sweep_links.py."""
     bookmaker: str
@@ -3995,3 +4040,79 @@ async def get_link_sweeps(
     ]
     limit = max(1, min(limit, _LINK_SWEEP_MAX))
     return {"sweeps": rows[-limit:], "count": len(rows[-limit:])}
+
+
+def _require_bet_store() -> BetStore:
+    if _bet_store is None:
+        raise HTTPException(status_code=503, detail="Bet store is not initialized")
+    return _bet_store
+
+
+@router.post("/bets")
+async def create_bet(
+    req: BetCreateRequest,
+    _auth: None = Depends(_require_api_key),
+):
+    """Log a manually placed bet. The scanner never places it."""
+    if req.investment <= 0:
+        raise HTTPException(status_code=400, detail="Investment must be positive")
+    if not req.legs:
+        raise HTTPException(status_code=400, detail="A bet needs at least one leg")
+    payload = req.model_dump(mode="json")
+    payload["legs"] = [
+        {**leg, "result": leg.get("result") or ""} for leg in payload["legs"]
+    ]
+    return _require_bet_store().create(payload)
+
+
+@router.get("/bets")
+async def get_bets(days: int = 30, limit: int = 200):
+    """Read the bet log window; settled and open bets are both returned."""
+    return {"bets": _require_bet_store().list_bets(days=max(1, days), limit=limit)}
+
+
+@router.get("/bets/summary")
+async def get_bet_summary(days: int = 30):
+    """Bankroll, ROI and CLV with explicit denominators."""
+    return _require_bet_store().summary(days=max(1, days))
+
+
+@router.get("/bets/export.csv")
+async def export_bets_csv(days: int = 30):
+    """CSV round-trip export of the bet log."""
+    csv_text = _require_bet_store().export_csv(days=max(1, days))
+    return PlainTextResponse(
+        csv_text,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="bh-arb-bets.csv"'},
+    )
+
+
+@router.post("/bets/{bet_id}/settle")
+async def settle_bet(
+    bet_id: str,
+    req: BetSettlementRequest,
+    _auth: None = Depends(_require_api_key),
+):
+    """Settle every leg; the realized P/L is computed from accepted amounts."""
+    result = _require_bet_store().settle(
+        bet_id, [leg.model_dump() for leg in req.legs]
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="Bet not found")
+    return result
+
+
+@router.post("/bets/{bet_id}/closing")
+async def set_bet_closing(
+    bet_id: str,
+    req: BetClosingRequest,
+    _auth: None = Depends(_require_api_key),
+):
+    """Record closing prices for CLV without changing the bet's state."""
+    result = _require_bet_store().set_closing(
+        bet_id, [leg.model_dump() for leg in req.legs]
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="Bet not found")
+    return result

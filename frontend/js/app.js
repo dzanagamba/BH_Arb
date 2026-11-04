@@ -197,6 +197,7 @@ function handleDataAction(event) {
         case 'switch-tab': switchTab(element.dataset.tab); break;
         case 'shutdown-server': shutdownServer(); break;
         case 'sweep-links': sweepLinks(); break;
+        case 'log-bet': logBet(element.dataset.slipId); break;
         case 'set-market-filter': setMarketFilter(element.dataset.market); break;
         case 'copy-text': copyText(element.dataset.copy, element.dataset.copyMessage); break;
         case 'close-slip': closeSlip(); break;
@@ -1251,6 +1252,7 @@ function renderSlip() {
 
         <div class="slip-actions">
             <button type="button" class="btn btn-secondary" data-action="verify-surebet" data-slip-id="${escapeHtml(sb.id)}">Re-check odds</button>
+            <button type="button" class="btn btn-secondary" data-action="log-bet" data-slip-id="${escapeHtml(sb.id)}">Log bet</button>
             <button type="button" class="btn btn-secondary" data-action="copy-surebet" data-slip-id="${escapeHtml(sb.id)}"${staleFeed() ? ' disabled aria-disabled="true" data-stale-blocked="true"' : ''}>Copy slip</button>
         </div>
     `;
@@ -1448,6 +1450,44 @@ async function copyText(text, message) {
         ta.remove();
     }
     if (message) showToast(message);
+}
+
+// A manual record of what was actually placed. It never places a bet and it
+// does not change the scanner's trust model.
+async function logBet(id) {
+    const sb = allSurebets.find(s => s.id === id);
+    if (!sb) return;
+    const state = slipFor(sb);
+    const check = verifyState[sb.id];
+    const plan = planStakes(placementOrder(currentStakes(sb, check)), state.investment, state.placed);
+    const body = {
+        surebet_id: sb.id,
+        mode: currentMode,
+        home_team: sb.home_team,
+        away_team: sb.away_team,
+        market_type: sb.market_type,
+        investment: state.investment,
+        notes: 'Logged from the bet slip',
+        legs: plan.legs.map(leg => ({
+            bookmaker: leg.bookmaker,
+            outcome_label: leg.outcome_label,
+            odds: leg.odds,
+            stake: leg.plannedStake,
+            accepted_odds: leg.placed ? leg.takenOdds : leg.takenOdds,
+            accepted_stake: leg.placed ? leg.plannedStake : leg.plannedStake,
+        })),
+    };
+    try {
+        const response = await apiFetch('/api/bets', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        }, 'This SureBet deployment requires an API key to log a bet.');
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        showToast('Bet logged. Settle it in the bet log when the legs finish.');
+    } catch (error) {
+        showToast(`Could not log the bet: ${error.message}`);
+    }
 }
 
 function copySurebetDetails(id) {
@@ -2317,6 +2357,15 @@ async function loadHealth() {
             }
         }
         if (titles.length) bar.title = titles.join(' | ');
+        try {
+            const betResponse = await fetch('/api/bets/summary?days=30');
+            if (betResponse.ok) {
+                const bet = await betResponse.json();
+                const roi = bet.roi == null ? '—' : `${(Number(bet.roi) * 100).toFixed(2)}%`;
+                const clv = bet.clv == null ? '—' : `${(Number(bet.clv) * 100).toFixed(2)}%`;
+                setText('bet-summary', `Bet log: ${bet.settled_bets}/${bet.bets} settled · ROI ${roi} · bankroll ${money(bet.bankroll)} KM · CLV ${clv} (${bet.clv_legs} legs)`);
+            }
+        } catch (e) { /* the bet log is optional */ }
         refreshNoSurebetState();
     } catch (e) { /* ignore */ }
 }
