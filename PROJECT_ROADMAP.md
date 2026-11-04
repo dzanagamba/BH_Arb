@@ -188,6 +188,7 @@ The project already reflects most of the mature practice in this space. The rese
 
 - A per-feed and per-book freshness budget, surfaced in `/api/results` and the dashboard (F3).
 - Do **not** raise live polling until a push path or sub-10 s capture is actually available. Keep the existing 60 s live TTL and 600 s prematch TTL.
+- Measure push-feed availability per book and add a WebSocket adapter only where it is materially fresher than polling (P2-10).
 - Add a last-known-value / "price moved" state rather than silently re-pricing a different bet.
 
 ### 2.3 Arbitrage economics and execution
@@ -273,6 +274,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 | P2-7 | Identical-feed ("skin") detection | P2 | M | P0-7 | Not started |
 | P2-8 | Event-identity edge cases: doubleheaders and rematches | P2 | M | P2-4 | Not started |
 | P2-9 | Silent-drop coverage budget | P2 | M | P0-7 | Not started |
+| P2-10 | Measured push-feed discovery and per-book WebSocket adapter | P2 | M | P0-4, P0-7 | Not started |
 | P3-1 | Persistent storage v2 (SQLite) and migration | P3 | L | P0-1, P1-1 | Not started |
 | P3-2 | Bet log, bankroll, and CLV analytics | P3 | L | P3-1 | Not started |
 | P3-3 | Advisory execution workflow and limits | P3 | M | P3-2 | Not started |
@@ -1096,6 +1098,47 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 - Existing: `tests/test_pairing_audit.py`, `tests/test_probe_feeds.py`
 
 **Notes / risks:** This is the complement to the pairing audit: the audit asks “did we miss a pair?”, the budget asks “did we miss a whole feed?”
+
+---
+
+### P2-10 — Measured push-feed discovery and per-book WebSocket adapter
+
+**Status:** Not started
+**Priority:** P2
+**Effort:** M (discovery plus one reference adapter; each additional book adds M)
+**Depends on:** P0-4, P0-7
+
+**Objective:** add a push path only where it is measured to be materially fresher than polling, without changing the certainty gate, the price-source rule, or the advisory non-goal.
+
+**Expected outcome:** each candidate book has a recorded transport decision backed by captured traffic; a book that justifies WebSockets gets a feature-flagged adapter with snapshot/delta handling, sequence and heartbeat checks, reconnect/gap detection, a bounded latest-state buffer, and a polling fallback. A silent or gapped stream is quarantined and cannot price a leg.
+
+**Steps:**
+
+1. Capture each candidate book's XHR/fetch and WebSocket traffic with Playwright: handshake/auth headers and cookies, heartbeat, frame shape (snapshot vs delta, JSON vs binary/protobuf), message rate and size. Record the evidence per book under `docs/evidence/`.
+2. Measure freshness and coverage against the current REST path: time to first price, update cadence, market coverage, gap/duplicate rate, and resource cost. Proceed only where the measured gain is material.
+3. Define a `LiveFeed` adapter interface and a per-book feature flag. Keep the current scraper and polling path as the fallback; with the flag off, behavior must be unchanged.
+4. Implement snapshot plus delta handling: sequence numbers, heartbeat, reconnect with backoff, explicit gap detection, a bounded latest-state buffer, and coalescing to the latest row per market rather than processing every tick.
+5. Normalize accepted rows into the existing `Match`/`Market` models and feed the certainty gate. Never bypass the gate or price an unverified or stale leg.
+6. Integrate with the P0-4 freshness state and P0-7 quarantine: every row carries `fetched_at` and `source_updated_at`; silence, a missed heartbeat or a sequence gap marks the book stale and refuses its legs.
+7. Freeze captured frames as offline fixtures. Add tests for snapshot, delta, reconnect/gap, silence/stale, flag-off, and no network in CI.
+8. Measure connection, event-loop and memory cost before enabling the feed in scheduled scans.
+
+**Acceptance criteria:**
+
+- [ ] Each candidate book has a recorded transport decision with captured evidence.
+- [ ] A WebSocket path exists only for a book that measured materially fresher, behind a flag, with polling fallback.
+- [ ] Sequence, heartbeat and gap handling are explicit; a silent or gapped stream cannot price a leg.
+- [ ] Stream state is coalesced to the latest row per market and storage growth is bounded.
+- [ ] Recorded-frame tests cover snapshot, delta, reconnect, silence and flag-off.
+- [ ] Existing scan behavior is unchanged when the flag is off.
+
+**Tests:**
+
+- New: `tests/test_live_feed.py`
+- Existing: `tests/test_live_mode.py`, `tests/test_soak.py`
+- Adding after P0-4: `tests/test_freshness_api.py`
+
+**Notes / risks:** Frames may be binary or protobuf, not JSON. Use an async client (`websockets`/`aiohttp`); `websocket-client` is sync/threaded and does not fit this pipeline. A Cloudflare browser session may be required, and a long-lived Playwright context is resource-heavy enough to belong in the soak test. Streaming removes our poll interval, not the book's own update latency. Partial, unsequenced deltas are worse than polling; fail closed. Redis is unnecessary at this scale: coalesce in memory and persist only the bounded state the scan consumes.
 
 ---
 
