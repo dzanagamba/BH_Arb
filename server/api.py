@@ -797,6 +797,10 @@ def _append_history(num_groups: int, mode: str) -> None:
         "surebets_found": status.surebets_found,
         "per_bookie": dict(per_bookie),
         "errors": list(status.errors),
+        "candidate_queue": len(_candidates_for(mode)),
+        "candidate_actionable": sum(
+            1 for candidate in _candidates_for(mode).values() if candidate.alias_actionable
+        ),
     }
     scan_history.insert(0, entry)
     del scan_history[_HISTORY_MAX:]
@@ -2511,6 +2515,10 @@ async def health():
         ),
         "pending_candidates": len(pending_candidates),
         "live_pending_candidates": len(pending_live_candidates),
+        "candidate_blockers": {
+            "prematch": _candidate_breakdown(list(pending_candidates.values())),
+            "live": _candidate_breakdown(list(pending_live_candidates.values())),
+        },
         "suppressed_candidates": len(_suppressed_candidates),
         # Matches whose per-event link is unproven AND can still block. See
         # `_unverified_link_count` for why the predicate is the gate's and why
@@ -2971,6 +2979,7 @@ async def get_candidates(
     queue = list(_candidates_for(mode).values())
     total = len(queue)
     actionable_total = sum(1 for candidate in queue if candidate.alias_actionable)
+    blocker_counts = _candidate_breakdown(queue)
     if actionable_only:
         queue = [candidate for candidate in queue if candidate.alias_actionable]
     window = queue[start:start + page]
@@ -2978,6 +2987,7 @@ async def get_candidates(
         "mode": mode,
         "total": total,
         "actionable_total": actionable_total,
+        "blocker_counts": blocker_counts,
         "actionable_only": actionable_only,
         "count": len(window),
         "limit": page,
@@ -2987,6 +2997,31 @@ async def get_candidates(
             for candidate in window
         ],
     }
+
+
+def _candidate_blocker(candidate: CandidateReview) -> str:
+    """The one class a reviewer needs to understand why this is queued.
+
+    Mutually exclusive by design: alias-actionable work first, then a league
+    mapping a human can still supply, then a machine link check, then anything
+    no human action closes. A candidate can have several reasons; this answers
+    "what would move it", not "list every reason".
+    """
+    if candidate.alias_actionable:
+        return "alias"
+    blockers = _approval_blockers(candidate)
+    if any("league" in reason for reason in blockers):
+        return "league"
+    if candidate.link_blocked:
+        return "link"
+    return "other"
+
+
+def _candidate_breakdown(queue: list[CandidateReview]) -> dict[str, int]:
+    counts = {"alias": 0, "league": 0, "link": 0, "other": 0}
+    for candidate in queue:
+        counts[_candidate_blocker(candidate)] += 1
+    return counts
 
 
 def _name_score(candidate: CandidateReview) -> int:

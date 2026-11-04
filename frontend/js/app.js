@@ -2002,6 +2002,7 @@ async function loadCandidates() {
             Array.isArray(data.candidates) ? data.candidates : [],
             Number(data.total) || 0,
             Number(data.actionable_total) || 0,
+            data.blocker_counts || {},
         );
     } catch (error) {
         console.error('Candidates load failed:', error);
@@ -2009,7 +2010,7 @@ async function loadCandidates() {
     }
 }
 
-function renderCandidates(candidates, total, actionableTotal) {
+function renderCandidates(candidates, total, actionableTotal, blockerCounts = {}) {
     const list = document.getElementById('candidates-list');
     const count = document.getElementById('review-count');
     const queue = Array.isArray(candidates) ? candidates : [];
@@ -2048,8 +2049,17 @@ function renderCandidates(candidates, total, actionableTotal) {
     const pageNote = total > queue.length
         ? `<p class="candidates-page-note">Showing ${queue.length} of ${actionableTotal} pairings an approval can clear, of ${total} queued in total. The rest cannot be closed by a human decision.</p>`
         : '';
+    const blockers = {
+        alias: Number(blockerCounts.alias) || 0,
+        league: Number(blockerCounts.league) || 0,
+        link: Number(blockerCounts.link) || 0,
+        other: Number(blockerCounts.other) || 0,
+    };
+    const blockerNote = total
+        ? `<p class="candidates-page-note">Queue: ${blockers.alias} actionable · ${blockers.league} league-blocked · ${blockers.link} link-pending · ${blockers.other} informational.</p>`
+        : '';
 
-    list.innerHTML = pageNote + orderedCandidates.map((candidate) => {
+    list.innerHTML = blockerNote + pageNote + orderedCandidates.map((candidate) => {
         const id = escapeHtml(candidate.id || '');
         const homeTeam = escapeHtml(formatTeamName(candidate.home_team || 'Unknown'));
         const awayTeam = escapeHtml(formatTeamName(candidate.away_team || 'Unknown'));
@@ -2120,7 +2130,7 @@ async function loadHistory() {
         const data = await res.json();
         const entries = data.entries || [];
         if (entries.length === 0) {
-            body.innerHTML = '<tr><td colspan="6" class="history-empty">No scans yet</td></tr>';
+            body.innerHTML = '<tr><td colspan="7" class="history-empty">No scans yet</td></tr>';
             return;
         }
         body.innerHTML = entries.map(e => {
@@ -2133,11 +2143,12 @@ async function loadHistory() {
                 <td class="mono">${formatCount(e.total_matches)}</td>
                 <td class="mono">${formatCount(e.match_groups)}</td>
                 <td class="mono${e.surebets_found > 0 ? ' good' : ''}">${formatCount(e.surebets_found)}</td>
+                <td class="mono" title="actionable / queued after this scan">${formatCount(e.candidate_actionable)} / ${formatCount(e.candidate_queue)}</td>
                 <td class="mono${errs > 0 ? ' bad' : ''}" title="${escapeHtml((e.errors || []).join(' | '))}">${errs}</td>
             </tr>`;
         }).join('');
     } catch (e) {
-        body.innerHTML = '<tr><td colspan="6" class="history-empty">Failed to load history</td></tr>';
+        body.innerHTML = '<tr><td colspan="7" class="history-empty">Failed to load history</td></tr>';
     }
 }
 

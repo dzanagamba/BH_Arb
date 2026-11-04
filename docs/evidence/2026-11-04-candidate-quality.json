@@ -1,0 +1,14 @@
+{
+  "source": "cache/last_scan.json",
+  "matches": 8969,
+  "groups": 1499,
+  "queue": 5569,
+  "actionable": 87,
+  "blockers": {
+    "alias": 87,
+    "league": 4196,
+    "link": 0,
+    "other": 1286
+  },
+  "note": "Recomputed from the real 2026-11-04 prematch cache with the current matcher and candidate builder; not a persisted scan."
+}

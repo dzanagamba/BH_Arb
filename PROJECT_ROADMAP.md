@@ -270,7 +270,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 | P2-3 | Publish `source_id` from every parser; complete registry coverage | P2 | L | — | Done |
 | P2-4 | Multi-day replay corpus and precision/recall evaluation | P2 | L | — | Done |
 | P2-5 | Sports expansion with measured admissibility | P2 | L | P2-4 | Done |
-| P2-6 | Candidate-queue quality and coverage metrics | P2 | M | P0-1, P1-1 | Not started |
+| P2-6 | Candidate-queue quality and coverage metrics | P2 | M | P0-1, P1-1 | Done |
 | P2-7 | Identical-feed ("skin") detection | P2 | M | P0-7 | Not started |
 | P2-8 | Event-identity edge cases: doubleheaders and rematches | P2 | M | P2-4 | Not started |
 | P2-9 | Silent-drop coverage budget | P2 | M | P0-7 | Not started |
@@ -963,7 +963,7 @@ was added.
 
 ### P2-6 — Candidate-queue quality and coverage metrics
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P2
 **Effort:** M
 **Depends on:** P0-1, P1-1
@@ -982,10 +982,10 @@ was added.
 
 **Acceptance criteria:**
 
-- [ ] The queue payload has counts by blocker class.
-- [ ] A reviewer can filter to actionable candidates.
-- [ ] The dashboard does not present informational entries as work.
-- [ ] The before/after numbers are recorded.
+- [x] The queue payload has counts by blocker class.
+- [x] A reviewer can filter to actionable candidates.
+- [x] The dashboard does not present informational entries as work.
+- [x] The before/after numbers are recorded.
 
 **Tests:**
 
@@ -1423,6 +1423,30 @@ Before writing a claim about behavior, run the command that proves it and paste 
 ## 6. Execution log
 
 Newest first. Each entry: date, task, status, commands, measured result, files changed, follow-ups.
+
+### 2026-11-04 — P2-6: Candidate-queue quality and coverage metrics
+
+**Task:** P2-6 (depends on P0-1 and P1-1, both complete).
+**Status:** Done.
+
+**Commands and results:**
+
+- `python -m pytest tests/test_candidate_quality.py tests/test_candidates_api.py -q` → passed.
+- Recomputed the real 2026-11-04 prematch cache with the current matcher and candidate builder: **5,569 queued**, **87 alias-actionable**, **4,196 league-blocked**, **0 link-pending**, **1,286 informational** (8,969 matches, 1,499 groups; 36.8 s, no network).
+- `python -m ruff check .`, `python -m mypy .` → clean.
+
+**What changed:**
+
+- `server/api.py`: `_candidate_blocker` / `_candidate_breakdown` classify each queued pair as `alias`, `league`, `link` or `other`; `/api/candidates` returns `blocker_counts` for the full queue even when the page is filtered; `/api/health` reports the same per feed; scan history records `candidate_queue` and `candidate_actionable`.
+- Dashboard: the Review tab shows the blocker breakdown, and History has a Queue column with actionable/queued counts.
+- `tests/test_candidate_quality.py` (new): classification, filtered API counts, health, history and frontend hooks.
+- `docs/evidence/2026-11-04-candidate-quality.json`: the real before/after numbers.
+
+**Trust rules:** unchanged. Blocked candidates are still labelled, never hidden; suppression remains premise-aware.
+
+**Follow-ups:** P2-7 (identical-feed detection) is next.
+
+---
 
 ### 2026-11-04 — P2-5: Sports expansion with measured admissibility
 
