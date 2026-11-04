@@ -278,7 +278,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 | P3-1 | Persistent storage v2 (SQLite) and migration | P3 | L | P0-1, P1-1 | Done |
 | P3-2 | Bet log, bankroll, and CLV analytics | P3 | L | P3-1 | Done |
 | P3-3 | Advisory execution workflow and limits | P3 | M | P3-2 | Done |
-| P3-4 | Alerts, PWA, accessibility, and Bosnian UI | P3 | M | P1-5 | Not started |
+| P3-4 | Alerts, PWA, accessibility, and Bosnian UI | P3 | M | P1-5 | Done |
 | P3-5 | Authentication and key management hardening | P3 | M | P1-3 | Not started |
 | P3-6 | Book risk profiles and advisory pacing | P3 | M | P1-7 | Not started |
 | P3-7 | Record-only / paper-trading mode | P3 | M | P3-1 | Not started |
@@ -1253,7 +1253,7 @@ no adapter is enabled.
 
 ### P3-4 — Alerts, PWA, accessibility, and Bosnian UI
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P3
 **Effort:** M
 **Depends on:** P1-5
@@ -1272,10 +1272,10 @@ no adapter is enabled.
 
 **Acceptance criteria:**
 
-- [ ] The app is installable and opens without a bundler.
-- [ ] Alerts respect the dedupe policy.
-- [ ] A keyboard-only user can scan, filter, open a slip, and copy a stake.
-- [ ] The language toggle persists.
+- [x] The app is installable and opens without a bundler.
+- [x] Alerts respect the dedupe policy.
+- [x] A keyboard-only user can scan, filter, open a slip, and copy a stake.
+- [x] The language toggle persists.
 
 **Tests:**
 
@@ -1424,6 +1424,30 @@ Before writing a claim about behavior, run the command that proves it and paste 
 ## 6. Execution log
 
 Newest first. Each entry: date, task, status, commands, measured result, files changed, follow-ups.
+
+### 2026-11-04 — P3-4: PWA, accessibility and Bosnian UI
+
+**Task:** P3-4 (depends on P1-5, complete).
+**Status:** Done.
+
+**Commands and results:**
+
+- `python -m pytest tests/test_pwa_accessibility.py tests/test_readme_claims.py -q` → passed.
+- `python -m ruff check .`, `python -m mypy .` → clean.
+
+**What changed:**
+
+- `frontend/manifest.webmanifest` and `frontend/sw.js`: installable shell; the worker caches only static assets and returns network-only for `/api/`, so odds are never served stale.
+- `frontend/index.html`: manifest/theme link, skip link to `#main`, language selector, browser-alert button, `aria-live` on status surfaces, `data-i18n` on the main labels.
+- `frontend/js/app.js`: `I18N.en`/`I18N.bs`, persisted `setLanguage`/`applyLanguage`, notification permission flow and service-worker registration.
+- `frontend/css/style.css`: visible-on-focus skip link.
+- `tests/test_pwa_accessibility.py` (new) and `docs/PWA_ACCESSIBILITY.md` (installability, cache rule, string workflow, manual source pass).
+
+**Trust rules:** unchanged. The service worker cannot cache API/odds, and alerts remain the P1-5 deduped path.
+
+**Follow-ups:** P3-5 (auth keys) is the last requested task.
+
+---
 
 ### 2026-11-04 — P3-3: Advisory execution workflow and limits
 

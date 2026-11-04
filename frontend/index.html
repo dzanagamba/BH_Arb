@@ -2,6 +2,8 @@
 <html lang="bs">
 <head>
     <meta charset="UTF-8">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <meta name="theme-color" content="#0b1220">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Surebet BiH</title>
     <meta name="description" content="Find and place surebets across Bosnian bookmakers.">
@@ -15,6 +17,7 @@
     <link rel="stylesheet" href="/css/style.css?v=7">
 </head>
 <body>
+<a class="skip-link" href="#main">Skip to content</a>
 
 <header class="topbar">
     <div class="brand">
@@ -41,7 +44,7 @@
         <button class="btn btn-icon btn-ghost" id="settings-btn" data-action="toggle-settings" data-open="true" aria-label="Settings" title="Settings">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
         </button>
-        <button class="btn btn-primary btn-scan" id="scan-btn" data-action="scan-now">Scan now</button>
+        <button class="btn btn-primary btn-scan" id="scan-btn" data-action="scan-now"><span data-i18n="action.scan">Scan now</span></button>
     </div>
 </header>
 
@@ -60,7 +63,7 @@
     <button class="error-banner-close" data-action="hide-error" aria-label="Dismiss">✕</button>
 </div>
 
-<main class="main">
+<main class="main" id="main" tabindex="-1">
     <!-- P0-4: cached rows stay visible, but a feed past its TTL must never look
          like a current opportunity. The text is written by renderFreshnessBanner. -->
     <div class="freshness-banner" id="freshness-banner" role="alert" aria-live="polite" hidden></div>
@@ -69,19 +72,19 @@
     <nav class="results-tabs" role="tablist" aria-label="Dashboard views">
         <button class="tab-btn active" id="surebets-tab" data-tab="surebets" role="tab"
                 aria-selected="true" aria-controls="surebets-panel" tabindex="0"
-                data-action="switch-tab">Surebets <span id="surebets-count" class="tab-count">0</span></button>
+                data-action="switch-tab"><span data-i18n="tab.surebets">Surebets</span> <span id="surebets-count" class="tab-count">0</span></button>
         <button class="tab-btn" id="review-tab" data-tab="review" role="tab"
                 aria-selected="false" aria-controls="review-panel" tabindex="-1"
-                data-action="switch-tab">Diagnostics <span id="review-count" class="tab-count">0</span></button>
+                data-action="switch-tab"><span data-i18n="tab.diagnostics">Diagnostics</span> <span id="review-count" class="tab-count">0</span></button>
         <button class="tab-btn" id="history-tab" data-tab="history" role="tab"
                 aria-selected="false" aria-controls="history-panel" tabindex="-1"
-                data-action="switch-tab">History</button>
+                data-action="switch-tab"><span data-i18n="tab.history">History</span></button>
         <button class="tab-btn" id="evidence-tab" data-tab="evidence" role="tab"
                 aria-selected="false" aria-controls="evidence-panel" tabindex="-1"
-                data-action="switch-tab">Evidence</button>
+                data-action="switch-tab"><span data-i18n="tab.evidence">Evidence</span></button>
         <button class="tab-btn" id="other-tab" data-tab="other" role="tab"
                 aria-selected="false" aria-controls="other-panel" tabindex="-1"
-                data-action="switch-tab">Other sports <span id="other-count" class="tab-count">0</span></button>
+                data-action="switch-tab"><span data-i18n="tab.other">Other sports</span> <span id="other-count" class="tab-count">0</span></button>
     </nav>
 
     <!-- Surebets: summary strip, then list on the left and bet slip on the right -->
@@ -151,7 +154,7 @@
                         Click <strong>Scan Now</strong> to start scanning your connected bookmakers for arbitrage opportunities. Browser windows will open — solve any CAPTCHA if prompted.
                     </p>
                     <div id="empty-state-actions" hidden></div>
-                    <button type="button" class="btn btn-primary btn-lg empty-cta" data-action="scan-now">Scan now</button>
+                    <button type="button" class="btn btn-primary btn-lg empty-cta" data-action="scan-now"><span data-i18n="action.scan">Scan now</span></button>
                     <div class="empty-state-bookies" id="empty-state-bookies"></div>
                 </div>
 
@@ -291,7 +294,16 @@
     </div>
 
     <section class="drawer-section">
-        <h3>Staking</h3>
+        <h3 data-i18n="settings.language">Language</h3>
+        <label class="field"><span data-i18n="settings.languageLabel">Interface language</span>
+            <select class="input" id="filter-language">
+                <option value="en">English</option>
+                <option value="bs">Bosanski</option>
+            </select></label>
+    </section>
+
+    <section class="drawer-section">
+        <h3 data-i18n="settings.staking">Staking</h3>
         <label class="field"><span>Default total stake (KM)</span>
             <input class="input mono" type="number" id="filter-investment" value="100" min="1" max="100000" step="10"></label>
         <label class="field"><span>Round stakes to</span>
@@ -303,7 +315,7 @@
     </section>
 
     <section class="drawer-section">
-        <h3>Scanning</h3>
+        <h3 data-i18n="settings.scanning">Scanning</h3>
         <label class="field"><span>Rescan automatically</span>
             <select class="input" id="filter-autorescan">
                 <option value="0">Off</option>
@@ -311,7 +323,8 @@
                 <option value="5">Every 5 min</option>
                 <option value="10">Every 10 min</option>
             </select></label>
-        <label class="field field-check"><input type="checkbox" id="sound-toggle"> <span>Chime on a new surebet above 3%</span></label>
+        <label class="field field-check"><input type="checkbox" id="sound-toggle"> <span data-i18n="settings.sound">Chime on a new surebet above 3%</span></label>
+        <button class="btn btn-secondary btn-small" id="notify-btn" data-action="enable-notifications">Enable browser alerts</button>
     </section>
 
     <section class="drawer-section">
@@ -341,7 +354,7 @@
                     <option value="live">Live</option>
                 </select></label>
             <button class="btn btn-secondary btn-small" data-action="sweep-links">Sweep links</button>
-            <p class="hint" id="sweep-status">Calls verify-links until every event is decided.</p>
+            <p class="hint" id="sweep-status" aria-live="polite">Calls verify-links until every event is decided.</p>
         </div>
         <p class="hint" id="bet-summary">No logged bets in the last 30 days.</p>
         <div class="health-bar" id="health-bar" style="display:none;"></div>
@@ -366,7 +379,7 @@
     </div>
 </div>
 
-<div class="toast" id="toast" role="status" hidden></div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
 <script src="/js/app.js?v=7" nonce="__CSP_NONCE__"></script>
 </body>

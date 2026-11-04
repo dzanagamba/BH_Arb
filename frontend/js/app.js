@@ -35,6 +35,55 @@ let audioContext = null;
 let autoRescanTimer = null;
 let knownSurebetSignatures = new Set();
 let healthSnapshot = null;          // last /api/health payload, kept for the no-surebet diagnostic
+let language = (() => { try { return localStorage.getItem('language') || 'en'; } catch (e) { return 'en'; } })();
+
+const I18N = {
+    en: {
+        'tab.surebets': 'Surebets', 'tab.diagnostics': 'Diagnostics', 'tab.history': 'History',
+        'tab.evidence': 'Evidence', 'tab.other': 'Other sports', 'action.scan': 'Scan now',
+        'settings.language': 'Language', 'settings.languageLabel': 'Interface language',
+        'settings.staking': 'Staking', 'settings.scanning': 'Scanning',
+        'settings.sound': 'Chime on a new surebet above 3%',
+    },
+    bs: {
+        'tab.surebets': 'Sigurni dobici', 'tab.diagnostics': 'Dijagnostika', 'tab.history': 'Historija',
+        'tab.evidence': 'Dokazi', 'tab.other': 'Drugi sportovi', 'action.scan': 'Skeniraj',
+        'settings.language': 'Jezik', 'settings.languageLabel': 'Jezik interfejsa',
+        'settings.staking': 'Ulog', 'settings.scanning': 'Skeniranje',
+        'settings.sound': 'Zvuk za novi sigurni dobitak iznad 3%',
+    },
+};
+
+function applyLanguage() {
+    const dictionary = I18N[language] || I18N.en;
+    document.documentElement.lang = language;
+    document.querySelectorAll('[data-i18n]').forEach(element => {
+        const key = element.dataset.i18n;
+        if (dictionary[key]) element.textContent = dictionary[key];
+    });
+    const select = document.getElementById('filter-language');
+    if (select) select.value = language;
+}
+
+function setLanguage(value) {
+    language = value === 'bs' ? 'bs' : 'en';
+    try { localStorage.setItem('language', language); } catch (e) { /* ignore */ }
+    applyLanguage();
+}
+
+async function enableNotifications() {
+    if (!('Notification' in window)) {
+        showToast('This browser does not support notifications.');
+        return;
+    }
+    const permission = await Notification.requestPermission();
+    showToast(permission === 'granted' ? 'Browser alerts enabled.' : 'Browser alerts were not enabled.');
+}
+
+// P3-4: installable shell only. Odds and /api responses are never cached.
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(() => { /* installability is optional */ });
+}
 let resultsSnapshot = null;         // last /api/results payload, same reason
 let freshnessSnapshot = null;       // P0-4: scan age, TTL and per-book freshness
 let freshnessBannerSignature = null; // avoids rebuilding the banner's button every tick
@@ -155,6 +204,7 @@ function outcomeDescription(label, marketType, sport) {
 document.addEventListener('DOMContentLoaded', async () => {
     restorePreferences();
     restoreMode();
+    applyLanguage();
     updateThemeButton();
     initInteractionHandlers();
     await loadConfig();
@@ -199,6 +249,7 @@ function handleDataAction(event) {
         case 'shutdown-server': shutdownServer(); break;
         case 'sweep-links': sweepLinks(); break;
         case 'log-bet': logBet(element.dataset.slipId); break;
+        case 'enable-notifications': enableNotifications(); break;
         case 'set-market-filter': setMarketFilter(element.dataset.market); break;
         case 'copy-text': copyText(element.dataset.copy, element.dataset.copyMessage); break;
         case 'close-slip': closeSlip(); break;
@@ -223,6 +274,8 @@ function handleDataInput(event) {
         renderOtherSports();
     } else if (element.id === 'evidence-search') {
         loadEvidence(true);
+    } else if (element.id === 'filter-language') {
+        setLanguage(element.value);
     } else if (element.id === 'filter-investment') {
         recalculateAll(element.value);
     } else if (element.matches('[data-slip-investment-input]')) {

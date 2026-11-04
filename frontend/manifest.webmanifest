@@ -1,0 +1,10 @@
+{
+  "name": "BH_Arb Surebet Scanner",
+  "short_name": "BH_Arb",
+  "description": "Advisory surebet scanner for Bosnian bookmakers. Never places a bet.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b1220",
+  "theme_color": "#0b1220",
+  "icons": []
+}

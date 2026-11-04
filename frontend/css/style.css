@@ -1086,3 +1086,17 @@ body.feed-stale .row-profit b { color: var(--warn); }
     text-transform: uppercase;
     letter-spacing: .03em;
 }
+
+/* P3-4: keyboard skip link, visible only on focus. */
+.skip-link {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    z-index: 10000;
+    padding: 10px 16px;
+    background: var(--bg, #0b1220);
+    color: var(--text, #fff);
+    border: 1px solid var(--border, #334155);
+    border-radius: 0 0 8px 0;
+}
+.skip-link:focus { left: 0; }
