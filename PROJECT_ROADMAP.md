@@ -1401,7 +1401,7 @@ Newest first. Each entry: date, task, status, commands, measured result, files c
 
 **Files changed:** `engine/certainty.py` (pair→entries index; `_proving_allowlist_entries`), `server/api.py` (compact cache writer, size guard and `/api/health` `cache` block), `config/settings.py` (`CACHE_SIZE_BUDGET_BYTES`), `tests/test_certainty.py`, `tests/test_cache_serialization.py`, `tests/test_e2e_certified.py` (asserts the consulted entries instead of the whole allowlist), `docs/ACCEPTANCE.md`, `PROJECT_ROADMAP.md`.
 
-**Follow-ups:** P0-3 is next. P1-1 (paginated group-evidence API) is now unblocked; the `/api/debug/report` payload is ~11 MB for this scan, still worth pagination but no longer a 179 MB browser freeze. Compact cache writing is runtime-only; config and decision files keep readable indentation.
+**Follow-ups:** P0-2 is the first `Not started` task by table order; P0-3 is the roadmap's recommended small follow-up. P1-1 (paginated group-evidence API) is now unblocked; the `/api/debug/report` payload is ~11 MB for this scan, still worth pagination but no longer a 179 MB browser freeze. Compact cache writing is runtime-only; config and decision files keep readable indentation.
 
 ---
 
