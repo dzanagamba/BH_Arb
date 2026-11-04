@@ -481,6 +481,46 @@ def test_allowlist_lookup_is_invalidated_when_the_set_changes():
     assert gate._is_allowlisted("Alpha United", "Alpha") is True
 
 
+def test_allowlist_evidence_records_only_the_proving_entry():
+    """F1/P0-1: the record names the entry that proved the pair, not the allowlist.
+
+    A real scan persisted the entire 3,000-entry allowlist inside every
+    allowlist-sourced evidence record. The decision was right; the payload was
+    not. The record must stay non-empty and exact.
+    """
+    proving = {"alpha united|alpha", "bravo city|bravo"}
+    unrelated = {f"unrelated {i}|other {i}" for i in range(2_000)}
+    gate = CertaintyGate(alias_allowlist=proving | unrelated)
+    a = _m(
+        "a",
+        "Alpha United",
+        "Bravo City",
+        "League",
+        home_n="alpha united",
+        away_n="bravo city",
+        event_id="1",
+    )
+    b = _m(
+        "b",
+        "Alpha",
+        "Bravo",
+        "League",
+        home_n="alpha",
+        away_n="bravo",
+        event_id="2",
+    )
+    gate.normalize([a, b])
+
+    result = gate.evaluate_pair(a, b)
+
+    assert result.status == "verified"
+    team = next(e for e in result.evidence if e.rule == "team_identity")
+    assert team.source == "allowlist"
+    assert set(team.allowlist_entries) == proving
+    assert len(team.allowlist_entries) == 2
+    assert len(team.allowlist_entries) < len(gate.alias_allowlist)
+
+
 def test_reviewed_lookup_is_invalidated_when_the_set_changes():
     reviewed = {"unrelated one|unrelated two"}
     gate = CertaintyGate(reviewed_aliases=reviewed)

@@ -220,8 +220,9 @@ def _wwin_match() -> Match:
     the markets are WWIN's and only the identity shell is this module's.
 
     WWIN is where the allowlist is exercised: it spells the same fixture
-    "Zeljeznicar - FK Sarajevo", which needs both ``zeljeznicar|željezničar``
-    and ``fk sarajevo|sarajevo`` from ``config/team_alias_allowlist.json``.
+    "Zeljeznicar - FK Sarajevo". "Zeljeznicar" resolves losslessly to
+    "Željezničar", while "FK Sarajevo" needs the reviewed alias
+    ``fk sarajevo|sarajevo`` from ``config/team_alias_allowlist.json``.
     """
     data = _capture("wwin")
     return Match(
@@ -380,14 +381,12 @@ def test_captured_markets_reach_the_verified_group_through_the_registry():
 
     # The gate's own evidence, not just the flag. Each accepted pairing appends
     # one `team_identity` record, and the gate attributes the allowlist to the
-    # pairing that needed it: WWIN spells both teams differently, so its record
-    # is `source="allowlist"` with `reason="swapped"`, while SportPlus's
+    # pairing that needed it: WWIN spells one side differently, so its record is
+    # `source="allowlist"` with `reason="swapped"`, while SportPlus's
     # byte-identical names are `source="rule"`. That attribution is the claim.
-    # The entry list alone is NOT: `certainty.py` dumps the whole configured
-    # allowlist into `allowlist_entries` for any allowlist-sourced record, so
-    # naming an entry proves it is configured, not that it was consulted. So
-    # this asserts which pairing used the allowlist, and separately that both
-    # of WWIN's spellings are on the list the evidence names.
+    # P0-1 changed what the entry list means: it now names the configured
+    # entries that actually proved THIS pairing, not the whole allowlist. So the
+    # list is both the attribution and the proof that the entry was consulted.
     team_evidence = [e for e in group.evidence if e.rule == "team_identity"]
     allowlist_evidence = [e for e in team_evidence if e.source == "allowlist"]
     rule_evidence = [e for e in team_evidence if e.source == "rule"]
@@ -403,11 +402,16 @@ def test_captured_markets_reach_the_verified_group_through_the_registry():
         )
     assert allowlist_evidence[0].reason == "swapped"
     assert allowlist_evidence[0].confidence == 1.0
-    for entry in ("zeljeznicar|željezničar", "fk sarajevo|sarajevo"):
-        assert entry in allowlist_evidence[0].allowlist_entries, (
-            f"{entry!r} is one of WWIN's two spellings and must be on the reviewed "
-            "list the gate credited"
-        )
+    proving_entries = set(allowlist_evidence[0].allowlist_entries)
+    # "Zeljeznicar" and "Željezničar" normalize to the same key, so that slot
+    # needs no alias. "FK Sarajevo" vs "Sarajevo" does, in both configured
+    # spellings (the matcher also holds the canonical form).
+    assert proving_entries == {"FK Sarajevo|Sarajevo", "fk sarajevo|sarajevo"}, (
+        "the record must name exactly the configured entries that proved the pair"
+    )
+    assert "zeljeznicar|željezničar" not in proving_entries, (
+        "diacritics are lossless, so that slot was proved without the allowlist"
+    )
 
 
 # --- seam 2: the gate's orientation -> find_surebets --------------------------

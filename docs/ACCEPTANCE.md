@@ -19,6 +19,40 @@ The cold replay starts with an empty evidence ledger, learns from the frozen
 corpus, and reaches a pass that adds no claim and changes no verdict. It has 0
 false merges and 0 unresolved evidence-backed pairs.
 
+## Cache payload (P0-1, 2026-11-04)
+
+F1 was a pure payload bug: every `team_identity` record whose proof used the
+alias allowlist persisted `sorted(alias_allowlist)` instead of the entry that
+proved the pairing. The gate's decision was correct; the evidence was a copy of
+configuration.
+
+Measured on the frozen 2026-11-03 nine-book cache (`cache/last_scan.json`,
+7,666 matches) by re-grouping the cached matches offline with the same gate:
+
+| Metric | Before | After |
+|---|---:|---:|
+| Cache file | **218.5 MB** | **23.3 MB** |
+| Match-group JSON (compact) | 127.8 MB | **7.3 MB** |
+| Match-group JSON (indented) | 178.8 MB | 11.1 MB |
+| Allowlist evidence records | 1,288 | 63 |
+| Allowlist entries persisted | 4,292,904 | **118** |
+| Largest record | 3,333 entries | **4 entries** |
+| Cache parse time | 2.62 s | **0.58 s** |
+
+The post-fix cache is written as compact JSON (it is a machine file, not
+hand-edited config), so the group JSON occupies its 7.3 MB compact form. A
+differential run with the previous evidence behavior produced the **same 1,237
+group signatures and statuses**, so the gate's decisions did not change.
+
+`/api/health` now reports `cache.prematch_bytes`, `cache.live_bytes`,
+`cache.budget_bytes` (default 40 MB, `CACHE_SIZE_BUDGET_BYTES`) and
+`cache.over_budget`; `_save_cache` logs a warning over budget.
+
+Regression tests:
+`tests/test_certainty.py::test_allowlist_evidence_records_only_the_proving_entry`
+and `tests/test_cache_serialization.py::test_cached_group_payload_is_bounded`.
+
+
 ## Browser hardening
 
 `server/app.py` sets `Content-Security-Policy` (`default-src 'self'`,

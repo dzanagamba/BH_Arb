@@ -39,6 +39,7 @@ from config.settings import (
     BOOKMAKERS,
     BROWSER_CONCURRENCY,
     CACHE_DIR,
+    CACHE_SIZE_BUDGET_BYTES,
     DEEP_LINK_VERIFY_RATE_LIMIT,
     DEFAULT_INVESTMENT,
     DUST_PROFIT_PERCENT,
@@ -245,14 +246,27 @@ _suppressed_premises: dict[str, str] = {}
 _SUPPRESSED_LOCK = threading.Lock()
 
 
-def _atomic_write_json(path: str, payload: object, prefix: str) -> None:
-    """Write JSON through a temp file so a reader never sees a partial document."""
+def _atomic_write_json(path: str, payload: object, prefix: str, indent: int | None = 2) -> None:
+    """Write JSON through a temp file so a reader never sees a partial document.
+
+    ``indent=None`` writes compact JSON. The scan cache uses that: it is a
+    machine file, never hand-edited, and indentation was a material share of a
+    218 MB cache before P0-1. Configuration and decision files keep the default
+    readable layout.
+    """
     directory = os.path.dirname(path) or "."
     os.makedirs(directory, exist_ok=True)
     fd, temp_path = tempfile.mkstemp(prefix=f".{prefix}.", suffix=".tmp", dir=directory, text=True)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as file:
-            json.dump(payload, file, ensure_ascii=False, indent=2, default=str)
+            json.dump(
+                payload,
+                file,
+                ensure_ascii=False,
+                indent=indent,
+                separators=(",", ":") if indent is None else None,
+                default=str,
+            )
             file.flush()
             os.fsync(file.fileno())
         os.replace(temp_path, path)
@@ -1608,6 +1622,14 @@ def _refresh_pairing_summary(
         _pairing_summary[mode] = {"error": str(exc)[:200]}
 
 
+def _cache_size(path: str) -> int:
+    """Return a cache file's size in bytes, or 0 when it does not exist."""
+    try:
+        return os.path.getsize(path)
+    except OSError:
+        return 0
+
+
 def _save_cache(mode: str = "prematch"):
     """Persist last scan results to JSON cache files (with TTL metadata P0-6).
 
@@ -1633,7 +1655,18 @@ def _save_cache(mode: str = "prematch"):
             "scan_time": scan_time,
             "fetched_at": scan_time,
         }
-        _atomic_write_json(cache_file, payload, os.path.basename(cache_file))
+        _atomic_write_json(
+            cache_file, payload, os.path.basename(cache_file), indent=None
+        )
+        size = _cache_size(cache_file)
+        if size > CACHE_SIZE_BUDGET_BYTES:
+            logger.warning(
+                "Cache %s is %.1f MB, over the %.1f MB budget — the evidence "
+                "payload may have regressed",
+                os.path.basename(cache_file),
+                size / 1e6,
+                CACHE_SIZE_BUDGET_BYTES / 1e6,
+            )
     except Exception as e:
         logger.warning(f"Cache save failed: {e}")
 
@@ -1970,6 +2003,18 @@ async def health():
             "errors": list(live_status.errors),
         },
         "odds_ttl_sec": ODDS_TTL_SECONDS,
+        # P0-1 guard. A scan cache that outgrows the budget means the persisted
+        # evidence payload regressed to carrying data it does not need; the size
+        # is reported rather than hidden so the regression is visible without a
+        # filesystem check.
+        "cache": {
+            "prematch_bytes": _cache_size(_PREMATCH_CACHE_FILE),
+            "live_bytes": _cache_size(_LIVE_CACHE_FILE),
+            "budget_bytes": CACHE_SIZE_BUDGET_BYTES,
+            "over_budget": max(
+                _cache_size(_PREMATCH_CACHE_FILE), _cache_size(_LIVE_CACHE_FILE)
+            ) > CACHE_SIZE_BUDGET_BYTES,
+        },
     }
 
 

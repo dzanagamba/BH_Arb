@@ -513,8 +513,8 @@ class CertaintyGate:
             self._reviewed_cache = cached
         return cached[1]
 
-    def _allowlist_index(self) -> frozenset[frozenset[str]]:
-        """The allowlist as a set of normalized pairs, rebuilt when it changes.
+    def _allowlist_index(self) -> dict[frozenset[str], tuple[str, ...]]:
+        """Map each normalized unordered pair to the entries that name it.
 
         Grouping asks this for every candidate pair; re-parsing a thousand-entry
         allowlist on each call made a scan's grouping several times slower.
@@ -523,14 +523,80 @@ class CertaintyGate:
         canonical forms) on every call cost more than the lookup it guards.
         Callers replace the set (``gate.alias_allowlist = set(...)``) or add to
         it; either one changes the key.
+
+        The values keep the ORIGINAL entry strings, so a `team_identity` record
+        can name the exact entry that proved a pairing. Persisting the whole
+        allowlist in every allowlisted record made a real cache 218 MB, almost
+        all of it duplicate alias text (F1/P0-1).
         """
         snapshot = (id(self.alias_allowlist), len(self.alias_allowlist))
         cached = getattr(self, "_allowlist_cache", None)
         if cached is None or cached[0] != snapshot:
-            index = frozenset(frozenset(entry) for entry in self.alias_allowlist_entries)
+            pairs: dict[frozenset[str], list[str]] = {}
+            for entry in self.alias_allowlist:
+                parts = {
+                    self._raw_team_key(part)
+                    for part in entry.split("|")
+                    if part.strip()
+                }
+                if len(parts) == 2:
+                    pairs.setdefault(frozenset(parts), []).append(entry)
+            index = {
+                pair: tuple(sorted(entries)) for pair, entries in pairs.items()
+            }
             cached = (snapshot, index)
             self._allowlist_cache = cached
         return cached[1]
+
+    def _allowlist_entries_for_pair(
+        self,
+        left_raw: str,
+        left_normalized: str,
+        right_raw: str,
+        right_normalized: str,
+    ) -> list[str]:
+        """Return only the configured entries that name this team pair.
+
+        The gate consults both the raw and the canonical spelling, so both are
+        looked up. De-duplication keeps the configured order stable when the
+        same entry is reachable through both forms.
+        """
+        if not self.alias_allowlist:
+            return []
+        index = self._allowlist_index()
+        entries: list[str] = []
+        for left, right in (
+            (left_raw, right_raw),
+            (left_normalized, right_normalized),
+        ):
+            pair = frozenset((self._raw_team_key(left), self._raw_team_key(right)))
+            entries.extend(index.get(pair, ()))
+        return list(dict.fromkeys(entries))
+
+    def _proving_allowlist_entries(
+        self, a: Match, b: Match, is_swapped: bool
+    ) -> list[str]:
+        """Return the allowlist entries that proved this pair's two team slots."""
+        if not self.alias_allowlist:
+            return []
+        if is_swapped:
+            pairs = (
+                (a.home_team, a.home_team_normalized, b.away_team, b.away_team_normalized),
+                (a.away_team, a.away_team_normalized, b.home_team, b.home_team_normalized),
+            )
+        else:
+            pairs = (
+                (a.home_team, a.home_team_normalized, b.home_team, b.home_team_normalized),
+                (a.away_team, a.away_team_normalized, b.away_team, b.away_team_normalized),
+            )
+        entries: list[str] = []
+        for left_raw, left_normalized, right_raw, right_normalized in pairs:
+            entries.extend(
+                self._allowlist_entries_for_pair(
+                    left_raw, left_normalized, right_raw, right_normalized
+                )
+            )
+        return list(dict.fromkeys(entries))
 
     @property
     def alias_allowlist_entries(self) -> list[set[str]]:
@@ -821,7 +887,9 @@ class CertaintyGate:
                 confidence=team_confidence,
                 reason=team_evidence_reason,
                 allowlist_entries=(
-                    sorted(self.alias_allowlist) if team_source == "allowlist" else []
+                    self._proving_allowlist_entries(a, b, is_swapped)
+                    if team_source == "allowlist"
+                    else []
                 ),
                 evidence_keys=(
                     [

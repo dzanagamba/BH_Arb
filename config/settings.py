@@ -214,6 +214,12 @@ RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
 
 # --- Cache ---
 CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "cache")
+# P0-1 guard: a nine-book scan cache was 218 MB because every allowlisted team
+# evidence record carried the whole alias allowlist. With only the proving
+# entries the same scan is tens of MB. Exceeding this budget means the payload
+# regressed, not that the feed grew, so `/api/health` and the cache writer both
+# report it.
+CACHE_SIZE_BUDGET_BYTES = int(os.getenv("CACHE_SIZE_BUDGET_BYTES", str(40 * 1024 * 1024)))
 
 # --- Match page URL templates (best-effort; scrapers may override with real per-match URLs) ---
 MATCH_URL_TEMPLATES: dict[str, str] = {

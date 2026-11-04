@@ -250,7 +250,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 
 | ID | Task | Priority | Effort | Depends on | Status |
 |---|---|---|---|---|---|
-| P0-1 | Bound the cached evidence payload | P0 | S | — | Not started |
+| P0-1 | Bound the cached evidence payload | P0 | S | — | Done |
 | P0-2 | Dashboard XSS + inline-handler + CSP hardening | P0 | M | — | Not started |
 | P0-3 | Gate-vocabulary truth audit and probe strengthening | P0 | S | — | Not started |
 | P0-4 | Runtime freshness and stale-state policy | P0 | M | — | Not started |
@@ -289,7 +289,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 
 ### P0-1 — Bound the cached evidence payload
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P0 (critical)
 **Effort:** S (one session)
 **Depends on:** none
@@ -309,12 +309,12 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 
 **Acceptance criteria:**
 
-- [ ] No `MatchEvidence.allowlist_entries` contains the full allowlist.
-- [ ] An allowlisted group still carries the exact entry that proved it.
-- [ ] A synthetic 9-book group's serialized size is bounded by its own data, not by `len(alias_allowlist)`.
-- [ ] A real/fixture cache is under 40 MB and match-group JSON under 15 MB.
-- [ ] Cache restore remains semantically identical (same groups, same statuses, same surebets).
-- [ ] `python -m pytest`, `ruff`, `mypy`, and the generated-doc check pass.
+- [x] No `MatchEvidence.allowlist_entries` contains the full allowlist.
+- [x] An allowlisted group still carries the exact entry that proved it.
+- [x] A synthetic 9-book group's serialized size is bounded by its own data, not by `len(alias_allowlist)`.
+- [x] A real/fixture cache is under 40 MB and match-group JSON under 15 MB.
+- [x] Cache restore remains semantically identical (same groups, same statuses, same surebets).
+- [x] `python -m pytest`, `ruff`, `mypy`, and the generated-doc check pass.
 
 **Tests:**
 
@@ -1378,6 +1378,32 @@ Before writing a claim about behavior, run the command that proves it and paste 
 ## 6. Execution log
 
 Newest first. Each entry: date, task, status, commands, measured result, files changed, follow-ups.
+
+### 2026-11-04 — P0-1: Bound the cached evidence payload
+
+**Task:** P0-1 (first eligible task; no dependencies).
+**Status:** Done.
+
+**Commands and results:**
+
+- `python -m pytest` → **1,254 passed** (was 1,251; +3 tests), 1 warning.
+- `python -m ruff check .` → clean.
+- `python -m mypy .` → clean on 134 source files.
+- `python scripts/generate_market_mapping_doc.py --check` → in sync.
+- `python scripts/replay_mappings.py tests/fixtures/replay/2026-11-03 --cold --check` → exit 0, fixed point, 0 false merges, 0 unresolved evidence-backed pairs, 2 ledger claims.
+- Frozen-cache measurement (`cache/last_scan.json`, 7,666 matches, re-grouped offline with kickoffs shifted as the replay does):
+  - cache **218.5 MB → 23.3 MB**;
+  - match-group JSON **127.8 MB compact / 178.8 MB indented → 7.3 MB / 11.1 MB**;
+  - allowlist evidence records **1,288 → 63**; persisted entries **4,292,904 → 118**; largest record **3,333 → 4**;
+  - cache parse **2.62 s → 0.58 s** (median of 3 runs).
+- Differential run with the old evidence behavior produced the same **1,237** group signatures and statuses as the new code, so decisions did not change.
+- New tests: `test_allowlist_evidence_records_only_the_proving_entry`, `test_cached_group_payload_is_bounded`, `test_health_reports_the_cache_size_budget`.
+
+**Files changed:** `engine/certainty.py` (pair→entries index; `_proving_allowlist_entries`), `server/api.py` (compact cache writer, size guard and `/api/health` `cache` block), `config/settings.py` (`CACHE_SIZE_BUDGET_BYTES`), `tests/test_certainty.py`, `tests/test_cache_serialization.py`, `tests/test_e2e_certified.py` (asserts the consulted entries instead of the whole allowlist), `docs/ACCEPTANCE.md`, `PROJECT_ROADMAP.md`.
+
+**Follow-ups:** P0-3 is next. P1-1 (paginated group-evidence API) is now unblocked; the `/api/debug/report` payload is ~11 MB for this scan, still worth pagination but no longer a 179 MB browser freeze. Compact cache writing is runtime-only; config and decision files keep readable indentation.
+
+---
 
 ### 2026-11-04 — Deep research pass
 
