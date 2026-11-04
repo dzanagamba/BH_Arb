@@ -412,3 +412,24 @@ def test_same_provider_id_may_bridge_a_missing_womens_marker():
     MatchMatcher().normalize_matches([men_like, women])
     result = CertaintyGate().evaluate_pair(men_like, women)
     assert result.status == "verified", result.reasons
+
+
+def test_ice_hockey_is_blocked_by_the_three_book_rule():
+    """P2-5: a blocked sport is a dated evidence entry, not a TODO."""
+    import json
+    from pathlib import Path
+
+    from config.settings import ENABLED_SPORTS
+
+    evidence = json.loads(
+        Path("docs/evidence/2026-11-04-sport-discovery.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    hockey = evidence["sports"]["ice_hockey"]
+
+    assert "ice_hockey" not in ENABLED_SPORTS
+    assert hockey["admissible"] is False
+    assert len(hockey["qualifying_books"]) < 3
+    assert "ice_hockey" in evidence["decision"]["left_unimplemented"]
+    assert "overtime" in evidence["decision"]["reason_ice_hockey"].lower()

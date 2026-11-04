@@ -269,7 +269,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 | P2-2 | Dated re-verification of no-event declarations | P2 | S | — | Done |
 | P2-3 | Publish `source_id` from every parser; complete registry coverage | P2 | L | — | Done |
 | P2-4 | Multi-day replay corpus and precision/recall evaluation | P2 | L | — | Done |
-| P2-5 | Sports expansion with measured admissibility | P2 | L | P2-4 | Not started |
+| P2-5 | Sports expansion with measured admissibility | P2 | L | P2-4 | Done |
 | P2-6 | Candidate-queue quality and coverage metrics | P2 | M | P0-1, P1-1 | Not started |
 | P2-7 | Identical-feed ("skin") detection | P2 | M | P0-7 | Not started |
 | P2-8 | Event-identity edge cases: doubleheaders and rematches | P2 | M | P2-4 | Not started |
@@ -928,7 +928,8 @@ harness, budget guard and two-cycle smoke evidence remain in `docs/SOAK.md`.
 
 ### P2-5 — Sports expansion with measured admissibility
 
-**Status:** Not started
+**Status:** Done — ice hockey blocked by the measured three-book rule; no parser
+was added.
 **Priority:** P2
 **Effort:** L
 **Depends on:** P2-4
@@ -947,10 +948,10 @@ harness, budget guard and two-cycle smoke evidence remain in `docs/SOAK.md`.
 
 **Acceptance criteria:**
 
-- [ ] The admissibility rule is applied before code.
-- [ ] No settlement mismatch is priced.
-- [ ] A blocked sport has a dated evidence entry, not a TODO.
-- [ ] Cross-sport pairing remains a hard reject.
+- [x] The admissibility rule is applied before code.
+- [x] No settlement mismatch is priced.
+- [x] A blocked sport has a dated evidence entry, not a TODO.
+- [x] Cross-sport pairing remains a hard reject.
 
 **Tests:**
 
@@ -1422,6 +1423,29 @@ Before writing a claim about behavior, run the command that proves it and paste 
 ## 6. Execution log
 
 Newest first. Each entry: date, task, status, commands, measured result, files changed, follow-ups.
+
+### 2026-11-04 — P2-5: Sports expansion with measured admissibility
+
+**Task:** P2-5 (depends on P2-4, complete).
+**Status:** Done — the candidate sport is blocked with evidence, so no code was added.
+
+**Commands and results:**
+
+- `python -m pytest tests/test_sports.py -q` → passed, including the new blocked-sport assertion.
+- Evidence: `docs/evidence/2026-11-04-sport-discovery.json`, measured on the same day with the fixed three-book rule.
+- Ice hockey: only `sportplus` and `mbet` publish three regular-time families. NSoft lacks a full-match handicap; MaxBet's only total includes overtime. Two books, not three; incl-OT is a different settlement.
+- Basketball and tennis remain the implemented non-football sports; `ice_hockey` stays out of `ENABLED_SPORTS`.
+
+**What changed:**
+
+- `docs/MULTISPORT_EVIDENCE.md` §5: the dated P2-5 re-audit and the exact blocker.
+- `tests/test_sports.py`: `test_ice_hockey_is_blocked_by_the_three_book_rule` pins the blocked evidence, the qualifying-book count, the overtime reason and the absence from `ENABLED_SPORTS`.
+
+**Trust rules:** unchanged. The three-book threshold was not lowered and settlement identity was not relaxed.
+
+**Follow-ups:** P2-6 (candidate-queue quality) is next.
+
+---
 
 ### 2026-11-04 — P2-4: Multi-day replay corpus and evaluation
 

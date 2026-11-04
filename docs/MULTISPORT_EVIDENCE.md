@@ -293,3 +293,21 @@ types; the new fields default to `football` / `full_time`.
   are recorded unmapped. They were not admitted because no label/structure and
   cross-book price proof exists for them yet; guessing one as a total or
   handicap would weaken the gate.
+
+## 5. P2-5 admissibility re-audit (2026-11-04)
+
+The expansion task re-applied the rule to the next candidate, ice hockey, using
+the same measured run above (`docs/evidence/2026-11-04-sport-discovery.json`).
+No new sport was admitted and no parser was added.
+
+- **Basketball** and **tennis** remain the only enabled non-football sports:
+  four and five qualifying books respectively, each with all three comparable
+  families.
+- **Ice hockey** is **blocked**, not a TODO: only `sportplus` and `mbet` publish
+  three regular-time families. NSoft has no full-match handicap, and MaxBet's
+  only total includes overtime, which is a different settlement.
+- The three-book threshold was not lowered to two, and the incl-OT total was not
+  treated as comparable.
+- Cross-sport pairing remains a hard `sport_mismatch` reject
+  (`tests/test_sports.py::test_sport_mismatch_is_a_hard_rejection`), and
+  `ice_hockey` stays out of `ENABLED_SPORTS`.
