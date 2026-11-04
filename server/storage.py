@@ -260,12 +260,17 @@ class Storage:
 
     def counts(self) -> dict[str, int]:
         with self._connect() as connection:
-            return {
-                table: int(
-                    connection.execute(f"SELECT COUNT(*) AS n FROM {table}").fetchone()["n"]
-                )
-                for table in ("scans", "decisions", "link_sweeps")
-            }
+            row = connection.execute(
+                "SELECT "
+                "(SELECT COUNT(*) FROM scans) AS scans, "
+                "(SELECT COUNT(*) FROM decisions) AS decisions, "
+                "(SELECT COUNT(*) FROM link_sweeps) AS link_sweeps"
+            ).fetchone()
+        return {
+            "scans": int(row["scans"]),
+            "decisions": int(row["decisions"]),
+            "link_sweeps": int(row["link_sweeps"]),
+        }
 
     def prune_scans(self, *, days: int = 90) -> int:
         cutoff = (datetime.now(UTC).replace(tzinfo=None) - timedelta(days=days)).isoformat()

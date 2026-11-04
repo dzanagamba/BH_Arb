@@ -1698,7 +1698,7 @@ Newest first. Each entry: date, task, status, commands, measured result, files c
 
 **Commands and results:**
 
-- `python scripts/evaluate_matching.py --check` → **3 days**, 4 scans, both modes, 413 same / 60 different labels, precision **100%**, recall **100%**, strict miss **0%**, false merges **0**.
+- `python scripts/evaluate_matching.py --check` → **3 days**, 4 scans, both modes, 413 same / 60 different labels, precision **100%**, clean-ledger recall **96.37%** (398 matched, 15 learned-alias misses), strict miss **3.63%**, false merges **0**.
 - `python -m pytest tests/test_evaluate_matching.py tests/test_replay.py -q` → 10 passed.
 - `python -m ruff check .`, `python -m mypy .` → clean.
 

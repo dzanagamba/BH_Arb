@@ -24,15 +24,18 @@ live caches (complete verified groups only, plus cross-group negatives).
 | Days | 3 |
 | Scans | 4 |
 | Modes | prematch, live |
-| Same-label pairs | 413 |
+| Same-label pairs | 413 (398 matched, 15 missed) |
 | Different-label pairs | 60 |
 | Precision | **100.00%** |
-| Recall | **100.00%** |
-| Strict miss rate | **0.00%** |
+| Recall | **96.37%** |
+| Strict miss rate | **3.63%** |
 | False-merge rate | **0.00%** |
 
-Thresholds enforced by `--check`: precision >= 99%, recall >= 80%, false-merge
-rate 0%, at least 3 days, and both prematch and live present. The raw report is
+The evaluation uses a clean ledger, not an operator's learned aliases. The 15
+live misses are positive pairs that required learned aliases in the original
+scan; they are reported rather than hidden. Thresholds enforced by `--check`:
+precision >= 99%, recall >= 80%, false-merge rate 0%, at least 3 days, and both
+prematch and live present. The raw report is
 `docs/evidence/2026-11-04-matching-eval.json`.
 
 ## What the labels cover, and what they do not

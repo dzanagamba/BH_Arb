@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -54,7 +55,12 @@ def _pairs(keys: list[str]) -> set[tuple[str, str]]:
 def evaluate_scan(
     matches: list[Match], labels: dict[str, list[list[str]]]
 ) -> dict[str, Any]:
-    groups = MatchMatcher().group_matches(matches)
+    # A frozen evaluation is run with a clean ledger, not the operator's learned
+    # aliases: the corpus labels were reviewed on a real scan, so a clean result
+    # measures what a fresh deployment would match.
+    with tempfile.TemporaryDirectory(prefix="bh-eval-ledger-") as temp:
+        matcher = MatchMatcher(evidence_path=Path(temp) / "empty.json")
+        groups = matcher.group_matches(matches)
     predicted: set[tuple[str, str]] = set()
     for group in groups:
         if group.status != "verified":

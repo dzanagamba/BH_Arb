@@ -2410,9 +2410,9 @@ async function loadHealth() {
             : 'Pairing —';
         const coverageFlags = (Number(data.coverage_budget?.prematch?.flag_count) || 0)
             + (Number(data.coverage_budget?.live?.flag_count) || 0);
-        const coverageText = coverageFlags ? ` | Coverage ${coverageFlags} flag(s)` : '';
-        bar.innerHTML = `Health — Prematch ${fmtAge(data.prematch?.last_scan_age_sec)} [${fmtPer(data.prematch?.per_bookie)}] | Live ${fmtAge(data.live?.last_scan_age_sec)} [${fmtPer(data.live?.per_bookie)}] | TTL ${data.odds_ttl_sec}s | ${pairing}${coverageText}`;
+        bar.innerHTML = `Health — Prematch ${fmtAge(data.prematch?.last_scan_age_sec)} [${fmtPer(data.prematch?.per_bookie)}] | Live ${fmtAge(data.live?.last_scan_age_sec)} [${fmtPer(data.live?.per_bookie)}] | TTL ${data.odds_ttl_sec}s | ${pairing}`;
         const titles = [...(data.prematch?.errors||[]), ...(data.live?.errors||[])];
+        if (coverageFlags) titles.push(`Coverage ${coverageFlags} flag(s)`);
         for (const mode of ['prematch', 'live']) {
             for (const flag of (data.coverage_budget?.[mode]?.flags || [])) {
                 titles.push(`${mode} ${flag.bookmaker}/${flag.sport}/${flag.market}: ${flag.kind} ${flag.observed}/${flag.baseline}`);

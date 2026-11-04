@@ -2538,7 +2538,8 @@ def _enforce_sliding_window(
     if limit <= 0:
         return
     # A named key gets its own bucket; open/local mode still keys on the client.
-    client = getattr(request.state, "api_key_id", "") or (
+    state = getattr(request, "state", None)
+    client = getattr(state, "api_key_id", "") or (
         request.client.host if request.client else "unknown"
     )
     now_ts = time.time()

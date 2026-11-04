@@ -72,9 +72,9 @@
       ],
       "day": "2026-11-04",
       "false_merge_rate": 0.0,
-      "false_negative": 0,
+      "false_negative": 15,
       "false_positive": 0,
-      "groups": 12,
+      "groups": 10,
       "label_source": "/home/nedim/BH_Arb/tests/fixtures/replay/2026-11-04/labels/live.json",
       "labels": {
         "different": 30,
@@ -84,15 +84,15 @@
       "mode": "live",
       "note": "Bounded extract from a real scan; labels are gate-reviewed pairs from that scan, not independent ground truth.",
       "precision": 1.0,
-      "recall": 1.0,
+      "recall": 0.8485,
       "source": "/home/nedim/BH_Arb/tests/fixtures/replay/2026-11-04/live.json",
       "sports": [
         "football"
       ],
-      "strict_miss_rate": 0.0,
+      "strict_miss_rate": 0.1515,
       "true_negative": 30,
-      "true_positive": 99,
-      "verified_groups": 12
+      "true_positive": 84,
+      "verified_groups": 10
     },
     {
       "books": [
@@ -151,7 +151,7 @@
     ],
     "days": 3,
     "false_merge_rate": 0.0,
-    "false_negative": 0,
+    "false_negative": 15,
     "false_positive": 0,
     "labels": {
       "different": 60,
@@ -162,10 +162,10 @@
       "prematch"
     ],
     "precision": 1.0,
-    "recall": 1.0,
+    "recall": 0.9637,
     "scans": 4,
-    "strict_miss_rate": 0.0,
+    "strict_miss_rate": 0.0363,
     "true_negative": 60,
-    "true_positive": 413
+    "true_positive": 398
   }
 }
