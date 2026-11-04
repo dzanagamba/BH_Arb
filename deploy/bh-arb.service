@@ -1,0 +1,55 @@
+# Bare-metal systemd unit for BH_Arb (P1-3).
+#
+# Install as /etc/systemd/system/bh-arb.service after placing the checkout at
+# /opt/bh-arb and creating the service user. Full steps:
+# docs/DEPLOYMENT.md.
+#
+# The unit is intentionally hardened for a network-facing scraper: the root
+# filesystem is read-only apart from the runtime state directories, and the
+# process runs as a dedicated non-root user.
+
+[Unit]
+Description=BH_Arb surebet scanner
+Documentation=file:/opt/bh-arb/docs/DEPLOYMENT.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=bh-arb
+Group=bh-arb
+WorkingDirectory=/opt/bh-arb
+
+# Copy .env.example to /etc/bh-arb.env and set only what you need. The leading
+# "-" makes the file optional; the defaults below still apply.
+EnvironmentFile=-/etc/bh-arb.env
+Environment=HOST=127.0.0.1
+Environment=PORT=8000
+Environment=LOG_LEVEL=INFO
+Environment=PLAYWRIGHT_BROWSERS_PATH=/opt/bh-arb/playwright-browsers
+
+ExecStart=/opt/bh-arb/.venv/bin/python /opt/bh-arb/main.py
+# SIGINT reaches uvicorn's graceful shutdown; the app closes its lifespan tasks.
+KillSignal=SIGINT
+TimeoutStopSec=30
+Restart=on-failure
+RestartSec=10
+
+# Hardening.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+# Runtime state: scan caches and decision stores, the learned mapping ledger,
+# and the human-approved alias allowlist.
+ReadWritePaths=/opt/bh-arb/cache
+ReadWritePaths=/opt/bh-arb/config/generated
+ReadWritePaths=/opt/bh-arb/config/team_alias_allowlist.json
+
+[Install]
+WantedBy=multi-user.target

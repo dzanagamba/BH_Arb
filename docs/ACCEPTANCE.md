@@ -259,6 +259,57 @@ id on a refused request, context filter, JSON formatter allowlist, traceback,
 a server, API-key protection, one structured scan-completion record, counters,
 per-book empty/error outcomes, failed-scan counter).
 
+## Reproducible deployment (P1-3, 2026-11-04)
+
+A fresh Linux host had no shipped deployment path: the README described
+`python main.py`, and the runtime state, browser install and non-root step were
+all implicit.
+
+**Docker.** `Dockerfile` builds from `python:3.11-slim`, installs
+`requirements.txt`, runs `playwright install --with-deps chromium` into
+`/ms-playwright`, copies the app owned by a non-root `scanner` user
+(`BH_UID`/`BH_GID`, default `1000`), and exposes a `HEALTHCHECK` against
+`/api/health`. `.dockerignore` keeps `.venv`, caches, git metadata, tests, docs
+and secrets out of the context while retaining the tracked
+`config/generated/bookmaker_markets.json`.
+
+`docker-compose.yml` builds the image, publishes on loopback by default, mounts
+`./cache:/app/cache` and `./config:/app/config`, runs with `read_only: true`,
+`no-new-privileges`, a `/tmp` tmpfs and 1 GB `/dev/shm` for Chromium, and
+declares the same health check. Environment values pass through
+`${VAR:-default}` interpolation from `.env`.
+
+**systemd.** `deploy/bh-arb.service` runs as `bh-arb`, uses an optional
+`/etc/bh-arb.env`, restarts on failure, sends `SIGINT` for a graceful shutdown,
+and hardens the unit with `ProtectSystem=strict`, `ProtectHome=true` and
+`ReadWritePaths` limited to `cache/`, `config/generated/` and the alias
+allowlist.
+
+**Smoke test.** `scripts/docker_smoke.py` builds the image, starts it with a
+named cache volume, polls `/api/health`, asserts `id -u` is non-zero, writes a
+marker to `/app/cache`, restarts the container and verifies the marker survived.
+`.github/workflows/docker.yml` runs the build and this smoke test on demand and
+when deployment inputs change; it is deliberately separate from the fast unit
+job because the Chromium layer dominates the build time.
+
+**Backup/restore.** `docs/DEPLOYMENT.md` documents the trust inputs that must be
+backed up together: `cache/` (scan caches, history, opportunity metrics, feed
+integrity, deep-link verification/decision stores), the learned ledger
+`config/generated/mapping_evidence.json`, the human alias allowlist, and edited
+deep-link declarations.
+
+Tests: `tests/test_deployment_assets.py` covers the Dockerfile's base image,
+Playwright install, non-root user, health check; `.dockerignore` entries; the
+Compose mounts/health/hardening; the systemd unit's non-root and write paths; the
+smoke script's build/restart/uid markers; README copy-paste steps; backup list;
+and the optional Docker workflow.
+
+**Verification limit:** the image build and container smoke were not executed in
+this session because the local Docker socket is not accessible to the session
+user (`docker info` → permission denied; the user is not in the `docker` group).
+The assets and the smoke script are validated offline, and the optional Docker
+workflow runs exactly that build and smoke on a Docker-capable runner.
+
 ## Browser hardening
 
 `server/app.py` sets `Content-Security-Policy` (`default-src 'self'`,

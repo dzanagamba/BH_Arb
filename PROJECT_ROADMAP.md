@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-11-04
 **Repository:** `dzanagamba/BH_Arb` (`main`)
-**Status of this document:** audit complete; P0-1 through P0-7, P1-1 and P1-2 done, implementation continuing
+**Status of this document:** audit complete; P0-1 through P0-7, P1-1 through P1-3 done, implementation continuing
 **Purpose:** a durable, session-by-session plan so work can resume without re-reading the whole repository.
 
 > **How to use this document**
@@ -260,7 +260,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 | P0-7 | Feed-integrity scorecard and stale-book quarantine | P0 | M | P0-4 | Done |
 | P1-1 | Paginated, filtered group-evidence API | P1 | M | P0-1 | Done |
 | P1-2 | Structured logs, request IDs, metrics endpoint | P1 | M | — | Done |
-| P1-3 | Reproducible deployment (Docker/systemd) | P1 | M | — | Not started |
+| P1-3 | Reproducible deployment (Docker/systemd) | P1 | M | — | Done |
 | P1-4 | CI hardening: coverage, dependency and security scans | P1 | S | — | Not started |
 | P1-5 | Alerting with dedupe and retry | P1 | M | P1-2 | Not started |
 | P1-6 | 24-hour soak and resource budget | P1 | M | P0-1, P1-2 | Not started |
@@ -621,7 +621,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 
 ### P1-3 — Reproducible deployment (Docker/systemd)
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P1
 **Effort:** M
 **Depends on:** none
@@ -641,10 +641,10 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 
 **Acceptance criteria:**
 
-- [ ] Fresh clone + `docker compose up` serves the dashboard and `/api/health`.
-- [ ] Cache survives a container restart.
-- [ ] The container runs as a non-root user.
-- [ ] README has copy-paste deployment steps.
+- [x] Fresh clone + `docker compose up` serves the dashboard and `/api/health`.
+- [x] Cache survives a container restart.
+- [x] The container runs as a non-root user.
+- [x] README has copy-paste deployment steps.
 
 **Tests:**
 
@@ -1421,6 +1421,40 @@ Before writing a claim about behavior, run the command that proves it and paste 
 ## 6. Execution log
 
 Newest first. Each entry: date, task, status, commands, measured result, files changed, follow-ups.
+
+### 2026-11-04 — P1-3: Reproducible deployment (Docker/systemd)
+
+**Task:** P1-3 (first eligible task after P1-2; no dependencies).
+**Status:** Done.
+
+**Commands and results:**
+
+- `python -m pytest` → **1,328 passed**, 1 warning, 177.70 s (was 1,318; +10 tests).
+- `python -m ruff check .` → clean.
+- `python -m mypy .` → clean on 150 source files.
+- `python scripts/generate_market_mapping_doc.py --check` → in sync.
+- `python scripts/replay_mappings.py tests/fixtures/replay/2026-11-03 --cold --check` → exit 0, fixed point, 0 false merges, 0 unresolved evidence-backed pairs.
+- `docker-compose.yml` and `.github/workflows/docker.yml` parsed as valid YAML.
+- `python scripts/docker_smoke.py --help` → CLI loads.
+- **Not run locally:** `docker build` / the container smoke. The Docker daemon socket is not accessible to this session's user (`docker info` → permission denied; the user is not in the `docker` group), and `sudo` requires an interactive password. The optional Docker workflow runs the same build and smoke on a runner with Docker access.
+
+**What changed:**
+
+- `Dockerfile` (new): `python:3.11-slim`, pinned `requirements.txt`, Playwright Chromium via `--with-deps`, `PLAYWRIGHT_BROWSERS_PATH`, non-root `scanner` user with `BH_UID`/`BH_GID`, health check, `CMD python main.py`.
+- `.dockerignore` (new): excludes git, virtualenvs, test/lint/type caches, runtime `cache`, the gitignored mapping ledger, tests, docs and secrets.
+- `docker-compose.yml` (new): loopback port, `.env` interpolation, `./cache` and `./config` bind mounts, health check, read-only root, `no-new-privileges`, `/tmp` tmpfs and 1 GB `/dev/shm`.
+- `deploy/bh-arb.service` (new): non-root, optional env file, restart-on-failure, `SIGINT`, `ProtectSystem=strict`, `ProtectHome=true`, state-only `ReadWritePaths`.
+- `scripts/docker_smoke.py` (new): build → run with a named cache volume → health poll → non-root uid check → cache marker → restart → marker check → cleanup.
+- `.github/workflows/docker.yml` (new): optional build + smoke job on deployment-path changes and manual dispatch.
+- `docs/DEPLOYMENT.md` (new) and `README.md`: copy-paste Compose/systemd steps, UID/GID notes, health/metrics, smoke test, and the backup/restore list for `cache/`, the learned ledger, alias allowlist and edited declarations.
+- `tests/test_deployment_assets.py` (new): offline guards for every asset above.
+- `docs/PRODUCTION_READINESS.md`: Operations row now records the deployment path.
+
+**Trust rules:** unchanged. Deployment does not alter the certainty gate, price guard, freshness or feed-integrity policy. The container runs non-root and mounts only the runtime state the scanner already writes.
+
+**Follow-ups:** P1-4 (CI hardening) is the next eligible task. P1-5 and P1-6 remain unblocked. The Docker build/smoke should be run once on a Docker-capable host or via the optional workflow; the local limitation is recorded above.
+
+---
 
 ### 2026-11-04 — P1-2: Structured logs, request IDs, metrics endpoint
 

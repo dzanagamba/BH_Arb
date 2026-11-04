@@ -1,0 +1,32 @@
+# Build context hygiene. Everything excluded here is recreated at runtime or is
+# only needed on a developer machine.
+.git
+.gitignore
+.github
+.worktrees
+.venv
+venv
+env
+__pycache__
+*.py[cod]
+.pytest_cache
+.mypy_cache
+.ruff_cache
+
+# Runtime state: the container mounts these from the host.
+cache
+config/generated/mapping_evidence.json
+
+# Not needed to run the scanner.
+tests
+docs
+*.log
+playwright-report
+test-results
+.superpowers
+ScraperLogic.md
+
+# Secrets. .env.example documents the variables; .env never enters the image.
+.env
+.env.*
+!.env.example

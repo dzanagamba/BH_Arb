@@ -1,0 +1,53 @@
+# Reproducible local deployment (P1-3).
+#
+#   docker compose up --build
+#
+# The host's cache/ and config/ are bind-mounted so a scan cache, learned
+# mapping ledger and deep-link decision stores survive `docker compose down`.
+# The container runs as the image's non-root user; see docs/DEPLOYMENT.md for
+# the UID/GID and backup notes.
+services:
+  scanner:
+    build:
+      context: .
+      args:
+        BH_UID: ${BH_UID:-1000}
+        BH_GID: ${BH_GID:-1000}
+    image: bh-arb:local
+    init: true
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    shm_size: "1gb"          # Chromium needs more than the 64 MB default
+    tmpfs:
+      - /tmp
+    ports:
+      # Loopback only by default. Use "0.0.0.0:8000:8000" only behind a
+      # firewall and with API_KEY set.
+      - "127.0.0.1:${BH_PORT:-8000}:8000"
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "8000"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_FORMAT: ${LOG_FORMAT:-text}
+      API_KEY: ${API_KEY:-}
+      HEADLESS: "true"
+      AUTO_SCAN_PREMATCH_MINUTES: ${AUTO_SCAN_PREMATCH_MINUTES:-0}
+      AUTO_SCAN_LIVE_MINUTES: ${AUTO_SCAN_LIVE_MINUTES:-0}
+      HUMAN_MAPPING_ENABLED: ${HUMAN_MAPPING_ENABLED:-false}
+      PRICE_GUARD_ENABLED: ${PRICE_GUARD_ENABLED:-true}
+    volumes:
+      - ./cache:/app/cache
+      - ./config:/app/config
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    stop_grace_period: 30s

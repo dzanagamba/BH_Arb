@@ -152,6 +152,33 @@ baseline is `docs/evidence/2026-11-04-opportunity-rate-baseline.md`; until a
 7-day run exists it records the public reference (1.34% crossing) and says the
 local window is still empty rather than inventing a number.
 
+## Deployment
+
+The shortest reproducible path on a fresh Linux host:
+
+```bash
+git clone https://github.com/dzanagamba/BH_Arb.git
+cd BH_Arb
+mkdir -p cache
+docker compose up --build -d
+curl -fsS http://127.0.0.1:8000/api/health
+```
+
+The dashboard is at `http://127.0.0.1:8000/`. The image runs as a non-root
+`scanner` user, publishes only on loopback by default, and bind-mounts `cache/`
+and `config/` so scan history, learned mappings and deep-link decisions survive
+a restart. The first build installs Chromium and takes roughly 5–10 minutes
+(1–1.5 GB); later builds reuse the dependency layer.
+
+`python scripts/docker_smoke.py` builds the image, starts it, checks
+`/api/health`, verifies the runtime uid is non-root, and proves a marker in
+`/app/cache` survives a container restart.
+
+For UID/GID matching, systemd, health checks, and the exact backup/restore list
+(`cache/`, `config/generated/mapping_evidence.json`,
+`config/team_alias_allowlist.json`, `config/bookmaker_deeplinks.json`), see
+[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+
 ## Configuration
 
 Copy `.env.example` to `.env` and set only what you need:
@@ -292,6 +319,8 @@ and `tests/test_live_mode.py`.
 | `tests/` | Offline pytest suite; `tests/fixtures/markets/` holds captured payloads. |
 | `cache/` | Gitignored runtime state: last scan per feed, history, link proofs and decisions. |
 | `docs/` | Design history, acceptance notes, readiness assessments and evidence. |
+| `Dockerfile`, `.dockerignore`, `docker-compose.yml` | Reproducible non-root container with a Chromium install and health check. |
+| `deploy/bh-arb.service` | Hardened systemd unit for a bare-metal install. |
 
 ## Development
 
