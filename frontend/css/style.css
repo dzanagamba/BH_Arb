@@ -381,7 +381,7 @@ body.feed-stale .row-profit b { color: var(--warn); }
 /* ─── KPI strip ────────────────────────────────────────────────────────── */
 .kpis {
     display: grid;
-    grid-template-columns: 1.3fr repeat(3, minmax(0, 1fr));
+    grid-template-columns: 1.3fr repeat(4, minmax(0, 1fr));
     gap: 12px;
     margin-bottom: 16px;
 }

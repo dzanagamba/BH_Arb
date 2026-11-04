@@ -102,6 +102,13 @@ POST /api/scan
   diagnosis but is labelled historical. The dashboard shows a banner and
   disables copy actions; **Re-check odds** stays available as the only path that
   re-establishes a leg's current price.
+- **Opportunity rate is measured, not inferred.** The same pricing pass that
+  emits surebets also counts boards, crossings, crossings above the profit floor,
+  and actionable opportunities. `/api/results` and `/api/health` expose
+  `opportunity_metrics`, including a `zero_result_reason` that separates "no
+  board crossed", "crossed below floor", "all crossings guarded", and stale or
+  unverified feeds. Crossing lifetimes are kept as a bounded key store and
+  summarized as p50/p90. The dashboard shows a crossing-rate tile.
 
 ## Dashboard
 
@@ -115,6 +122,12 @@ POST /api/scan
 - **History** — per-scan counts and errors for both feeds.
 - **Settings** — stake, rounding, auto-rescan, alert sound, enabled bookmakers,
   experimental markets and the health line.
+
+`python scripts/opportunity_baseline.py --days 7` prints the aggregate
+opportunity-rate baseline for the recorded scan history. The first local
+baseline is `docs/evidence/2026-11-04-opportunity-rate-baseline.md`; until a
+7-day run exists it records the public reference (1.34% crossing) and says the
+local window is still empty rather than inventing a number.
 
 ## Configuration
 

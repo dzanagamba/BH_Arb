@@ -102,6 +102,46 @@ Tests: `tests/test_deeplinks.py` (change without restart, malformed fail-safe,
 recovery after fixing the file, health reporting) and
 `tests/test_candidates_api.py` (health source fields).
 
+## Opportunity-rate and arb-lifetime telemetry (P0-6, 2026-11-04)
+
+F13 was the missing denominator: the dashboard reported groups and surebets but
+could not say whether a zero-surebet scan saw no crossing, saw crossings that
+failed the gates, or priced only stale data.
+
+`engine/opportunity_metrics.py` observes every board the real pricing pass
+evaluates. A board is one event + market + line + period + settlement with the
+best cross-book combination; the observation is taken before the display
+filters, so a below-floor crossing and a price-guard drop are still counted.
+`/api/results` and `/api/health` report:
+
+| Field | Meaning |
+|---|---|
+| `boards` | Market instances the engine actually priced |
+| `crossed` | Boards with implied sum below 1.0 |
+| `crossed_above_floor` | Crossings at or above `DUST_PROFIT_PERCENT` (0.2%) |
+| `actionable` | Surebets kept after the price guard |
+| `crossing_rate_percent` | `crossed / boards` |
+| `floor_crossing_rate_percent` | `crossed_above_floor / boards` |
+| `actionable_rate_percent` | `actionable / boards` |
+| `median_margin`, `best_margin` | Median/minimum implied sum across boards |
+| `zero_result_reason` | `actionable`, `no_crossing`, `crossing_below_floor`, `crossing_guarded`, `stale_data`, `expired_data`, `unverified_data`, or `no_priced_boards` |
+| `lifetime` | p50/p90 seconds, sample count and live count |
+
+Crossing keys are `event + market + line + period + settlement`; each record
+keeps `first_crossed_at`, `last_crossed_at`, `last_seen_at` and
+`disappeared_at`. The store is bounded to 5,000 keys and a 7-day retention.
+Only aggregates, the crossing-key map, and one compact aggregate row per scan
+are persisted; the full board is not duplicated.
+
+The dashboard adds a **Crossing rate** tile and shows the actionable count or
+the zero-result reason beneath it. `scripts/opportunity_baseline.py --days 7`
+renders the aggregate report; the dated baseline is
+`docs/evidence/2026-11-04-opportunity-rate-baseline.md`.
+
+Tests: `tests/test_opportunity_metrics.py` (no crossing, below-floor crossing,
+above-floor actionable, stale group, disappearance, bounded keys, API exposure,
+and aggregate-only persistence).
+
 ## Browser hardening
 
 `server/app.py` sets `Content-Security-Policy` (`default-src 'self'`,

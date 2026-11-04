@@ -62,6 +62,12 @@ from engine.mapping_evidence import MappingLedger
 from engine.mapping_learner import learn
 from engine.market_registry import unmapped_markets
 from engine.matcher import MatchMatcher, swap_match_teams_and_odds
+from engine.opportunity_metrics import (
+    ScanMetrics,
+    lifetime_distribution,
+    summarize_scan,
+    update_lifetimes,
+)
 from engine.price_guard import filter_price_outliers
 from models.schemas import (
     CandidateReview,
@@ -367,6 +373,15 @@ _HISTORY_FILE = os.path.join(CACHE_DIR, "scan_history.json")
 _HISTORY_MAX = 50
 _PREMATCH_CACHE_FILE = os.path.join(CACHE_DIR, "last_scan.json")
 _LIVE_CACHE_FILE = os.path.join(CACHE_DIR, "last_live_scan.json")
+# P0-6: compact per-scan aggregates plus the bounded crossing-key store. The
+# full board remains in the scan cache; this file never duplicates it.
+_OPPORTUNITY_METRICS_FILE = os.path.join(CACHE_DIR, "opportunity_metrics.json")
+_opportunity_by_mode: dict[str, dict] = {}
+_crossing_lifetimes: dict[str, dict[str, dict]] = {"prematch": {}, "live": {}}
+# Aggregates only, one compact row per completed scan. The cap is a storage
+# bound, not a retention promise; the 7-day report filters by scan_time.
+_OPPORTUNITY_HISTORY_MAX = 2_000
+_opportunity_history: list[dict] = []
 
 
 def _state_for(mode: str) -> tuple[ScanStatus, list, list, list, dict]:
@@ -1547,6 +1562,9 @@ async def run_scan(mode: str = "prematch", scheduled: bool = False):
 
         status.current_bookmaker = "Detecting surebets..."
         engine = ArbitrageEngine()
+        # P0-6: the same pricing pass fills the denominator: every board it
+        # evaluates is observed before the display filters run.
+        scan_metrics = ScanMetrics()
         # P1-6: include dust (0.2%) — frontend filters/highlights by tier
         surebets = engine.find_surebets(
             groups,
@@ -1555,6 +1573,7 @@ async def run_scan(mode: str = "prematch", scheduled: bool = False):
             allow_past_kickoffs=is_live,
             enabled_markets=_enabled_markets(),
             mode=mode,
+            metrics=scan_metrics,
         )
         price_dropped = []
         if PRICE_GUARD_ENABLED:
@@ -1572,7 +1591,26 @@ async def run_scan(mode: str = "prematch", scheduled: bool = False):
 
         # --- Update state ---
         status.surebets_found = len(surebets)
-        status.last_scan_time = datetime.now(UTC).replace(tzinfo=None)
+        scan_finished_at = datetime.now(UTC).replace(tzinfo=None)
+        status.last_scan_time = scan_finished_at
+
+        # P0-6: aggregates from the boards this scan actually priced, and the
+        # bounded lifetime store keyed by event+market+line+period+settlement.
+        summary = summarize_scan(
+            scan_metrics,
+            surebets,
+            price_dropped,
+            mode=mode,
+            scan_time=scan_finished_at,
+            floor_profit_percent=DUST_PROFIT_PERCENT,
+        )
+        tracked = _crossing_lifetimes.setdefault(mode, {})
+        update_lifetimes(tracked, scan_metrics.boards, scan_finished_at)
+        summary["lifetime"] = lifetime_distribution(tracked, scan_finished_at)
+        summary["tracked_crossings"] = len(tracked)
+        _opportunity_by_mode[mode] = summary
+        _opportunity_history.insert(0, summary)
+        del _opportunity_history[_OPPORTUNITY_HISTORY_MAX:]
 
         # Serialize to dict for JSON responses
         surebets_cache[:] = [s.model_dump(mode="json") for s in surebets]
@@ -1580,6 +1618,7 @@ async def run_scan(mode: str = "prematch", scheduled: bool = False):
 
         # Persist to cache file
         _save_cache(mode)
+        _save_opportunity_metrics()
         _append_history(len(groups), mode)
 
         _refresh_pairing_summary(mode, matches_cache, report_cache)
@@ -1745,6 +1784,57 @@ def _freshness_block(mode: str, status: ScanStatus, matches: list[dict]) -> dict
     }
 
 
+def _load_opportunity_metrics() -> None:
+    """Restore the last aggregate summary and bounded crossing-key store."""
+    global _opportunity_by_mode, _crossing_lifetimes, _opportunity_history
+    try:
+        with open(_OPPORTUNITY_METRICS_FILE, encoding="utf-8") as file:
+            data = json.load(file)
+    except (OSError, ValueError):
+        return
+    if not isinstance(data, dict):
+        return
+    last = data.get("last")
+    if isinstance(last, dict):
+        _opportunity_by_mode = {
+            mode: value for mode, value in last.items() if isinstance(value, dict)
+        }
+    lifetimes = data.get("lifetimes")
+    if isinstance(lifetimes, dict):
+        restored: dict[str, dict[str, dict]] = {"prematch": {}, "live": {}}
+        for mode in ("prematch", "live"):
+            records = lifetimes.get(mode)
+            if isinstance(records, dict):
+                restored[mode] = {
+                    key: value
+                    for key, value in records.items()
+                    if isinstance(key, str) and isinstance(value, dict)
+                }
+        _crossing_lifetimes = restored
+    history = data.get("history")
+    if isinstance(history, list):
+        _opportunity_history = [
+            row for row in history if isinstance(row, dict)
+        ][:_OPPORTUNITY_HISTORY_MAX]
+
+
+def _save_opportunity_metrics() -> None:
+    """Persist only aggregates and crossing keys, never the full board."""
+    try:
+        _atomic_write_json(
+            _OPPORTUNITY_METRICS_FILE,
+            {
+                "last": _opportunity_by_mode,
+                "lifetimes": _crossing_lifetimes,
+                "history": _opportunity_history,
+            },
+            "opportunity_metrics",
+            indent=None,
+        )
+    except Exception as exc:  # a metric must never stop a scan
+        logger.warning("Opportunity metrics save failed: %s", exc)
+
+
 def _save_cache(mode: str = "prematch"):
     """Persist last scan results to JSON cache files (with TTL metadata P0-6).
 
@@ -1869,6 +1959,7 @@ def _restorable_match_groups(report: object, mode: str) -> list[dict]:
 
 def _load_cache():
     """Restore last scan results from the JSON cache files on startup (TTL 30min P0-6)."""
+    _load_opportunity_metrics()
     for mode, cache_file, state_fields in (
         ("prematch", _PREMATCH_CACHE_FILE,
          (scan_status, cached_surebets, cached_matches, cached_match_groups_report)),
@@ -2066,6 +2157,11 @@ async def health():
         "live_matches_cached": len(cached_live_matches),
         "pairing": _pairing_summary.get("prematch") or {},
         "live_pairing": _pairing_summary.get("live") or {},
+        # P0-6: a zero-surebet scan must be distinguishable from a broken feed.
+        "opportunity_metrics": {
+            "prematch": _opportunity_by_mode.get("prematch") or {},
+            "live": _opportunity_by_mode.get("live") or {},
+        },
         "unmapped_markets": dict(unmapped_markets),
         "verified_groups": sum(
             1
@@ -2221,6 +2317,9 @@ async def get_results(mode: str = "prematch"):
         # a first-class state. A stale result is labelled, not silently shown as
         # a current opportunity.
         "freshness": _freshness_block(mode, status, matches_cache),
+        # P0-6: the denominator behind the surebet count, plus the bounded
+        # lifetime distribution. Empty before the first scan of a mode.
+        "opportunity_metrics": _opportunity_by_mode.get(mode) or {},
     }
 
 

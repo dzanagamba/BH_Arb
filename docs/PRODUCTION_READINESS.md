@@ -21,7 +21,7 @@ This is an evidence-based verdict, not a score:
 | Execution | Partial | Stakes are rounded, legs are ordered, the slip re-plans, and every shown surebet is re-checked before placement. Book limits, partial acceptance, balance, and the "price moved between legs" workflow are not complete. |
 | Operations | Partial | Scheduler, per-book back-off and a 10-cycle soak that plateaus at ~767 MB exist; no alerting, no 24 h soak, no deployment, no health budget for mapping coverage. |
 | Security | Good | Loopback by default, same-origin CORS, an all-route API-key guard, a CSRF guard, URL-scheme checks and CSP/anti-framing headers are in place; the dashboard prompts once. Script execution is nonce-gated with no `script-src 'unsafe-inline'`; inline styles remain the documented CSP gap. |
-| Evaluation | Partial | Deterministic replay, a cold-start fixed point, a repeatable pairing audit and real scans exist. No large multi-scan corpus, no labelled precision/recall, no CLV/backtest. |
+| Evaluation | Partial | Deterministic replay, a cold-start fixed point, a repeatable pairing audit and real scans exist. Opportunity-rate and crossing-lifetime telemetry now report the denominator and a zero-result reason per scan. No local 7-day baseline, labelled multi-day corpus, precision/recall, or CLV/backtest yet. |
 
 The honest summary: **the engine can prove a match and price it on real data
 without false merges or price outliers; the product cannot yet prove that it

@@ -36,6 +36,7 @@ from config.settings import (
     price_source,
 )
 from engine.destinations import attach_destinations
+from engine.opportunity_metrics import BoardObservation, ScanMetrics, event_identity
 from models.schemas import Market, MarketType, Match, MatchGroup, Surebet, SurebetStake
 from scrapers.common import parse_ah_label
 
@@ -186,6 +187,46 @@ def _attach_stake_fetches(surebet: Surebet, group: MatchGroup) -> None:
 def _settlement_for_market(market: Market) -> str:
     """Settlement is part of a market's identity, not a label detail."""
     return market.settlement or "full_time"
+
+
+def _dominant_period(markets: list[tuple[str, Market]]) -> str:
+    """The period most of a market's listings agree on, for the board key."""
+    counts: dict[str, int] = {}
+    for _bookmaker, market in markets:
+        period = market.period or "full_time"
+        counts[period] = counts.get(period, 0) + 1
+    if not counts:
+        return "full_time"
+    return sorted(counts.items(), key=lambda item: (-item[1], item[0]))[0][0]
+
+
+def _record_board(
+    metrics: ScanMetrics | None,
+    group: MatchGroup,
+    market_type: MarketType,
+    *,
+    line: str,
+    period: str,
+    settlement: str,
+    margin: float,
+    profit_percent: float,
+    odds_map: dict[str, tuple[str, float]],
+) -> None:
+    """Append one evaluated board to the scan collector, before display filters."""
+    if metrics is None:
+        return
+    metrics.boards.append(
+        BoardObservation(
+            event_key=event_identity(group),
+            market_type=market_type.value,
+            line=line,
+            period=period,
+            settlement=settlement,
+            margin=margin,
+            profit_percent=profit_percent,
+            bookmakers=tuple(sorted({bookmaker for bookmaker, _ in odds_map.values()})),
+        )
+    )
 
 
 def _dominant_settlement(markets: list[tuple[str, Market]]) -> str:
@@ -382,6 +423,7 @@ class ArbitrageEngine:
         allow_past_kickoffs: bool = False,
         enabled_markets: set[str] | None = None,
         mode: str = "prematch",
+        metrics: ScanMetrics | None = None,
     ) -> list[Surebet]:
         """
         Scan all match groups for arbitrage opportunities.
@@ -398,6 +440,8 @@ class ArbitrageEngine:
         surebets: list[Surebet] = []
         now_utc_naive = datetime.now(UTC).replace(tzinfo=None)
         ttl = LIVE_ODDS_TTL_SECONDS if allow_past_kickoffs else ODDS_TTL_SECONDS
+        if metrics is not None:
+            metrics.groups_total = len(groups)
 
         for group in groups:
             # Only a group the certainty gate VERIFIED may be priced. The matcher
@@ -405,10 +449,14 @@ class ArbitrageEngine:
             # different matches" is this product's central safety property, so it
             # is enforced here too rather than resting on one caller.
             if group.status != "verified":
+                if metrics is not None:
+                    metrics.groups_unverified += 1
                 logger.debug(
                     f"Skipping {group.status} group: {group.canonical_home} vs {group.canonical_away}"
                 )
                 continue
+            if metrics is not None:
+                metrics.groups_verified += 1
             # Skip matches whose latest member kickoff has already passed
             # (prematch mode only; live matches are in play right now and
             # remain actionable). The two-minute buffer is clock tolerance, not
@@ -420,6 +468,8 @@ class ArbitrageEngine:
                     latest_kickoff, buffer_minutes=PREMATCH_EXPIRY_BUFFER_MINUTES
                 )
             ):
+                if metrics is not None:
+                    metrics.groups_expired += 1
                 logger.debug(
                     "Skipping expired match group: %s vs %s (%s)",
                     group.canonical_home,
@@ -435,6 +485,8 @@ class ArbitrageEngine:
                 return (now_utc_naive - fa).total_seconds()
 
             if any(_fetched_age_sec(m.fetched_at) > ttl for m in group.matches):
+                if metrics is not None:
+                    metrics.groups_stale += 1
                 logger.debug(f"Skipping stale odds group: {group.canonical_home} vs {group.canonical_away} (age >{ttl}s)")
                 continue
 
@@ -443,14 +495,20 @@ class ArbitrageEngine:
                     continue
                 if market_type == MarketType.DOUBLE_CHANCE:
                     # Cross-market 1X2 + Double Chance arbitrage
-                    result = self._check_cross_market_dc(group, min_profit, investment)
+                    result = self._check_cross_market_dc(
+                        group, min_profit, investment, metrics=metrics
+                    )
                 elif market_type in LINE_MARKETS:
-                    result = self._check_line_market(group, market_type, min_profit, investment)
+                    result = self._check_line_market(
+                        group, market_type, min_profit, investment, metrics=metrics
+                    )
                 else:
                     required = REQUIRED_LABELS.get(market_type, [])
                     if not required:
                         continue  # Skip markets with no defined outcome set
-                    result = self._check_market(group, market_type, min_profit, investment)
+                    result = self._check_market(
+                        group, market_type, min_profit, investment, metrics=metrics
+                    )
 
                 if result:
                     result.listings = _collect_listings(group)
@@ -473,6 +531,8 @@ class ArbitrageEngine:
         market_type: MarketType,
         min_profit: float,
         investment: float,
+        *,
+        metrics: ScanMetrics | None = None,
     ) -> Surebet | None:
         """
         Check a specific market type across all bookmakers in a match group.
@@ -527,6 +587,17 @@ class ArbitrageEngine:
         best_implied, best_odds_map = best
 
         profit_percent = (1.0 / best_implied - 1.0) * 100.0
+        _record_board(
+            metrics,
+            group,
+            market_type,
+            line="",
+            period=_dominant_period(typed),
+            settlement=settlement,
+            margin=best_implied,
+            profit_percent=profit_percent,
+            odds_map=best_odds_map,
+        )
 
         if group.sport != "football":
             # A book whose own set was dropped as stale does not support the
@@ -595,6 +666,8 @@ class ArbitrageEngine:
         min_profit: float,
         investment: float,
         max_profit: float = MAX_SUREBET_PROFIT_PERCENT,
+        *,
+        metrics: ScanMetrics | None = None,
     ) -> Surebet | None:
         """
         Check a line-embedded market (FIRST_HALF_OU, ASIAN_HANDICAP) across all
@@ -667,6 +740,17 @@ class ArbitrageEngine:
                 for bookmaker, odds in restricted.items()
                 if all(label in odds for label in labels)
             })
+            _record_board(
+                metrics,
+                group,
+                market_type,
+                line=line_key,
+                period=_dominant_period(typed),
+                settlement=settlement,
+                margin=best[0],
+                profit_percent=(1.0 / best[0] - 1.0) * 100.0,
+                odds_map=best[1],
+            )
             if best_overall is None or best[0] < best_overall[0]:
                 best_overall = (best[0], best[1], labels, supporting)
 
@@ -808,6 +892,8 @@ class ArbitrageEngine:
         group: MatchGroup,
         min_profit: float,
         investment: float,
+        *,
+        metrics: ScanMetrics | None = None,
     ) -> Surebet | None:
         """
         Cross-market Double Chance arbitrage: combine a 1X2 outcome with the
@@ -834,6 +920,17 @@ class ArbitrageEngine:
             best = self._best_combination(merged, pair)
             if best is None:
                 continue
+            _record_board(
+                metrics,
+                group,
+                MarketType.DOUBLE_CHANCE,
+                line=label,
+                period="full_time",
+                settlement="full_time",
+                margin=best[0],
+                profit_percent=(1.0 / best[0] - 1.0) * 100.0,
+                odds_map=best[1],
+            )
             if best_overall is None or best[0] < best_overall[0]:
                 best_overall = (best[0], best[1], label)
 

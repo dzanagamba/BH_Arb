@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-11-04
 **Repository:** `dzanagamba/BH_Arb` (`main`)
-**Status of this document:** audit complete; P0-1 through P0-5 done, implementation continuing
+**Status of this document:** audit complete; P0-1 through P0-6 done, implementation continuing
 **Purpose:** a durable, session-by-session plan so work can resume without re-reading the whole repository.
 
 > **How to use this document**
@@ -256,7 +256,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 | P0-3 | Gate-vocabulary truth audit and probe strengthening | P0 | S | — | Done |
 | P0-4 | Runtime freshness and stale-state policy | P0 | M | — | Done |
 | P0-5 | Reloadable deep-link declarations | P0 | S | — | Done |
-| P0-6 | Opportunity-rate and arb-lifetime telemetry | P0 | M | P0-4 | Not started |
+| P0-6 | Opportunity-rate and arb-lifetime telemetry | P0 | M | P0-4 | Done |
 | P0-7 | Feed-integrity scorecard and stale-book quarantine | P0 | M | P0-4 | Not started |
 | P1-1 | Paginated, filtered group-evidence API | P1 | M | P0-1 | Not started |
 | P1-2 | Structured logs, request IDs, metrics endpoint | P1 | M | — | Not started |
@@ -477,7 +477,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 
 ### P0-6 — Opportunity-rate and arb-lifetime telemetry
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P0
 **Effort:** M
 **Depends on:** P0-4
@@ -497,11 +497,11 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 
 **Acceptance criteria:**
 
-- [ ] A scan reports boards, crossings, and actionable opportunities with explicit denominators.
-- [ ] A zero-surebet result distinguishes “no crossing” from “crossing below floor” from “all crossings stale/guarded.”
-- [ ] Arb lifetime is reported as a distribution, not a single anecdote.
-- [ ] The metric is computed from raw odds, not from a precomputed count.
-- [ ] Storage growth is bounded per scan.
+- [x] A scan reports boards, crossings, and actionable opportunities with explicit denominators.
+- [x] A zero-surebet result distinguishes “no crossing” from “crossing below floor” from “all crossings stale/guarded.”
+- [x] Arb lifetime is reported as a distribution, not a single anecdote.
+- [x] The metric is computed from raw odds, not from a precomputed count.
+- [x] Storage growth is bounded per scan.
 
 **Tests:**
 
@@ -1421,6 +1421,36 @@ Before writing a claim about behavior, run the command that proves it and paste 
 ## 6. Execution log
 
 Newest first. Each entry: date, task, status, commands, measured result, files changed, follow-ups.
+
+### 2026-11-04 — P0-6: Opportunity-rate and arb-lifetime telemetry
+
+**Task:** P0-6 (first eligible task after P0-5; depends on P0-4, which is Done).
+**Status:** Done.
+
+**Commands and results:**
+
+- `python -m pytest` → **1,286 passed**, 1 warning, 176.90 s (was 1,278; +8 tests).
+- `python -m ruff check .` → clean.
+- `python -m mypy .` → clean on 141 source files.
+- `python scripts/generate_market_mapping_doc.py --check` → in sync.
+- `python scripts/replay_mappings.py tests/fixtures/replay/2026-11-03 --cold --check` → exit 0, fixed point, 0 false merges, 0 unresolved evidence-backed pairs.
+- `python scripts/opportunity_baseline.py --days 7` → renders the aggregate history report; with no live history yet it states that the local window is empty rather than inventing a number. The report is `docs/evidence/2026-11-04-opportunity-rate-baseline.md`.
+
+**What changed:**
+
+- `engine/opportunity_metrics.py` (new): `BoardObservation`, `ScanMetrics`, `summarize_scan()`, bounded `update_lifetimes()` and `lifetime_distribution()`.
+- `engine/arbitrage.py`: `find_surebets(..., metrics=...)` records every board from the existing pricing pass, before display filters; no second arb formula.
+- `server/api.py`: each scan stores `opportunity_metrics` (denominators, median/best margin, zero-result reason, p50/p90 lifetime) in `/api/results` and `/api/health`; persists compact aggregates plus the bounded crossing-key store and per-scan history to `cache/opportunity_metrics.json`.
+- `frontend/index.html`, `frontend/css/style.css`, `frontend/js/app.js`: a **Crossing rate** KPI and zero-result reason.
+- `scripts/opportunity_baseline.py` (new) and `docs/evidence/2026-11-04-opportunity-rate-baseline.md` (new; local 7-day window explicitly marked pending).
+- `tests/test_opportunity_metrics.py` (new): no crossing, below-floor crossing, above-floor action, stale group, lifetime disappearance, key cap, API exposure, aggregate-only persistence.
+- `README.md`, `docs/ACCEPTANCE.md`, `docs/PRODUCTION_READINESS.md` document the metric and its limits.
+
+**Trust rules:** observations are taken from the same engine path, before filters; the certainty gate and price guard still decide what is actionable. Stale groups are reported as `stale_data`, not as a no-crossing market.
+
+**Follow-ups:** P0-7 (feed-integrity scorecard and stale-book quarantine) is the next eligible task. The local 7-day baseline remains empty until scheduled scans have run; the report says so.
+
+---
 
 ### 2026-11-04 — P0-5: Reloadable deep-link declarations
 

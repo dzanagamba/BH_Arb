@@ -61,6 +61,19 @@ const REASON_LABELS = Object.freeze({
     sport_mismatch: 'Different sport',
 });
 
+// P0-6: why a zero-surebet scan has no result. The denominator is the point:
+// "no crossing" and "all crossings guarded" are different operational facts.
+const ZERO_RESULT_LABELS = Object.freeze({
+    actionable: 'actionable',
+    no_crossing: 'no board crossed',
+    crossing_below_floor: 'crossed below floor',
+    crossing_guarded: 'all crossings guarded',
+    stale_data: 'stale feed',
+    expired_data: 'only expired fixtures',
+    unverified_data: 'no verified groups',
+    no_priced_boards: 'no boards priced',
+});
+
 const SUREBET_STATUS_LABELS = Object.freeze({
     verified: { label: 'Verified pairing', ariaLabel: 'Verified match pairing' },
     suggested: { label: 'Suggested pairing', ariaLabel: 'Suggested match pairing' },
@@ -742,6 +755,16 @@ function renderKpis(surebets) {
     setText('kpi-count-sub', pool.length > surebets.length
         ? `of ${pool.length} found · ${pool.length - surebets.length} filtered out`
         : 'above your minimum');
+
+    const metrics = resultsSnapshot?.opportunity_metrics || {};
+    const boards = Number(metrics.boards) || 0;
+    const crossingRate = Number(metrics.crossing_rate_percent);
+    setText('kpi-crossing', boards > 0 && Number.isFinite(crossingRate)
+        ? `${crossingRate.toFixed(2)}%`
+        : '—');
+    setText('kpi-crossing-sub', boards > 0
+        ? `${Number(metrics.crossed) || 0} of ${boards} boards · ${Number(metrics.actionable) || 0} actionable`
+        : (ZERO_RESULT_LABELS[metrics.zero_result_reason] || 'no boards priced'));
     setText('kpi-mode-sub', currentMode === 'live' ? 'live matches' : 'upcoming matches');
 }
 
