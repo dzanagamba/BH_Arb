@@ -333,7 +333,16 @@ python -m pytest
 python -m ruff check .
 python -m mypy .
 python scripts/generate_market_mapping_doc.py --check
+
+# Same coverage and security gates as CI
+python -m pytest --cov --cov-report=term-missing
+python -m pip_audit -r requirements.txt -r requirements-dev.txt --progress-spinner off
+python -m bandit -r engine server scrapers config models main.py scripts -ll -q
 ```
+
+The coverage floor is 80% (measured baseline 81.55%) and Bandit fails at medium
+severity or above. Accepted `# nosec` entries and the coverage baseline are
+documented in [`docs/CI.md`](docs/CI.md).
 
 - Tests must stay offline: use fakes, `httpx.MockTransport` or
   `tests/fixtures/`. A test must never call a bookmaker.

@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-11-04
 **Repository:** `dzanagamba/BH_Arb` (`main`)
-**Status of this document:** audit complete; P0-1 through P0-7, P1-1 through P1-3 done, implementation continuing
+**Status of this document:** audit complete; P0-1 through P0-7, P1-1 through P1-4 done, implementation continuing
 **Purpose:** a durable, session-by-session plan so work can resume without re-reading the whole repository.
 
 > **How to use this document**
@@ -261,7 +261,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 | P1-1 | Paginated, filtered group-evidence API | P1 | M | P0-1 | Done |
 | P1-2 | Structured logs, request IDs, metrics endpoint | P1 | M | — | Done |
 | P1-3 | Reproducible deployment (Docker/systemd) | P1 | M | — | Done |
-| P1-4 | CI hardening: coverage, dependency and security scans | P1 | S | — | Not started |
+| P1-4 | CI hardening: coverage, dependency and security scans | P1 | S | — | Done |
 | P1-5 | Alerting with dedupe and retry | P1 | M | P1-2 | Not started |
 | P1-6 | 24-hour soak and resource budget | P1 | M | P0-1, P1-2 | Not started |
 | P1-7 | Raw-price invariant and rounding audit | P1 | S | P0-4 | Not started |
@@ -657,7 +657,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 
 ### P1-4 — CI hardening: coverage, dependency and security scans
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P1
 **Effort:** S
 **Depends on:** none
@@ -676,9 +676,9 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 
 **Acceptance criteria:**
 
-- [ ] CI publishes a coverage summary.
-- [ ] `pip-audit` and `bandit` run on every push/PR.
-- [ ] A known false positive is documented, not silently ignored.
+- [x] CI publishes a coverage summary.
+- [x] `pip-audit` and `bandit` run on every push/PR.
+- [x] A known false positive is documented, not silently ignored.
 
 **Tests:** the CI workflow itself; no application test changes required.
 
@@ -1421,6 +1421,41 @@ Before writing a claim about behavior, run the command that proves it and paste 
 ## 6. Execution log
 
 Newest first. Each entry: date, task, status, commands, measured result, files changed, follow-ups.
+
+### 2026-11-04 — P1-4: CI hardening (coverage, dependency and security scans)
+
+**Task:** P1-4 (first eligible task after P1-3; no dependencies).
+**Status:** Done.
+
+**Commands and results:**
+
+- `python -m pytest --cov --cov-report=term-missing` → **1,335 passed**, 1 warning, 365.69 s; **81.55%** coverage across `engine`, `server`, `scrapers`, `config` and `models` (8,096 statements); the 80% floor passed.
+- `python -m pytest` on **Python 3.12** (temporary uv venv) → exit 0, full suite, no failures (forward-compatibility leg).
+- `python -m ruff check .` → clean.
+- `python -m mypy .` → clean on 151 source files.
+- `python scripts/generate_market_mapping_doc.py --check` → in sync.
+- `python scripts/replay_mappings.py tests/fixtures/replay/2026-11-03 --cold --check` → exit 0, fixed point.
+- `python -m pip_audit -r requirements.txt -r requirements-dev.txt --progress-spinner off` → **no known vulnerabilities**.
+- `python -m bandit -r engine server scrapers config models main.py scripts -ll -q` → exit 0 at medium and above.
+- `.github/workflows/ci.yml` parsed as valid YAML.
+
+**What changed:**
+
+- `requirements-dev.txt`: added `pytest-cov`, `coverage`, `pip-audit` and `bandit`; upgraded `pytest` 8.4.1 → 9.0.3 to clear `PYSEC-2026-1845` instead of allowlisting it.
+- `pyproject.toml`: `[tool.coverage.run]` measures only the five application packages and `[tool.coverage.report]` enforces `fail_under = 80` (baseline 81.55%).
+- `.github/workflows/ci.yml`: split into `quality`, matrixed `tests` (3.11 required, 3.12 forward-compatible) and `security`; the 3.11 test leg writes a markdown coverage summary to the run page and uploads `coverage.xml`; `pip-audit` audits runtime and dev requirements; Bandit fails at medium and above. Added `permissions: contents: read`.
+- `server/api.py`: the SHA-1 review-queue id now passes `usedforsecurity=False`; it is a stable key, not a security primitive.
+- `scripts/capture_market_fixtures.py`, `scripts/docker_smoke.py`, `scripts/soak.py`: three explicitly documented `# nosec` entries (`B501` for the capture-only certificate exception, `B310` for the two loopback/operator HTTP probes).
+- `docs/CI.md` (new): coverage baseline and floor, local reproduction, the pip-audit upgrade and future allowlist rule, and the three-row Bandit allowlist.
+- `README.md`: development commands now include coverage, pip-audit and Bandit, linking `docs/CI.md`.
+- `.gitignore`: ignores `.coverage*`, `coverage.xml` and `htmlcov/`.
+- `tests/test_ci_hardening.py` (new): guards the dev pins, coverage scope/floor, CI coverage publication, security jobs, matrix, allowlist documentation and ignored artifacts.
+
+**Trust rules:** unchanged. No application behaviour changed apart from the non-security hash flag; the certainty gate, price guard, freshness and feed-integrity policy are untouched.
+
+**Follow-ups:** P1-5 (alerting), P1-6 (24-hour soak) and P1-7 (raw-price invariant) remain. The Docker build/smoke from P1-3 still needs one run on a Docker-capable host.
+
+---
 
 ### 2026-11-04 — P1-3: Reproducible deployment (Docker/systemd)
 

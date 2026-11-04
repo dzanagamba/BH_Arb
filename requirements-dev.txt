@@ -1,4 +1,10 @@
 # Development tooling (tests, linters, type checker) — install after requirements.txt
-pytest==8.4.1
+pytest==9.0.3
+pytest-cov==7.1.0
+coverage==7.17.1
 ruff==0.9.10
 mypy==1.15.0
+
+# CI security checks (see docs/CI.md).
+pip-audit==2.10.1
+bandit==1.9.4

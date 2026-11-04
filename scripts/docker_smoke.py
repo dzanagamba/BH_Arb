@@ -47,7 +47,8 @@ def _cleanup() -> None:
 
 def _health(port: int) -> dict:
     url = f"http://127.0.0.1:{port}/api/health"
-    with urllib.request.urlopen(url, timeout=3) as response:
+    # Local loopback probe only; the scheme is fixed above. See docs/CI.md.
+    with urllib.request.urlopen(url, timeout=3) as response:  # nosec B310
         return json.loads(response.read().decode("utf-8"))
 
 

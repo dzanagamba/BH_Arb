@@ -33,6 +33,12 @@ cache/*.json
 playwright-report/
 test-results/
 
+# Coverage output
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
 # Logs
 *.log
 

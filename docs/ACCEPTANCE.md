@@ -259,6 +259,36 @@ id on a refused request, context filter, JSON formatter allowlist, traceback,
 a server, API-key protection, one structured scan-completion record, counters,
 per-book empty/error outcomes, failed-scan counter).
 
+## CI hardening (P1-4, 2026-11-04)
+
+The unit-test job proved correctness but published no coverage number, and
+nothing audited dependencies or scanned for dangerous constructs on each push.
+
+**Coverage.** `[tool.coverage.run]` measures `engine`, `server`, `scrapers`,
+`config` and `models` (8,096 statements; tests, operator scripts and generated
+state excluded). The measured baseline is **81.55%**; `fail_under = 80` keeps a
+small cushion below it rather than forcing low-value tests. The Python 3.11 CI
+test leg runs `pytest --cov`, prints the missing-line report, appends a markdown
+summary to the workflow run page, and uploads `coverage.xml` as an artifact.
+
+**Dependency audit.** `pip-audit` runs against `requirements.txt` and
+`requirements-dev.txt` on every push and pull request. The first run found
+`pytest 8.4.1` affected by `PYSEC-2026-1845` (fixed in `9.0.3`); the dependency
+was upgraded and the full suite re-run rather than suppressing the advisory.
+
+**Static scan.** Bandit runs at medium severity and above; low-severity
+best-effort cleanup findings are visible but non-blocking. Three call sites
+carry an inline, reasoned `# nosec`: the capture-only `verify=False` client
+(`B501`) and two loopback/operator `urlopen` probes (`B310`). The SHA-1 review
+queue id is not a security primitive and now passes `usedforsecurity=False`
+instead of being allowlisted.
+
+**Matrix.** Python 3.11 remains the required runtime. 3.12 runs the same suite
+as a forward-compatibility check.
+
+**Local reproduction** is documented in `docs/CI.md`; the README development
+section lists the same commands.
+
 ## Reproducible deployment (P1-3, 2026-11-04)
 
 A fresh Linux host had no shipped deployment path: the README described

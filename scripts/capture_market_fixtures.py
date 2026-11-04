@@ -1203,7 +1203,13 @@ async def main() -> int:
     if unknown:
         parser.error(f"unknown bookmaker(s): {unknown}")
 
-    async with httpx.AsyncClient(timeout=120.0, verify=False, follow_redirects=True) as client:
+    # Capture-only tool: some bookmaker hosts present an invalid certificate
+    # chain from a developer machine. It reads public pages and never sends
+    # credentials, so accepting the certificate here is deliberate. See
+    # docs/CI.md for the security-scan allowlist.
+    async with httpx.AsyncClient(  # nosec B501
+        timeout=120.0, verify=False, follow_redirects=True
+    ) as client:
         for book in books:
             print(f"== {book}")
             for mode in (("prematch", "live") if book in BOTH_MODES else ("prematch",)):

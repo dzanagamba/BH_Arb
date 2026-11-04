@@ -40,7 +40,9 @@ def _get_json(url: str, api_key: str = "") -> dict[str, Any]:
     request = urllib.request.Request(url)
     if api_key:
         request.add_header("X-API-Key", api_key)
-    with urllib.request.urlopen(request, timeout=120) as response:
+    # The URL is the operator-supplied scanner endpoint; http is expected on
+    # loopback. See docs/CI.md for the security-scan allowlist.
+    with urllib.request.urlopen(request, timeout=120) as response:  # nosec B310
         return json.loads(response.read().decode("utf-8"))
 
 
@@ -48,7 +50,9 @@ def _post(url: str, api_key: str = "") -> dict[str, Any]:
     request = urllib.request.Request(url, method="POST")
     if api_key:
         request.add_header("X-API-Key", api_key)
-    with urllib.request.urlopen(request, timeout=120) as response:
+    # The URL is the operator-supplied scanner endpoint; http is expected on
+    # loopback. See docs/CI.md for the security-scan allowlist.
+    with urllib.request.urlopen(request, timeout=120) as response:  # nosec B310
         return json.loads(response.read().decode("utf-8"))
 
 

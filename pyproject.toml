@@ -15,3 +15,20 @@ ignore = ["E501"]  # long lines handled by formatter, not lint
 python_version = "3.11"
 ignore_missing_imports = true
 exclude = ["venv/", "cache/"]
+
+[tool.coverage.run]
+# Application packages only: tests, operator scripts and generated runtime
+# state would inflate or destabilise the number.
+source = ["engine", "server", "scrapers", "config", "models"]
+omit = ["config/generated/*"]
+
+[tool.coverage.report]
+# Baseline measured on 2026-11-04: 81.55% across the packages above. Keep a small
+# cushion so unrelated refactors do not turn CI red, and raise this as coverage
+# improves. Enforced only when pytest runs with --cov (the CI test job).
+fail_under = 80
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+]

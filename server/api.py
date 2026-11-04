@@ -1003,7 +1003,11 @@ def _candidate_id(canonical_key: str) -> str:
     The queue is keyed by this id and the review UI approves by it, so it has to
     be reproducible from the pair itself and free of truncation collisions.
     """
-    return hashlib.sha1(canonical_key.encode("utf-8")).hexdigest()[:16]
+    # Not used for security: the id only needs to be stable and collision-free
+    # for a bounded review queue, so the cheaper digest is deliberate.
+    return hashlib.sha1(
+        canonical_key.encode("utf-8"), usedforsecurity=False
+    ).hexdigest()[:16]
 
 
 def _verified_group_index(groups: list[MatchGroup]) -> dict[str, int]:
