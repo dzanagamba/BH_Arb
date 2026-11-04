@@ -113,6 +113,10 @@ class Match(BaseModel):
     # Betradar match id, when the book's feed carries one. Books on the same id
     # list the same real match, whatever they call the teams.
     betradar_id: str = ""
+    # Optional leg marker for a doubleheader/rematch (e.g. "1"/"2"). Empty when
+    # the feed cannot say. A present mismatch is a hard reject; it is never
+    # guessed from names.
+    leg: str = ""
     # Book-specific event context used only to build a destination URL (region,
     # competition and the book's own event name). Never used for identity.
     source_context: dict[str, str] = {}

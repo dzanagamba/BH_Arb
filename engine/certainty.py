@@ -81,6 +81,7 @@ HARD_REJECT_REASONS = frozenset(
         "league_mismatch",
         "category_mismatch",
         "betradar_mismatch",
+        "leg_mismatch",
         "orientation_unresolved",
     }
 )
@@ -722,6 +723,11 @@ class CertaintyGate:
         same_id = bool(a_betradar and b_betradar and a_betradar == b_betradar)
         different_id = bool(a_betradar and b_betradar and a_betradar != b_betradar)
 
+        # A doubleheader/rematch can have identical names and a shared kickoff.
+        # A feed-declared leg is the only safe separator; it is never inferred.
+        a_leg, b_leg = (a.leg or "").strip(), (b.leg or "").strip()
+        leg_mismatch = bool(a_leg and b_leg and a_leg != b_leg)
+
         # League identity.
         a_league, b_league = a.league_normalized or "", b.league_normalized or ""
         league_ok = self._league_ok(a_league, b_league, a.sport)
@@ -930,6 +936,8 @@ class CertaintyGate:
         # name, league or kickoff evidence can make two ids the same event.
         if different_id:
             reasons.append("betradar_mismatch")
+        if leg_mismatch:
+            reasons.append("leg_mismatch")
 
         if reasons:
             hard = [reason for reason in reasons if reason in HARD_REJECT_REASONS]

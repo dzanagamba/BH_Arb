@@ -251,7 +251,7 @@ status:
 |---|---|---|
 | `verified` | Zero reasons. Every part of the claim is proven, links included. Only these groups reach arbitrage. | — |
 | `suggested` | At least one reason is outstanding: plausible but incomplete. Shown in Diagnostics only. | `kickoff_missing`, `kickoff_delta`, `team_unresolved`, `link_unverified`, `no_event_link` |
-| `rejected` | A hard gate contradicts the claim. | `league_mismatch`, `category_mismatch`, `betradar_mismatch`, `orientation_unresolved`, `sport_mismatch` |
+| `rejected` | A hard gate contradicts the claim. | `league_mismatch`, `category_mismatch`, `betradar_mismatch`, `leg_mismatch`, `orientation_unresolved`, `sport_mismatch` |
 
 The strings above are the vocabulary the gate actually emits, and
 `tests/test_readme_claims.py` proves it by running the gate over one broken claim
@@ -276,6 +276,11 @@ Every member of `HARD_REJECT_REASONS` is reachable and appears in the table.
 - **A link is a machine fact.** It is never by a human approval that
   `deep_link_verified` is set; only `scripts/verify_deeplinks.py` or
   `POST /api/verify-links`, after a real browser check, may set it.
+- **A second fixture is not a name match.** Different provider ids reject. A
+  feed-declared `leg` (doubleheader/rematch) that differs rejects as
+  `leg_mismatch`; it is never inferred from names. Same teams outside the
+  kickoff window are a `kickoff_delta`, not one event, and a kickoff across a
+  date boundary is judged by the absolute minutes.
 
 ### Diagnostics
 

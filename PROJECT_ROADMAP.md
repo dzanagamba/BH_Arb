@@ -272,7 +272,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 | P2-5 | Sports expansion with measured admissibility | P2 | L | P2-4 | Done |
 | P2-6 | Candidate-queue quality and coverage metrics | P2 | M | P0-1, P1-1 | Done |
 | P2-7 | Identical-feed ("skin") detection | P2 | M | P0-7 | Done |
-| P2-8 | Event-identity edge cases: doubleheaders and rematches | P2 | M | P2-4 | Not started |
+| P2-8 | Event-identity edge cases: doubleheaders and rematches | P2 | M | P2-4 | Done |
 | P2-9 | Silent-drop coverage budget | P2 | M | P0-7 | Not started |
 | P2-10 | Measured push-feed discovery and per-book WebSocket adapter | P2 | M | P0-4, P0-7 | Not started |
 | P3-1 | Persistent storage v2 (SQLite) and migration | P3 | L | P0-1, P1-1 | Not started |
@@ -1034,7 +1034,7 @@ was added.
 
 ### P2-8 — Event-identity edge cases: doubleheaders and rematches
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P2
 **Effort:** M
 **Depends on:** P2-4
@@ -1053,10 +1053,10 @@ was added.
 
 **Acceptance criteria:**
 
-- [ ] Two different fixtures with identical team names are never one verified group.
-- [ ] A legitimate doubleheader can still group across books when the provider ID or kickoff proves it.
-- [ ] The behavior is documented and test-pinned.
-- [ ] No new fuzzy rule is introduced.
+- [x] Two different fixtures with identical team names are never one verified group.
+- [x] A legitimate doubleheader can still group across books when the provider ID or kickoff proves it.
+- [x] The behavior is documented and test-pinned.
+- [x] No new fuzzy rule is introduced.
 
 **Tests:**
 
@@ -1423,6 +1423,31 @@ Before writing a claim about behavior, run the command that proves it and paste 
 ## 6. Execution log
 
 Newest first. Each entry: date, task, status, commands, measured result, files changed, follow-ups.
+
+### 2026-11-04 — P2-8: Event-identity edge cases
+
+**Task:** P2-8 (depends on P2-4, complete).
+**Status:** Done.
+
+**Commands and results:**
+
+- `python -m pytest tests/test_identity_edge_cases.py tests/test_certainty.py tests/test_matcher.py tests/test_e2e_certified.py -q` → passed.
+- `python -m pytest tests/test_readme_claims.py -q` → passed with `leg_mismatch` added to the rejected vocabulary.
+- `python -m ruff check .`, `python -m mypy .` → clean.
+
+**What changed:**
+
+- `models/schemas.py`: optional `Match.leg` for a feed-declared doubleheader/rematch marker.
+- `engine/certainty.py`: two different non-empty legs are a hard `leg_mismatch`; the reason is in `HARD_REJECT_REASONS`.
+- `tests/test_identity_edge_cases.py` (new): leg mismatch, same-leg grouping, different provider ids, shared id+leg, rematch hours apart, midnight kickoff boundary, different mapped competitions, and the matcher-level doubleheader refusal.
+- `README.md`: `leg_mismatch` in the rejected table and the doubleheader/rematch rule.
+- `tests/test_readme_claims.py`: the reason probe now exercises `leg_mismatch`.
+
+**Trust rules:** no fuzzy rule was added. Missing legs stay empty; only two explicitly different feed values reject, and provider ids/kickoff behavior is unchanged.
+
+**Follow-ups:** P2-9 (silent-drop coverage budget) is next.
+
+---
 
 ### 2026-11-04 — P2-7: Identical-feed ("skin") detection
 

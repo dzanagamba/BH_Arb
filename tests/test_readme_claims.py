@@ -502,6 +502,12 @@ def _observed_reasons() -> tuple[set[str], set[str]]:
         _match(bookmaker="mbet", event_id="e2", betradar_id="222"),
     ])
 
+    # A feed-declared doubleheader leg is the same kind of contradiction.
+    record([
+        _match(leg="1"),
+        _match(bookmaker="mbet", event_id="e2", leg="2"),
+    ])
+
     # The id proves the event, but names that tie both ways cannot orient it.
     record([
         _match(home_team="Aa", away_team="Bb", betradar_id="111"),
