@@ -84,6 +84,7 @@ _API_RUNTIME_FILES = {
     "_OPPORTUNITY_METRICS_FILE": "opportunity_metrics.json",
     "_FEED_INTEGRITY_FILE": "feed_integrity.json",
     "_COVERAGE_BUDGET_FILE": "coverage_budget.json",
+    "_SCAN_COST_FILE": "scan_cost.json",
     "_STALE_PRICE_FILE": "stale_price_state.json",
     "DEEP_LINK_VERIFICATIONS_FILE": "deep_link_verifications.json",
     "DEEP_LINK_DECISIONS_FILE": "deep_link_decisions.json",
@@ -240,6 +241,8 @@ def _isolated_runtime_state(
     monkeypatch.setattr(api, "_mapping_coverage", {"prematch": {}, "live": {}})
     monkeypatch.setattr(api, "_coverage_trend", {"prematch": [], "live": []})
     monkeypatch.setattr(api, "_zero_result_streaks", {"prematch": {}, "live": {}})
+    monkeypatch.setattr(api, "_scan_cost", {"prematch": {}, "live": {}})
+    monkeypatch.setattr(api, "_scan_cost_history", [])
 
     # A module that copied CACHE_DIR at import time keeps its own reference.
     verify_module = sys.modules.get("scripts.verify_deeplinks")

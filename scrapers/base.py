@@ -5,12 +5,14 @@ retries.
 
 import asyncio
 import logging
+import time
 from collections.abc import Awaitable, Callable
 
 import httpx
 from playwright.async_api import Browser, BrowserContext, Playwright, async_playwright
 
 from config.settings import HEADLESS, USER_AGENT
+from scrapers.cost import record_browser_seconds, record_request, response_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +23,7 @@ async def launch_browser() -> tuple[Playwright, Browser, BrowserContext]:
     Bosnian locale/timezone, custom UA). Used by all Playwright-based scrapers.
     Caller is responsible for closing the browser and stopping Playwright.
     """
+    started = time.perf_counter()
     playwright = await async_playwright().start()
     browser = await playwright.chromium.launch(
         headless=HEADLESS,
@@ -58,10 +61,46 @@ async def launch_browser() -> tuple[Playwright, Browser, BrowserContext]:
         if route.request.resource_type in _BLOCKED_RESOURCES
         else route.continue_(),
     )
+    record_browser_seconds(time.perf_counter() - started)
     return playwright, browser, context
 
 
 _BLOCKED_RESOURCES = frozenset({"image", "media", "font"})
+
+
+async def goto(page, url: str, **kwargs):
+    """Navigate a page and count the navigation as one measured request."""
+    response = await page.goto(url, **kwargs)
+    body = None
+    if response is not None:
+        try:
+            body = await response.body()
+        except Exception:  # noqa: BLE001 - size is best effort
+            body = None
+    record_request(len(body) if body is not None else None)
+    return response
+
+
+async def _record_api_response(response) -> None:
+    try:
+        body = await response.body()
+    except Exception:  # noqa: BLE001 - size is best effort
+        body = None
+    record_request(len(body) if body is not None else None)
+
+
+async def measured_api_get(page, url: str, **kwargs):
+    """Playwright ``page.request.get`` with request/byte accounting."""
+    response = await page.request.get(url, **kwargs)
+    await _record_api_response(response)
+    return response
+
+
+async def measured_api_post(page, url: str, **kwargs):
+    """Playwright ``page.request.post`` with request/byte accounting."""
+    response = await page.request.post(url, **kwargs)
+    await _record_api_response(response)
+    return response
 
 
 async def settle(page, max_ms: int) -> None:
@@ -121,12 +160,14 @@ async def fetch_with_retry(
     for attempt in range(1, max_retries + 1):
         try:
             resp = await client.get(url, headers=headers, params=params)
+            record_request(response_bytes(resp))
             if resp.status_code < 500:
                 return resp
             logger.warning(
                 f"HTTP {resp.status_code} on {url} (attempt {attempt}/{max_retries})"
             )
         except (httpx.TimeoutException, httpx.NetworkError, httpx.RequestError) as e:
+            record_request(None)
             logger.warning(
                 f"Request failed: {e} on {url} (attempt {attempt}/{max_retries})"
             )

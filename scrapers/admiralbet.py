@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 
 from engine import sports
 from models.schemas import Market, Match
-from scrapers.base import launch_browser, settle
+from scrapers.base import goto, launch_browser, measured_api_get, settle
 from scrapers.common import (
     betradar_id,
     build_event_url,
@@ -116,11 +116,12 @@ class AdmiralbetScraper:
             page = await context.new_page()
 
             # 1. Get Cloudflare session
-            await page.goto(BASE_URL, wait_until="domcontentloaded", timeout=60000)
+            await goto(page, BASE_URL, wait_until="domcontentloaded", timeout=60000)
             await settle(page, 3000)
 
             # 2. Navigate to football prematch page (loads API)
-            await page.goto(
+            await goto(
+                page,
                 f"{BASE_URL}/sport-prematch?sport=Fudbal",
                 wait_until="domcontentloaded", timeout=60000,
             )
@@ -143,7 +144,8 @@ class AdmiralbetScraper:
                     f"&dateFrom={date_from}&dateTo={date_to}"
                     f"&eventMappingTypes=1,2,3,4,5"
                 )
-                resp = await page.request.get(
+                resp = await measured_api_get(
+                    page,
                     url,
                     headers={
                         "Accept": "application/utf8+json, application/json;q=0.9, text/plain;q=0.8, */*;q=0.7",

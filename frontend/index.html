@@ -203,6 +203,21 @@
                 <span><i class="coverage-dot coverage-dot-unmapped"></i> Unmapped rows</span>
             </div>
         </div>
+        <!-- N1-3: last scan's per-book cost. Counts only; no URLs or payloads. -->
+        <div class="scan-cost" id="scan-cost" hidden>
+            <div class="scan-cost-head">
+                <span class="coverage-trend-title">Scan cost</span>
+                <span class="mono" id="scan-cost-summary">—</span>
+            </div>
+            <div class="table-wrap">
+                <table class="scan-cost-table">
+                    <thead>
+                        <tr><th>Book</th><th>Outcome</th><th>Wall</th><th>Browser</th><th>Requests</th><th>Bytes</th><th>Matches</th><th>s/match</th></tr>
+                    </thead>
+                    <tbody id="scan-cost-body"></tbody>
+                </table>
+            </div>
+        </div>
         <div id="candidates-list" class="candidates-list">
             <div class="empty-state">
                 <h2 class="empty-state-title">No unresolved pairings.</h2>

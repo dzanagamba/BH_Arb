@@ -32,7 +32,7 @@ from datetime import UTC, datetime, timedelta
 
 from engine.market_registry import MARKET_REGISTRY, record_unmapped
 from models.schemas import Market, MarketType, Match, OddsValue
-from scrapers.base import launch_browser, settle
+from scrapers.base import goto, launch_browser, measured_api_get, settle
 from scrapers.common import betradar_id, qualify_league
 
 logger = logging.getLogger(__name__)
@@ -261,7 +261,7 @@ class WWINScraper:
         p, browser, context = await launch_browser()
         try:
             page = await context.new_page()
-            await page.goto(f"{BASE_URL}/kladjenje/", wait_until="domcontentloaded", timeout=60000)
+            await goto(page, f"{BASE_URL}/kladjenje/", wait_until="domcontentloaded", timeout=60000)
             await settle(page, 5000)
 
             # The events endpoint accepts at most two bet ids per call, so fetch
@@ -280,7 +280,8 @@ class WWINScraper:
                 for attempt in range(3):
                     try:
                         async with sem:
-                            resp = await page.request.get(
+                            resp = await measured_api_get(
+                                page,
                                 f"{API_ROOT}/PrematchEvents/events",
                                 params={
                                     "key": "bs",
@@ -374,10 +375,11 @@ class WWINScraper:
         p, browser, context = await launch_browser()
         try:
             page = await context.new_page()
-            await page.goto(f"{BASE_URL}/kladjenje-uzivo/", wait_until="domcontentloaded", timeout=60000)
+            await goto(page, f"{BASE_URL}/kladjenje-uzivo/", wait_until="domcontentloaded", timeout=60000)
             await settle(page, 5000)
 
-            resp = await page.request.get(
+            resp = await measured_api_get(
+                page,
                 f"{API_ROOT}/LiveEvents/events",
                 params={"key": "bs", "bets": "", "bet": "", "pbet": ""},
                 headers={"Accept": "application/json, text/plain, */*", "Referer": f"{BASE_URL}/kladjenje-uzivo/"},
@@ -400,7 +402,8 @@ class WWINScraper:
             bet_map: dict[str, list] = {}
             for chunk_start in range(0, len(ids), 100):
                 chunk = ids[chunk_start:chunk_start + 100]
-                r2 = await page.request.get(
+                r2 = await measured_api_get(
+                    page,
                     f"{API_ROOT}/LiveEvents/headerBets",
                     params={
                         "bets": ",".join(str(sid) for sid in _request_market_ids("live")),

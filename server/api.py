@@ -131,6 +131,12 @@ from scrapers.common import (
     deeplink_declaration_source,
     effective_deeplink_declarations,
 )
+from scrapers.cost import (
+    begin_book,
+    build_scan_report,
+    classify_exception,
+    finish_book,
+)
 from scrapers.evlbet import EvlbetScraper
 from scrapers.maxbet import MaxBetScraper
 from scrapers.mbet import MBetScraper
@@ -164,6 +170,7 @@ from server.observability import (
     set_scan_id,
 )
 from server.paper import PaperStore
+from server.scan_cost import book_failure_rates
 from server.storage import Storage, default_storage_path
 
 logger = logging.getLogger(__name__)
@@ -526,6 +533,8 @@ _crossing_lifetimes: dict[str, dict[str, dict]] = {"prematch": {}, "live": {}}
 # P0-7: per-book integrity state, one scorecard per feed, with bounded history.
 _FEED_INTEGRITY_FILE = os.path.join(CACHE_DIR, "feed_integrity.json")
 _COVERAGE_BUDGET_FILE = os.path.join(CACHE_DIR, "coverage_budget.json")
+# N1-3: bounded per-scan per-book cost history. Counts/durations only.
+_SCAN_COST_FILE = os.path.join(CACHE_DIR, "scan_cost.json")
 # N0-2: bounded per-book price observations and the rows refused this scan.
 _STALE_PRICE_FILE = os.path.join(CACHE_DIR, "stale_price_state.json")
 _stale_price_store: dict[str, dict[str, dict]] = {"prematch": {}, "live": {}}
@@ -544,6 +553,10 @@ _coverage_trend: dict[str, list[dict[str, Any]]] = {"prematch": [], "live": []}
 _COVERAGE_TREND_MAX = 30
 _zero_result_streaks: dict[str, dict[str, int]] = {"prematch": {}, "live": {}}
 _ZERO_RESULT_ALERT_REASONS = frozenset({"stale_data", "no_priced_boards"})
+# N1-3: current scan cost per mode and a bounded newest-first history.
+_scan_cost: dict[str, dict[str, Any]] = {"prematch": {}, "live": {}}
+_scan_cost_history: list[dict[str, Any]] = []
+_SCAN_COST_HISTORY_MAX = 500
 _feed_integrity: dict[str, dict[str, dict]] = {"prematch": {}, "live": {}}
 # P2-7: the measured price-agreement matrix and its config-mismatch warnings.
 _skin_detection: dict[str, dict[str, Any]] = {"prematch": {}, "live": {}}
@@ -1647,6 +1660,34 @@ def _track_zero_result(mode: str, reason: str) -> int:
     return 0
 
 
+def _record_scan_cost_metrics(report: dict[str, Any]) -> None:
+    """Publish per-book cost gauges; an unmeasured value is absent, not zero."""
+    mode = str(report.get("mode") or "")
+    rates = book_failure_rates(_scan_cost_history, mode)
+    for book, record in (report.get("books") or {}).items():
+        if not isinstance(record, dict):
+            continue
+        metrics.set_gauge(
+            "bh_book_seconds",
+            float(record.get("wall_seconds") or 0.0),
+            mode=mode,
+            book=book,
+        )
+        for field, metric in (
+            ("browser_seconds", "bh_book_browser_seconds"),
+            ("requests", "bh_book_requests"),
+            ("bytes", "bh_book_bytes"),
+        ):
+            value = record.get(field)
+            if value is not None:
+                metrics.set_gauge(metric, float(value), mode=mode, book=book)
+        rate = rates.get(book)
+        if rate is not None:
+            metrics.set_gauge(
+                "bh_book_failure_rate", float(rate), mode=mode, book=book
+            )
+
+
 def learn_scan_mappings(
     matches: list[Match],
     scan: str,
@@ -1708,14 +1749,24 @@ async def run_scan(
 
     try:
         all_matches: list[Match] = []
+        scan_costs: dict[str, dict[str, Any]] = {}
 
         # --- Scrape each enabled bookmaker (P2: browser concurrency cap) ---
         async def scrape_one(bookie_id: str, config: dict) -> list[Match]:
+            uses_browser = bookie_id in PLAYWRIGHT_BOOKIES
             if not _is_enabled(bookie_id):
+                begin_book(bookie_id, mode, uses_browser=uses_browser)
+                scan_costs[bookie_id] = (
+                    finish_book("skipped", note="disabled by runtime toggle") or {}
+                )
                 status.bookmaker_progress[bookie_id] = "skipped"
                 _metric_book(mode, bookie_id, "skipped")
                 return []
             if scheduled and _book_is_backed_off(mode, bookie_id):
+                begin_book(bookie_id, mode, uses_browser=uses_browser)
+                scan_costs[bookie_id] = (
+                    finish_book("skipped", note="scheduled-scan backoff") or {}
+                )
                 status.bookmaker_progress[bookie_id] = "skipped"
                 _metric_book(mode, bookie_id, "skipped")
                 with _BOOK_BACKOFF_LOCK:
@@ -1726,6 +1777,10 @@ async def run_scan(
                 )
                 return []
 
+            begin_book(bookie_id, mode, uses_browser=uses_browser)
+            matches: list[Match] = []
+            outcome = "parse_error"
+            note = ""
             status.bookmaker_progress[bookie_id] = "scraping"
             status.current_bookmaker = f"Scraping {config['name']}..."
             # Limit concurrent Playwright browsers
@@ -1736,6 +1791,7 @@ async def run_scan(
             try:
                 scraper_class = SCRAPERS.get(bookie_id)
                 if not scraper_class:
+                    note = "no scraper registered"
                     status.bookmaker_progress[bookie_id] = "error"
                     _metric_book(mode, bookie_id, "error")
                     return []
@@ -1763,6 +1819,7 @@ async def run_scan(
                     if not m.fetched_at:
                         m.fetched_at = scan_started_at
 
+                outcome = "success" if matches else "empty"
                 status.bookmaker_progress[bookie_id] = "done"
                 status.bookmakers_done.append(config["name"])
                 status.total_matches += len(matches)
@@ -1773,6 +1830,8 @@ async def run_scan(
                 return matches
 
             except Exception as e:
+                outcome = classify_exception(e)
+                note = f"{type(e).__name__}: {str(e)[:200]}"
                 error_msg = f"{config['name']}: {str(e)[:200]}"
                 status.bookmaker_progress[bookie_id] = "error"
                 status.errors.append(error_msg)
@@ -1781,6 +1840,15 @@ async def run_scan(
                 logger.error(f"❌ Scrape error — {error_msg}", exc_info=True)
                 return []
             finally:
+                scan_costs[bookie_id] = (
+                    finish_book(
+                        outcome,
+                        note=note,
+                        matches=len(matches),
+                        markets=sum(len(m.markets) for m in matches),
+                    )
+                    or {}
+                )
                 if sem:
                     sem.release()
                     _metric_browser_opened(-1)
@@ -1796,6 +1864,18 @@ async def run_scan(
             elif isinstance(res, Exception):
                 logger.error(f"Scraper gather exception: {res}")
                 status.errors.append(f"Scraper error: {str(res)[:200]}")
+
+        # N1-3: one bounded per-book cost record for this scan. The history is
+        # newest-first so the CLI and the failure-rate window can read it
+        # without scanning the whole file.
+        scan_cost_report = build_scan_report(
+            mode, scan_started_at, scan_costs
+        )
+        _scan_cost[mode] = scan_cost_report
+        _scan_cost_history.insert(0, scan_cost_report)
+        del _scan_cost_history[_SCAN_COST_HISTORY_MAX:]
+        _save_scan_cost()
+        _record_scan_cost_metrics(scan_cost_report)
 
         # A book that "succeeds" with nothing is usually a blocked or changed
         # feed, not an empty market. Say so while other books did return data,
@@ -2671,6 +2751,42 @@ def _save_coverage_budget() -> None:
         logger.warning("Coverage budget save failed: %s", exc)
 
 
+def _load_scan_cost() -> None:
+    """Restore the bounded per-scan per-book cost history."""
+    global _scan_cost, _scan_cost_history
+    try:
+        with open(_SCAN_COST_FILE, encoding="utf-8") as file:
+            data = json.load(file)
+    except (OSError, ValueError):
+        return
+    if not isinstance(data, dict):
+        return
+    last = data.get("last")
+    if isinstance(last, dict):
+        _scan_cost = {
+            mode: last[mode]
+            for mode in ("prematch", "live")
+            if isinstance(last.get(mode), dict)
+        }
+    history = data.get("history")
+    if isinstance(history, list):
+        _scan_cost_history = [
+            entry for entry in history if isinstance(entry, dict)
+        ][:_SCAN_COST_HISTORY_MAX]
+
+
+def _save_scan_cost() -> None:
+    try:
+        _atomic_write_json(
+            _SCAN_COST_FILE,
+            {"last": _scan_cost, "history": _scan_cost_history},
+            "scan_cost",
+            indent=None,
+        )
+    except Exception as exc:  # diagnostics must never stop a scan
+        logger.warning("Scan cost save failed: %s", exc)
+
+
 def _feed_integrity_payload(mode: str) -> dict[str, Any]:
     """Compact scorecard for one feed plus the books that are priced out."""
     books = _feed_integrity.get(mode) or {}
@@ -2826,6 +2942,7 @@ def _load_cache():
     _load_opportunity_metrics()
     _load_feed_integrity()
     _load_coverage_budget()
+    _load_scan_cost()
     for mode, cache_file, state_fields in (
         ("prematch", _PREMATCH_CACHE_FILE,
          (scan_status, cached_surebets, cached_matches, cached_match_groups_report)),
@@ -3118,6 +3235,12 @@ async def health():
             "mapping_coverage_floor": MAPPING_COVERAGE_FLOOR,
             "mapping_min_rows": MAPPING_COVERAGE_MIN_ROWS,
             "consecutive_scans": COVERAGE_ALERT_CONSECUTIVE_SCANS,
+        },
+        # N1-3: the last scan's per-book cost, with explicit totals. Only
+        # durations, counts, sizes and outcomes are served.
+        "scan_cost": {
+            "prematch": _scan_cost.get("prematch") or {},
+            "live": _scan_cost.get("live") or {},
         },
         "unmapped_markets": dict(unmapped_markets),
         "unmapped_markets_by_book": unmapped_by_book(),

@@ -922,6 +922,31 @@ body.feed-stale .row-profit b { color: var(--warn); }
 .coverage-dot-flags { background: var(--warn); }
 .coverage-dot-unmapped { background: var(--blue); }
 
+.scan-cost {
+    margin-bottom: 14px;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    background: var(--panel-2);
+}
+.scan-cost-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px 14px;
+    margin-bottom: 8px;
+}
+#scan-cost-summary { font-size: 11px; color: var(--muted); }
+.scan-cost-table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 11px; }
+.scan-cost-table th,
+.scan-cost-table td { padding: 4px 8px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+.scan-cost-table th:first-child,
+.scan-cost-table td:first-child,
+.scan-cost-table th:nth-child(2),
+.scan-cost-table td:nth-child(2) { text-align: left; }
+.scan-cost-table td.missing { color: var(--muted); }
+
 .candidates-list { display: flex; flex-direction: column; gap: 10px; }
 .candidates-page-note { margin: 0 0 4px; color: var(--muted); font-size: 13px; }
 

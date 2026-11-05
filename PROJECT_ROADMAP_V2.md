@@ -69,7 +69,7 @@ long-horizon.
 | N0-4 | Automatic closing-line capture for logged bets | P0 | M | N0-2 | Done |
 | N1-1 | Retention and maintenance automation | P1 | M | — | Done |
 | N1-2 | Coverage/mapping alerts and SLOs | P1 | S | — | Done |
-| N1-3 | Per-book scan cost accounting | P1 | M | — | Not started |
+| N1-3 | Per-book scan cost accounting | P1 | M | — | Done |
 | N1-4 | Release hardening: Docker smoke, SBOM, dependency updates | P1 | S | — | Not started |
 | N2-1 | Paper ledger dashboard, CSV and retention view | P2 | M | N1-1 | Not started |
 | N2-2 | Realistic paper fills: rejection, partial acceptance, caps | P2 | M | N2-1 | Not started |
@@ -355,7 +355,7 @@ group because a coverage alert fired.
 
 ### N1-3 — Per-book scan cost accounting
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P1
 **Effort:** M
 **Depends on:** none
@@ -379,12 +379,12 @@ book, not with a global estimate.
 
 **Acceptance criteria:**
 
-- [ ] Every enabled book has time, request, byte and outcome fields or an
+- [x] Every enabled book has time, request, byte and outcome fields or an
       explicit “not measurable” reason.
-- [ ] A failed/blocked book is distinguishable from an empty one.
-- [ ] The dashboard shows the cost table without exposing URLs, headers or
+- [x] A failed/blocked book is distinguishable from an empty one.
+- [x] The dashboard shows the cost table without exposing URLs, headers or
       payloads.
-- [ ] The report has explicit scan and book denominators.
+- [x] The report has explicit scan and book denominators.
 
 **Tests:**
 
@@ -783,6 +783,54 @@ For every task:
 
 Newest first. Each entry: date, task, status, commands, measured result, files
 changed, follow-ups.
+
+### 2026-11-05 — N1-3 — Done
+
+**Commands**
+
+```bash
+python -m pytest
+BH_ARB_TEST_RUNTIME_LEDGER=populated python -m pytest
+python -m pytest tests/test_scan_cost.py
+python scripts/scan_cost.py --days 7
+python -m ruff check .
+python -m mypy .
+python scripts/generate_market_mapping_doc.py --check
+node --check frontend/js/app.js
+```
+
+**Measured result**
+
+- Operator checkout: **1,542 passed, 2 skipped, 1 warning** in 58.72 s;
+  populated-ledger mode: **1,542 passed, 2 skipped, 1 warning** in 58.76 s.
+- `tests/test_scan_cost.py`: **12 passed** — wall/browser/request/byte fields,
+  null `n/a` reasons, blocked vs parse error vs empty, report totals, bounded
+  aggregation, failure rate, CLI denominators, metrics and health.
+- `scripts/scan_cost.py --days 7` ran cleanly; this session had no live scan, so
+  it correctly reported **0 scans / 0 books** rather than inventing a cost.
+- Ruff clean, MyPy clean on **197 source files**, Node syntax check clean and
+  the generated market doc in sync.
+
+**Files changed**
+
+- `scrapers/cost.py` — context collector, browser/request/byte instrumentation,
+  outcome classification and scan report.
+- `scrapers/base.py`, `scrapers/admiralbet.py`, `scrapers/mozzartbet.py`,
+  `scrapers/wwin.py`, `scrapers/premier_kladionica.py` — measured browser
+  navigation and HTTP paths.
+- `server/scan_cost.py` — bounded history aggregation and failure rates.
+- `server/api.py` — per-scan records, `/api/health.scan_cost`, cost metrics and
+  save/restore.
+- `frontend/index.html`, `frontend/css/style.css`, `frontend/js/app.js` —
+  Diagnostics cost table.
+- `scripts/scan_cost.py`, `tests/test_scan_cost.py`, `tests/conftest.py`.
+- `docs/SCAN_COST.md`,
+  `docs/evidence/2026-11-05-scan-cost-baseline.md`.
+
+**Follow-up:** the first live baseline is still pending because this session ran
+no live scan; the dated evidence slot and CLI are ready. N1-4 (release
+hardening) is the next eligible task. No certainty-gate, link-proof,
+settlement, price-source or one-leg-per-book rule changed.
 
 ### 2026-11-05 — N1-2 — Done
 

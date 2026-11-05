@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 
 from engine.market_registry import MARKET_REGISTRY, record_unmapped
 from models.schemas import Market, MarketType, Match, OddsValue
-from scrapers.base import fetch_pages, launch_browser, settle
+from scrapers.base import fetch_pages, goto, launch_browser, measured_api_post, settle
 from scrapers.common import parse_dt
 
 logger = logging.getLogger(__name__)
@@ -390,7 +390,7 @@ class MozzartbetScraper:
             page.on("response", capture_response)
 
             # 1. Load the page (triggers initial API calls)
-            await page.goto(f"{BASE_URL}/sr/kladjenje", wait_until="domcontentloaded", timeout=60000)
+            await goto(page, f"{BASE_URL}/sr/kladjenje", wait_until="domcontentloaded", timeout=60000)
             await settle(page, 3000)
 
             # 2. Paginate via page.request (with correct headers from the page)
@@ -410,7 +410,8 @@ class MozzartbetScraper:
 
             async def fetch_page(page_num: int) -> list | None:
                 try:
-                    resp = await page.request.post(
+                    resp = await measured_api_post(
+                        page,
                         f"{BASE_URL}/betting/matches",
                         data={**api_body, "currentPage": page_num},
                         headers={

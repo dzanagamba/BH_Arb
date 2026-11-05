@@ -2533,6 +2533,54 @@ function renderCoverageTrend(data) {
     setText('coverage-trend-summary', `${currentMode}: ${Number(last.flag_count) || 0} flag(s) · ${Number(last.unmapped_rows) || 0} unmapped rows · mapped ${rows} (${ratio})`);
 }
 
+function formatBytes(value) {
+    if (value == null) return 'n/a';
+    const bytes = Number(value);
+    if (!Number.isFinite(bytes)) return 'n/a';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function renderScanCost(data) {
+    const box = document.getElementById('scan-cost');
+    const body = document.getElementById('scan-cost-body');
+    if (!box || !body) return;
+    const report = data?.scan_cost?.[currentMode] || {};
+    const books = report.books || {};
+    const names = Object.keys(books).sort();
+    if (!names.length) {
+        box.hidden = true;
+        body.innerHTML = '';
+        return;
+    }
+    box.hidden = false;
+    const totals = report.totals || {};
+    const fmt = (value, suffix = '') => (
+        value == null || !Number.isFinite(Number(value))
+            ? 'n/a'
+            : `${Number(value).toFixed(2)}${suffix}`
+    );
+    setText('scan-cost-summary', `${currentMode}: ${Number(totals.books) || names.length} book(s) · ${fmt(totals.wall_seconds, 's')} wall · ${fmt(totals.requests)} requests · ${Number(totals.matches) || 0} matches · ${fmt(totals.seconds_per_match, 's/match')}`);
+    body.innerHTML = names.map(name => {
+        const book = books[name] || {};
+        const missing = (book.missing || []).join('; ');
+        const perMatch = Number(book.matches) > 0
+            ? Number(book.wall_seconds) / Number(book.matches)
+            : null;
+        return `<tr title="${escapeHtml(missing)}">`
+            + `<td>${escapeHtml(name)}</td>`
+            + `<td>${escapeHtml(book.outcome || '?')}</td>`
+            + `<td>${fmt(book.wall_seconds, 's')}</td>`
+            + `<td>${fmt(book.browser_seconds, 's')}</td>`
+            + `<td>${fmt(book.requests)}</td>`
+            + `<td>${formatBytes(book.bytes)}</td>`
+            + `<td>${Number(book.matches) || 0}</td>`
+            + `<td>${fmt(perMatch, 's')}</td>`
+            + '</tr>';
+    }).join('');
+}
+
 async function loadHealth() {
     try {
         const res = await fetch('/api/health');
@@ -2541,6 +2589,7 @@ async function loadHealth() {
         // the payload is kept for the diagnostic.
         healthSnapshot = data;
         renderCoverageTrend(data);
+        renderScanCost(data);
         const bar = document.getElementById('health-bar');
         if (!bar) return;
         const fmtAge = (sec) => sec == null ? '—' : sec < 60 ? `${Math.round(sec)}s ago` : `${Math.round(sec/60)}m ago`;

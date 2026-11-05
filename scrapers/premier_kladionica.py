@@ -43,6 +43,7 @@ import httpx
 from config.settings import VERIFY_SSL
 from engine.market_registry import MARKET_REGISTRY, record_unmapped
 from models.schemas import Market, MarketType, Match, OddsValue
+from scrapers.cost import record_request, response_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -448,7 +449,9 @@ class PremierKladionicaScraper:
             )
         except Exception as e:
             logger.warning(f"[PremierKladionica] Sync request failed: {e}")
+            record_request(None)
             return None
+        record_request(response_bytes(response))
         if response.status_code != 200:
             logger.warning(f"[PremierKladionica] Sync HTTP {response.status_code}")
             return None
