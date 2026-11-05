@@ -1,7 +1,7 @@
 // P3-4: cache only the static app shell. Never cache /api or odds: stale odds
 // are dangerous, and a service worker must not become a second stale-feed layer.
-const CACHE = 'bh-arb-shell-v1';
-const SHELL = ['/', '/index.html', '/css/style.css', '/js/app.js', '/manifest.webmanifest'];
+const CACHE = 'bh-arb-shell-v2';
+const SHELL = ['/', '/index.html', '/css/style.css', '/js/i18n.js', '/js/app.js', '/manifest.webmanifest'];
 
 self.addEventListener('install', event => {
     event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)));

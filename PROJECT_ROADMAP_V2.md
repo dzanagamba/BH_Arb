@@ -74,8 +74,8 @@ long-horizon.
 | N2-1 | Paper ledger dashboard, CSV and retention view | P2 | M | N1-1 | Done |
 | N2-2 | Realistic paper fills: rejection, partial acceptance, caps | P2 | M | N2-1 | Done |
 | N2-3 | Candidate remediation and strict-miss trends | P2 | M | — | Done |
-| N2-4 | Seven-day local opportunity baseline and drift gates | P2 | M | — | Not started |
-| N2-5 | Complete Bosnian localization and automated a11y checks | P2 | M | N0-3 | Not started |
+| N2-4 | Seven-day local opportunity baseline and drift gates | P2 | M | — | Deferred |
+| N2-5 | Complete Bosnian localization and automated a11y checks | P2 | M | N0-3 | Done |
 | N2-6 | Parser fixture refresh and drift detection | P2 | M | — | Not started |
 | N3-1 | Property-based pricing/identity tests and load budgets | P3 | M | N0-1 | Not started |
 | N3-2 | Scheduled market/sport admissibility re-audit | P3 | M | N2-6 | Not started |
@@ -556,7 +556,9 @@ diagnostic, not a trust decision.
 
 ### N2-4 — Seven-day local opportunity baseline and drift gates
 
-**Status:** Not started
+**Status:** Deferred — operator deferred this task on 2026-11-05 ("skip N2-4
+for now"); it is not blocked, just intentionally out of order. Do not start it
+until the operator un-defers it.
 **Priority:** P2
 **Effort:** M
 **Depends on:** none
@@ -595,7 +597,7 @@ a finding, not a threshold to lower.
 
 ### N2-5 — Complete Bosnian localization and automated accessibility checks
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P2
 **Effort:** M
 **Depends on:** N0-3
@@ -614,11 +616,11 @@ a finding, not a threshold to lower.
 
 **Acceptance criteria:**
 
-- [ ] No user-facing English string remains outside the dictionary except
+- [x] No user-facing English string remains outside the dictionary except
       bookmaker names and data.
-- [ ] A missing translation fails a test.
-- [ ] Automated a11y checks cover the main tabs and slip.
-- [ ] Keyboard-only navigation still works in both languages.
+- [x] A missing translation fails a test.
+- [x] Automated a11y checks cover the main tabs and slip.
+- [x] Keyboard-only navigation still works in both languages.
 
 **Tests:**
 
@@ -783,6 +785,72 @@ For every task:
 
 Newest first. Each entry: date, task, status, commands, measured result, files
 changed, follow-ups.
+
+### 2026-11-05 — N2-5 — Done
+
+N2-4 was deferred by the operator before this task started ("skip N2-4 for
+now"); it is marked **Deferred**, not blocked, in the table above.
+
+**Commands**
+
+```bash
+python -m pytest
+BH_ARB_TEST_RUNTIME_LEDGER=populated python -m pytest
+BH_ARB_TEST_BROWSER=1 python -m pytest tests/test_accessibility_axe.py
+python -m pytest tests/test_i18n_coverage.py
+python scripts/a11y_audit.py --axe /tmp/opencode/axe/node_modules/axe-core/axe.min.js
+python -m ruff check .
+python -m mypy .
+python scripts/generate_market_mapping_doc.py --check
+node --check frontend/js/app.js
+node --check frontend/js/i18n.js
+```
+
+**Measured result**
+
+- Operator checkout: **1,598 passed, 4 skipped, 1 warning** in 60.72 s;
+  populated-ledger mode: **1,598 passed, 4 skipped, 1 warning** in 60.44 s. The
+  four skips are the two opt-in runtime-state checks plus the two Chromium tests
+  when `BH_ARB_TEST_BROWSER` is unset.
+- `tests/test_i18n_coverage.py`: **12 passed** — every `data-i18n`/`tr()` key has
+  Bosnian copy, placeholders are preserved, the reason table has `*_bs` for every
+  case, no shipped HTML text or accessible attribute is outside the catalog, and
+  the language switch repaints generated views.
+- `tests/test_accessibility_axe.py` (browser mode): **8 passed** — static
+  landmark/name/tab/duplicate-id/focus-order checks, the axe runner contract, the
+  live audit over all six tabs plus the synthetic slip, and the keyboard-only
+  path (scan → filter → open slip → copy stake → close) in English and Bosnian.
+- Live axe run: **0 violations** over the six tabs and the slip; light and dark
+  schemes both clean. The reviewed allowlist is empty.
+- Ruff clean, MyPy clean on **205 source files**, Node syntax checks clean and
+  the generated market doc in sync.
+
+**Files changed**
+
+- `frontend/js/i18n.js` — Bosnian catalog, gettext-style English keys and
+  placeholder copy.
+- `frontend/js/no-surebet-reasons.json` — `title_bs`/`body_bs` and live variants
+  for every diagnostic case.
+- `frontend/js/app.js` — `tr()`, attribute/HTML translation, localized generated
+  chrome, `refreshLocalizedViews()`, translated diagnostics, Escape closes the
+  slip, `h1`/heading fixes.
+- `frontend/index.html`, `frontend/css/style.css` — catalog hooks on every static
+  string and accessible attribute, skip/landmark/slip semantics, readable
+  contrast tokens, `sr-only` helper, brand `h1`.
+- `frontend/sw.js` — cache `i18n.js`; shell version bumped.
+- `scripts/a11y_audit.py` — Playwright audit for tabs and slip, optional
+  axe-core, built-in DOM rules, empty documented allowlist.
+- `tests/test_i18n_coverage.py`, `tests/test_accessibility_axe.py`,
+  `tests/test_pwa_accessibility.py`, `tests/test_frontend_empty_state.py`,
+  `tests/test_paper_ui.py`, `tests/test_slip_partial_acceptance.py`,
+  `tests/test_coverage_budget.py`, `tests/test_candidate_quality.py`,
+  `tests/test_csp_nonce.py`.
+- `docs/ACCESSIBILITY.md`, `docs/PWA_ACCESSIBILITY.md`, `README.md`.
+
+**Follow-ups:** N2-6 (parser fixture refresh and drift detection) is the next
+eligible task once the deferred N2-4 is left out of order. Localization does not
+translate scraped data, and no trust rule, pricing rule or price-source identity
+changed.
 
 ### 2026-11-05 — N2-3 — Done
 

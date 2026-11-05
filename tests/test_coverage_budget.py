@@ -78,4 +78,4 @@ def test_history_is_bounded():
 
 def test_dashboard_shows_the_coverage_flag_count():
     assert "coverage_budget" in JS
-    assert "Coverage ${coverageFlags} flag(s)" in JS
+    assert "Coverage {count} flag(s)" in JS

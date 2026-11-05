@@ -43,13 +43,15 @@ def test_main_regions_have_labels_and_live_regions():
 
 
 def test_the_language_toggle_persists_and_covers_main_labels():
+    i18n = Path("frontend/js/i18n.js").read_text(encoding="utf-8")
     assert 'id="filter-language"' in HTML
-    assert 'data-i18n="tab.surebets"' in HTML
-    assert 'data-i18n="action.scan"' in HTML
-    assert "const I18N = {" in JS
-    assert "'tab.surebets': 'Sigurni dobici'" in JS
+    assert 'data-i18n="Surebets"' in HTML
+    assert 'data-i18n="Scan now"' in HTML
+    assert "window.I18N = {" in i18n
+    assert '"Scan now": "Skeniraj sada"' in i18n
     assert "localStorage.setItem('language'" in JS
     assert "function applyLanguage" in JS
+    assert "function tr(" in JS
 
 
 def test_browser_alerts_are_permission_gated():

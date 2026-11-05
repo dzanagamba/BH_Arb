@@ -26,7 +26,7 @@ def test_partial_acceptance_replans_the_remaining_legs():
 
 
 def test_a_negative_worst_case_tells_the_operator_to_stop_or_hedge():
-    assert "loses ${money(-plan.profit)} KM" in JS
+    assert "With these stakes the worst outcome loses {loss} KM." in JS
     assert "stopping or hedging rather than placing the rest" in JS
 
 

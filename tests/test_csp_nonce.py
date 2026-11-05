@@ -33,8 +33,8 @@ def test_dashboard_csp_uses_a_nonce_and_not_unsafe_inline_scripts():
     assert match, f"script-src has no nonce: {script_src}"
     nonce = match.group(1)
 
-    # Both script tags (the pre-paint theme bootstrap and app.js) carry it.
-    assert response.text.count(f'nonce="{nonce}"') == 2
+    # The pre-paint theme bootstrap, i18n.js and app.js all carry it.
+    assert response.text.count(f'nonce="{nonce}"') == 3
     assert "__CSP_NONCE__" not in response.text
 
 

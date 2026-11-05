@@ -40,34 +40,69 @@ let knownSurebetSignatures = new Set();
 let healthSnapshot = null;          // last /api/health payload, kept for the no-surebet diagnostic
 let language = (() => { try { return localStorage.getItem('language') || 'en'; } catch (e) { return 'en'; } })();
 
-const I18N = {
-    en: {
-        'tab.surebets': 'Surebets', 'tab.diagnostics': 'Diagnostics', 'tab.paper': 'Paper',
-        'tab.history': 'History',
-        'tab.evidence': 'Evidence', 'tab.other': 'Other sports', 'action.scan': 'Scan now',
-        'settings.language': 'Language', 'settings.languageLabel': 'Interface language',
-        'settings.staking': 'Staking', 'settings.scanning': 'Scanning',
-        'settings.sound': 'Chime on a new surebet above 3%',
-    },
-    bs: {
-        'tab.surebets': 'Sigurni dobici', 'tab.diagnostics': 'Dijagnostika', 'tab.paper': 'Papir',
-        'tab.history': 'Historija',
-        'tab.evidence': 'Dokazi', 'tab.other': 'Drugi sportovi', 'action.scan': 'Skeniraj',
-        'settings.language': 'Jezik', 'settings.languageLabel': 'Jezik interfejsa',
-        'settings.staking': 'Ulog', 'settings.scanning': 'Skeniranje',
-        'settings.sound': 'Zvuk za novi sigurni dobitak iznad 3%',
-    },
-};
+// N2-5: the Bosnian copy lives in frontend/js/i18n.js. Keys are the English
+// source strings (gettext-style), so `tr()` can fall back to the key when the
+// UI is running in English. Only UI chrome is translated; bookmaker, team and
+// league strings always come from the feed as data.
+const I18N = (typeof window !== 'undefined' && window.I18N) ? window.I18N : { bs: {} };
+
+function tr(text, vars) {
+    const dictionary = I18N.bs || {};
+    const template = language === 'bs' && Object.prototype.hasOwnProperty.call(dictionary, text)
+        ? dictionary[text]
+        : text;
+    if (!vars) return template;
+    return String(template).replace(/\{(\w+)\}/g, (whole, name) => (
+        Object.prototype.hasOwnProperty.call(vars, name) ? String(vars[name]) : whole
+    ));
+}
+
+function translateElement(element) {
+    const key = element.dataset.i18n;
+    if (key) {
+        if (element.dataset.i18nHtml === 'true') element.innerHTML = tr(key);
+        else element.textContent = tr(key);
+    }
+    for (const attribute of ['aria-label', 'title', 'placeholder']) {
+        const keyAttribute = `i18n${attribute.split('-').map(part => part[0].toUpperCase() + part.slice(1)).join('')}`;
+        const attributeKey = element.dataset[keyAttribute];
+        if (attributeKey) element.setAttribute(attribute, tr(attributeKey));
+    }
+}
 
 function applyLanguage() {
-    const dictionary = I18N[language] || I18N.en;
     document.documentElement.lang = language;
-    document.querySelectorAll('[data-i18n]').forEach(element => {
-        const key = element.dataset.i18n;
-        if (dictionary[key]) element.textContent = dictionary[key];
-    });
+    document
+        .querySelectorAll('[data-i18n], [data-i18n-aria-label], [data-i18n-title], [data-i18n-placeholder]')
+        .forEach(translateElement);
     const select = document.getElementById('filter-language');
     if (select) select.value = language;
+    refreshLocalizedViews();
+}
+
+// Every generated string is rendered from `tr()`, so a language change has to
+// repaint the views that are already on screen. Network-backed views reload;
+// the local ones re-render from the snapshots they already hold.
+function refreshLocalizedViews() {
+    if (typeof updateModeToggleUI === 'function') updateModeToggleUI();
+    if (typeof updateThemeButton === 'function') updateThemeButton();
+    if (typeof renderKpis === 'function' && typeof resultsSnapshot !== 'undefined' && resultsSnapshot) {
+        renderKpis(footballSurebets());
+    }
+    if (typeof renderSurebets === 'function' && typeof resultsSnapshot !== 'undefined' && resultsSnapshot) {
+        renderSurebets(footballSurebets());
+    }
+    if (typeof renderOtherSports === 'function') renderOtherSports();
+    if (typeof renderSlip === 'function') renderSlip();
+    if (typeof renderFreshnessBanner === 'function') renderFreshnessBanner();
+    if (typeof renderRunModeBanner === 'function') renderRunModeBanner();
+    if (typeof renderFeedIntegrity === 'function') renderFeedIntegrity();
+    if (typeof refreshNoSurebetState === 'function') refreshNoSurebetState();
+    if (typeof loadCandidates === 'function' && typeof currentMode !== 'undefined') loadCandidates();
+    if (typeof activeTab !== 'undefined' && activeTab === 'history' && typeof loadHistory === 'function') loadHistory();
+    if (typeof activeTab !== 'undefined' && activeTab === 'evidence' && typeof loadEvidence === 'function') loadEvidence();
+    if (typeof activeTab !== 'undefined' && activeTab === 'paper' && typeof loadPaper === 'function') loadPaper();
+    if (typeof loadHealth === 'function') loadHealth();
 }
 
 function setLanguage(value) {
@@ -78,11 +113,13 @@ function setLanguage(value) {
 
 async function enableNotifications() {
     if (!('Notification' in window)) {
-        showToast('This browser does not support notifications.');
+        showToast(tr('This browser does not support notifications.'));
         return;
     }
     const permission = await Notification.requestPermission();
-    showToast(permission === 'granted' ? 'Browser alerts enabled.' : 'Browser alerts were not enabled.');
+    showToast(permission === 'granted'
+        ? tr('Browser alerts enabled.')
+        : tr('Browser alerts were not enabled.'));
 }
 
 // P3-4: installable shell only. Odds and /api responses are never cached.
@@ -200,6 +237,25 @@ const SPORT_LABELS = {
     football: 'Football', basketball: 'Basketball', tennis: 'Tennis', ice_hockey: 'Ice hockey',
 };
 
+// Every label table is keyed by English source text; `tr()` resolves it to the
+// active language. Keeping the tables English makes them readable and makes the
+// catalog coverage test exact.
+function reasonLabel(code) {
+    return tr(reasonLabel(code));
+}
+
+function feedReasonLabel(reason) {
+    return tr(feedReasonLabel(reason));
+}
+
+function marketLabel(market) {
+    return tr(MARKET_LABELS[market] || market);
+}
+
+function sportLabel(sport) {
+    return tr(SPORT_LABELS[sport] || sport);
+}
+
 // What each outcome label means, in words a bettor types into a ticket.
 function outcomeDescription(label, marketType, sport) {
     const half = marketType && marketType.startsWith('first_half') ? ' (1st half)' : '';
@@ -208,15 +264,18 @@ function outcomeDescription(label, marketType, sport) {
         '1X': 'Home or draw', 'X2': 'Draw or away', '12': 'Home or away',
         'GG': 'Both teams score', 'NG': 'Not both teams score',
     };
-    if (words[label]) return words[label] + half;
+    if (words[label]) return tr(words[label]) + tr(half);
     const line = /^([12])\s+([+-]?\d+(?:\.\d+)?)$/.exec(label);
-    if (line) return `${line[1] === '1' ? 'Home' : 'Away'} ${line[2]}${half}`;
+    if (line) {
+        const side = line[1] === '1' ? 'Home' : 'Away';
+        return `${tr(side)} ${line[2]}${tr(half)}`;
+    }
     const unit = sport === 'tennis' ? 'games' : sport === 'basketball' ? 'points' : 'goals';
     const over = /^Over (.+)$/.exec(label);
-    if (over) return `Over ${over[1]} ${unit}${half}`;
+    if (over) return tr('Over {line} {unit}{half}', { line: over[1], unit: tr(unit), half: tr(half) });
     const under = /^Under (.+)$/.exec(label);
-    if (under) return `Under ${under[1]} ${unit}${half}`;
-    return label + half;
+    if (under) return tr('Under {line} {unit}{half}', { line: under[1], unit: tr(unit), half: tr(half) });
+    return label + tr(half);
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
@@ -447,9 +506,14 @@ function handleTabKeydown(event) {
     }
 }
 
-// j/k move through the list, Escape closes the settings drawer.
+// j/k move through the list, Escape closes the settings drawer or the slip.
 function handleGlobalKeydown(event) {
-    if (event.key === 'Escape') { toggleSettings(false); return; }
+    if (event.key === 'Escape') {
+        const drawer = document.getElementById('settings-drawer');
+        if (drawer && !drawer.hidden) toggleSettings(false);
+        else if (document.body.classList.contains('slip-open')) closeSlip();
+        return;
+    }
     const typing = event.target.closest('input, select, textarea');
     if (typing || activeTab !== 'surebets' || !filteredSurebets.length) return;
     if (event.key !== 'j' && event.key !== 'k') return;
@@ -487,12 +551,12 @@ function cycleTheme() {
     else document.documentElement.dataset.theme = next;
     try { localStorage.setItem('theme', next); } catch (e) { /* ignore */ }
     updateThemeButton();
-    showToast(`Theme: ${next}`);
+    showToast(tr('Theme: {theme}', { theme: tr(next) }));
 }
 
 function updateThemeButton() {
     const button = document.getElementById('theme-btn');
-    if (button) button.title = `Theme: ${currentTheme()} (click to change)`;
+    if (button) button.title = tr('Theme: {theme} (click to change)', { theme: tr(currentTheme()) });
 }
 
 function toggleSettings(open) {
@@ -601,22 +665,22 @@ async function scanNow() {
         const res = await apiFetch(`/api/scan?mode=${currentMode}&run_mode=${encodeURIComponent(scanRunMode)}`, { method: 'POST', headers: candidateActionHeaders() });
         const data = await res.json();
         if (res.status === 429) {
-            showError(data.detail || 'Too many scans — wait a moment.');
+            showError(data.detail || tr('Too many scans — wait a moment.'));
             return;
         }
         if (data.status === 'already_scanning') {
-            setStatus('scanning', 'Scan in progress…');
+            setStatus('scanning', tr('Scan in progress…'));
             startPolling();
             return;
         }
         btn.disabled = true;
-        btn.textContent = 'Scanning…';
+        btn.textContent = tr('Scanning…');
         activeScanMode = currentMode;
         showScanProgress();
-        setStatus('scanning', `Scanning ${currentMode === 'live' ? 'live' : 'upcoming'} matches…`);
+        setStatus('scanning', tr('Scanning {mode} matches…', { mode: tr(currentMode === 'live' ? 'live' : 'upcoming') }));
         startPolling();
     } catch (e) {
-        showError('Could not start the scan: ' + e.message);
+        showError(tr('Could not start the scan: {error}', { error: e.message }));
     }
 }
 
@@ -651,7 +715,7 @@ function setAutoRescan(minutes) {
             countdownEl.hidden = false;
             const m = Math.floor(remaining / 60);
             const s = (remaining % 60).toString().padStart(2, '0');
-            countdownEl.textContent = `next scan ${m}:${s}`;
+            countdownEl.textContent = tr('next scan {minutes}:{seconds}', { minutes: m, seconds: s });
         }
         if (remaining <= 0) {
             remaining = minutes * 60;
@@ -680,8 +744,8 @@ function updateScanProgress(status) {
     const subEl = document.getElementById('scan-progress-sub');
     const doneEl = document.getElementById('scan-bookies-done');
     const barEl = document.getElementById('scan-bar');
-    if (subEl) subEl.textContent = status.current_bookmaker || 'Processing…';
-    setStatus('scanning', status.current_bookmaker || 'Scanning…');
+    if (subEl) subEl.textContent = status.current_bookmaker || tr('Processing…');
+    setStatus('scanning', status.current_bookmaker || tr('Scanning…'));
     if (doneEl) {
         const progress = status.bookmaker_progress || {};
         doneEl.innerHTML = Object.entries(progress).map(([id, state]) => {
@@ -701,13 +765,13 @@ async function onScanComplete(status) {
     hideScanProgress();
     const btn = document.getElementById('scan-btn');
     btn.disabled = false;
-    btn.textContent = 'Scan now';
+    btn.textContent = tr('Scan now');
     if (status.errors && status.errors.length > 0) {
-        showError('Some bookmakers failed: ' + status.errors.slice(0, 3).join('; '));
+        showError(tr('Some bookmakers failed: {books}', { books: status.errors.slice(0, 3).join('; ') }));
     }
     setStatus('done', status.surebets_found > 0
-        ? `${status.surebets_found} surebet${status.surebets_found > 1 ? 's' : ''} found`
-        : 'Scan complete — no surebets');
+        ? tr(status.surebets_found === 1 ? '{count} surebet found' : '{count} surebets found', { count: status.surebets_found })
+        : tr('Scan complete — no surebets'));
     await loadResults();
     loadCandidates();
 }
@@ -728,7 +792,7 @@ async function loadResults(silent = false) {
 
         setText('stat-matches', data.total_matches != null ? data.total_matches.toLocaleString() : '—');
         setText('stat-groups', data.match_groups != null ? Number(data.match_groups).toLocaleString() : '—');
-        setText('stat-time', data.last_scan_time ? formatAgo(parseKickoff(data.last_scan_time)) : 'never');
+        setText('stat-time', data.last_scan_time ? formatAgo(parseKickoff(data.last_scan_time)) : tr('never'));
 
         if (selectedSurebetId && !allSurebets.some(sb => sb.id === selectedSurebetId)) {
             selectedSurebetId = null;
@@ -765,12 +829,12 @@ function staleFeed() {
 }
 
 function freshnessAgeText(seconds) {
-    if (seconds == null) return 'unknown age';
-    if (seconds < 60) return `${Math.round(seconds)}s`;
+    if (seconds == null) return tr('unknown age');
+    if (seconds < 60) return tr('{count}s', { count: Math.round(seconds) });
     const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes}m ${Math.round(seconds % 60)}s`;
+    if (minutes < 60) return tr('{minutes}m {seconds}s', { minutes, seconds: Math.round(seconds % 60) });
     const hours = Math.floor(minutes / 60);
-    return `${hours}h ${minutes % 60}m`;
+    return tr('{hours}h {minutes}m', { hours, minutes: minutes % 60 });
 }
 
 function renderFreshnessBanner() {
@@ -792,22 +856,22 @@ function renderFreshnessBanner() {
     banner.hidden = !stale;
     if (!stale) { banner.innerHTML = ''; return; }
 
-    const mode = fresh.mode === 'live' ? 'live' : 'prematch';
+    const mode = tr(fresh.mode === 'live' ? 'live' : 'prematch');
     const ttl = fresh.ttl_sec;
     const books = (fresh.stale_books || []).map(b => bookName(b));
     const booksText = books.length
-        ? ` Stale book${books.length > 1 ? 's' : ''}: ${books.map(escapeHtml).join(', ')}.`
+        ? tr(' Stale book(s): {books}.', { books: books.map(escapeHtml).join(', ') })
         : '';
     let message;
     if (fresh.state === 'never_scanned') {
-        message = `<strong>No completed ${escapeHtml(mode)} scan.</strong> Nothing on this screen is a current price.`;
+        message = `<strong>${escapeHtml(tr('No completed {mode} scan.', { mode }))}</strong> ${escapeHtml(tr('Nothing on this screen is a current price.'))}`;
     } else if (fresh.state === 'book_older_than_ttl') {
-        message = `<strong>Historical ${escapeHtml(mode)} data.</strong> At least one book is older than the ${escapeHtml(String(ttl))}s freshness budget.${booksText}`;
+        message = `<strong>${escapeHtml(tr('Historical {mode} data.', { mode }))}</strong> ${escapeHtml(tr('At least one book is older than the {ttl}s freshness budget.', { ttl }))}${booksText}`;
     } else {
-        message = `<strong>Historical ${escapeHtml(mode)} data.</strong> The last scan is ${escapeHtml(freshnessAgeText(fresh.age_sec))} old; the budget is ${escapeHtml(String(ttl))}s.${booksText}`;
+        message = `<strong>${escapeHtml(tr('Historical {mode} data.', { mode }))}</strong> ${escapeHtml(tr('The last scan is {age} old; the budget is {ttl}s.', { age: freshnessAgeText(fresh.age_sec), ttl }))}${booksText}`;
     }
-    banner.innerHTML = `${message} These odds are not current — re-check a slip or run a new scan.
-        <button type="button" class="btn btn-primary btn-small" data-action="scan-now">Scan now</button>`;
+    banner.innerHTML = `${message} ${escapeHtml(tr('These odds are not current — re-check a slip or run a new scan.'))}
+        <button type="button" class="btn btn-primary btn-small" data-action="scan-now">${escapeHtml(tr('Scan now'))}</button>`;
 }
 
 // P3-7: the last completed scan may not have been advisory. Say so instead of
@@ -822,14 +886,14 @@ function renderRunModeBanner() {
         return;
     }
     const count = Number(resultsSnapshot?.recorded_opportunities || 0);
-    const label = runMode === 'paper' ? 'Paper trading' : 'Record-only';
-    const noun = count === 1 ? 'opportunity' : 'opportunities';
+    const label = runMode === 'paper' ? tr('Paper trading') : tr('Record-only');
+    const noun = tr(count === 1 ? 'opportunity' : 'opportunities');
     const detail = runMode === 'paper'
-        ? ` ${count} verified ${noun} recorded and tracked in the virtual paper ledger.`
-        : ` ${count} verified ${noun} recorded in the paper ledger.`;
+        ? tr(' {count} verified {noun} recorded and tracked in the virtual paper ledger.', { count, noun })
+        : tr(' {count} verified {noun} recorded in the paper ledger.', { count, noun });
     banner.hidden = false;
-    banner.innerHTML = `<strong>${escapeHtml(label)} scan.</strong>${escapeHtml(detail)}
-        No live surebet is shown and no bet was placed. Switch Run mode back to Advisory to scan for live opportunities.`;
+    banner.innerHTML = `<strong>${escapeHtml(label)}${escapeHtml(tr(' scan.'))}</strong>${escapeHtml(detail)}
+        ${escapeHtml(tr('No live surebet is shown and no bet was placed. Switch Run mode back to Advisory to scan for live opportunities.'))}`;
 }
 
 // P0-7: only unhealthy books are shown here. A healthy feed needs no badge,
@@ -845,22 +909,22 @@ function renderFeedIntegrity() {
     if (!unhealthy.length && frozen === 0) { strip.innerHTML = ''; return; }
     const badges = unhealthy.map(book => {
         const state = book.state === 'quarantined' ? 'quarantined' : 'degraded';
-        const reasons = (book.reasons || []).map(reason => FEED_REASON_LABELS[reason] || reason);
-        const reasonText = reasons.join(', ') || book.reason || 'unhealthy';
+        const reasons = (book.reasons || []).map(reason => feedReasonLabel(reason));
+        const reasonText = reasons.join(', ') || book.reason || tr('unhealthy');
         const label = book.name || bookName(book.bookmaker);
         return `<span class="feed-integrity-badge" data-state="${escapeHtml(state)}" title="${escapeHtml(book.reason || reasonText)}">`
-            + `<b>${escapeHtml(label)}</b> ${escapeHtml(state)} — ${escapeHtml(reasonText)}`
-            + (state === 'quarantined' ? ' · not priced' : '')
+            + `<b>${escapeHtml(label)}</b> ${escapeHtml(tr(state))} — ${escapeHtml(reasonText)}`
+            + (state === 'quarantined' ? ` · ${escapeHtml(tr('not priced'))}` : '')
             + '</span>';
     }).join('');
     // N0-2: a frozen price is refused, not quarantined; say so without
     // pretending the whole book is out.
     const frozenBadge = frozen
-        ? `<span class="feed-integrity-badge" data-state="degraded" title="A price unchanged while peers moved, or older than the book's update budget, is refused for this scan.">`
-            + `<b>price frozen</b> ${frozen} row${frozen === 1 ? '' : 's'} refused`
+        ? `<span class="feed-integrity-badge" data-state="degraded" title="${escapeHtml(tr('A price unchanged while peers moved, or older than the book update budget, is refused for this scan.'))}">`
+            + `<b>${escapeHtml(tr('price frozen'))}</b> ${frozen} ${escapeHtml(tr(frozen === 1 ? 'row refused' : 'rows refused'))}`
             + '</span>'
         : '';
-    strip.innerHTML = `<span class="feed-integrity-title">Feed integrity</span>${badges}${frozenBadge}`;
+    strip.innerHTML = `<span class="feed-integrity-title">${escapeHtml(tr('Feed integrity'))}</span>${badges}${frozenBadge}`;
 }
 
 function surebetSignature(sb) {
@@ -929,7 +993,7 @@ function renderMarketChips() {
     pool.forEach(sb => { counts[sb.market_type] = (counts[sb.market_type] || 0) + 1; });
     const markets = Object.keys(MARKET_LABELS).filter(m => counts[m] || m === active);
     wrap.hidden = pool.length === 0;
-    wrap.innerHTML = [['', 'All', pool.length], ...markets.map(m => [m, MARKET_LABELS[m], counts[m] || 0])]
+    wrap.innerHTML = [['', tr('All'), pool.length], ...markets.map(m => [m, marketLabel(m), counts[m] || 0])]
         .map(([value, label, count]) => `<button type="button" class="mchip${value === active ? ' active' : ''}" aria-pressed="${value === active}" data-action="set-market-filter" data-market="${escapeHtml(value)}">${escapeHtml(label)} <b>${count}</b></button>`)
         .join('');
 }
@@ -946,11 +1010,11 @@ function renderKpis(surebets) {
     if (hero) hero.toggleAttribute('data-empty', !best);
     setText('kpi-best', best ? `${best.profit_percent.toFixed(2)}%` : '—');
     setText('kpi-best-sub', best
-        ? `+${money(globalInvestment * best.profit_percent / 100)} KM on ${globalInvestment} KM · ${formatTeamName(best.home_team)}`
+        ? tr('+{profit} KM on {stake} KM · {team}', { profit: money(globalInvestment * best.profit_percent / 100), stake: globalInvestment, team: formatTeamName(best.home_team) })
         : 'no surebet yet');
     setText('kpi-count', surebets.length);
     setText('kpi-count-sub', pool.length > surebets.length
-        ? `of ${pool.length} found · ${pool.length - surebets.length} filtered out`
+        ? tr('of {found} found · {filtered} filtered out', { found: pool.length, filtered: pool.length - surebets.length })
         : 'above your minimum');
 
     const metrics = resultsSnapshot?.opportunity_metrics || {};
@@ -960,9 +1024,9 @@ function renderKpis(surebets) {
         ? `${crossingRate.toFixed(2)}%`
         : '—');
     setText('kpi-crossing-sub', boards > 0
-        ? `${Number(metrics.crossed) || 0} of ${boards} boards · ${Number(metrics.actionable) || 0} actionable`
-        : (ZERO_RESULT_LABELS[metrics.zero_result_reason] || 'no boards priced'));
-    setText('kpi-mode-sub', currentMode === 'live' ? 'live matches' : 'upcoming matches');
+        ? tr('{crossed} of {boards} boards · {actionable} actionable', { crossed: Number(metrics.crossed) || 0, boards, actionable: Number(metrics.actionable) || 0 })
+        : tr(ZERO_RESULT_LABELS[metrics.zero_result_reason] || 'no boards priced'));
+    setText('kpi-mode-sub', tr(currentMode === 'live' ? 'live matches' : 'upcoming matches'));
 }
 
 function otherSurebets() {
@@ -987,8 +1051,8 @@ function renderOtherSports() {
     }
     const select = document.getElementById('other-sport-filter');
     if (select) {
-        const options = ['<option value="all">All other sports</option>']
-            .concat(sports.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(SPORT_LABELS[s] || s)}</option>`));
+        const options = [`<option value="all">${escapeHtml(tr('All other sports'))}</option>`]
+            .concat(sports.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(sportLabel(s))}</option>`));
         select.innerHTML = options.join('');
         select.value = otherSportFilter;
     }
@@ -1009,7 +1073,7 @@ function renderOtherSports() {
     setText('other-kpi-count', rows.length);
     const best = rows[0];
     setText('other-kpi-best', best ? `${best.profit_percent.toFixed(2)}%` : '—');
-    setText('other-kpi-sports', sports.length ? sports.map(s => SPORT_LABELS[s] || s).join(' · ') : 'none yet');
+    setText('other-kpi-sports', sports.length ? sports.map(s => sportLabel(s)).join(' · ') : tr('none yet'));
     const empty = document.getElementById('other-empty');
     if (empty) empty.hidden = rows.length > 0;
     grid.innerHTML = rows.map(sb => {
@@ -1022,11 +1086,11 @@ function renderOtherSports() {
             </span>`).join('');
         return `<article class="other-card" role="listitem" data-sport="${escapeHtml(sport)}">
             <div class="row-top">
-                <span class="sport-badge">${escapeHtml(SPORT_LABELS[sport] || sport)}</span>
+                <span class="sport-badge">${escapeHtml(sportLabel(sport))}</span>
                 <span class="profit mono">${sb.profit_percent.toFixed(2)}%</span>
             </div>
             <div class="row-title">${escapeHtml(formatTeamName(sb.home_team))} <span class="row-vs">vs</span> ${escapeHtml(formatTeamName(sb.away_team))}</div>
-            <div class="row-meta"><span class="mkt">${escapeHtml(MARKET_LABELS[sb.market_type] || sb.market_type)}</span><span class="row-league">${escapeHtml(formatLeague(sb.league))}</span></div>
+            <div class="row-meta"><span class="mkt">${escapeHtml(marketLabel(sb.market_type))}</span><span class="row-league">${escapeHtml(formatLeague(sb.league))}</span></div>
             <div class="other-legs">${legs}</div>
         </article>`;
     }).join('');
@@ -1074,11 +1138,11 @@ function buildSurebetRow(sb) {
     row.setAttribute('role', 'option');
     row.dataset.tier = profitTier(sb.profit_percent);
     const kickoff = parseKickoff(sb.kickoff);
-    const when = currentMode === 'live' ? 'In play' : (kickoff ? formatKickoff(kickoff) : '');
+    const when = currentMode === 'live' ? tr('In play') : (kickoff ? formatKickoff(kickoff) : '');
     // Kickoff inside the hour is flagged: the window to place all legs is closing.
     const minutesAway = kickoff ? (kickoff.getTime() - Date.now()) / 60000 : null;
     const whenClass = currentMode === 'live' ? ' live' : (minutesAway != null && minutesAway >= 0 && minutesAway < 60 ? ' soon' : '');
-    const whenText = whenClass === ' soon' ? `in ${Math.max(1, Math.round(minutesAway))} min` : when;
+    const whenText = whenClass === ' soon' ? tr('in {minutes} min', { minutes: Math.max(1, Math.round(minutesAway)) }) : when;
     const legs = placementOrder(sb.stakes).map(s => `
         <span class="leg-pill" title="${escapeHtml(bookName(s.bookmaker))}: ${escapeHtml(outcomeDescription(s.outcome_label, sb.market_type, sb.sport))} at ${s.odds.toFixed(2)}">
             <span class="book-dot" data-book-color="${escapeHtml(s.bookmaker)}">${escapeHtml(bookShort(s.bookmaker))}</span>
@@ -1093,7 +1157,7 @@ function buildSurebetRow(sb) {
         <span class="row-profit"><b>${sb.profit_percent.toFixed(2)}%</b><small>+${money(earns)} KM</small></span>
         <span class="row-main">
             <span class="row-teams">${escapeHtml(formatTeamName(sb.home_team))} – ${escapeHtml(formatTeamName(sb.away_team))}</span>
-            <span class="row-meta"><span class="mkt">${escapeHtml(MARKET_LABELS[sb.market_type] || sb.market_type)}</span><span class="row-when${whenClass}">${escapeHtml(whenText)}</span><span class="row-league">${escapeHtml(formatLeague(sb.league))}</span></span>
+            <span class="row-meta"><span class="mkt">${escapeHtml(marketLabel(sb.market_type))}</span><span class="row-when${whenClass}">${escapeHtml(whenText)}</span><span class="row-league">${escapeHtml(formatLeague(sb.league))}</span></span>
         </span>
         <span class="row-legs">${legs}</span>${badge}
     `;
@@ -1131,6 +1195,9 @@ function selectSurebet(id) {
 
 function closeSlip() {
     document.body.classList.remove('slip-open');
+    selectedSurebetId = null;
+    markSelectedRow();
+    renderSlip();
 }
 
 // ─── Bet slip ─────────────────────────────────────────────────────────────────
@@ -1249,18 +1316,18 @@ function renderSlip() {
 
     const warnings = [];
     if (staleFeed()) {
-        warnings.push('<div class="slip-alert slip-alert-bad">These are historical scan prices, not a current opportunity. Copy is disabled; use <strong>Re-check odds</strong> to establish the current prices before placing.</div>');
+        warnings.push(`<div class="slip-alert slip-alert-bad">${escapeHtml(tr('These are historical scan prices, not a current opportunity. Copy is disabled; use Re-check odds to establish the current prices before placing.'))}</div>`);
     }
     if (marginMismatch || profitMismatch) {
-        warnings.push('<div class="slip-alert slip-alert-bad">The served odds do not reproduce the payload margin. Do not use this slip; run a new scan.</div>');
+        warnings.push(`<div class="slip-alert slip-alert-bad">${escapeHtml(tr('The served odds do not reproduce the payload margin. Do not use this slip; run a new scan.'))}</div>`);
     }
     if (plan.profit <= 0) {
-        warnings.push(`<div class="slip-alert slip-alert-bad">With these stakes the worst outcome loses ${money(-plan.profit)} KM. ${Object.keys(state.placed).length ? 'A placed price moved — consider stopping or hedging rather than placing the rest.' : 'Raise the total stake or round to exact amounts.'}</div>`);
+        warnings.push(`<div class="slip-alert slip-alert-bad">${escapeHtml(tr('With these stakes the worst outcome loses {loss} KM.', { loss: money(-plan.profit) }))} ${escapeHtml(Object.keys(state.placed).length ? tr('A placed price moved — consider stopping or hedging rather than placing the rest.') : tr('Raise the total stake or round to exact amounts.'))}</div>`);
     } else if (!Object.keys(state.placed).length && roundingCost > exactProfit / 2) {
-        warnings.push(`<div class="slip-alert">Rounding eats more than half the edge (${plan.profitPercent.toFixed(2)}% left of ${exactProfit.toFixed(2)}%). A larger total stake keeps more of it.</div>`);
+        warnings.push(`<div class="slip-alert">${escapeHtml(tr('Rounding eats more than half the edge ({left}% left of {exact}%). A larger total stake keeps more of it.', { left: plan.profitPercent.toFixed(2), exact: exactProfit.toFixed(2) }))}</div>`);
     }
     if (plan.legs.some(leg => !leg.placed && leg.plannedStake < 1)) {
-        warnings.push('<div class="slip-alert">A stake is below 1 KM — most bookmakers will not take it.</div>');
+        warnings.push(`<div class="slip-alert">${escapeHtml(tr('A stake is below 1 KM — most bookmakers will not take it.'))}</div>`);
     }
     const overLimit = plan.legs.filter(leg => {
         const limit = Number(bookmakersConfig?.[leg.bookmaker]?.max_stake);
@@ -1270,11 +1337,11 @@ function renderSlip() {
     const otherOverLimit = overLimit.filter(leg => bookRisk(leg.bookmaker).profile !== 'soft');
     if (otherOverLimit.length) {
         const details = otherOverLimit.map(leg => `${bookName(leg.bookmaker)} ${stakeFormat(leg.plannedStake)}/${stakeFormat(bookmakersConfig[leg.bookmaker].max_stake)}`).join(', ');
-        warnings.push(`<div class="slip-alert">Above the advisory book limit: ${details} KM. Split or reduce before placing.</div>`);
+        warnings.push(`<div class="slip-alert">${escapeHtml(tr('Above the advisory book limit: {details} KM. Split or reduce before placing.', { details }))}</div>`);
     }
     if (softOverLimit.length) {
         const details = softOverLimit.map(leg => `${bookName(leg.bookmaker)} ${stakeFormat(leg.plannedStake)}/${stakeFormat(bookmakersConfig[leg.bookmaker].max_stake)}`).join(', ');
-        warnings.push(`<div class="slip-alert slip-alert-bad" data-risk-warning="soft-book-stake">High stake at a soft book: ${details} KM. Retail books often cut stakes or limit accounts after repeated arbing. Reduce or split the stake; this warning is advisory and nothing is placed automatically.</div>`);
+        warnings.push(`<div class="slip-alert slip-alert-bad" data-risk-warning="soft-book-stake">${escapeHtml(tr('High stake at a soft book: {details} KM. Retail books often cut stakes or limit accounts after repeated arbing. Reduce or split the stake; this warning is advisory and nothing is placed automatically.', { details }))}</div>`);
     }
 
     const listings = sb.listings || {};
@@ -1290,20 +1357,20 @@ function renderSlip() {
         const dest = leg.destination || {};
         const destKind = dest.kind || '';
         const url = dest.url || '';
-        const destLabel = dest.label || (url ? `Open ${name}` : '');
+        const destLabel = dest.label || (url ? tr('Open {name}', { name }) : '');
         const searchText = dest.search_text || listedAs;
         const pickText = dest.selection || leg.selection || leg.outcome_label;
         const pickLine = dest.line || leg.line || '';
-        const lineText = pickLine && !String(pickText).includes(pickLine) ? ` · line ${pickLine}` : '';
-        const copyLabel = destKind === 'search' ? 'copy search' : destKind === 'competition' ? 'copy fixture' : 'copy name';
+        const lineText = pickLine && !String(pickText).includes(pickLine) ? tr(' · line {line}', { line: pickLine }) : '';
+        const copyLabel = tr(destKind === 'search' ? 'copy search' : destKind === 'competition' ? 'copy fixture' : 'copy name');
         const stakeNote = destKind === 'ticket_filled' && !dest.ticket_stake_supported
-            ? '<span class="leg-sub">stake not prefilled</span>' : '';
+            ? `<span class="leg-sub">${escapeHtml(tr('stake not prefilled'))}</span>` : '';
         const drift = check?.data?.drift?.[leg.outcome_label];
         let driftNote = '';
         if (leg.scannedOdds != null && !leg.placed) {
-            driftNote = `<span class="leg-drift">was ${leg.scannedOdds.toFixed(2)} at scan</span>`;
+            driftNote = `<span class="leg-drift">${escapeHtml(tr('was {odds} at scan', { odds: leg.scannedOdds.toFixed(2) }))}</span>`;
         } else if (drift && drift.changed && !leg.placed) {
-            driftNote = `<span class="leg-drift leg-drift-bad">${drift.new_odds != null ? 'best now ' + Number(drift.new_odds).toFixed(2) + ' at ' + escapeHtml(bookName(drift.new_bookmaker)) : 'no longer offered'}</span>`;
+            driftNote = `<span class="leg-drift leg-drift-bad">${drift.new_odds != null ? escapeHtml(tr('best now {odds} at {book}', { odds: Number(drift.new_odds).toFixed(2), book: bookName(drift.new_bookmaker) })) : escapeHtml(tr('no longer offered'))}</span>`;
         }
         const stakeText = leg.plannedStake.toFixed(stakeRounding === 'exact' ? 2 : 0);
         const label = escapeHtml(leg.outcome_label);
@@ -1317,31 +1384,31 @@ function renderSlip() {
                         <span class="risk-badge" data-risk-profile="${escapeHtml(risk.profile)}" title="${escapeHtml(riskTitle)}">${escapeHtml(riskProfileLabel(risk.profile))}</span>
                     </span>
                     ${url ? `<a class="btn btn-small dest-link" data-dest-kind="${escapeHtml(destKind)}" href="${escapeHtml(safeUrl(url))}" target="_blank" rel="noopener" title="${escapeHtml(dest.proof_summary || destKind || '')}">${escapeHtml(destLabel)} ↗</a>` : ''}
-                    ${destKind === 'search' && !url ? `<button type="button" class="btn btn-small btn-secondary" ${copyAttributes(searchText, 'Search text copied')}>Copy search text</button>` : ''}
-                    ${dest.ticket_script ? `<button type="button" class="btn btn-small btn-secondary" title="Paste this in the SportPlus page console; it only fills the slip" ${copyAttributes(dest.ticket_script, 'SportPlus prefill script copied — paste it into the SportPlus page console')}>${escapeHtml(dest.ticket_script_label || 'Copy prefill script')}</button>` : ''}
+                    ${destKind === 'search' && !url ? `<button type="button" class="btn btn-small btn-secondary" ${copyAttributes(searchText, 'Search text copied')}>${escapeHtml(tr('Copy search text'))}</button>` : ''}
+                    ${dest.ticket_script ? `<button type="button" class="btn btn-small btn-secondary" title="${escapeHtml(tr('Paste this in the SportPlus page console; it only fills the slip'))}" ${copyAttributes(dest.ticket_script, 'SportPlus prefill script copied — paste it into the SportPlus page console')}>${escapeHtml(dest.ticket_script_label || tr('Copy prefill script'))}</button>` : ''}
                 </div>
                 <div class="leg-listing">
-                    <span title="How ${escapeHtml(name)} lists this match">${escapeHtml(listedAs)}</span>
-                    <button type="button" class="link-btn" ${copyAttributes(searchText, copyLabel === 'copy search' ? 'Search text copied' : 'Match name copied')}>${copyLabel}</button>
+                    <span title="${escapeHtml(tr('How {name} lists this match', { name }))}">${escapeHtml(listedAs)}</span>
+                    <button type="button" class="link-btn" ${copyAttributes(searchText, copyLabel === tr('copy search') ? tr('Search text copied') : tr('Match name copied'))}>${copyLabel}</button>
                     ${listing?.league ? `<span class="leg-league">${escapeHtml(listing.league)}</span>` : ''}
-                    ${destKind ? `<span class="leg-league">${escapeHtml(destKind === 'ticket_filled' ? 'ticket' : destKind === 'match_page' ? 'match page' : destKind)}</span>` : ''}
+                    ${destKind ? `<span class="leg-league">${escapeHtml(destKind === 'ticket_filled' ? tr('ticket') : destKind === 'match_page' ? tr('match page') : destKind)}</span>` : ''}
                     <span class="leg-risk-note" title="${escapeHtml(risk.limit)}">${escapeHtml(risk.typical)}</span>
                 </div>
                 <div class="leg-bet">
-                    <div><span class="leg-k">Pick</span><span class="leg-v">${escapeHtml(pickText)}${escapeHtml(lineText)}</span><span class="leg-sub">${escapeHtml(outcomeDescription(leg.outcome_label, sb.market_type, sb.sport))}</span>${stakeNote}</div>
-                    <div><span class="leg-k">Odds</span><span class="leg-v mono">${leg.takenOdds.toFixed(2)}</span>${driftNote}</div>
-                    <div><span class="leg-k">Stake</span>
-                        <button type="button" class="leg-v mono stake-copy" title="Copy stake" ${copyAttributes(stakeText, 'Stake copied')}>${stakeText} KM</button>
+                    <div><span class="leg-k">${escapeHtml(tr('Pick'))}</span><span class="leg-v">${escapeHtml(pickText)}${escapeHtml(lineText)}</span><span class="leg-sub">${escapeHtml(outcomeDescription(leg.outcome_label, sb.market_type, sb.sport))}</span>${stakeNote}</div>
+                    <div><span class="leg-k">${escapeHtml(tr('Odds'))}</span><span class="leg-v mono">${leg.takenOdds.toFixed(2)}</span>${driftNote}</div>
+                    <div><span class="leg-k">${escapeHtml(tr('Stake'))}</span>
+                        <button type="button" class="leg-v mono stake-copy" title="${escapeHtml(tr('Copy stake'))}" ${copyAttributes(stakeText, tr('Stake copied'))}>${stakeText} KM</button>
                     </div>
-                    <div><span class="leg-k">Returns</span><span class="leg-v mono">${money(leg.plannedStake * leg.takenOdds)}</span></div>
+                    <div><span class="leg-k">${escapeHtml(tr('Returns'))}</span><span class="leg-v mono">${money(leg.plannedStake * leg.takenOdds)}</span></div>
                 </div>
                 <div class="leg-placed-row">
                     ${leg.placed
-                        ? `<span class="placed-tag">Placed at ${leg.takenOdds.toFixed(2)} for ${stakeText} KM</span>
-                           <button type="button" class="link-btn" data-action="unmark-placed" data-slip-id="${escapeHtml(sb.id)}" data-outcome-label="${escapeHtml(leg.outcome_label)}">undo</button>`
-                        : `<label class="placed-odds">Odds taken <input class="input input-narrow mono" type="number" step="0.01" min="1.01" value="${leg.odds.toFixed(2)}" data-placed-odds></label>
-                           <label class="placed-odds">Stake accepted <input class="input input-narrow mono" type="number" step="1" min="0.01" value="${leg.plannedStake}" data-placed-stake></label>
-                           <button type="button" class="btn btn-secondary btn-small" data-action="mark-placed" data-slip-id="${escapeHtml(sb.id)}" data-outcome-label="${escapeHtml(leg.outcome_label)}">Mark placed</button>`}
+                        ? `<span class="placed-tag">${escapeHtml(tr('Placed at {odds} for {stake} KM', { odds: leg.takenOdds.toFixed(2), stake: stakeText }))}</span>
+                           <button type="button" class="link-btn" data-action="unmark-placed" data-slip-id="${escapeHtml(sb.id)}" data-outcome-label="${escapeHtml(leg.outcome_label)}">${escapeHtml(tr('undo'))}</button>`
+                        : `<label class="placed-odds">${escapeHtml(tr('Odds taken'))} <input class="input input-narrow mono" type="number" step="0.01" min="1.01" value="${leg.odds.toFixed(2)}" data-placed-odds></label>
+                           <label class="placed-odds">${escapeHtml(tr('Stake accepted'))} <input class="input input-narrow mono" type="number" step="1" min="0.01" value="${leg.plannedStake}" data-placed-stake></label>
+                           <button type="button" class="btn btn-secondary btn-small" data-action="mark-placed" data-slip-id="${escapeHtml(sb.id)}" data-outcome-label="${escapeHtml(leg.outcome_label)}">${escapeHtml(tr('Mark placed'))}</button>`}
                 </div>
             </div>
         </li>`;
@@ -1349,44 +1416,44 @@ function renderSlip() {
 
     const evidence = (sb.evidence || []).map(line => `<li>${escapeHtml(line)}</li>`).join('');
     const placedCount = Object.keys(state.placed).length;
-    const locked = placedCount ? ' disabled title="Fixed once a leg is placed"' : '';
+    const locked = placedCount ? ` disabled title="${escapeHtml(tr('Fixed once a leg is placed'))}"` : '';
     const presets = [50, 100, 200, 500].map(amount => `
         <button type="button" class="${Number(state.investment) === amount ? 'active' : ''}"${locked}
                 data-action="set-slip-investment" data-slip-id="${escapeHtml(sb.id)}" data-amount="${amount}">${amount}</button>`).join('');
 
     pane.innerHTML = `
         <div class="slip-head">
-            <button type="button" class="link-btn slip-back" data-action="close-slip">← All surebets</button>
+            <button type="button" class="link-btn slip-back" data-action="close-slip">← ${escapeHtml(tr('All surebets'))}</button>
             <div class="slip-eyebrow">
-                <span class="mkt">${escapeHtml(MARKET_LABELS[sb.market_type] || sb.market_type)}</span>
+                <span class="mkt">${escapeHtml(marketLabel(sb.market_type))}</span>
                 <span>${escapeHtml(formatLeague(sb.league))}</span>
                 <span class="status-badge" hidden></span>
             </div>
             <div class="slip-title">
                 <h2>${escapeHtml(formatTeamName(sb.home_team))} – ${escapeHtml(formatTeamName(sb.away_team))}</h2>
-                <p>${escapeHtml(currentMode === 'live' ? 'In play' : (kickoff ? formatKickoffLong(kickoff) : 'Kickoff unknown'))}</p>
+                <p>${escapeHtml(currentMode === 'live' ? tr('In play') : (kickoff ? formatKickoffLong(kickoff) : tr('Kickoff unknown')))}</p>
             </div>
         </div>
 
         <div class="slip-hero${plan.profit > 0 ? '' : ' is-loss'}">
-            <div class="slip-profit" data-tier="${profitTier(plan.profitPercent)}" title="Realized profit of the rounded stakes below">
+            <div class="slip-profit" data-tier="${profitTier(plan.profitPercent)}" title="${escapeHtml(tr('Realized profit of the rounded stakes below'))}">
                 <span class="mono">${plan.profitPercent.toFixed(2)}%</span>
-                <small>${exactProfit.toFixed(2)}% at scan, exact stakes</small>
+                <small>${escapeHtml(tr('{profit}% at scan, exact stakes', { profit: exactProfit.toFixed(2) }))}</small>
             </div>
             <div class="slip-stake">
-                <label class="inline-field"><span>Total stake</span>
+                <label class="inline-field"><span>${escapeHtml(tr('Total stake'))}</span>
                     <input class="input mono" type="number" min="1" step="10" value="${state.investment}"
                            data-slip-investment-input data-slip-id="${escapeHtml(sb.id)}"${locked}> KM</label>
-                <div class="slip-presets" aria-label="Quick stake">${presets}</div>
+                <div class="slip-presets" aria-label="${escapeHtml(tr('Quick stake'))}">${presets}</div>
             </div>
         </div>
 
         <div class="slip-totals">
-            <span>Staked <b class="mono">${money(plan.total)}</b></span>
-            <span>Worst return <b class="mono">${money(plan.worst)}</b></span>
-            <span>Exact profit <b class="mono">${exactProfitAmount >= 0 ? '+' : ''}${money(exactProfitAmount)} KM</b></span>
-            <span class="${plan.profit > 0 ? 'good' : 'bad'}">Realized profit <b class="mono">${plan.profit >= 0 ? '+' : ''}${money(plan.profit)} KM</b></span>
-            <span class="${roundingEffect < 0 ? 'bad' : ''}">Rounding effect <b class="mono">${roundingEffect >= 0 ? '+' : '−'}${money(Math.abs(roundingEffect))} KM</b></span>
+            <span>${escapeHtml(tr('Staked'))} <b class="mono">${money(plan.total)}</b></span>
+            <span>${escapeHtml(tr('Worst return'))} <b class="mono">${money(plan.worst)}</b></span>
+            <span>${escapeHtml(tr('Exact profit'))} <b class="mono">${exactProfitAmount >= 0 ? '+' : ''}${money(exactProfitAmount)} KM</b></span>
+            <span class="${plan.profit > 0 ? 'good' : 'bad'}">${escapeHtml(tr('Realized profit'))} <b class="mono">${plan.profit >= 0 ? '+' : ''}${money(plan.profit)} KM</b></span>
+            <span class="${roundingEffect < 0 ? 'bad' : ''}">${escapeHtml(tr('Rounding effect'))} <b class="mono">${roundingEffect >= 0 ? '+' : '−'}${money(Math.abs(roundingEffect))} KM</b></span>
         </div>
 
         ${renderVerifyBanner(sb, check)}
@@ -1399,20 +1466,20 @@ function renderSlip() {
         <ol class="legs">${legsHtml}</ol>
 
         <details class="slip-howto">
-            <summary>How to place this</summary>
+            <summary>${escapeHtml(tr('How to place this'))}</summary>
             <ol>
-                <li>Place the legs top to bottom. The first has the longest odds — the price most likely to move or be limited.</li>
-                <li>On the bookmaker's site, check the odds match before you confirm. If they dropped or the book accepted only part of the stake, type what you actually got into <em>Odds taken</em> and <em>Stake accepted</em>, then press <em>Mark placed</em>: the remaining stakes are re-planned to cover it.</li>
-                <li>If a later leg is gone or the profit turns red, stop. Either hedge the placed leg at the best price available or accept the single bet — do not chase.</li>
+                <li>${escapeHtml(tr('Place the legs top to bottom. The first has the longest odds — the price most likely to move or be limited.'))}</li>
+                <li>${escapeHtml(tr('On the bookmaker site, check the odds match before you confirm. If they dropped or the book accepted only part of the stake, type what you actually got into Odds taken and Stake accepted, then press Mark placed: the remaining stakes are re-planned to cover it.'))}</li>
+                <li>${escapeHtml(tr('If a later leg is gone or the profit turns red, stop. Either hedge the placed leg at the best price available or accept the single bet — do not chase.'))}</li>
             </ol>
         </details>
 
-        ${evidence ? `<div class="slip-evidence"><h4>Why these are the same match</h4><ul>${evidence}</ul></div>` : ''}
+        ${evidence ? `<div class="slip-evidence"><h3>${escapeHtml(tr('Why these are the same match'))}</h3><ul>${evidence}</ul></div>` : ''}
 
         <div class="slip-actions">
-            <button type="button" class="btn btn-secondary" data-action="verify-surebet" data-slip-id="${escapeHtml(sb.id)}">Re-check odds</button>
-            <button type="button" class="btn btn-secondary" data-action="log-bet" data-slip-id="${escapeHtml(sb.id)}">Log bet</button>
-            <button type="button" class="btn btn-secondary" data-action="copy-surebet" data-slip-id="${escapeHtml(sb.id)}"${staleFeed() ? ' disabled aria-disabled="true" data-stale-blocked="true"' : ''}>Copy slip</button>
+            <button type="button" class="btn btn-secondary" data-action="verify-surebet" data-slip-id="${escapeHtml(sb.id)}">${escapeHtml(tr('Re-check odds'))}</button>
+            <button type="button" class="btn btn-secondary" data-action="log-bet" data-slip-id="${escapeHtml(sb.id)}">${escapeHtml(tr('Log bet'))}</button>
+            <button type="button" class="btn btn-secondary" data-action="copy-surebet" data-slip-id="${escapeHtml(sb.id)}"${staleFeed() ? ' disabled aria-disabled="true" data-stale-blocked="true"' : ''}>${escapeHtml(tr('Copy slip'))}</button>
         </div>
     `;
     applyDynamicStyles(pane);
@@ -1432,35 +1499,35 @@ function applyStatusBadge(statusEl, reportedStatus) {
     if (statusInfo) {
         statusEl.hidden = false;
         statusEl.classList.add(`status-${reportedStatus}`);
-        statusEl.textContent = statusInfo.label;
-        statusEl.setAttribute('aria-label', statusInfo.ariaLabel);
+        statusEl.textContent = tr(statusInfo.label);
+        statusEl.setAttribute('aria-label', tr(statusInfo.ariaLabel));
     }
 }
 
 function renderVerifyBanner(sb, check) {
-    if (!check) return '<div class="verify-banner verify-idle">Odds not re-checked yet.</div>';
+    if (!check) return `<div class="verify-banner verify-idle">${escapeHtml(tr('Odds not re-checked yet.'))}</div>`;
     if (check.state === 'checking') {
-        return '<div class="verify-banner verify-checking"><span class="spinner"></span> Re-checking the odds at each bookmaker…</div>';
+        return `<div class="verify-banner verify-checking"><span class="spinner"></span> ${escapeHtml(tr('Re-checking the odds at each bookmaker…'))}</div>`;
     }
     const ago = `<span data-ago="${check.at.getTime()}">${formatAgo(check.at)}</span>`;
     if (check.state === 'ok') {
         const fresh = verifyIsFresh(check);
-        const floor = check.data.meets_min_profit === false ? ' — below your usual minimum' : '';
+        const floor = check.data.meets_min_profit === false ? tr(' — below your usual minimum') : '';
         return `<div class="verify-banner ${fresh ? 'verify-ok' : 'verify-stale'}">
-            ${fresh ? 'Still a surebet' : 'Was a surebet'}: <b class="mono">${Number(check.data.current.profit_percent).toFixed(2)}%</b>${floor}, re-checked ${ago}.
-            ${fresh ? '' : ' Re-check before placing.'}</div>`;
+            ${escapeHtml(fresh ? tr('Still a surebet') : tr('Was a surebet'))}: <b class="mono">${Number(check.data.current.profit_percent).toFixed(2)}%</b>${escapeHtml(floor)}, ${escapeHtml(tr('re-checked {ago}.', { ago }))}
+            ${fresh ? '' : escapeHtml(tr(' Re-check before placing.'))}</div>`;
     }
     if (check.state === 'gone') {
         const now = check.data?.current ? ` (now ${Number(check.data.current.profit_percent).toFixed(2)}%)` : '';
-        return `<div class="verify-banner verify-bad">Gone${now}. ${escapeHtml(check.data?.message || 'The prices moved.')} Checked ${ago}. Do not place.</div>`;
+        return `<div class="verify-banner verify-bad">${escapeHtml(tr('Gone{now}.', { now }))} ${escapeHtml(check.data?.message || tr('The prices moved.'))} ${escapeHtml(tr('Checked {ago}. Do not place.', { ago }))}</div>`;
     }
-    return `<div class="verify-banner verify-unknown">Could not confirm: ${escapeHtml(check.message || 'unknown')}. Checked ${ago}. Check each price on the site before placing.</div>`;
+    return `<div class="verify-banner verify-unknown">${escapeHtml(tr('Could not confirm: {reason}.', { reason: check.message || tr('unknown') }))} ${escapeHtml(tr('Checked {ago}. Check each price on the site before placing.', { ago }))}</div>`;
 }
 
 function verifyShortLabel(check) {
-    if (check.state === 'checking') return 'checking';
-    if (check.state === 'ok') return verifyIsFresh(check) ? 'live ✓' : 'stale';
-    if (check.state === 'gone') return 'gone';
+    if (check.state === 'checking') return tr('checking');
+    if (check.state === 'ok') return verifyIsFresh(check) ? tr('live ✓') : tr('stale');
+    if (check.state === 'gone') return tr('gone');
     return '?';
 }
 
@@ -1499,11 +1566,11 @@ function markPlaced(id, label, button) {
     const odds = parseFloat(input?.value);
     const stake = parseFloat(stakeInput?.value);
     if (!leg || !odds || odds < 1.01) {
-        showToast('Enter the odds you actually got');
+        showToast(tr('Enter the odds you actually got'));
         return;
     }
     if (!stake || stake <= 0) {
-        showToast('Enter the stake the bookmaker accepted');
+        showToast(tr('Enter the stake the bookmaker accepted'));
         return;
     }
     // Partial acceptance is a real outcome: the remaining legs are re-planned
@@ -1535,16 +1602,16 @@ async function verifySurebet(id) {
         });
         const data = await res.json();
         if (!res.ok) {
-            result = { state: 'unknown', at: new Date(), message: data.detail || `request failed (${res.status})` };
+            result = { state: 'unknown', at: new Date(), message: data.detail || tr('request failed ({status})', { status: res.status }) };
         } else if (data.still_profitable === true) {
             result = { state: 'ok', at: new Date(), data };
         } else if (data.still_profitable === false) {
             result = { state: 'gone', at: new Date(), data };
         } else {
-            result = { state: 'unknown', at: new Date(), message: data.message || 'the bookmakers did not all answer', data };
+            result = { state: 'unknown', at: new Date(), message: data.message || tr('the bookmakers did not all answer'), data };
         }
     } catch (e) {
-        result = { state: 'unknown', at: new Date(), message: 'network error' };
+        result = { state: 'unknown', at: new Date(), message: tr('network error') };
     }
     verifyState[id] = result;
     refreshRowBadge(id);
@@ -1631,7 +1698,7 @@ async function logBet(id) {
         league: sb.league || '',
         sport: sb.sport || 'football',
         investment: state.investment,
-        notes: 'Logged from the bet slip',
+        notes: tr('Logged from the bet slip'),
         legs: plan.legs.map(leg => ({
             bookmaker: leg.bookmaker,
             outcome_label: leg.outcome_label,
@@ -1650,17 +1717,17 @@ async function logBet(id) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
-        }, 'This SureBet deployment requires an API key to log a bet.');
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        showToast('Bet logged. Settle it in the bet log when the legs finish.');
+        }, tr('This SureBet deployment requires an API key to log a bet.'));
+        if (!response.ok) throw new Error(tr('HTTP {status}', { status: response.status }));
+        showToast(tr('Bet logged. Settle it in the bet log when the legs finish.'));
     } catch (error) {
-        showToast(`Could not log the bet: ${error.message}`);
+        showToast(tr('Could not log the bet: {error}', { error: error.message }));
     }
 }
 
 function copySurebetDetails(id) {
     if (staleFeed()) {
-        showToast('Historical prices — re-check the odds before copying.');
+        showToast(tr('Historical prices — re-check the odds before copying.'));
         return;
     }
     const sb = allSurebets.find(s => s.id === id);
@@ -1670,8 +1737,8 @@ function copySurebetDetails(id) {
     const kickoff = parseKickoff(sb.kickoff);
     const lines = [
         `${formatTeamName(sb.home_team)} – ${formatTeamName(sb.away_team)}`,
-        `${formatLeague(sb.league)} · ${kickoff ? formatKickoffLong(kickoff) : 'kickoff unknown'}`,
-        `${MARKET_LABELS[sb.market_type] || sb.market_type} · profit ${plan.profitPercent.toFixed(2)}% (${money(plan.profit)} KM on ${money(plan.total)} KM)`,
+        `${formatLeague(sb.league)} · ${kickoff ? formatKickoffLong(kickoff) : tr('kickoff unknown')}`,
+        tr('{market} · profit {profit}% ({amount} KM on {total} KM)', { market: marketLabel(sb.market_type), profit: plan.profitPercent.toFixed(2), amount: money(plan.profit), total: money(plan.total) }),
         '',
         ...plan.legs.map((leg, index) => {
             const dest = leg.destination || {};
@@ -1682,7 +1749,7 @@ function copySurebetDetails(id) {
             return `${index + 1}. ${bookName(leg.bookmaker)}${listed}: ${leg.outcome_label} @ ${leg.takenOdds.toFixed(2)} → ${leg.plannedStake.toFixed(stakeRounding === 'exact' ? 2 : 0)} KM${where}${link ? ' ' + link : ''}`;
         }),
     ];
-    copyText(lines.join('\n'), 'Slip copied');
+    copyText(lines.join('\n'), tr('Slip copied'));
 }
 
 // ─── No-surebet diagnostic ─────────────────────────────────────────────────────
@@ -1773,8 +1840,13 @@ function fillDiagnosticBody(template, values) {
 
 function renderCaseCopy(reason, values, live) {
     if (!reason) return { title: '', body: '' };
-    const title = live && reason.title_live ? reason.title_live : reason.title;
-    const body = live && reason.body_live ? reason.body_live : reason.body;
+    const bosnian = language === 'bs';
+    const title = bosnian && reason.title_bs
+        ? reason.title_bs
+        : (live && reason.title_live ? reason.title_live : reason.title);
+    const body = bosnian && reason.body_bs
+        ? reason.body_bs
+        : (live && reason.body_live ? reason.body_live : reason.body);
     return {
         title: fillDiagnosticBody(title, values),
         body: fillDiagnosticBody(body, values),
@@ -1787,7 +1859,7 @@ function renderDiagnosticActions(reason) {
         .filter(name => Object.prototype.hasOwnProperty.call(DIAGNOSTIC_ACTIONS, name))
         .map(name => {
             const action = DIAGNOSTIC_ACTIONS[name];
-            return `<button type="button" class="btn btn-secondary" data-diagnostic-action="${escapeHtml(name)}">${escapeHtml(action.label)}</button>`;
+            return `<button type="button" class="btn btn-secondary" data-diagnostic-action="${escapeHtml(name)}">${escapeHtml(tr(action.label))}</button>`;
         })
         .join('');
 }
@@ -1811,11 +1883,8 @@ function writeDiagnosticPanel(panel, reason, copy) {
 // Shown when the dashboard cannot name a cause. Neither case may fall back to a
 // hard-coded sentence: guessing is the defect this module exists to remove.
 const DIAGNOSTIC_UNAVAILABLE = {
-    noCopyTable: 'The dashboard could not read its diagnostic copy, so it cannot tell you why '
-        + 'this scan returned nothing. /api/health and /api/results hold the counts it would '
-        + 'have used.',
-    countsUnread: 'The dashboard has not read the counts for this scan yet, so it cannot tell '
-        + 'you why there is no surebet. /api/health and /api/results hold them.',
+    noCopyTable: 'The dashboard could not read its diagnostic copy, so it cannot tell you why this scan returned nothing. /api/health and /api/results hold the counts it would have used.',
+    countsUnread: 'The dashboard has not read the counts for this scan yet, so it cannot tell you why there is no surebet. /api/health and /api/results hold them.',
 };
 
 function renderNoSurebetState() {
@@ -1874,10 +1943,10 @@ function renderDiagnosticUnavailable() {
     emptyState.dataset.noSurebetReason = 'diagnostics_unavailable';
     const title = emptyState.querySelector('.empty-state-title');
     const body = emptyState.querySelector('.empty-state-desc');
-    if (title) title.textContent = 'No Surebets — Reason Unknown';
+    if (title) title.textContent = tr('No Surebets — Reason Unknown');
     if (body) body.textContent = noSurebetReasons
-        ? DIAGNOSTIC_UNAVAILABLE.countsUnread
-        : DIAGNOSTIC_UNAVAILABLE.noCopyTable;
+        ? tr(DIAGNOSTIC_UNAVAILABLE.countsUnread)
+        : tr(DIAGNOSTIC_UNAVAILABLE.noCopyTable);
     const bookies = emptyState.querySelector('.empty-state-bookies');
     if (bookies) bookies.hidden = true;
     const cta = emptyState.querySelector('.empty-cta');
@@ -1982,17 +2051,17 @@ function renderEvidenceList(payload) {
     const count = Number(payload.count) || groups.length;
     setText('evidence-page', total ? `${offset + 1}–${offset + count} of ${total}` : '0 groups');
     if (!groups.length) {
-        list.innerHTML = '<div class="empty-state"><h2 class="empty-state-title">No matching groups.</h2><p class="empty-state-desc">Change the filters or run a scan for this feed.</p></div>';
+        list.innerHTML = `<div class="empty-state"><h2 class="empty-state-title">${escapeHtml(tr('No matching groups.'))}</h2><p class="empty-state-desc">${escapeHtml(tr('Change the filters or run a scan for this feed.'))}</p></div>`;
         return;
     }
     list.innerHTML = groups.map(group => {
         const bookmakers = (group.bookmakers || []).map(book => bookName(book.bookmaker)).join(' · ');
-        const reasons = (group.reasons || []).slice(0, 4).map(reason => REASON_LABELS[reason] || reason).join(', ');
+        const reasons = (group.reasons || []).slice(0, 4).map(reason => reasonLabel(reason)).join(', ');
         return `<button type="button" class="evidence-row" data-action="evidence-open" data-group-id="${escapeHtml(group.group_id)}">
-            <span class="evidence-row-title">${escapeHtml(group.canonical_match || 'unknown fixture')}</span>
-            <span class="evidence-row-status" data-state="${escapeHtml(group.status || '')}">${escapeHtml(group.status || 'unknown')}</span>
-            <span class="evidence-row-meta">${escapeHtml(formatLeague(group.league))} · ${escapeHtml(String(group.sport || 'football'))} · ${escapeHtml(bookmakers || 'no books')}</span>
-            <span class="evidence-row-meta">${escapeHtml(reasons || 'no gate reasons')}</span>
+            <span class="evidence-row-title">${escapeHtml(group.canonical_match || tr('unknown fixture'))}</span>
+            <span class="evidence-row-status" data-state="${escapeHtml(group.status || '')}">${escapeHtml(tr(group.status || 'unknown'))}</span>
+            <span class="evidence-row-meta">${escapeHtml(formatLeague(group.league))} · ${escapeHtml(String(group.sport || 'football'))} · ${escapeHtml(bookmakers || tr('no books'))}</span>
+            <span class="evidence-row-meta">${escapeHtml(reasons || tr('no gate reasons'))}</span>
         </button>`;
     }).join('');
 }
@@ -2018,7 +2087,7 @@ async function loadEvidenceDetail(groupId) {
     if (!list || !detail || groupId == null) return;
     try {
         const response = await apiFetch(`/api/groups/${encodeURIComponent(groupId)}?mode=${encodeURIComponent(currentMode)}`);
-        if (!response.ok) throw new Error(`group responded ${response.status}`);
+        if (!response.ok) throw new Error(tr('group responded {status}', { status: response.status }));
         const payload = await response.json();
         renderEvidenceDetail(payload.group);
         list.hidden = true;
@@ -2027,7 +2096,7 @@ async function loadEvidenceDetail(groupId) {
         console.error('Group detail load failed:', error);
         list.hidden = true;
         detail.hidden = false;
-        detail.innerHTML = '<div class="empty-state"><h2 class="empty-state-title">Could not load this group.</h2><p class="empty-state-desc">The group may have been replaced by a new scan.</p></div>';
+        detail.innerHTML = `<div class="empty-state"><h2 class="empty-state-title">${escapeHtml(tr('Could not load this group.'))}</h2><p class="empty-state-desc">${escapeHtml(tr('The group may have been replaced by a new scan.'))}</p></div>`;
     }
 }
 
@@ -2035,25 +2104,25 @@ function renderEvidenceDetail(group) {
     const detail = document.getElementById('evidence-detail');
     if (!detail || !group) return;
     const books = (group.bookmakers || []).map(book =>
-        `<li><b>${escapeHtml(bookName(book.bookmaker))}</b> · event ${escapeHtml(book.event_id || '—')} · ${escapeHtml(String(book.num_markets || 0))} markets</li>`
+        `<li><b>${escapeHtml(bookName(book.bookmaker))}</b> · ${escapeHtml(tr('event'))} ${escapeHtml(book.event_id || '—')} · ${escapeHtml(tr('{count} markets', { count: String(book.num_markets || 0) }))}</li>`
     ).join('');
     const evidence = (group.evidence || []).map(item => {
         const confidence = Number(item.confidence);
-        const confidenceText = Number.isFinite(confidence) ? ` · confidence ${confidence.toFixed(2)}` : '';
-        const league = (item.league_pair || []).length ? ` · league ${item.league_pair.join(' / ')}` : '';
-        return `<li><b>${escapeHtml(item.rule || 'evidence')}</b> <span class="evidence-reason">${escapeHtml(item.reason || '')}${escapeHtml(confidenceText)}${escapeHtml(league)}</span></li>`;
+        const confidenceText = Number.isFinite(confidence) ? tr(' · confidence {value}', { value: confidence.toFixed(2) }) : '';
+        const league = (item.league_pair || []).length ? tr(' · league {leagues}', { leagues: item.league_pair.join(' / ') }) : '';
+        return `<li><b>${escapeHtml(tr(item.rule || 'evidence'))}</b> <span class="evidence-reason">${escapeHtml(item.reason || '')}${escapeHtml(confidenceText)}${escapeHtml(league)}</span></li>`;
     }).join('');
     detail.innerHTML = `
         <div class="evidence-detail-head">
-            <button type="button" class="btn btn-small btn-secondary" data-action="evidence-close">← All groups</button>
-            <h3>${escapeHtml(group.canonical_match || 'unknown fixture')}</h3>
-            <span class="evidence-row-status" data-state="${escapeHtml(group.status || '')}">${escapeHtml(group.status || 'unknown')}</span>
+            <button type="button" class="btn btn-small btn-secondary" data-action="evidence-close">← ${escapeHtml(tr('All groups'))}</button>
+            <h3>${escapeHtml(group.canonical_match || tr('unknown fixture'))}</h3>
+            <span class="evidence-row-status" data-state="${escapeHtml(group.status || '')}">${escapeHtml(tr(group.status || 'unknown'))}</span>
         </div>
-        <div class="evidence-row-meta">${escapeHtml(formatLeague(group.league))} · ${escapeHtml(String(group.sport || 'football'))} · ${escapeHtml(group.kickoff || 'kickoff unknown')}</div>
-        <h4>Bookmakers</h4>
-        <ul>${books || '<li>none</li>'}</ul>
-        <h4>Gate evidence</h4>
-        <ul>${evidence || '<li>none recorded</li>'}</ul>
+        <div class="evidence-row-meta">${escapeHtml(formatLeague(group.league))} · ${escapeHtml(String(group.sport || 'football'))} · ${escapeHtml(group.kickoff || tr('kickoff unknown'))}</div>
+        <h3>${escapeHtml(tr('Bookmakers'))}</h3>
+        <ul>${books || `<li>${escapeHtml(tr('none'))}</li>`}</ul>
+        <h3>${escapeHtml(tr('Gate evidence'))}</h3>
+        <ul>${evidence || `<li>${escapeHtml(tr('none recorded'))}</li>`}</ul>
     `;
 }
 
@@ -2063,7 +2132,7 @@ function renderCandidatesMessage(message) {
     list.innerHTML = `
         <div class="empty-state">
             <h2 class="empty-state-title">${escapeHtml(message)}</h2>
-            <p class="empty-state-desc">The review queue could not be refreshed. Try again in a moment.</p>
+            <p class="empty-state-desc">${escapeHtml(tr('The review queue could not be refreshed. Try again in a moment.'))}</p>
         </div>
     `;
 }
@@ -2084,7 +2153,7 @@ async function apiFetch(url, options = {}, promptText = 'This SureBet deployment
     if (candidateApiKey && candidateApiKey !== keyUsed) return send();
     // A background poll does not re-ask after a cancel; a click (a POST) does.
     if (candidateApiKeyDeclined && !options.method) return response;
-    const entered = window.prompt(promptText);
+    const entered = window.prompt(tr(promptText));
     if (entered && entered.trim()) {
         candidateApiKey = entered.trim();
         candidateApiKeyDeclined = false;
@@ -2100,7 +2169,7 @@ async function candidateListFetch(url) {
     const send = () => fetch(url, { headers: candidateActionHeaders() });
     let response = await send();
     if (response.status === 401 && !candidateApiKey) {
-        const entered = window.prompt('This SureBet deployment requires an API key to read the review queue.');
+        const entered = window.prompt(tr('This SureBet deployment requires an API key to read the review queue.'));
         if (entered && entered.trim()) {
             candidateApiKey = entered.trim();
             response = await send();
@@ -2126,7 +2195,7 @@ async function sweepLinks() {
     const bookmaker = bookEl ? bookEl.value : '';
     const mode = modeEl ? modeEl.value : 'prematch';
     if (!bookmaker) {
-        if (statusEl) statusEl.textContent = 'Pick a book with a declared event route first.';
+        if (statusEl) statusEl.textContent = tr('Pick a book with a declared event route first.');
         return;
     }
     sweepState.running = true;
@@ -2147,11 +2216,11 @@ async function sweepLinks() {
                 'This SureBet deployment requires an API key to sweep links.'
             );
             if (response.status === 429) {
-                if (statusEl) statusEl.textContent = 'Rate limited by the server — waiting before the next check…';
+                if (statusEl) statusEl.textContent = tr('Rate limited by the server — waiting before the next check…');
                 await sweepDelay(5000);
                 continue;
             }
-            if (!response.ok) throw new Error(`verify-links returned ${response.status}`);
+            if (!response.ok) throw new Error(tr('verify-links returned {status}', { status: response.status }));
             const body = await response.json();
             totals.calls += 1;
             totals.available = Math.max(totals.available, Number(body.available || 0));
@@ -2161,7 +2230,7 @@ async function sweepLinks() {
             totals.remaining = Number(body.remaining || 0);
             totals.last_next_offset = Number(body.next_offset || 0);
             if (statusEl) {
-                statusEl.textContent = `Checked ${totals.checked} · verified ${totals.verified} · failed ${totals.failed} · errored ${totals.errored} · remaining ${totals.remaining}`;
+                statusEl.textContent = tr('Checked {checked} · verified {verified} · failed {failed} · errored {errored} · remaining {remaining}', totals);
             }
             if (body.status === 'skipped' || totals.remaining === 0) {
                 status = body.status === 'skipped' ? 'skipped' : 'converged';
@@ -2184,10 +2253,10 @@ async function sweepLinks() {
             'This SureBet deployment requires an API key to save the sweep report.'
         );
         if (statusEl) {
-            statusEl.textContent = `Sweep ${status}: ${totals.checked} checked, ${totals.verified} verified, ${totals.failed} failed, ${totals.errored} errored.`;
+            statusEl.textContent = tr('Sweep {status}: {checked} checked, {verified} verified, {failed} failed, {errored} errored.', { status, checked: totals.checked, verified: totals.verified, failed: totals.failed, errored: totals.errored });
         }
     } catch (error) {
-        if (statusEl) statusEl.textContent = `Sweep failed: ${error.message}`;
+        if (statusEl) statusEl.textContent = tr('Sweep failed: {error}', { error: error.message });
     } finally {
         sweepState.running = false;
     }
@@ -2205,7 +2274,7 @@ async function loadCandidates() {
         const response = await candidateListFetch(
             `/api/candidates?closeable_only=true&limit=${CANDIDATE_PAGE_SIZE}&offset=0&mode=${currentMode}`
         );
-        if (response.ok === false) throw new Error(`Candidate request failed (${response.status})`);
+        if (response.ok === false) throw new Error(tr('Candidate request failed ({status})', { status: response.status }));
         const data = await response.json();
         renderCandidates(
             Array.isArray(data.candidates) ? data.candidates : [],
@@ -2216,7 +2285,7 @@ async function loadCandidates() {
         );
     } catch (error) {
         console.error('Candidates load failed:', error);
-        renderCandidatesMessage('Could not load candidates.');
+        renderCandidatesMessage(tr('Could not load candidates.'));
     }
 }
 
@@ -2235,10 +2304,10 @@ function renderCandidates(candidates, total, closeableTotal, blockerCounts = {},
         const nothingQueued = total === 0;
         list.innerHTML = `
             <div class="empty-state">
-                <h2 class="empty-state-title">${nothingQueued ? 'No unresolved pairings.' : 'No actionable pairings.'}</h2>
-                <p class="empty-state-desc">${nothingQueued
-                    ? 'The ledger has not left any pairing without a terminal decision.'
-                    : `${total} pairing${total === 1 ? '' : 's'} are informational; the ledger learns them automatically.`}</p>
+                <h2 class="empty-state-title">${escapeHtml(nothingQueued ? tr('No unresolved pairings.') : tr('No actionable pairings.'))}</h2>
+                <p class="empty-state-desc">${escapeHtml(nothingQueued
+                    ? tr('The ledger has not left any pairing without a terminal decision.')
+                    : tr('{count} pairing(s) are informational; the ledger learns them automatically.', { count: total }))}</p>
             </div>
         `;
         return;
@@ -2257,7 +2326,7 @@ function renderCandidates(candidates, total, closeableTotal, blockerCounts = {},
     });
 
     const pageNote = total > queue.length
-        ? `<p class="candidates-page-note">Showing ${queue.length} of ${closeableTotal} pairings a mapping can close, of ${total} queued in total. The rest cannot be closed by a team alias or league mapping.</p>`
+        ? `<p class="candidates-page-note">${escapeHtml(tr('Showing {shown} of {closeable} pairings a mapping can close, of {total} queued in total. The rest cannot be closed by a team alias or league mapping.', { shown: queue.length, closeable: closeableTotal, total }))}</p>`
         : '';
     const blockers = {
         alias: Number(blockerCounts.alias) || 0,
@@ -2273,26 +2342,26 @@ function renderCandidates(candidates, total, closeableTotal, blockerCounts = {},
         none: Number(remediationCounts.none) || 0,
     };
     const blockerNote = total
-        ? `<p class="candidates-page-note">Queue: ${blockers.alias} actionable · ${blockers.league} league-blocked · ${blockers.link} link-pending · ${blockers.other} informational. Closeable by a proposed mapping: ${remediation.alias} alias · ${remediation.league} league · ${remediation.both} alias+league · ${remediation.systemLink} system-link · ${remediation.none} none of ${total}.</p>`
+        ? `<p class="candidates-page-note">${escapeHtml(tr('Queue: {alias} actionable · {league} league-blocked · {link} link-pending · {other} informational. Closeable by a proposed mapping: {rAlias} alias · {rLeague} league · {rBoth} alias+league · {rLink} system-link · {rNone} none of {total}.', { alias: blockers.alias, league: blockers.league, link: blockers.link, other: blockers.other, rAlias: remediation.alias, rLeague: remediation.league, rBoth: remediation.both, rLink: remediation.systemLink, rNone: remediation.none, total }))}</p>`
         : '';
 
     list.innerHTML = blockerNote + pageNote + orderedCandidates.map((candidate) => {
         const id = escapeHtml(candidate.id || '');
-        const homeTeam = escapeHtml(formatTeamName(candidate.home_team || 'Unknown'));
-        const awayTeam = escapeHtml(formatTeamName(candidate.away_team || 'Unknown'));
-        const league = escapeHtml(formatLeague(candidate.league || 'Unknown league'));
+        const homeTeam = escapeHtml(formatTeamName(candidate.home_team || tr('Unknown')));
+        const awayTeam = escapeHtml(formatTeamName(candidate.away_team || tr('Unknown')));
+        const league = escapeHtml(formatLeague(candidate.league || tr('Unknown league')));
         const kickoffDate = candidate.kickoff ? parseKickoff(candidate.kickoff) : null;
-        const kickoff = kickoffDate ? escapeHtml(formatKickoff(kickoffDate)) : 'Kickoff unknown';
+        const kickoff = kickoffDate ? escapeHtml(formatKickoff(kickoffDate)) : tr('Kickoff unknown');
         const bookmakers = (Array.isArray(candidate.bookmakers) ? candidate.bookmakers : [])
             .map(bookmaker => escapeHtml(bookName(bookmaker)))
-            .join(' / ') || 'No bookmakers recorded';
+            .join(' / ') || tr('No bookmakers recorded');
         const confidence = Math.round(candidateConfidence(candidate.ai_confidence) * 100);
         const nameScore = Math.round(Number(candidate.name_score) || 0);
         const aiNegative = candidate.ai_same_event === false;
         const aiReason = candidate.ai_reason ? escapeHtml(candidate.ai_reason) : '';
         const aiVerdict = aiNegative
-            ? `<p class="candidate-ai"><strong>AI verdict:</strong> <span class="candidate-ai-negative">not the same event</span> ${aiReason}</p>`
-            : (aiReason ? `<p class="candidate-ai"><strong>AI suggestion (${confidence}%):</strong> ${aiReason} <span class="candidate-ai-note">Suggestion only — a human must decide.</span></p>` : '');
+            ? `<p class="candidate-ai"><strong>${escapeHtml(tr('AI verdict:'))}</strong> <span class="candidate-ai-negative">${escapeHtml(tr('not the same event'))}</span> ${aiReason}</p>`
+            : (aiReason ? `<p class="candidate-ai"><strong>${escapeHtml(tr('AI suggestion ({confidence}%):', { confidence }))}</strong> ${aiReason} <span class="candidate-ai-note">${escapeHtml(tr('Suggestion only — a human must decide.'))}</span></p>` : '');
         const positions = Array.isArray(candidate.team_positions) ? candidate.team_positions : [];
         const positionItems = positions.length
             ? positions.map(position => `
@@ -2303,28 +2372,28 @@ function renderCandidates(candidates, total, closeableTotal, blockerCounts = {},
                     <span>${escapeHtml(position.team_b)}</span>
                 </li>
             `).join('')
-            : '<li class="candidate-position candidate-position-none">No cross-bookmaker names recorded — run a scan to regenerate this candidate</li>';
+            : `<li class="candidate-position candidate-position-none">${escapeHtml(tr('No cross-bookmaker names recorded — run a scan to regenerate this candidate'))}</li>`;
         const searchUrl = fixtureSearchUrl(candidate);
-        const readOnlyNote = candidate.link_blocked
+        const readOnlyNote = tr(candidate.link_blocked
             ? 'The ledger learns this pairing automatically; the link half is a separate machine check.'
-            : 'The ledger learns this pairing automatically; this card is informational.';
+            : 'The ledger learns this pairing automatically; this card is informational.');
         const reasons = Array.isArray(candidate.rule_rejections) ? candidate.rule_rejections : [];
         const reasonItems = reasons.length
             ? reasons.map(reason => {
                 const rawCode = String(reason);
-                const label = REASON_LABELS[rawCode] || rawCode || REASON_UNKNOWN_LABEL;
+                const label = reasonLabel(rawCode) || tr(REASON_UNKNOWN_LABEL);
                 return `<li class="candidate-reason" title="${escapeHtml(rawCode)}">${escapeHtml(label)}</li>`;
             }).join('')
-            : '<li class="candidate-reason candidate-reason-none">No reason recorded</li>';
+            : `<li class="candidate-reason candidate-reason-none">${escapeHtml(tr('No reason recorded'))}</li>`;
         const candidateRemediation = candidate.remediation || null;
         const actionKey = candidateRemediation ? String(candidateRemediation.action || 'none') : 'none';
-        const actionLabel = REMEDIATION_LABELS[actionKey] || REMEDIATION_LABELS.none;
+        const actionLabel = tr(REMEDIATION_LABELS[actionKey] || REMEDIATION_LABELS.none);
         const proposalItems = candidateRemediation && Array.isArray(candidateRemediation.proposals)
             ? candidateRemediation.proposals.map(proposal => {
-                const kind = proposal.kind === 'league_equivalence' ? 'league mapping' : 'team alias';
+                const kind = tr(proposal.kind === 'league_equivalence' ? 'league mapping' : 'team alias');
                 const ledger = proposal.ledger_status && proposal.ledger_status !== 'absent'
-                    ? `${proposal.ledger_status} ${(Number(proposal.ledger_confidence) * 100).toFixed(0)}%`
-                    : 'absent from ledger';
+                    ? `${tr(proposal.ledger_status)} ${(Number(proposal.ledger_confidence) * 100).toFixed(0)}%`
+                    : tr('absent from ledger');
                 return `<li class="candidate-proposal" title="${escapeHtml(`${proposal.entry} — ledger ${ledger}; proposal only`)}">`
                     + `<span class="candidate-proposal-kind">${escapeHtml(kind)}</span> `
                     + `<span class="mono">${escapeHtml(proposal.entry || '')}</span> `
@@ -2333,7 +2402,7 @@ function renderCandidates(candidates, total, closeableTotal, blockerCounts = {},
             : '';
         const remediationBlock = candidateRemediation
             ? `<div class="candidate-remediation" data-action="${escapeHtml(actionKey)}">
-                    <p class="candidate-remediation-head"><span class="candidate-remediation-action">${escapeHtml(actionLabel)}</span> <span class="candidate-proposal-only">proposal only — nothing is applied</span></p>
+                    <p class="candidate-remediation-head"><span class="candidate-remediation-action">${escapeHtml(actionLabel)}</span> <span class="candidate-proposal-only">${escapeHtml(tr('proposal only — nothing is applied'))}</span></p>
                     ${proposalItems ? `<ul class="candidate-proposals" aria-label="Proposed mappings">${proposalItems}</ul>` : ''}
                 </div>`
             : '';
@@ -2342,7 +2411,7 @@ function renderCandidates(candidates, total, closeableTotal, blockerCounts = {},
                 <div class="candidate-body">
                     <div class="candidate-card-header">
                         <div class="candidate-teams"><span>${homeTeam}</span> <span class="candidate-vs">vs</span> <span>${awayTeam}</span></div>
-                        <span class="name-score" data-score="${nameScore >= 85 ? 'high' : nameScore >= 65 ? 'mid' : 'low'}" title="How alike the least-alike name pair is">${nameScore}% alike</span>
+                        <span class="name-score" data-score="${nameScore >= 85 ? 'high' : nameScore >= 65 ? 'mid' : 'low'}" title="${escapeHtml(tr('How alike the least-alike name pair is'))}">${escapeHtml(tr('{score}% alike', { score: nameScore }))}</span>
                     </div>
                     <div class="candidate-meta">${league} · ${kickoff} · ${bookmakers}</div>
                     <ul class="candidate-positions" aria-label="How the two bookmakers spell each team">${positionItems}</ul>
@@ -2353,7 +2422,7 @@ function renderCandidates(candidates, total, closeableTotal, blockerCounts = {},
                 </div>
                 <div class="candidate-actions">
                     <a class="btn btn-secondary btn-small" href="${escapeHtml(safeUrl(searchUrl))}" target="_blank" rel="noopener noreferrer"
-                       title="Search the web for this fixture">Check on the web ↗</a>
+                       title="${escapeHtml(tr('Search the web for this fixture'))}">${escapeHtml(tr('Check on the web ↗'))}</a>
                 </div>
             </article>
         `;
@@ -2369,25 +2438,25 @@ async function loadHistory() {
         const data = await res.json();
         const entries = data.entries || [];
         if (entries.length === 0) {
-            body.innerHTML = '<tr><td colspan="7" class="history-empty">No scans yet</td></tr>';
+            body.innerHTML = `<tr><td colspan="7" class="history-empty">${escapeHtml(tr('No scans yet'))}</td></tr>`;
             return;
         }
         body.innerHTML = entries.map(e => {
             const time = e.scan_time ? escapeHtml(parseKickoff(e.scan_time).toLocaleString()) : '—';
             const errs = (e.errors || []).length;
-            const mode = e.mode === 'live' ? '<span class="tag tag-live">Live</span>' : '<span class="tag">Upcoming</span>';
+            const mode = e.mode === 'live' ? `<span class="tag tag-live">${escapeHtml(tr('Live'))}</span>` : `<span class="tag">${escapeHtml(tr('Upcoming'))}</span>`;
             return `<tr>
                 <td>${mode}</td>
                 <td>${time}</td>
                 <td class="mono">${formatCount(e.total_matches)}</td>
                 <td class="mono">${formatCount(e.match_groups)}</td>
                 <td class="mono${e.surebets_found > 0 ? ' good' : ''}">${formatCount(e.surebets_found)}</td>
-                <td class="mono" title="actionable / queued after this scan">${formatCount(e.candidate_actionable)} / ${formatCount(e.candidate_queue)}</td>
+                <td class="mono" title="${escapeHtml(tr('actionable / queued after this scan'))}">${formatCount(e.candidate_actionable)} / ${formatCount(e.candidate_queue)}</td>
                 <td class="mono${errs > 0 ? ' bad' : ''}" title="${escapeHtml((e.errors || []).join(' | '))}">${errs}</td>
             </tr>`;
         }).join('');
     } catch (e) {
-        body.innerHTML = '<tr><td colspan="7" class="history-empty">Failed to load history</td></tr>';
+        body.innerHTML = `<tr><td colspan="7" class="history-empty">${escapeHtml(tr('Failed to load history'))}</td></tr>`;
     }
 }
 
@@ -2417,18 +2486,18 @@ function hideError() {
 }
 
 async function shutdownServer() {
-    if (!window.confirm('Stop the server? Scans stop and this page goes offline.')) return;
+    if (!window.confirm(tr('Stop the server? Scans stop and this page goes offline.'))) return;
     const btn = document.getElementById('shutdown-btn');
     btn.disabled = true;
     try {
         const res = await apiFetch('/api/shutdown', { method: 'POST', headers: candidateActionHeaders() });
         if (!res.ok) {
             const data = await res.json().catch(() => ({}));
-            throw new Error(data.detail || `HTTP ${res.status}`);
+            throw new Error(data.detail || tr('HTTP {status}', { status: res.status }));
         }
     } catch (e) {
         btn.disabled = false;
-        showError(`Could not stop the server: ${e.message}`);
+        showError(tr('Could not stop the server: {error}', { error: e.message }));
         return;
     }
     // Stop polling so the dead server does not fill the console with errors.
@@ -2482,13 +2551,13 @@ function bookRisk(id) {
     const cfg = bookmakersConfig?.[id] || {};
     return {
         profile: cfg.risk_profile || 'unknown',
-        typical: cfg.typical_max_stake_note || 'No typical stake recorded.',
-        limit: cfg.limit_risk || 'Unknown risk profile: check the book\'s limit policy.',
+        typical: cfg.typical_max_stake_note || tr('No typical stake recorded.'),
+        limit: cfg.limit_risk || tr('Unknown risk profile: check the book limit policy.'),
     };
 }
 
 function riskProfileLabel(profile) {
-    return ({ sharp: 'Sharp', soft: 'Soft book', exchange: 'Exchange', unknown: 'Unknown risk' })[profile] || 'Unknown risk';
+    return tr(({ sharp: 'Sharp', soft: 'Soft book', exchange: 'Exchange', unknown: 'Unknown risk' })[profile] || 'Unknown risk');
 }
 
 function bookShort(id) {
@@ -2508,11 +2577,11 @@ function parseKickoff(str) {
 function formatAgo(dt) {
     if (!dt || isNaN(dt)) return '—';
     const sec = Math.max(0, Math.round((Date.now() - dt.getTime()) / 1000));
-    if (sec < 60) return `${sec}s ago`;
+    if (sec < 60) return tr('{count}s ago', { count: sec });
     const min = Math.floor(sec / 60);
-    if (min < 60) return `${min}m ago`;
+    if (min < 60) return tr('{count}m ago', { count: min });
     const hr = Math.floor(min / 60);
-    if (hr < 24) return `${hr}h ago`;
+    if (hr < 24) return tr('{count}h ago', { count: hr });
     return dt.toLocaleDateString();
 }
 
@@ -2521,19 +2590,19 @@ function formatKickoff(dt) {
     const time = dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const today = new Date();
     const tomorrow = new Date(today.getTime() + 86400000);
-    if (dt.toDateString() === today.toDateString()) return `Today ${time}`;
-    if (dt.toDateString() === tomorrow.toDateString()) return `Tomorrow ${time}`;
+    if (dt.toDateString() === today.toDateString()) return tr('Today {time}', { time });
+    if (dt.toDateString() === tomorrow.toDateString()) return tr('Tomorrow {time}', { time });
     return `${dt.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })} ${time}`;
 }
 
 function formatKickoffLong(dt) {
     const hours = (dt.getTime() - Date.now()) / 3600000;
-    const rel = hours > 0 && hours < 48 ? ` (in ${hours < 1 ? Math.round(hours * 60) + ' min' : Math.round(hours) + ' h'})` : '';
+    const rel = hours > 0 && hours < 48 ? tr(' ({when})', { when: hours < 1 ? tr('{count} min', { count: Math.round(hours * 60) }) : tr('{count} h', { count: Math.round(hours) }) }) : '';
     return formatKickoff(dt) + rel;
 }
 
 function formatTeamName(name) {
-    if (!name) return 'Unknown';
+    if (!name) return tr('Unknown');
     return name
         .replace(/_/g, ' ')
         .replace(/\b\w/g, c => c.toUpperCase())
@@ -2591,36 +2660,42 @@ function renderRemediation(data) {
     const closeable = Number(remediation.closeable) || 0;
     setText(
         'remediation-summary',
-        `${currentMode}: ${closeable}/${total} closeable · `
-        + `alias ${Number(counts.alias) || 0} · league ${Number(counts.league) || 0} · `
-        + `alias+league ${Number(counts['alias+league']) || 0} · `
-        + `system-link ${Number(counts.system_link) || 0} · none ${Number(counts.none) || 0}`
+        tr('{mode}: {closeable}/{total} closeable · alias {alias} · league {league} · alias+league {both} · system-link {link} · none {none}', {
+            mode: currentMode,
+            closeable,
+            total,
+            alias: Number(counts.alias) || 0,
+            league: Number(counts.league) || 0,
+            both: Number(counts['alias+league']) || 0,
+            link: Number(counts.system_link) || 0,
+            none: Number(counts.none) || 0,
+        })
     );
     const note = document.getElementById('remediation-note');
-    if (note && remediation.note) note.textContent = remediation.note;
+    if (note) note.textContent = tr('Queue size is a diagnostic, not a coverage-progress claim. A proposal is never applied here.');
     list.innerHTML = groups.length
         ? groups.map(row => {
-            const action = REMEDIATION_LABELS[row.action] || row.action || 'unknown';
+            const action = tr(REMEDIATION_LABELS[row.action] || row.action || 'unknown');
             const rawReasons = Array.isArray(row.reasons) ? row.reasons : [];
-            const reasons = rawReasons.map(code => REASON_LABELS[code] || code).join(', ')
+            const reasons = rawReasons.map(code => reasonLabel(code)).join(', ')
                 || 'no reason recorded';
             const share = (Number(row.share || 0) * 100).toFixed(1);
             return `<li class="remediation-group" data-action="${escapeHtml(String(row.action || 'none'))}" title="${escapeHtml(rawReasons.join(', '))}">`
                 + `<span class="remediation-count mono">${Number(row.count) || 0}</span>`
                 + `<span class="remediation-action">${escapeHtml(action)}</span>`
                 + `<span class="remediation-meta">${escapeHtml(row.book_pair || '')} · ${escapeHtml(row.league || '')} · ${escapeHtml(reasons)}</span>`
-                + `<span class="remediation-share mono">${escapeHtml(share)}% of ${total}</span>`
+                + `<span class="remediation-share mono">${escapeHtml(tr('{share}% of {total}', { share, total }))}</span>`
                 + `</li>`;
         }).join('')
-        : '<li class="remediation-empty">No blocked candidates in this queue.</li>';
+        : `<li class="remediation-empty">${escapeHtml(tr('No blocked candidates in this queue.'))}</li>`;
     const line = document.getElementById('remediation-line');
     if (line) line.setAttribute('points', coveragePolyline(points, 'strict_misses'));
     const last = points[points.length - 1] || {};
     setText(
         'remediation-trend-summary',
         points.length
-            ? `${Number(last.strict_misses) || 0} miss(es) of ${Number(last.matches) || 0} listing(s) · ${(Number(last.strict_miss_rate || 0) * 100).toFixed(2)}%`
-            : 'no scan yet'
+            ? tr('{misses} miss(es) of {listings} listing(s) · {rate}%', { misses: Number(last.strict_misses) || 0, listings: Number(last.matches) || 0, rate: (Number(last.strict_miss_rate || 0) * 100).toFixed(2) })
+            : tr('no scan yet')
     );
 }
 
@@ -2643,7 +2718,7 @@ function renderCoverageTrend(data) {
     const mapping = data?.mapping_coverage?.[currentMode] || {};
     const ratio = mapping.coverage == null ? '—' : `${(Number(mapping.coverage) * 100).toFixed(1)}%`;
     const rows = `${Number(mapping.numerator) || 0}/${Number(mapping.denominator) || 0}`;
-    setText('coverage-trend-summary', `${currentMode}: ${Number(last.flag_count) || 0} flag(s) · ${Number(last.unmapped_rows) || 0} unmapped rows · mapped ${rows} (${ratio})`);
+    setText('coverage-trend-summary', tr('{mode}: {flags} flag(s) · {unmapped} unmapped rows · mapped {rows} ({ratio})', { mode: currentMode, flags: Number(last.flag_count) || 0, unmapped: Number(last.unmapped_rows) || 0, rows, ratio }));
 }
 
 function formatBytes(value) {
@@ -2671,10 +2746,10 @@ function renderScanCost(data) {
     const totals = report.totals || {};
     const fmt = (value, suffix = '') => (
         value == null || !Number.isFinite(Number(value))
-            ? 'n/a'
+            ? tr('n/a')
             : `${Number(value).toFixed(2)}${suffix}`
     );
-    setText('scan-cost-summary', `${currentMode}: ${Number(totals.books) || names.length} book(s) · ${fmt(totals.wall_seconds, 's')} wall · ${fmt(totals.requests)} requests · ${Number(totals.matches) || 0} matches · ${fmt(totals.seconds_per_match, 's/match')}`);
+    setText('scan-cost-summary', tr('{mode}: {books} book(s) · {wall} wall · {requests} requests · {matches} matches · {per} s/match', { mode: currentMode, books: Number(totals.books) || names.length, wall: fmt(totals.wall_seconds, 's'), requests: fmt(totals.requests), matches: Number(totals.matches) || 0, per: fmt(totals.seconds_per_match, 's') }));
     body.innerHTML = names.map(name => {
         const book = books[name] || {};
         const missing = (book.missing || []).join('; ');
@@ -2725,10 +2800,10 @@ function paperPositionQuery() {
 }
 
 function paperPageLabel(offset, total) {
-    if (!total) return '0 of 0';
+    if (!total) return tr('0 of 0');
     const first = Math.min(total, offset + 1);
     const last = Math.min(total, offset + PAPER_PAGE_SIZE);
-    return `${first}–${last} of ${total}`;
+    return tr('{first}–{last} of {total}', { first, last, total });
 }
 
 function updatePaperExportLink() {
@@ -2761,7 +2836,7 @@ async function loadPaper() {
         updatePaperExportLink();
     } catch (error) {
         console.warn('Paper ledger load failed:', error);
-        setText('paper-store', 'Paper store: could not load the ledger.');
+        setText('paper-store', tr('Paper store: could not load the ledger.'));
     }
 }
 
@@ -2769,32 +2844,36 @@ function renderPaperSummary(summary) {
     const data = summary || {};
     const days = Number(data.days) || 30;
     setText('paper-recorded', formatCount(data.opportunities_recorded));
-    setText('paper-recorded-sub', `opportunities in the last ${days} day(s)`);
+    setText('paper-recorded-sub', tr('opportunities in the last {days} day(s)', { days }));
     setText('paper-positions', formatCount(data.positions));
-    setText('paper-positions-sub', `paper positions in the last ${days} day(s)`);
+    setText('paper-positions-sub', tr('paper positions in the last {days} day(s)', { days }));
     setText('paper-open-settled', `${formatCount(data.open_positions)} / ${formatCount(data.settled_positions)}`);
-    setText('paper-open-settled-sub', `open / settled of ${formatCount(data.positions)} position(s)`);
+    setText('paper-open-settled-sub', tr('open / settled of {count} position(s)', { count: formatCount(data.positions) }));
     setText('paper-roi', data.roi == null ? '—' : `${(Number(data.roi) * 100).toFixed(2)}%`);
     setText('paper-roi-sub', data.roi == null
-        ? `no settled positions (0 of ${formatCount(data.positions)} position(s))`
-        : `profit ${money(data.profit)} on settled stake ${money(data.staked)} (${formatCount(data.settled_positions)} settled)`);
+        ? tr('no settled positions (0 of {count} position(s))', { count: formatCount(data.positions) })
+        : tr('profit {profit} on settled stake {staked} ({settled} settled)', { profit: money(data.profit), staked: money(data.staked), settled: formatCount(data.settled_positions) }));
     setText('paper-hit', data.hit_rate == null ? '—' : `${(Number(data.hit_rate) * 100).toFixed(2)}%`);
     setText('paper-hit-sub', data.hit_rate == null
-        ? `no marked positions (0 of ${formatCount(data.positions)} position(s))`
-        : `${formatCount(data.hit_rate_positions)} marked position(s)`);
+        ? tr('no marked positions (0 of {count} position(s))', { count: formatCount(data.positions) })
+        : tr('{count} marked position(s)', { count: formatCount(data.hit_rate_positions) }));
     setText('paper-clv', data.clv == null ? '—' : `${(Number(data.clv) * 100).toFixed(2)}%`);
     setText('paper-clv-sub', data.clv == null
-        ? 'no marked legs with a next-scan price'
-        : `${formatCount(data.clv_legs)} leg(s) with a next-scan price`);
+        ? tr('no marked legs with a next-scan price')
+        : tr('{count} leg(s) with a next-scan price', { count: formatCount(data.clv_legs) }));
     const execution = data.execution_adjusted || {};
     const optimistic = data.simulated_open || {};
     const pct = value => value == null ? '—' : `${(Number(value) * 100).toFixed(2)}%`;
     setText(
         'paper-fill-summary',
-        `Execution-adjusted ROI ${pct(execution.roi)} on ${formatCount(execution.positions)} complete fill record(s) · `
-        + `worst case ${execution.worst_case_profit == null ? '—' : `${money(execution.worst_case_profit)} KM`} `
-        + `on ${money(execution.filled_stake)} KM filled · `
-        + `optimistic ${pct(optimistic.roi_if_all_filled)} on ${formatCount(optimistic.positions)} open position(s)`
+        tr('Execution-adjusted ROI {roi} on {count} complete fill record(s) · worst case {worst} on {filled} KM filled · optimistic {optimistic} on {open} open position(s)', {
+            roi: pct(execution.roi),
+            count: formatCount(execution.positions),
+            worst: execution.worst_case_profit == null ? '—' : `${money(execution.worst_case_profit)} KM`,
+            filled: money(execution.filled_stake),
+            optimistic: pct(optimistic.roi_if_all_filled),
+            open: formatCount(optimistic.positions),
+        })
     );
     const count = document.getElementById('paper-count');
     if (count) count.textContent = formatCount(data.positions);
@@ -2803,12 +2882,17 @@ function renderPaperSummary(summary) {
     const retention = store.retention || {};
     const last = store.last_maintenance && store.last_maintenance.finished_at
         ? store.last_maintenance.finished_at
-        : 'never';
+        : tr('never');
     setText(
         'paper-store',
-        `Paper store: ${formatBytes(store.bytes)} · ${formatCount(rows.recorded_opportunities)} recorded row(s) · `
-        + `${formatCount(rows.paper_positions)} position row(s) · retention ${formatCount(retention.paper_days)} day(s) / `
-        + `${formatCount(retention.paper_max_rows)} row cap · last maintenance ${last}`
+        tr('Paper store: {bytes} · {recorded} recorded row(s) · {positions} position row(s) · retention {days} day(s) / {cap} row cap · last maintenance {last}', {
+            bytes: formatBytes(store.bytes),
+            recorded: formatCount(rows.recorded_opportunities),
+            positions: formatCount(rows.paper_positions),
+            days: formatCount(retention.paper_days),
+            cap: formatCount(retention.paper_max_rows),
+            last,
+        })
     );
 }
 
@@ -2821,10 +2905,10 @@ function renderPaperOpportunities(payload) {
     if (!body) return;
     const rows = Array.isArray(payload?.opportunities) ? payload.opportunities : [];
     const total = Number(payload?.total) || 0;
-    setText('paper-opp-total', `${total} row(s)`);
+    setText('paper-opp-total', tr('{count} row(s)', { count: total }));
     setText('paper-opp-page', paperPageLabel(paperState.oppOffset, total));
     if (!rows.length) {
-        body.innerHTML = '<tr><td colspan="6">No recorded opportunities in this window.</td></tr>';
+        body.innerHTML = `<tr><td colspan="6">${escapeHtml(tr('No recorded opportunities in this window.'))}</td></tr>`;
         return;
     }
     body.innerHTML = rows.map(row => {
@@ -2845,39 +2929,39 @@ function renderPaperOpportunities(payload) {
 
 function paperMarkCell(position) {
     const mark = position.mark || {};
-    if (!mark || mark.marked_at == null) return '<span class="paper-sub">not marked yet</span>';
+    if (!mark || mark.marked_at == null) return `<span class="paper-sub">${escapeHtml(tr('not marked yet'))}</span>`;
     const matched = Number(mark.matched_legs) || 0;
     const total = Number(mark.total_legs) || 0;
-    const label = mark.available ? 'available' : 'unavailable';
+    const label = tr(mark.available ? 'available' : 'unavailable');
     const cls = mark.available ? 'paper-mark-ok' : 'paper-mark-bad';
     const reason = mark.reason ? `<span class="paper-sub">${escapeHtml(mark.reason)}</span>` : '';
     const fills = Array.isArray(mark.fills) ? mark.fills : [];
     const counts = {};
     for (const fill of fills) counts[fill.status] = (counts[fill.status] || 0) + 1;
-    const fillText = Object.entries(counts).map(([status, count]) => `${count} ${status}`).join(', ') || 'no fill record';
-    const fill = mark.fill_complete ? 'fill complete' : 'fill incomplete';
-    const worst = mark.worst_case_profit == null ? 'n/a' : `${money(mark.worst_case_profit)} KM`;
-    return `<span class="${cls}">${label} (${matched}/${total})</span>`
-        + `<span class="paper-sub">${fill}: ${fillText} · filled ${money(mark.filled_stake)}/${money(mark.planned_stake)} · worst ${worst}</span>`
+    const fillText = Object.entries(counts).map(([status, count]) => `${count} ${tr(status)}`).join(', ') || tr('no fill record');
+    const fill = tr(mark.fill_complete ? 'fill complete' : 'fill incomplete');
+    const worst = mark.worst_case_profit == null ? tr('n/a') : `${money(mark.worst_case_profit)} KM`;
+    return `<span class="${cls}">${escapeHtml(label)} (${matched}/${total})</span>`
+        + `<span class="paper-sub">${escapeHtml(fill)}: ${escapeHtml(fillText)} · ${escapeHtml(tr('filled {filled}/{planned} · worst {worst}', { filled: money(mark.filled_stake), planned: money(mark.planned_stake), worst }))}</span>`
         + reason;
 }
 
 function paperSettleCell(position) {
     if (position.status !== 'open') {
         const profit = position.realized_profit == null ? '' : ` · ${money(position.realized_profit)} KM`;
-        return `<span class="paper-sub">settled${escapeHtml(profit)}</span>`;
+        return `<span class="paper-sub">${escapeHtml(tr('settled{profit}', { profit }))}</span>`;
     }
     const legs = Array.isArray(position.entry_legs) ? position.entry_legs : [];
     const selects = legs.map(leg => {
         const label = String(leg.outcome_label || '');
         return `<label class="paper-sub">${escapeHtml(label)}`
             + `<select data-paper-result data-position-id="${escapeHtml(position.id)}" data-leg-label="${escapeHtml(label)}">`
-            + '<option value="">—</option><option value="won">Won</option>'
-            + '<option value="lost">Lost</option><option value="void">Void</option>'
+            + `<option value="">—</option><option value="won">${escapeHtml(tr('Won'))}</option>`
+            + `<option value="lost">${escapeHtml(tr('Lost'))}</option><option value="void">${escapeHtml(tr('Void'))}</option>`
             + '</select></label>';
     }).join('');
     return `<div class="paper-settle">${selects}`
-        + `<button type="button" class="btn btn-small btn-secondary" data-action="paper-settle" data-position-id="${escapeHtml(position.id)}">Settle</button>`
+        + `<button type="button" class="btn btn-small btn-secondary" data-action="paper-settle" data-position-id="${escapeHtml(position.id)}">${escapeHtml(tr('Settle'))}</button>`
         + '</div>';
 }
 
@@ -2886,10 +2970,10 @@ function renderPaperPositions(payload) {
     if (!body) return;
     const rows = Array.isArray(payload?.positions) ? payload.positions : [];
     const total = Number(payload?.total) || 0;
-    setText('paper-pos-total', `${total} row(s)`);
+    setText('paper-pos-total', tr('{count} row(s)', { count: total }));
     setText('paper-pos-page', paperPageLabel(paperState.posOffset, total));
     if (!rows.length) {
-        body.innerHTML = '<tr><td colspan="7">No paper positions in this window.</td></tr>';
+        body.innerHTML = `<tr><td colspan="7">${escapeHtml(tr('No paper positions in this window.'))}</td></tr>`;
         return;
     }
     body.innerHTML = rows.map(position => {
@@ -2914,7 +2998,7 @@ async function settlePaperPosition(positionId) {
     )];
     if (!selects.length) return;
     if (selects.some(select => !select.value)) {
-        showToast('Set a result for every leg before settling.');
+        showToast(tr('Set a result for every leg before settling.'));
         return;
     }
     const legs = selects.map(select => ({
@@ -2929,13 +3013,13 @@ async function settlePaperPosition(positionId) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ legs }),
             },
-            'This SureBet deployment requires an API key to settle a paper position.'
+            tr('This SureBet deployment requires an API key to settle a paper position.')
         );
-        if (!response.ok) throw new Error(`settle returned ${response.status}`);
-        showToast('Paper position settled.');
+        if (!response.ok) throw new Error(tr('settle returned {status}', { status: response.status }));
+        showToast(tr('Paper position settled.'));
         loadPaper();
     } catch (error) {
-        showToast(`Could not settle the paper position: ${error.message}`);
+        showToast(tr('Could not settle the paper position: {error}', { error: error.message }));
     }
 }
 
@@ -2969,13 +3053,13 @@ async function loadHealth() {
         bar.hidden = false;
         const missRate = Number(data.pairing?.strict_miss_rate);
         const pairing = Number.isFinite(missRate)
-            ? `Pairing ${(missRate * 100).toFixed(2)}% miss`
-            : 'Pairing —';
+            ? tr('Pairing {rate}% miss', { rate: (missRate * 100).toFixed(2) })
+            : tr('Pairing —');
         const coverageFlags = (Number(data.coverage_budget?.prematch?.flag_count) || 0)
             + (Number(data.coverage_budget?.live?.flag_count) || 0);
-        bar.innerHTML = `Health — Prematch ${fmtAge(data.prematch?.last_scan_age_sec)} [${fmtPer(data.prematch?.per_bookie)}] | Live ${fmtAge(data.live?.last_scan_age_sec)} [${fmtPer(data.live?.per_bookie)}] | TTL ${data.odds_ttl_sec}s | ${pairing}`;
+        bar.innerHTML = escapeHtml(tr('Health — Prematch {prematch} | Live {live} | TTL {ttl}s | {pairing}', { prematch: `${fmtAge(data.prematch?.last_scan_age_sec)} [${fmtPer(data.prematch?.per_bookie)}]`, live: `${fmtAge(data.live?.last_scan_age_sec)} [${fmtPer(data.live?.per_bookie)}]`, ttl: data.odds_ttl_sec, pairing }));
         const titles = [...(data.prematch?.errors||[]), ...(data.live?.errors||[])];
-        if (coverageFlags) titles.push(`Coverage ${coverageFlags} flag(s)`);
+        if (coverageFlags) titles.push(tr('Coverage {count} flag(s)', { count: coverageFlags }));
         for (const mode of ['prematch', 'live']) {
             for (const flag of (data.coverage_budget?.[mode]?.flags || [])) {
                 titles.push(`${mode} ${flag.bookmaker}/${flag.sport}/${flag.market}: ${flag.kind} ${flag.observed}/${flag.baseline}`);
@@ -2992,7 +3076,7 @@ async function loadHealth() {
                 const closingLegs = `${Number(closing.legs_with_closing || 0)}/${Number(closing.legs_total || 0)}`;
                 const sources = Object.entries(closing.by_source || {})
                     .map(([source, count]) => `${source} ${count}`).join(', ');
-                setText('bet-summary', `Bet log: ${bet.settled_bets}/${bet.bets} settled · ROI ${roi} · bankroll ${money(bet.bankroll)} KM · CLV ${clv} (${bet.clv_legs} legs) · closing ${closingLegs}${sources ? ` (${sources})` : ''}`);
+                setText('bet-summary', tr('Bet log: {settled}/{bets} settled · ROI {roi} · bankroll {bankroll} KM · CLV {clv} ({legs} legs) · closing {closing}{sources}', { settled: bet.settled_bets, bets: bet.bets, roi, bankroll: money(bet.bankroll), clv, legs: bet.clv_legs, closing: closingLegs, sources: sources ? ` (${sources})` : '' }));
             }
         } catch (e) { /* the bet log is optional */ }
         refreshNoSurebetState();

@@ -108,9 +108,7 @@ ALLOWED_TAGS = {"strong", "em", "br"}
 # operator already reads, and every other tab reads it too, so it is pinned
 # rather than trusted.
 HEALTH_BAR_LINE = (
-    "bar.innerHTML = `Health — Prematch ${fmtAge(data.prematch?.last_scan_age_sec)}"
-    " [${fmtPer(data.prematch?.per_bookie)}] | Live ${fmtAge(data.live?.last_scan_age_sec)}"
-    " [${fmtPer(data.live?.per_bookie)}] | TTL ${data.odds_ttl_sec}s | ${pairing}`;"
+    "tr('Health — Prematch {prematch} | Live {live} | TTL {ttl}s | {pairing}'"
 )
 
 client = TestClient(app)
@@ -401,7 +399,7 @@ def _static_drift_problems(html: str, table: dict) -> list[str]:
         if copy in html:
             problems.append(f"index.html still asserts {copy!r}")
     described = re.search(
-        r'id="empty-state".*?<h2 class="empty-state-title">(.*?)</h2>\s*<p class="empty-state-desc">(.*?)</p>',
+        r'id="empty-state".*?<h2 class="empty-state-title"[^>]*>(.*?)</h2>\s*<p class="empty-state-desc"[^>]*>(.*?)</p>',
         html,
         flags=re.DOTALL,
     )
@@ -731,12 +729,19 @@ def test_the_five_states_the_brief_names_are_the_ones_the_table_distinguishes():
 # ===========================================================================
 
 _NODE_DRIVER = textwrap.dedent(
-    """
+    r"""
     const fs = require('fs');
     // `node -e` puts the first extra argument at argv[1], not argv[2].
     const table = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
     const inputs = JSON.parse(process.argv[2]);
     let noSurebetReasons = table;
+    const language = 'en';
+    function tr(text, vars) {
+        if (!vars) return text;
+        return String(text).replace(/\{(\w+)\}/g, (whole, name) => (
+            Object.prototype.hasOwnProperty.call(vars, name) ? String(vars[name]) : whole
+        ));
+    }
     @formatCount@
     @escapeHtml@
     @fillDiagnosticBody@
@@ -922,7 +927,7 @@ def test_the_health_bar_is_untouched_and_the_payload_is_retained_separately():
 
 
 def test_health_bar_check_fails_when_the_bar_line_changes():
-    drifted = JS.replace("| TTL ${data.odds_ttl_sec}s |", "| TTL ${data.odds_ttl_sec} sec |")
+    drifted = JS.replace("| TTL {ttl}s | {pairing}", "| TTL {ttl} sec | {pairing}")
     assert drifted != JS, "the mutation did not apply; the companion is untested"
     problems = _health_bar_problems(drifted)
     assert any("rendered line changed" in problem for problem in problems), problems
@@ -1013,7 +1018,7 @@ def test_no_untrusted_interpolation_path_exists_and_no_class_is_invented():
 def test_interpolation_check_fails_on_a_raw_hole_and_on_a_new_class():
     raw = JS.replace(
         """return `<button type="button" class="btn btn-secondary" """
-        """data-diagnostic-action="${escapeHtml(name)}">${escapeHtml(action.label)}</button>`;""",
+        """data-diagnostic-action="${escapeHtml(name)}">${escapeHtml(tr(action.label))}</button>`;""",
         """return `<button type="button" class="btn btn-verify" """
         """data-diagnostic-action="${action.name}">${action.label}</button>`;""",
     )

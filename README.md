@@ -340,6 +340,19 @@ python scripts/candidate_remediation.py --top 20
 
 See `docs/CANDIDATE_REMEDIATION.md` for the ranking and denominator rules.
 
+### Language and accessibility
+
+The dashboard ships English and Bosnian. All UI chrome comes from
+`frontend/js/i18n.js`; a language change repaints the generated list, slip and
+tabs. Scraped names and league labels are data and are never translated.
+`tests/test_i18n_coverage.py` fails on a missing key or a lost placeholder.
+
+Accessibility is machine-checked: `tests/test_accessibility_axe.py` covers
+landmarks, names, tab semantics, live regions and the keyboard path, and
+`scripts/a11y_audit.py` runs a live Chromium audit with optional axe-core. The
+reviewed exception list and the keyboard-only run are in
+`docs/ACCESSIBILITY.md`.
+
 ### Deep-link verification
 
 `scripts/verify_deeplinks.py` proves a bookmaker’s per-event links with real

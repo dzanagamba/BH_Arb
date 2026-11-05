@@ -20,49 +20,130 @@
     {
       "id": "never_scanned",
       "panel": "empty-state",
-      "decided_by": ["matches_cached", "live_matches_cached", "last_scan_age_sec"],
-      "guard": { "all": [], "none": ["scanned"] },
+      "decided_by": [
+        "matches_cached",
+        "live_matches_cached",
+        "last_scan_age_sec"
+      ],
+      "guard": {
+        "all": [],
+        "none": [
+          "scanned"
+        ]
+      },
       "title": "Ready to Hunt Surebets",
       "title_live": "No Live Matches Scanned",
       "body": "Click <strong>Scan Now</strong> to start scanning your connected bookmakers for arbitrage opportunities. Browser windows will open — solve any CAPTCHA if prompted.",
       "body_live": "Click <strong>Scan Now</strong> to scan all bookmakers for <strong>in-play</strong> arbitrage opportunities. Live odds change fast — rescan often.",
-      "actions": []
+      "actions": [],
+      "title_bs": "Spremno za lov na sigurne dobitke",
+      "title_live_bs": "Nema skeniranih utakmica uživo",
+      "body_bs": "Kliknite <strong>Skeniraj sada</strong> da započnete skeniranje povezanih knjiga za arbitražne prilike. Otvorit će se prozori preglednika — riješite CAPTCHA ako se pojavi.",
+      "body_live_bs": "Kliknite <strong>Skeniraj sada</strong> da skenirate sve knjige za <strong>in-play</strong> arbitražne prilike. Kvote uživo se brzo mijenjaju — skenirajte često."
     },
     {
       "id": "links_unverified",
       "panel": "empty-state",
-      "decided_by": ["unverified_links", "live_unverified_links", "verified_groups", "match_groups", "matches_cached"],
-      "guard": { "all": ["scanned", "unverified_links"], "none": ["verified_groups", "have_surebets"] },
+      "decided_by": [
+        "unverified_links",
+        "live_unverified_links",
+        "verified_groups",
+        "match_groups",
+        "matches_cached"
+      ],
+      "guard": {
+        "all": [
+          "scanned",
+          "unverified_links"
+        ],
+        "none": [
+          "verified_groups",
+          "have_surebets"
+        ]
+      },
       "title": "No Surebets — Deep Links Are Unproven",
       "body": "The scan read {matches} matches. {unverified_links} of them carry a per-event link that has never been proven, and the certainty gate refuses a pairing the moment one side's link is unproven, so a match on that list can never join a verified group. {verified_groups} match groups came out verified, which leaves the surebet engine with nothing to price. <strong>This is not a filter problem:</strong> no market, bookmaker or minimum profit can prove a link. The pairings the gate refused are queued in the Review tab.",
-      "actions": ["showReview"]
+      "actions": [
+        "showReview"
+      ],
+      "title_bs": "Nema sigurnih dobitaka — duboki linkovi nisu dokazani",
+      "body_bs": "Skeniranje je pročitalo {matches} utakmica. {unverified_links} ih nosi link po događaju koji nikada nije dokazan, a gate sigurnosti odbija par čim je link jedne strane nedokazan, pa utakmica s tog popisa nikada ne može u potvrđenu grupu. {verified_groups} grupa utakmica je potvrđeno, što surebet engine ostavlja bez ičega za obračun. <strong>Ovo nije problem filtera:</strong> nijedno tržište, knjiga ni minimalni profit ne mogu dokazati link. Parovi koje je gate odbio su u redu za pregled."
     },
     {
       "id": "identity_unproven",
       "panel": "empty-state",
-      "decided_by": ["unverified_links", "live_unverified_links", "verified_groups", "match_groups", "matches_cached"],
-      "guard": { "all": ["scanned"], "none": ["unverified_links", "verified_groups", "have_surebets"] },
+      "decided_by": [
+        "unverified_links",
+        "live_unverified_links",
+        "verified_groups",
+        "match_groups",
+        "matches_cached"
+      ],
+      "guard": {
+        "all": [
+          "scanned"
+        ],
+        "none": [
+          "unverified_links",
+          "verified_groups",
+          "have_surebets"
+        ]
+      },
       "title": "No Surebets — No Match Group Is Verified",
       "body": "The scan read {matches} matches. {unverified_links} of them are carrying an unproven per-event link, and {verified_groups} match groups came out verified, so nothing reached the surebet engine: it is only ever fed groups the certainty gate has proven to be the same event — the same league (or the exact same two teams under a differently-named league), kickoff within 15 minutes, the same match category, the same two teams in the same home/away order, and each side's link either proven or declared absent. The pairings the gate refused are queued in the Review tab. <strong>This is not a filter problem:</strong> no threshold or market choice can prove that two fixtures are the same event.",
-      "actions": ["showReview"]
+      "actions": [
+        "showReview"
+      ],
+      "title_bs": "Nema sigurnih dobitaka — nijedna grupa utakmica nije potvrđena",
+      "body_bs": "Skeniranje je pročitalo {matches} utakmica. {unverified_links} ih nosi nedokazan link po događaju, a {verified_groups} grupa utakmica je potvrđeno, pa ništa nije stiglo do surebet enginea: on prima samo grupe koje je gate sigurnosti dokazao kao isti događaj — ista liga (ili ista dva tima pod drugim nazivom lige), početak unutar 15 minuta, ista kategorija utakmice, ista dva tima u istom redoslijedu domaćin/gost, i link svake strane dokazan ili deklarisan kao odsutan. Parovi koje je gate odbio su u redu za pregled. <strong>Ovo nije problem filtera:</strong> nijedan prag ni izbor tržišta ne mogu dokazati da su dvije utakmice isti događaj."
     },
     {
       "id": "no_edge",
       "panel": "empty-state",
-      "decided_by": ["verified_groups", "match_groups", "matches_cached"],
-      "guard": { "all": ["scanned", "verified_groups"], "none": ["have_surebets"] },
+      "decided_by": [
+        "verified_groups",
+        "match_groups",
+        "matches_cached"
+      ],
+      "guard": {
+        "all": [
+          "scanned",
+          "verified_groups"
+        ],
+        "none": [
+          "have_surebets"
+        ]
+      },
       "title": "No Surebets — Verified Groups, Nothing Priced",
       "body": "The scan proved {verified_groups} match groups, so pairing worked, and the surebet engine priced none of them. A group is only priced once its kickoff has not passed and its odds are still inside the freshness window the health bar reports, so a group already under way — or a scan older than that window — is never priced at all. <strong>This is not a filter problem:</strong> this scan priced no surebet at the {profit_floor_percent}% floor it applies, so there is nothing for the filters to reveal. Scan again for a fresher read of the same fixtures.",
-      "actions": []
+      "actions": [],
+      "title_bs": "Nema sigurnih dobitaka — potvrđene grupe, ništa obračunato",
+      "body_bs": "Skeniranje je dokazalo {verified_groups} grupa utakmica, pa je uparivanje radilo, a surebet engine nije obračunao nijednu. Grupa se obračunava samo ako joj početak nije prošao i kvote su još unutar prozora svježine koji prikazuje health bar, pa se grupa koja je već počela — ili skeniranje starije od tog prozora — nikada ne obračunava. <strong>Ovo nije problem filtera:</strong> ovo skeniranje nije obračunalo nijedan siguran dobitak na pragu od {profit_floor_percent}% koji primjenjuje, pa filteri nemaju šta otkriti. Skenirajte ponovno za svježiji prikaz istih utakmica."
     },
     {
       "id": "filters_hiding",
       "panel": "no-results",
-      "decided_by": ["have_surebets", "surebets", "matches_cached"],
-      "guard": { "all": ["scanned", "have_surebets"], "none": ["show_surebets"] },
+      "decided_by": [
+        "have_surebets",
+        "surebets",
+        "matches_cached"
+      ],
+      "guard": {
+        "all": [
+          "scanned",
+          "have_surebets"
+        ],
+        "none": [
+          "show_surebets"
+        ]
+      },
       "title": "No Surebets Match Your Filters",
       "body": "The scan priced {surebets} surebets and the filters in force are showing none of them. Every control on this bar is applied on top of the scan, so the market, the bookmakers, the search text and the minimum profit can each hide all of them. The certainty gate is not involved here — the scan already priced these.",
-      "actions": ["resetFilters"]
+      "actions": [
+        "resetFilters"
+      ],
+      "title_bs": "Nema sigurnih dobitaka koji odgovaraju filterima",
+      "body_bs": "Skeniranje je obračunalo {surebets} sigurnih dobitaka, a aktivni filteri ne prikazuju nijedan. Svaki kontrol na ovoj traci se primjenjuje nakon skeniranja, pa tržište, knjige, tekst pretrage i minimalni profit mogu sakriti sve. Gate sigurnosti ovdje nije uključen — skeniranje ih je već obračunalo."
     }
   ]
 }

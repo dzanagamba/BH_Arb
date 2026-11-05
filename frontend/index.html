@@ -17,41 +17,41 @@
     <link rel="stylesheet" href="/css/style.css?v=7">
 </head>
 <body>
-<a class="skip-link" href="#main">Skip to content</a>
+<a class="skip-link" href="#main" data-i18n="Skip to content">Skip to content</a>
 
 <header class="topbar">
     <div class="brand">
         <span class="brand-mark" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l5-5 4 4 7-8"/><path d="M15 8h5v5"/></svg>
         </span>
-        <span class="brand-name">Surebet <span>BiH</span></span>
+        <h1 class="brand-name">Surebet <span>BiH</span></h1>
     </div>
 
-    <div class="segmented" id="mode-toggle" role="tablist" aria-label="Match mode">
-        <button class="segment active" id="mode-prematch" role="tab" aria-selected="true" data-action="switch-mode" data-mode="prematch">Upcoming</button>
-        <button class="segment" id="mode-live" role="tab" aria-selected="false" data-action="switch-mode" data-mode="live"><span class="live-dot"></span>Live</button>
+    <div class="segmented" id="mode-toggle" role="tablist" aria-label="Match mode" data-i18n-aria-label="Match mode">
+        <button class="segment active" id="mode-prematch" role="tab" aria-selected="true" data-action="switch-mode" data-mode="prematch" data-i18n="Upcoming">Upcoming</button>
+        <button class="segment" id="mode-live" role="tab" aria-selected="false" data-action="switch-mode" data-mode="live"><span class="live-dot"></span><span data-i18n="Live">Live</span></button>
     </div>
 
     <div class="topbar-right">
         <div class="status-pill" id="status-pill">
             <span class="status-dot"></span>
-            <span id="status-text">Ready</span>
+            <span id="status-text" data-i18n="Ready">Ready</span>
         </div>
         <span class="autorescan" id="autorescan-countdown" hidden></span>
-        <button class="btn btn-icon btn-ghost" id="theme-btn" data-action="cycle-theme" aria-label="Theme" title="Theme: system">
+        <button class="btn btn-icon btn-ghost" id="theme-btn" data-action="cycle-theme" aria-label="Theme" data-i18n-aria-label="Theme" title="Theme: system">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 3v18" /><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg>
         </button>
-        <button class="btn btn-icon btn-ghost" id="settings-btn" data-action="toggle-settings" data-open="true" aria-label="Settings" title="Settings">
+        <button class="btn btn-icon btn-ghost" id="settings-btn" data-action="toggle-settings" data-open="true" aria-label="Settings" data-i18n-aria-label="Settings" title="Settings" data-i18n-title="Settings">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
         </button>
-        <button class="btn btn-primary btn-scan" id="scan-btn" data-action="scan-now"><span data-i18n="action.scan">Scan now</span></button>
+        <button class="btn btn-primary btn-scan" id="scan-btn" data-action="scan-now"><span data-i18n="Scan now">Scan now</span></button>
     </div>
 </header>
 
 <div class="scan-progress" id="scan-progress" hidden>
     <div class="scan-progress-row">
         <span class="spinner"></span>
-        <span class="scan-progress-sub" id="scan-progress-sub">Opening browsers</span>
+        <span class="scan-progress-sub" id="scan-progress-sub" data-i18n="Opening browsers">Opening browsers</span>
         <div class="scan-bookies" id="scan-bookies-done"></div>
     </div>
     <div class="scan-bar-wrap"><div class="scan-bar" id="scan-bar"></div></div>
@@ -60,7 +60,7 @@
 <div class="error-banner" id="error-banner" hidden role="alert">
     <svg class="error-banner-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
     <span id="error-banner-text"></span>
-    <button class="error-banner-close" data-action="hide-error" aria-label="Dismiss">✕</button>
+    <button class="error-banner-close" data-action="hide-error" aria-label="Dismiss" data-i18n-aria-label="Dismiss">✕</button>
 </div>
 
 <main class="main" id="main" tabindex="-1">
@@ -71,55 +71,55 @@
     <div class="run-mode-banner" id="run-mode-banner" role="status" aria-live="polite" hidden></div>
     <div class="feed-integrity" id="feed-integrity" role="status" aria-live="polite" hidden></div>
 
-    <nav class="results-tabs" role="tablist" aria-label="Dashboard views">
+    <nav class="results-tabs" role="tablist" aria-label="Dashboard views" data-i18n-aria-label="Dashboard views">
         <button class="tab-btn active" id="surebets-tab" data-tab="surebets" role="tab"
                 aria-selected="true" aria-controls="surebets-panel" tabindex="0"
-                data-action="switch-tab"><span data-i18n="tab.surebets">Surebets</span> <span id="surebets-count" class="tab-count">0</span></button>
+                data-action="switch-tab"><span data-i18n="Surebets">Surebets</span> <span id="surebets-count" class="tab-count">0</span></button>
         <button class="tab-btn" id="review-tab" data-tab="review" role="tab"
                 aria-selected="false" aria-controls="review-panel" tabindex="-1"
-                data-action="switch-tab"><span data-i18n="tab.diagnostics">Diagnostics</span> <span id="review-count" class="tab-count">0</span></button>
+                data-action="switch-tab"><span data-i18n="Diagnostics">Diagnostics</span> <span id="review-count" class="tab-count">0</span></button>
         <button class="tab-btn" id="paper-tab" data-tab="paper" role="tab"
                 aria-selected="false" aria-controls="paper-panel" tabindex="-1"
-                data-action="switch-tab"><span data-i18n="tab.paper">Paper</span> <span id="paper-count" class="tab-count">0</span></button>
+                data-action="switch-tab"><span data-i18n="Paper">Paper</span> <span id="paper-count" class="tab-count">0</span></button>
         <button class="tab-btn" id="history-tab" data-tab="history" role="tab"
                 aria-selected="false" aria-controls="history-panel" tabindex="-1"
-                data-action="switch-tab"><span data-i18n="tab.history">History</span></button>
+                data-action="switch-tab"><span data-i18n="History">History</span></button>
         <button class="tab-btn" id="evidence-tab" data-tab="evidence" role="tab"
                 aria-selected="false" aria-controls="evidence-panel" tabindex="-1"
-                data-action="switch-tab"><span data-i18n="tab.evidence">Evidence</span></button>
+                data-action="switch-tab"><span data-i18n="Evidence">Evidence</span></button>
         <button class="tab-btn" id="other-tab" data-tab="other" role="tab"
                 aria-selected="false" aria-controls="other-panel" tabindex="-1"
-                data-action="switch-tab"><span data-i18n="tab.other">Other sports</span> <span id="other-count" class="tab-count">0</span></button>
+                data-action="switch-tab"><span data-i18n="Other sports">Other sports</span> <span id="other-count" class="tab-count">0</span></button>
     </nav>
 
     <!-- Surebets: summary strip, then list on the left and bet slip on the right -->
     <section id="surebets-panel" class="tab-panel" role="tabpanel" aria-labelledby="surebets-tab"
              aria-hidden="false" data-tab-panel="surebets">
-        <div class="kpis" aria-label="Scan summary">
+        <div class="kpis" aria-label="Scan summary" data-i18n-aria-label="Scan summary">
             <div class="kpi kpi-hero">
-                <span class="kpi-k">Best edge</span>
+                <span class="kpi-k" data-i18n="Best edge">Best edge</span>
                 <span class="kpi-v mono" id="kpi-best">—</span>
-                <span class="kpi-sub" id="kpi-best-sub">no surebet yet</span>
+                <span class="kpi-sub" id="kpi-best-sub" data-i18n="no surebet yet">no surebet yet</span>
             </div>
             <div class="kpi">
-                <span class="kpi-k">Surebets</span>
+                <span class="kpi-k" data-i18n="Surebets">Surebets</span>
                 <span class="kpi-v mono" id="kpi-count">0</span>
-                <span class="kpi-sub" id="kpi-count-sub">above your minimum</span>
+                <span class="kpi-sub" id="kpi-count-sub" data-i18n="above your minimum">above your minimum</span>
             </div>
             <div class="kpi">
-                <span class="kpi-k">Crossing rate</span>
+                <span class="kpi-k" data-i18n="Crossing rate">Crossing rate</span>
                 <span class="kpi-v mono" id="kpi-crossing">—</span>
-                <span class="kpi-sub" id="kpi-crossing-sub">no boards priced</span>
+                <span class="kpi-sub" id="kpi-crossing-sub" data-i18n="no boards priced">no boards priced</span>
             </div>
             <div class="kpi">
-                <span class="kpi-k">Matches scanned</span>
+                <span class="kpi-k" data-i18n="Matches scanned">Matches scanned</span>
                 <span class="kpi-v mono" id="stat-matches">—</span>
-                <span class="kpi-sub"><b class="mono" id="stat-groups">—</b> verified across books</span>
+                <span class="kpi-sub"><b class="mono" id="stat-groups">—</b> <span data-i18n="verified across books">verified across books</span></span>
             </div>
             <div class="kpi">
-                <span class="kpi-k">Last scan</span>
-                <span class="kpi-v" id="stat-time">never</span>
-                <span class="kpi-sub" id="kpi-mode-sub">upcoming matches</span>
+                <span class="kpi-k" data-i18n="Last scan">Last scan</span>
+                <span class="kpi-v" id="stat-time" data-i18n="never">never</span>
+                <span class="kpi-sub" id="kpi-mode-sub" data-i18n="upcoming matches">upcoming matches</span>
             </div>
         </div>
 
@@ -129,37 +129,37 @@
                     <label class="search">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
                         <input class="input search-input" type="search" id="filter-search"
-                               placeholder="Search team or league" aria-label="Search">
+                               placeholder="Search team or league" data-i18n-placeholder="Search team or league" aria-label="Search" data-i18n-aria-label="Search">
                     </label>
-                    <label class="inline-field" title="Hide surebets below this profit">
-                        <span>Min</span>
+                    <label class="inline-field" title="Hide surebets below this profit" data-i18n-title="Hide surebets below this profit">
+                        <span data-i18n="Min">Min</span>
                         <input class="input input-narrow mono" type="number" id="filter-profit"
                                value="0.5" min="0" max="50" step="0.1">
                         <span>%</span>
                     </label>
-                    <select class="input" id="filter-sort" aria-label="Sort">
-                        <option value="profit">Best profit</option>
-                        <option value="kickoff">Soonest kickoff</option>
-                        <option value="league">League</option>
+                    <select class="input" id="filter-sort" aria-label="Sort" data-i18n-aria-label="Sort">
+                        <option value="profit" data-i18n="Best profit">Best profit</option>
+                        <option value="kickoff" data-i18n="Soonest kickoff">Soonest kickoff</option>
+                        <option value="league" data-i18n="League">League</option>
                     </select>
                 </div>
                 <!-- Market filter: the chips write this field; applyFilters reads it. -->
                 <input type="hidden" id="filter-market" value="">
-                <div class="market-chips" id="market-chips" role="group" aria-label="Market" hidden></div>
+                <div class="market-chips" id="market-chips" role="group" aria-label="Market" data-i18n-aria-label="Market" hidden></div>
 
-                <div class="results-grid" id="results-grid" role="listbox" aria-label="Surebets"></div>
-                <p class="list-hint" id="list-hint" hidden><kbd>J</kbd> <kbd>K</kbd> move through the list · click a surebet to open its bet slip</p>
+                <div class="results-grid" id="results-grid" role="listbox" aria-label="Surebets" data-i18n-aria-label="Surebets"></div>
+                <p class="list-hint" id="list-hint" hidden data-i18n-html="true" data-i18n="&lt;kbd&gt;J&lt;/kbd&gt; &lt;kbd&gt;K&lt;/kbd&gt; move through the list · click a surebet to open its bet slip"><kbd>J</kbd> <kbd>K</kbd> move through the list · click a surebet to open its bet slip</p>
 
                 <div class="empty-state" id="empty-state">
                     <div class="empty-state-icon" aria-hidden="true">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/><path d="M8 12l2-2 2 2 3-3"/></svg>
                     </div>
-                    <h2 class="empty-state-title">Ready to Hunt Surebets</h2>
-                    <p class="empty-state-desc">
+                    <h2 class="empty-state-title" data-i18n="Ready to Hunt Surebets">Ready to Hunt Surebets</h2>
+                    <p class="empty-state-desc" data-i18n-html="true" data-i18n="Click &lt;strong&gt;Scan Now&lt;/strong&gt; to start scanning your connected bookmakers for arbitrage opportunities. Browser windows will open — solve any CAPTCHA if prompted.">
                         Click <strong>Scan Now</strong> to start scanning your connected bookmakers for arbitrage opportunities. Browser windows will open — solve any CAPTCHA if prompted.
                     </p>
                     <div id="empty-state-actions" hidden></div>
-                    <button type="button" class="btn btn-primary btn-lg empty-cta" data-action="scan-now"><span data-i18n="action.scan">Scan now</span></button>
+                    <button type="button" class="btn btn-primary btn-lg empty-cta" data-action="scan-now"><span data-i18n="Scan now">Scan now</span></button>
                     <div class="empty-state-bookies" id="empty-state-bookies"></div>
                 </div>
 
@@ -176,8 +176,8 @@
 
             <aside class="slip-pane" id="slip" aria-live="polite">
                 <div class="slip-placeholder">
-                    <h3>Bet slip</h3>
-                    <p>Pick a surebet on the left. Its odds are re-checked first, then you get each leg in the order to place it, with the stake to type.</p>
+                    <h3 data-i18n="Bet slip">Bet slip</h3>
+                    <p data-i18n="Pick a surebet on the left. Its odds are re-checked first, then you get each leg in the order to place it, with the stake to type.">Pick a surebet on the left. Its odds are re-checked first, then you get each leg in the order to place it, with the stake to type.</p>
                 </div>
             </aside>
         </div>
@@ -187,25 +187,25 @@
     <section id="review-panel" class="tab-panel" role="tabpanel" aria-labelledby="review-tab"
              aria-hidden="true" data-tab-panel="review" hidden>
         <div class="review-toolbar">
-            <p class="review-intro">Pairings the scanner could not prove, with the evidence it used. This view is read-only: the evidence ledger learns team, league and market spellings automatically on every scan; nothing here changes a mapping.</p>
+            <p class="review-intro" data-i18n="Pairings the scanner could not prove, with the evidence it used. This view is read-only: the evidence ledger learns team, league and market spellings automatically on every scan; nothing here changes a mapping.">Pairings the scanner could not prove, with the evidence it used. This view is read-only: the evidence ledger learns team, league and market spellings automatically on every scan; nothing here changes a mapping.</p>
         </div>
         <!-- N2-3: ranked, proposal-only remediation. Counts carry the queue as
              their denominator; nothing in this panel applies a suggestion. -->
         <div class="remediation-panel" id="remediation-panel" hidden>
             <div class="remediation-head">
-                <span class="coverage-trend-title">Top recurring blockers</span>
+                <span class="coverage-trend-title" data-i18n="Top recurring blockers">Top recurring blockers</span>
                 <span class="mono" id="remediation-summary">—</span>
             </div>
-            <p class="remediation-note" id="remediation-note">Queue size is a diagnostic, not a coverage-progress claim. A proposal is never applied here.</p>
+            <p class="remediation-note" id="remediation-note" data-i18n="Queue size is a diagnostic, not a coverage-progress claim. A proposal is never applied here.">Queue size is a diagnostic, not a coverage-progress claim. A proposal is never applied here.</p>
             <ul class="remediation-groups" id="remediation-groups"></ul>
             <div class="remediation-trend">
                 <svg class="coverage-spark" id="remediation-spark" viewBox="0 0 240 44"
-                     role="img" aria-label="Strict misses per recent scan"
+                     role="img" aria-label="Strict misses per recent scan" data-i18n-aria-label="Strict misses per recent scan"
                      preserveAspectRatio="none">
                     <polyline class="coverage-line remediation-line" id="remediation-line" points=""></polyline>
                 </svg>
                 <div class="coverage-trend-legend">
-                    <span><i class="coverage-dot remediation-dot-miss"></i> Strict misses per scan (numerator)</span>
+                    <span><i class="coverage-dot remediation-dot-miss"></i> <span data-i18n="Strict misses per scan (numerator)">Strict misses per scan (numerator)</span></span>
                     <span class="mono" id="remediation-trend-summary">—</span>
                 </div>
             </div>
@@ -213,30 +213,30 @@
         <!-- N1-2: bounded per-scan trend, drawn from /api/health. -->
         <div class="coverage-trend" id="coverage-trend" hidden>
             <div class="coverage-trend-head">
-                <span class="coverage-trend-title">Coverage trend</span>
+                <span class="coverage-trend-title" data-i18n="Coverage trend">Coverage trend</span>
                 <span class="mono" id="coverage-trend-summary">—</span>
             </div>
             <svg class="coverage-spark" id="coverage-spark" viewBox="0 0 240 44"
-                 role="img" aria-label="Coverage flags and unmapped market rows over recent scans"
+                 role="img" aria-label="Coverage flags and unmapped market rows over recent scans" data-i18n-aria-label="Coverage flags and unmapped market rows over recent scans"
                  preserveAspectRatio="none">
                 <polyline class="coverage-line coverage-line-flags" id="coverage-line-flags" points=""></polyline>
                 <polyline class="coverage-line coverage-line-unmapped" id="coverage-line-unmapped" points=""></polyline>
             </svg>
             <div class="coverage-trend-legend">
-                <span><i class="coverage-dot coverage-dot-flags"></i> Coverage flags</span>
-                <span><i class="coverage-dot coverage-dot-unmapped"></i> Unmapped rows</span>
+                <span><i class="coverage-dot coverage-dot-flags"></i> <span data-i18n="Coverage flags">Coverage flags</span></span>
+                <span><i class="coverage-dot coverage-dot-unmapped"></i> <span data-i18n="Unmapped rows">Unmapped rows</span></span>
             </div>
         </div>
         <!-- N1-3: last scan's per-book cost. Counts only; no URLs or payloads. -->
         <div class="scan-cost" id="scan-cost" hidden>
             <div class="scan-cost-head">
-                <span class="coverage-trend-title">Scan cost</span>
+                <span class="coverage-trend-title" data-i18n="Scan cost">Scan cost</span>
                 <span class="mono" id="scan-cost-summary">—</span>
             </div>
             <div class="table-wrap">
                 <table class="scan-cost-table">
                     <thead>
-                        <tr><th>Book</th><th>Outcome</th><th>Wall</th><th>Browser</th><th>Requests</th><th>Bytes</th><th>Matches</th><th>s/match</th></tr>
+                        <tr><th data-i18n="Book">Book</th><th data-i18n="Outcome">Outcome</th><th data-i18n="Wall">Wall</th><th data-i18n="Browser">Browser</th><th data-i18n="Requests">Requests</th><th data-i18n="Bytes">Bytes</th><th data-i18n="Matches">Matches</th><th data-i18n="s/match">s/match</th></tr>
                     </thead>
                     <tbody id="scan-cost-body"></tbody>
                 </table>
@@ -244,8 +244,8 @@
         </div>
         <div id="candidates-list" class="candidates-list">
             <div class="empty-state">
-                <h2 class="empty-state-title">No unresolved pairings.</h2>
-                <p class="empty-state-desc">The ledger has not left any pairing without a terminal decision.</p>
+                <h2 class="empty-state-title" data-i18n="No unresolved pairings.">No unresolved pairings.</h2>
+                <p class="empty-state-desc" data-i18n="The ledger has not left any pairing without a terminal decision.">The ledger has not left any pairing without a terminal decision.</p>
             </div>
         </div>
     </section>
@@ -253,96 +253,97 @@
     <!-- Paper ledger (P3-7/N2-1). Read-mostly, advisory, and never a live ticket. -->
     <section id="paper-panel" class="tab-panel" role="tabpanel" aria-labelledby="paper-tab"
              aria-hidden="true" data-tab-panel="paper" hidden>
-        <div class="paper-note" id="paper-note" role="status">
+        <h2 class="sr-only" data-i18n="Paper ledger">Paper ledger</h2>
+        <div class="paper-note" id="paper-note" role="status" data-i18n-html="true" data-i18n="&lt;strong&gt;Paper simulation only.&lt;/strong&gt; No bet was placed, no money moved, and no bookmaker account was used. Every number below carries its denominator.">
             <strong>Paper simulation only.</strong> No bet was placed, no money moved, and no bookmaker account was used.
             Every number below carries its denominator.
         </div>
-        <div class="kpis paper-summary" aria-label="Paper ledger summary">
+        <div class="kpis paper-summary" aria-label="Paper ledger summary" data-i18n-aria-label="Paper ledger summary">
             <div class="kpi">
-                <span class="kpi-k">Recorded</span>
+                <span class="kpi-k" data-i18n="Recorded">Recorded</span>
                 <span class="kpi-v mono" id="paper-recorded">—</span>
-                <span class="kpi-sub" id="paper-recorded-sub">opportunities in the window</span>
+                <span class="kpi-sub" id="paper-recorded-sub" data-i18n="opportunities in the window">opportunities in the window</span>
             </div>
             <div class="kpi">
-                <span class="kpi-k">Positions</span>
+                <span class="kpi-k" data-i18n="Positions">Positions</span>
                 <span class="kpi-v mono" id="paper-positions">—</span>
-                <span class="kpi-sub" id="paper-positions-sub">paper positions in the window</span>
+                <span class="kpi-sub" id="paper-positions-sub" data-i18n="paper positions in the window">paper positions in the window</span>
             </div>
             <div class="kpi">
-                <span class="kpi-k">Open / settled</span>
+                <span class="kpi-k" data-i18n="Open / settled">Open / settled</span>
                 <span class="kpi-v mono" id="paper-open-settled">—</span>
-                <span class="kpi-sub" id="paper-open-settled-sub">of all paper positions</span>
+                <span class="kpi-sub" id="paper-open-settled-sub" data-i18n="of all paper positions">of all paper positions</span>
             </div>
             <div class="kpi">
-                <span class="kpi-k">ROI</span>
+                <span class="kpi-k" data-i18n="ROI">ROI</span>
                 <span class="kpi-v mono" id="paper-roi">—</span>
-                <span class="kpi-sub" id="paper-roi-sub">settled positions only</span>
+                <span class="kpi-sub" id="paper-roi-sub" data-i18n="settled positions only">settled positions only</span>
             </div>
             <div class="kpi">
-                <span class="kpi-k">Hit rate</span>
+                <span class="kpi-k" data-i18n="Hit rate">Hit rate</span>
                 <span class="kpi-v mono" id="paper-hit">—</span>
-                <span class="kpi-sub" id="paper-hit-sub">marked positions only</span>
+                <span class="kpi-sub" id="paper-hit-sub" data-i18n="marked positions only">marked positions only</span>
             </div>
             <div class="kpi">
-                <span class="kpi-k">CLV</span>
+                <span class="kpi-k" data-i18n="CLV">CLV</span>
                 <span class="kpi-v mono" id="paper-clv">—</span>
-                <span class="kpi-sub" id="paper-clv-sub">legs with a next-scan price</span>
+                <span class="kpi-sub" id="paper-clv-sub" data-i18n="legs with a next-scan price">legs with a next-scan price</span>
             </div>
         </div>
-        <p class="hint" id="paper-fill-summary">Execution-adjusted ROI — · optimistic (if all filled) —</p>
+        <p class="hint" id="paper-fill-summary" data-i18n="Execution-adjusted ROI — · optimistic (if all filled) —">Execution-adjusted ROI — · optimistic (if all filled) —</p>
         <div class="paper-filters filters">
-            <label class="inline-field"><span>Ledger</span>
-                <select class="input" id="paper-run-mode" aria-label="Paper run mode">
-                    <option value="">All</option>
-                    <option value="record_only">Record-only</option>
-                    <option value="paper">Paper</option>
+            <label class="inline-field"><span data-i18n="Ledger">Ledger</span>
+                <select class="input" id="paper-run-mode" aria-label="Paper run mode" data-i18n-aria-label="Paper run mode">
+                    <option value="" data-i18n="All">All</option>
+                    <option value="record_only" data-i18n="Record-only">Record-only</option>
+                    <option value="paper" data-i18n="Paper">Paper</option>
                 </select></label>
-            <label class="inline-field"><span>Feed</span>
-                <select class="input" id="paper-feed-mode" aria-label="Paper feed">
-                    <option value="">All</option>
-                    <option value="prematch">Prematch</option>
-                    <option value="live">Live</option>
+            <label class="inline-field"><span data-i18n="Feed">Feed</span>
+                <select class="input" id="paper-feed-mode" aria-label="Paper feed" data-i18n-aria-label="Paper feed">
+                    <option value="" data-i18n="All">All</option>
+                    <option value="prematch" data-i18n="Prematch">Prematch</option>
+                    <option value="live" data-i18n="Live">Live</option>
                 </select></label>
-            <label class="inline-field"><span>Status</span>
-                <select class="input" id="paper-status" aria-label="Paper position status">
-                    <option value="">All</option>
-                    <option value="open">Open</option>
-                    <option value="settled">Settled</option>
+            <label class="inline-field"><span data-i18n="Status">Status</span>
+                <select class="input" id="paper-status" aria-label="Paper position status" data-i18n-aria-label="Paper position status">
+                    <option value="" data-i18n="All">All</option>
+                    <option value="open" data-i18n="Open">Open</option>
+                    <option value="settled" data-i18n="Settled">Settled</option>
                 </select></label>
-            <button type="button" class="btn btn-secondary btn-small" data-action="paper-refresh">Refresh</button>
-            <a class="btn btn-secondary btn-small" id="paper-export" href="/api/paper/export.csv?days=30" download>Export CSV</a>
+            <button type="button" class="btn btn-secondary btn-small" data-action="paper-refresh" data-i18n="Refresh">Refresh</button>
+            <a class="btn btn-secondary btn-small" id="paper-export" href="/api/paper/export.csv?days=30" download data-i18n="Export CSV">Export CSV</a>
         </div>
         <div class="paper-grid">
             <div class="paper-pane">
-                <h3>Recorded opportunities <span class="mono" id="paper-opp-total">—</span></h3>
+                <h3><span data-i18n="Recorded opportunities">Recorded opportunities</span> <span class="mono" id="paper-opp-total">—</span></h3>
                 <div class="table-wrap">
                     <table class="paper-table">
-                        <thead><tr><th>Recorded</th><th>Event</th><th>Market</th><th>Profit</th><th>Best</th><th>Gate</th></tr></thead>
+                        <thead><tr><th data-i18n="Recorded">Recorded</th><th data-i18n="Event">Event</th><th data-i18n="Market">Market</th><th data-i18n="Profit">Profit</th><th data-i18n="Best">Best</th><th data-i18n="Gate">Gate</th></tr></thead>
                         <tbody id="paper-opportunities-body"></tbody>
                     </table>
                 </div>
                 <div class="paper-pager">
-                    <button type="button" class="btn btn-small btn-secondary" data-action="paper-opp-prev">Previous</button>
+                    <button type="button" class="btn btn-small btn-secondary" data-action="paper-opp-prev" data-i18n="Previous">Previous</button>
                     <span class="mono" id="paper-opp-page">—</span>
-                    <button type="button" class="btn btn-small btn-secondary" data-action="paper-opp-next">Next</button>
+                    <button type="button" class="btn btn-small btn-secondary" data-action="paper-opp-next" data-i18n="Next">Next</button>
                 </div>
             </div>
             <div class="paper-pane">
-                <h3>Paper positions <span class="mono" id="paper-pos-total">—</span></h3>
+                <h3><span data-i18n="Paper positions">Paper positions</span> <span class="mono" id="paper-pos-total">—</span></h3>
                 <div class="table-wrap">
                     <table class="paper-table">
-                        <thead><tr><th>Event</th><th>Market</th><th>Status</th><th>Stake</th><th>Sim P/L</th><th>Mark</th><th>Settle</th></tr></thead>
+                        <thead><tr><th data-i18n="Event">Event</th><th data-i18n="Market">Market</th><th data-i18n="Status">Status</th><th data-i18n="Stake">Stake</th><th data-i18n="Sim P/L">Sim P/L</th><th data-i18n="Mark">Mark</th><th data-i18n="Settle">Settle</th></tr></thead>
                         <tbody id="paper-positions-body"></tbody>
                     </table>
                 </div>
                 <div class="paper-pager">
-                    <button type="button" class="btn btn-small btn-secondary" data-action="paper-pos-prev">Previous</button>
+                    <button type="button" class="btn btn-small btn-secondary" data-action="paper-pos-prev" data-i18n="Previous">Previous</button>
                     <span class="mono" id="paper-pos-page">—</span>
-                    <button type="button" class="btn btn-small btn-secondary" data-action="paper-pos-next">Next</button>
+                    <button type="button" class="btn btn-small btn-secondary" data-action="paper-pos-next" data-i18n="Next">Next</button>
                 </div>
             </div>
         </div>
-        <p class="hint" id="paper-store">Paper store: —</p>
+        <p class="hint" id="paper-store" data-i18n="Paper store: —">Paper store: —</p>
     </section>
 
     <!-- History -->
@@ -351,7 +352,7 @@
         <div class="table-wrap">
             <table class="history-table">
                 <thead>
-                    <tr><th>Feed</th><th>Time</th><th>Matches</th><th>Groups</th><th>Surebets</th><th>Queue</th><th>Errors</th></tr>
+                    <tr><th data-i18n="Feed">Feed</th><th data-i18n="Time">Time</th><th data-i18n="Matches">Matches</th><th data-i18n="Groups">Groups</th><th data-i18n="Surebets">Surebets</th><th data-i18n="Queue">Queue</th><th data-i18n="Errors">Errors</th></tr>
                 </thead>
                 <tbody id="history-body"></tbody>
             </table>
@@ -362,35 +363,35 @@
              aria-hidden="true" data-tab-panel="evidence" hidden>
         <div class="evidence-head">
             <div class="filters">
-                <label class="inline-field"><span>Status</span>
-                    <select class="input" id="evidence-status" aria-label="Group status">
-                        <option value="">All</option>
-                        <option value="verified">Verified</option>
-                        <option value="suggested">Suggested</option>
-                        <option value="rejected">Rejected</option>
+                <label class="inline-field"><span data-i18n="Status">Status</span>
+                    <select class="input" id="evidence-status" aria-label="Group status" data-i18n-aria-label="Group status">
+                        <option value="" data-i18n="All">All</option>
+                        <option value="verified" data-i18n="Verified">Verified</option>
+                        <option value="suggested" data-i18n="Suggested">Suggested</option>
+                        <option value="rejected" data-i18n="Rejected">Rejected</option>
                     </select></label>
-                <label class="inline-field"><span>Sport</span>
-                    <select class="input" id="evidence-sport" aria-label="Sport">
-                        <option value="">All</option>
-                        <option value="football">Football</option>
-                        <option value="basketball">Basketball</option>
-                        <option value="tennis">Tennis</option>
+                <label class="inline-field"><span data-i18n="Sport">Sport</span>
+                    <select class="input" id="evidence-sport" aria-label="Sport" data-i18n-aria-label="Sport">
+                        <option value="" data-i18n="All">All</option>
+                        <option value="football" data-i18n="Football">Football</option>
+                        <option value="basketball" data-i18n="Basketball">Basketball</option>
+                        <option value="tennis" data-i18n="Tennis">Tennis</option>
                     </select></label>
                 <label class="search">
                     <input class="input search-input" type="search" id="evidence-search"
-                           placeholder="Search team or league" aria-label="Search groups">
+                           placeholder="Search team or league" data-i18n-placeholder="Search team or league" aria-label="Search groups" data-i18n-aria-label="Search groups">
                 </label>
             </div>
             <div class="evidence-pager">
-                <button type="button" class="btn btn-small btn-secondary" data-action="evidence-prev">Previous</button>
+                <button type="button" class="btn btn-small btn-secondary" data-action="evidence-prev" data-i18n="Previous">Previous</button>
                 <span id="evidence-page" class="mono">—</span>
-                <button type="button" class="btn btn-small btn-secondary" data-action="evidence-next">Next</button>
+                <button type="button" class="btn btn-small btn-secondary" data-action="evidence-next" data-i18n="Next">Next</button>
             </div>
         </div>
         <div id="evidence-list" class="evidence-list">
             <div class="empty-state">
-                <h2 class="empty-state-title">No groups loaded.</h2>
-                <p class="empty-state-desc">Open this tab to read the current scan's group summaries.</p>
+                <h2 class="empty-state-title" data-i18n="No groups loaded.">No groups loaded.</h2>
+                <p class="empty-state-desc" data-i18n="Open this tab to read the current scan's group summaries.">Open this tab to read the current scan's group summaries.</p>
             </div>
         </div>
         <div id="evidence-detail" class="evidence-detail" hidden></div>
@@ -399,40 +400,40 @@
     <!-- Other sports: separate from football, with its own sport filter. -->
     <section id="other-panel" class="tab-panel" role="tabpanel" aria-labelledby="other-tab"
              aria-hidden="true" data-tab-panel="other" hidden>
-        <div class="kpis" aria-label="Other sports summary">
+        <div class="kpis" aria-label="Other sports summary" data-i18n-aria-label="Other sports summary">
             <div class="kpi kpi-hero">
-                <span class="kpi-k">Best other-sport edge</span>
+                <span class="kpi-k" data-i18n="Best other-sport edge">Best other-sport edge</span>
                 <span class="kpi-v mono" id="other-kpi-best">—</span>
-                <span class="kpi-sub" id="other-kpi-sports">none yet</span>
+                <span class="kpi-sub" id="other-kpi-sports" data-i18n="none yet">none yet</span>
             </div>
             <div class="kpi">
-                <span class="kpi-k">Surebets</span>
+                <span class="kpi-k" data-i18n="Surebets">Surebets</span>
                 <span class="kpi-v mono" id="other-kpi-count">0</span>
-                <span class="kpi-sub">basketball and tennis</span>
+                <span class="kpi-sub" data-i18n="basketball and tennis">basketball and tennis</span>
             </div>
         </div>
         <div class="filters">
             <label class="inline-field">
-                <span>Sport</span>
-                <select class="input" id="other-sport-filter" aria-label="Sport">
-                    <option value="all">All other sports</option>
+                <span data-i18n="Sport">Sport</span>
+                <select class="input" id="other-sport-filter" aria-label="Sport" data-i18n-aria-label="Sport">
+                    <option value="all" data-i18n="All other sports">All other sports</option>
                 </select>
             </label>
             <label class="search">
                 <input class="input search-input" type="search" id="other-search"
-                       placeholder="Search team, player or league" aria-label="Search other sports">
+                       placeholder="Search team, player or league" data-i18n-placeholder="Search team, player or league" aria-label="Search other sports" data-i18n-aria-label="Search other sports">
             </label>
-            <label class="inline-field" title="Hide surebets below this profit">
-                <span>Min</span>
+            <label class="inline-field" title="Hide surebets below this profit" data-i18n-title="Hide surebets below this profit">
+                <span data-i18n="Min">Min</span>
                 <input class="input input-narrow mono" type="number" id="other-profit"
                        value="0.5" min="0" max="50" step="0.1">
                 <span>%</span>
             </label>
         </div>
-        <div class="results-grid" id="other-grid" role="listbox" aria-label="Other sports surebets"></div>
+        <div class="results-grid" id="other-grid" role="listbox" aria-label="Other sports surebets" data-i18n-aria-label="Other sports surebets"></div>
         <div class="empty-state" id="other-empty">
-            <h2 class="empty-state-title">No other-sport surebets in this scan</h2>
-            <p class="empty-state-desc">Basketball and tennis are scanned in both Upcoming and Live. Football stays in the Surebets tab.</p>
+            <h2 class="empty-state-title" data-i18n="No other-sport surebets in this scan">No other-sport surebets in this scan</h2>
+            <p class="empty-state-desc" data-i18n="Basketball and tennis are scanned in both Upcoming and Live. Football stays in the Surebets tab.">Basketball and tennis are scanned in both Upcoming and Live. Football stays in the Surebets tab.</p>
         </div>
     </section>
 
@@ -440,15 +441,15 @@
 
 <!-- Settings drawer -->
 <div class="drawer-backdrop" id="settings-backdrop" data-action="toggle-settings" data-open="false" hidden></div>
-<aside class="drawer" id="settings-drawer" aria-label="Settings" hidden>
+<aside class="drawer" id="settings-drawer" aria-label="Settings" data-i18n-aria-label="Settings" hidden>
     <div class="drawer-head">
-        <h2>Settings</h2>
-        <button class="btn btn-icon btn-ghost" data-action="toggle-settings" data-open="false" aria-label="Close settings">✕</button>
+        <h2 data-i18n="Settings">Settings</h2>
+        <button class="btn btn-icon btn-ghost" data-action="toggle-settings" data-open="false" aria-label="Close settings" data-i18n-aria-label="Close settings">✕</button>
     </div>
 
     <section class="drawer-section">
-        <h3 data-i18n="settings.language">Language</h3>
-        <label class="field"><span data-i18n="settings.languageLabel">Interface language</span>
+        <h3 data-i18n="Language">Language</h3>
+        <label class="field"><span data-i18n="Interface language">Interface language</span>
             <select class="input" id="filter-language">
                 <option value="en">English</option>
                 <option value="bs">Bosanski</option>
@@ -456,90 +457,91 @@
     </section>
 
     <section class="drawer-section">
-        <h3 data-i18n="settings.staking">Staking</h3>
-        <label class="field"><span>Default total stake (KM)</span>
+        <h3 data-i18n="Staking">Staking</h3>
+        <label class="field"><span data-i18n="Default total stake (KM)">Default total stake (KM)</span>
             <input class="input mono" type="number" id="filter-investment" value="100" min="1" max="100000" step="10"></label>
-        <label class="field"><span>Round stakes to</span>
+        <label class="field"><span data-i18n="Round stakes to">Round stakes to</span>
             <select class="input" id="filter-rounding">
-                <option value="1">Whole KM (recommended)</option>
-                <option value="5">Nearest 5 KM</option>
-                <option value="exact">Exact (2 decimals)</option>
+                <option value="1" data-i18n="Whole KM (recommended)">Whole KM (recommended)</option>
+                <option value="5" data-i18n="Nearest 5 KM">Nearest 5 KM</option>
+                <option value="exact" data-i18n="Exact (2 decimals)">Exact (2 decimals)</option>
             </select></label>
     </section>
 
     <section class="drawer-section">
-        <h3 data-i18n="settings.scanning">Scanning</h3>
-        <label class="field"><span>Run mode</span>
+        <h3 data-i18n="Scanning">Scanning</h3>
+        <label class="field"><span data-i18n="Run mode">Run mode</span>
             <select class="input" id="filter-run-mode">
-                <option value="advisory">Advisory (show live surebets)</option>
-                <option value="record_only">Record only (no live surebets)</option>
-                <option value="paper">Paper trading (virtual bankroll)</option>
+                <option value="advisory" data-i18n="Advisory (show live surebets)">Advisory (show live surebets)</option>
+                <option value="record_only" data-i18n="Record only (no live surebets)">Record only (no live surebets)</option>
+                <option value="paper" data-i18n="Paper trading (virtual bankroll)">Paper trading (virtual bankroll)</option>
             </select></label>
-        <label class="field"><span>Rescan automatically</span>
+        <label class="field"><span data-i18n="Rescan automatically">Rescan automatically</span>
             <select class="input" id="filter-autorescan">
-                <option value="0">Off</option>
-                <option value="2">Every 2 min</option>
-                <option value="5">Every 5 min</option>
-                <option value="10">Every 10 min</option>
+                <option value="0" data-i18n="Off">Off</option>
+                <option value="2" data-i18n="Every 2 min">Every 2 min</option>
+                <option value="5" data-i18n="Every 5 min">Every 5 min</option>
+                <option value="10" data-i18n="Every 10 min">Every 10 min</option>
             </select></label>
-        <label class="field field-check"><input type="checkbox" id="sound-toggle"> <span data-i18n="settings.sound">Chime on a new surebet above 3%</span></label>
-        <button class="btn btn-secondary btn-small" id="notify-btn" data-action="enable-notifications">Enable browser alerts</button>
+        <label class="field field-check"><input type="checkbox" id="sound-toggle"> <span data-i18n="Chime on a new surebet above 3%">Chime on a new surebet above 3%</span></label>
+        <button class="btn btn-secondary btn-small" id="notify-btn" data-action="enable-notifications" data-i18n="Enable browser alerts">Enable browser alerts</button>
     </section>
 
     <section class="drawer-section">
-        <h3>Bookmakers</h3>
-        <p class="hint">Turned-off books are skipped by the next scan.</p>
+        <h3 data-i18n="Bookmakers">Bookmakers</h3>
+        <p class="hint" data-i18n="Turned-off books are skipped by the next scan.">Turned-off books are skipped by the next scan.</p>
         <div class="chips" id="bookie-chips"></div>
     </section>
 
     <section class="drawer-section">
-        <h3>Experimental markets</h3>
-        <p class="hint">Applied on the next scan.</p>
+        <h3 data-i18n="Experimental markets">Experimental markets</h3>
+        <p class="hint" data-i18n="Applied on the next scan.">Applied on the next scan.</p>
         <div id="experimental-checks">
-            <label class="field field-check exp-check" data-market="first_half_1x2"><input type="checkbox" value="first_half_1x2"> <span>1st half 1X2</span></label>
-            <label class="field field-check exp-check" data-market="first_half_ou"><input type="checkbox" value="first_half_ou"> <span>1st half Over/Under</span></label>
-            <label class="field field-check exp-check" data-market="asian_handicap"><input type="checkbox" value="asian_handicap"> <span>Asian handicap</span></label>
+            <label class="field field-check exp-check" data-market="first_half_1x2"><input type="checkbox" value="first_half_1x2"> <span data-i18n="1st half 1X2">1st half 1X2</span></label>
+            <label class="field field-check exp-check" data-market="first_half_ou"><input type="checkbox" value="first_half_ou"> <span data-i18n="1st half Over/Under">1st half Over/Under</span></label>
+            <label class="field field-check exp-check" data-market="asian_handicap"><input type="checkbox" value="asian_handicap"> <span data-i18n="Asian handicap">Asian handicap</span></label>
         </div>
     </section>
 
     <section class="drawer-section">
-        <h3>Diagnostics</h3>
+        <h3 data-i18n="Diagnostics">Diagnostics</h3>
         <div class="sweep-control">
-            <label class="field"><span>Link sweep book</span>
+            <label class="field"><span data-i18n="Link sweep book">Link sweep book</span>
                 <select class="input" id="sweep-book"></select></label>
-            <label class="field"><span>Feed</span>
+            <label class="field"><span data-i18n="Feed">Feed</span>
                 <select class="input" id="sweep-mode">
-                    <option value="prematch">Prematch</option>
-                    <option value="live">Live</option>
+                    <option value="prematch" data-i18n="Prematch">Prematch</option>
+                    <option value="live" data-i18n="Live">Live</option>
                 </select></label>
-            <button class="btn btn-secondary btn-small" data-action="sweep-links">Sweep links</button>
-            <p class="hint" id="sweep-status" aria-live="polite">Calls verify-links until every event is decided.</p>
+            <button class="btn btn-secondary btn-small" data-action="sweep-links" data-i18n="Sweep links">Sweep links</button>
+            <p class="hint" id="sweep-status" aria-live="polite" data-i18n="Calls verify-links until every event is decided.">Calls verify-links until every event is decided.</p>
         </div>
-        <p class="hint" id="bet-summary">No logged bets in the last 30 days.</p>
+        <p class="hint" id="bet-summary" data-i18n="No logged bets in the last 30 days.">No logged bets in the last 30 days.</p>
         <div class="health-bar" id="health-bar" hidden></div>
         <p class="drawer-links">
-            <a href="/api/debug/report" target="_blank" rel="noopener">Match report</a>
-            <a href="/api/health" target="_blank" rel="noopener">Health</a>
-            <a href="/docs" target="_blank" rel="noopener">API docs</a>
+            <a href="/api/debug/report" target="_blank" rel="noopener" data-i18n="Match report">Match report</a>
+            <a href="/api/health" target="_blank" rel="noopener" data-i18n="Health">Health</a>
+            <a href="/docs" target="_blank" rel="noopener" data-i18n="API docs">API docs</a>
         </p>
     </section>
 
     <section class="drawer-section">
-        <h3>Server</h3>
-        <p class="hint">Stops the scanner on this computer. Start it again with <span class="mono">Start Surebet.bat</span>.</p>
-        <button class="btn btn-danger" id="shutdown-btn" data-action="shutdown-server">Stop server</button>
+        <h3 data-i18n="Server">Server</h3>
+        <p class="hint" data-i18n-html="true" data-i18n="Stops the scanner on this computer. Start it again with &lt;span class=&quot;mono&quot;&gt;Start Surebet.bat&lt;/span&gt;.">Stops the scanner on this computer. Start it again with <span class="mono">Start Surebet.bat</span>.</p>
+        <button class="btn btn-danger" id="shutdown-btn" data-action="shutdown-server" data-i18n="Stop server">Stop server</button>
     </section>
 </aside>
 
 <div class="stopped-screen" id="stopped-screen" hidden>
     <div class="stopped-card">
-        <h2>Server stopped</h2>
-        <p>The scanner is off. Double-click <span class="mono">Start Surebet.bat</span> in the project folder to start it again.</p>
+        <h2 data-i18n="Server stopped">Server stopped</h2>
+        <p data-i18n-html="true" data-i18n="The scanner is off. Double-click &lt;span class=&quot;mono&quot;&gt;Start Surebet.bat&lt;/span&gt; in the project folder to start it again.">The scanner is off. Double-click <span class="mono">Start Surebet.bat</span> in the project folder to start it again.</p>
     </div>
 </div>
 
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
+<script src="/js/i18n.js" nonce="__CSP_NONCE__"></script>
 <script src="/js/app.js?v=7" nonce="__CSP_NONCE__"></script>
 </body>
 </html>

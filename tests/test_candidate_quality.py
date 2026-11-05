@@ -125,4 +125,4 @@ def test_dashboard_shows_the_blocker_breakdown_and_queue_trend():
     assert "candidate_actionable" in JS
     assert "candidate_queue" in JS
     assert "Queue:" in JS
-    assert "<th>Queue</th>" in HTML
+    assert '<th data-i18n="Queue">Queue</th>' in HTML

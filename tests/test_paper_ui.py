@@ -281,6 +281,12 @@ function escapeHtml(value) {{
 function formatCount(value) {{ return Number(value || 0).toLocaleString('en-US'); }}
 function money(value) {{ return Number(value || 0).toFixed(2); }}
 function formatBytes(value) {{ return value == null ? 'n/a' : String(value); }}
+function tr(text, vars) {{
+    if (!vars) return text;
+    return String(text).replace(/{{(\\w+)}}/g, (whole, name) => (
+        Object.prototype.hasOwnProperty.call(vars, name) ? String(vars[name]) : whole
+    ));
+}}
 function setText(id, value) {{ element(id).textContent = value; }}
 {functions}
 const empty = {{ opportunities: [], total: 0 }};
