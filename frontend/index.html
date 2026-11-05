@@ -78,6 +78,9 @@
         <button class="tab-btn" id="review-tab" data-tab="review" role="tab"
                 aria-selected="false" aria-controls="review-panel" tabindex="-1"
                 data-action="switch-tab"><span data-i18n="tab.diagnostics">Diagnostics</span> <span id="review-count" class="tab-count">0</span></button>
+        <button class="tab-btn" id="paper-tab" data-tab="paper" role="tab"
+                aria-selected="false" aria-controls="paper-panel" tabindex="-1"
+                data-action="switch-tab"><span data-i18n="tab.paper">Paper</span> <span id="paper-count" class="tab-count">0</span></button>
         <button class="tab-btn" id="history-tab" data-tab="history" role="tab"
                 aria-selected="false" aria-controls="history-panel" tabindex="-1"
                 data-action="switch-tab"><span data-i18n="tab.history">History</span></button>
@@ -224,6 +227,100 @@
                 <p class="empty-state-desc">The ledger has not left any pairing without a terminal decision.</p>
             </div>
         </div>
+    </section>
+
+    <!-- Paper ledger (P3-7/N2-1). Read-mostly, advisory, and never a live ticket. -->
+    <section id="paper-panel" class="tab-panel" role="tabpanel" aria-labelledby="paper-tab"
+             aria-hidden="true" data-tab-panel="paper" hidden>
+        <div class="paper-note" id="paper-note" role="status">
+            <strong>Paper simulation only.</strong> No bet was placed, no money moved, and no bookmaker account was used.
+            Every number below carries its denominator.
+        </div>
+        <div class="kpis paper-summary" aria-label="Paper ledger summary">
+            <div class="kpi">
+                <span class="kpi-k">Recorded</span>
+                <span class="kpi-v mono" id="paper-recorded">—</span>
+                <span class="kpi-sub" id="paper-recorded-sub">opportunities in the window</span>
+            </div>
+            <div class="kpi">
+                <span class="kpi-k">Positions</span>
+                <span class="kpi-v mono" id="paper-positions">—</span>
+                <span class="kpi-sub" id="paper-positions-sub">paper positions in the window</span>
+            </div>
+            <div class="kpi">
+                <span class="kpi-k">Open / settled</span>
+                <span class="kpi-v mono" id="paper-open-settled">—</span>
+                <span class="kpi-sub" id="paper-open-settled-sub">of all paper positions</span>
+            </div>
+            <div class="kpi">
+                <span class="kpi-k">ROI</span>
+                <span class="kpi-v mono" id="paper-roi">—</span>
+                <span class="kpi-sub" id="paper-roi-sub">settled positions only</span>
+            </div>
+            <div class="kpi">
+                <span class="kpi-k">Hit rate</span>
+                <span class="kpi-v mono" id="paper-hit">—</span>
+                <span class="kpi-sub" id="paper-hit-sub">marked positions only</span>
+            </div>
+            <div class="kpi">
+                <span class="kpi-k">CLV</span>
+                <span class="kpi-v mono" id="paper-clv">—</span>
+                <span class="kpi-sub" id="paper-clv-sub">legs with a next-scan price</span>
+            </div>
+        </div>
+        <div class="paper-filters filters">
+            <label class="inline-field"><span>Ledger</span>
+                <select class="input" id="paper-run-mode" aria-label="Paper run mode">
+                    <option value="">All</option>
+                    <option value="record_only">Record-only</option>
+                    <option value="paper">Paper</option>
+                </select></label>
+            <label class="inline-field"><span>Feed</span>
+                <select class="input" id="paper-feed-mode" aria-label="Paper feed">
+                    <option value="">All</option>
+                    <option value="prematch">Prematch</option>
+                    <option value="live">Live</option>
+                </select></label>
+            <label class="inline-field"><span>Status</span>
+                <select class="input" id="paper-status" aria-label="Paper position status">
+                    <option value="">All</option>
+                    <option value="open">Open</option>
+                    <option value="settled">Settled</option>
+                </select></label>
+            <button type="button" class="btn btn-secondary btn-small" data-action="paper-refresh">Refresh</button>
+            <a class="btn btn-secondary btn-small" id="paper-export" href="/api/paper/export.csv?days=30" download>Export CSV</a>
+        </div>
+        <div class="paper-grid">
+            <div class="paper-pane">
+                <h3>Recorded opportunities <span class="mono" id="paper-opp-total">—</span></h3>
+                <div class="table-wrap">
+                    <table class="paper-table">
+                        <thead><tr><th>Recorded</th><th>Event</th><th>Market</th><th>Profit</th><th>Best</th><th>Gate</th></tr></thead>
+                        <tbody id="paper-opportunities-body"></tbody>
+                    </table>
+                </div>
+                <div class="paper-pager">
+                    <button type="button" class="btn btn-small btn-secondary" data-action="paper-opp-prev">Previous</button>
+                    <span class="mono" id="paper-opp-page">—</span>
+                    <button type="button" class="btn btn-small btn-secondary" data-action="paper-opp-next">Next</button>
+                </div>
+            </div>
+            <div class="paper-pane">
+                <h3>Paper positions <span class="mono" id="paper-pos-total">—</span></h3>
+                <div class="table-wrap">
+                    <table class="paper-table">
+                        <thead><tr><th>Event</th><th>Market</th><th>Status</th><th>Stake</th><th>Sim P/L</th><th>Mark</th><th>Settle</th></tr></thead>
+                        <tbody id="paper-positions-body"></tbody>
+                    </table>
+                </div>
+                <div class="paper-pager">
+                    <button type="button" class="btn btn-small btn-secondary" data-action="paper-pos-prev">Previous</button>
+                    <span class="mono" id="paper-pos-page">—</span>
+                    <button type="button" class="btn btn-small btn-secondary" data-action="paper-pos-next">Next</button>
+                </div>
+            </div>
+        </div>
+        <p class="hint" id="paper-store">Paper store: —</p>
     </section>
 
     <!-- History -->

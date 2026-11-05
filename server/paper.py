@@ -15,7 +15,9 @@ already is; this store is the queryable paper ledger.
 
 from __future__ import annotations
 
+import csv
 import hashlib
+import io
 import json
 import sqlite3
 from datetime import UTC, datetime, timedelta
@@ -117,6 +119,16 @@ def _simulated_entry(
         returns.append(leg_stake * value)
     profit = round(min(returns) - stake, 2) if returns else 0.0
     return staked_legs, round(margin, 6), profit
+
+
+def _mark_reason(matched: int, total: int) -> str:
+    if total <= 0:
+        return "no entry legs to mark"
+    if matched == total:
+        return ""
+    if matched == 0:
+        return "no entry leg is still quoted"
+    return f"{total - matched} of {total} entry legs are no longer quoted"
 
 
 class PaperStore:
@@ -223,6 +235,8 @@ class PaperStore:
         days: int = 30,
         limit: int = 200,
         run_mode: str = "",
+        feed_mode: str = "",
+        offset: int = 0,
     ) -> list[dict[str, Any]]:
         cutoff = (datetime.now(UTC).replace(tzinfo=None) - timedelta(days=days)).isoformat()
         query = "SELECT payload FROM recorded_opportunities WHERE recorded_at >= ?"
@@ -230,11 +244,29 @@ class PaperStore:
         if run_mode:
             query += " AND run_mode = ?"
             params.append(run_mode)
-        query += " ORDER BY recorded_at DESC LIMIT ?"
-        params.append(max(1, min(limit, 5000)))
+        if feed_mode:
+            query += " AND feed_mode = ?"
+            params.append(feed_mode)
+        query += " ORDER BY recorded_at DESC LIMIT ? OFFSET ?"
+        params.extend([max(1, min(limit, 5000)), max(0, offset)])
         with self._connect() as connection:
             rows = connection.execute(query, params).fetchall()
         return [json.loads(row["payload"]) for row in rows]
+
+    def count_opportunities(
+        self, *, days: int = 30, run_mode: str = "", feed_mode: str = ""
+    ) -> int:
+        cutoff = (datetime.now(UTC).replace(tzinfo=None) - timedelta(days=days)).isoformat()
+        query = "SELECT COUNT(*) FROM recorded_opportunities WHERE recorded_at >= ?"
+        params: list[Any] = [cutoff]
+        if run_mode:
+            query += " AND run_mode = ?"
+            params.append(run_mode)
+        if feed_mode:
+            query += " AND feed_mode = ?"
+            params.append(feed_mode)
+        with self._connect() as connection:
+            return int(connection.execute(query, params).fetchone()[0])
 
     def open_positions_from_scan(
         self,
@@ -307,6 +339,7 @@ class PaperStore:
                         "clv": None,
                         "current": [],
                         "disappeared_at": now,
+                        "reason": "opportunity disappeared from the next scan",
                     }
                     connection.execute(
                         "UPDATE paper_positions SET payload = ? WHERE id = ?",
@@ -385,6 +418,7 @@ class PaperStore:
             "clv": round(weighted / weight, 6) if weight else None,
             "current": matched,
             "disappeared_at": None,
+            "reason": _mark_reason(len(matched), len(entry_legs)),
         }
         return payload
 
@@ -394,6 +428,8 @@ class PaperStore:
         days: int = 30,
         limit: int = 200,
         status: str = "",
+        feed_mode: str = "",
+        offset: int = 0,
     ) -> list[dict[str, Any]]:
         cutoff = (datetime.now(UTC).replace(tzinfo=None) - timedelta(days=days)).isoformat()
         query = "SELECT payload FROM paper_positions WHERE opened_at >= ?"
@@ -401,11 +437,167 @@ class PaperStore:
         if status:
             query += " AND status = ?"
             params.append(status)
-        query += " ORDER BY opened_at DESC LIMIT ?"
-        params.append(max(1, min(limit, 5000)))
+        if feed_mode:
+            query += " AND json_extract(payload, '$.feed_mode') = ?"
+            params.append(feed_mode)
+        query += " ORDER BY opened_at DESC LIMIT ? OFFSET ?"
+        params.extend([max(1, min(limit, 5000)), max(0, offset)])
         with self._connect() as connection:
             rows = connection.execute(query, params).fetchall()
         return [json.loads(row["payload"]) for row in rows]
+
+    def count_positions(
+        self, *, days: int = 30, status: str = "", feed_mode: str = ""
+    ) -> int:
+        cutoff = (datetime.now(UTC).replace(tzinfo=None) - timedelta(days=days)).isoformat()
+        query = "SELECT COUNT(*) FROM paper_positions WHERE opened_at >= ?"
+        params: list[Any] = [cutoff]
+        if status:
+            query += " AND status = ?"
+            params.append(status)
+        if feed_mode:
+            query += " AND json_extract(payload, '$.feed_mode') = ?"
+            params.append(feed_mode)
+        with self._connect() as connection:
+            return int(connection.execute(query, params).fetchone()[0])
+
+    def export_csv(
+        self,
+        *,
+        days: int = 30,
+        run_mode: str = "",
+        feed_mode: str = "",
+        status: str = "",
+    ) -> str:
+        """One CSV covering both paper stores; every displayed row round-trips."""
+        opportunities = self.list_opportunities(
+            days=days,
+            limit=5000,
+            run_mode=run_mode,
+            feed_mode=feed_mode,
+        )
+        positions = self.list_positions(
+            days=days,
+            limit=5000,
+            status=status,
+            feed_mode=feed_mode,
+        )
+        columns = [
+            "kind",
+            "id",
+            "key",
+            "recorded_at",
+            "opened_at",
+            "settled_at",
+            "status",
+            "feed_mode",
+            "run_mode",
+            "sport",
+            "home_team",
+            "away_team",
+            "league",
+            "kickoff",
+            "market_type",
+            "line",
+            "profit_percent",
+            "total_margin",
+            "gate_verdict",
+            "best_odds",
+            "best_book",
+            "stake",
+            "entry_margin",
+            "simulated_profit",
+            "simulated_roi",
+            "realized_profit",
+            "mark_available",
+            "mark_matched_legs",
+            "mark_total_legs",
+            "mark_clv",
+            "mark_reason",
+            "legs_json",
+            "disclaimer",
+        ]
+        buffer = io.StringIO()
+        writer = csv.writer(buffer, lineterminator="\n")
+        writer.writerow(columns)
+        for row in opportunities:
+            writer.writerow(
+                [
+                    "opportunity",
+                    row.get("id", ""),
+                    row.get("key", ""),
+                    row.get("recorded_at", ""),
+                    "",
+                    "",
+                    "recorded",
+                    row.get("feed_mode", ""),
+                    row.get("run_mode", ""),
+                    row.get("sport", ""),
+                    row.get("home_team", ""),
+                    row.get("away_team", ""),
+                    row.get("league", ""),
+                    row.get("kickoff", ""),
+                    row.get("market_type", ""),
+                    row.get("line", ""),
+                    row.get("profit_percent", ""),
+                    row.get("total_margin", ""),
+                    row.get("gate_verdict", ""),
+                    row.get("best_odds", ""),
+                    row.get("best_book", ""),
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    json.dumps(row.get("legs") or [], sort_keys=True),
+                    row.get("disclaimer", ""),
+                ]
+            )
+        for row in positions:
+            mark = row.get("mark") or {}
+            writer.writerow(
+                [
+                    "position",
+                    row.get("id", ""),
+                    row.get("key", ""),
+                    "",
+                    row.get("opened_at", ""),
+                    row.get("settled_at") or "",
+                    row.get("status", ""),
+                    row.get("feed_mode", ""),
+                    "",
+                    "",
+                    row.get("home_team", ""),
+                    row.get("away_team", ""),
+                    row.get("league", ""),
+                    row.get("kickoff", ""),
+                    row.get("market_type", ""),
+                    row.get("line", ""),
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    row.get("stake", ""),
+                    row.get("entry_margin", ""),
+                    row.get("simulated_profit", ""),
+                    row.get("simulated_roi", ""),
+                    row.get("realized_profit", ""),
+                    mark.get("available", ""),
+                    mark.get("matched_legs", ""),
+                    mark.get("total_legs", ""),
+                    mark.get("clv", ""),
+                    mark.get("reason", ""),
+                    json.dumps(row.get("entry_legs") or [], sort_keys=True),
+                    row.get("disclaimer", ""),
+                ]
+            )
+        return buffer.getvalue()
 
     def prune(
         self,

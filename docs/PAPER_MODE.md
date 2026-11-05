@@ -94,6 +94,40 @@ stake. No match-result feed is assumed.
 `roi` is `null` until a paper position is settled. `clv` is `null` until a
 position is marked. A number without its denominator is not reported as one.
 
+## Dashboard (N2-1)
+
+The **Paper** tab is read-mostly and advisory. It shows summary tiles for
+recorded rows, positions, open/settled, ROI, hit rate and CLV, each with its
+denominator. The ledger is filtered by run mode, feed and position status, and
+both tables page with Previous/Next. The `no_bet_placed` notice is always
+visible; the pane has no live-slip or copy action.
+
+Open positions carry one result selector per entry leg and a **Settle** button.
+Settling posts the same leg results as the manual bet log; a missing result
+leaves the position open. An unavailable mark shows its reason (for example
+"opportunity disappeared from the next scan"), so a missing price is not
+mistaken for a settlement.
+
+## CSV export
+
+`GET /api/paper/export.csv?days=30&run_mode=&feed_mode=&status=` returns one CSV
+covering both stores. The first column is `kind` (`opportunity` or `position`).
+Every field the dashboard displays is included, including the leg list as
+`legs_json`, the mark fields and the mark reason. The export uses the same
+filters as the tables and is not capped by the current page.
+
+```bash
+curl -fsS 'http://127.0.0.1:8000/api/paper/export.csv?days=30' -o paper.csv
+```
+
+## Store size and retention
+
+`/api/paper/summary` includes a `store` block: the SQLite bytes, row counts for
+`recorded_opportunities` and `paper_positions`, the N1-1 retention window/row
+cap, and the last maintenance time. The Paper tab prints the same values under
+the tables. Retention is bounded by `RETENTION_PAPER_DAYS` and
+`RETENTION_PAPER_MAX_ROWS`; see `docs/STORAGE.md`.
+
 ## Limitations
 
 - **No bet is placed.** The paper bankroll is a local simulation; there is no

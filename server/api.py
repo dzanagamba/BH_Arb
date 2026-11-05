@@ -4745,16 +4745,32 @@ async def export_bets_csv(days: int = 30):
 async def get_paper_opportunities(
     days: int = 30,
     limit: int = 200,
+    offset: int = 0,
     run_mode: str = "",
+    feed_mode: str = "",
 ):
     """Compact snapshots recorded by record-only and paper scans."""
     if run_mode and run_mode not in RUN_MODES:
         raise HTTPException(status_code=400, detail="Unknown run_mode")
+    if feed_mode and feed_mode not in ("prematch", "live"):
+        raise HTTPException(status_code=400, detail="Unknown feed_mode")
+    store = _paper_store_or_init()
+    window = max(1, days)
     return {
-        "opportunities": _paper_store_or_init().list_opportunities(
-            days=max(1, days), limit=limit, run_mode=run_mode
+        "opportunities": store.list_opportunities(
+            days=window,
+            limit=limit,
+            run_mode=run_mode,
+            feed_mode=feed_mode,
+            offset=max(0, offset),
         ),
+        "total": store.count_opportunities(
+            days=window, run_mode=run_mode, feed_mode=feed_mode
+        ),
+        "limit": max(1, min(limit, 5000)),
+        "offset": max(0, offset),
         "run_mode": run_mode or "all",
+        "feed_mode": feed_mode or "all",
         "no_bet_placed": True,
     }
 
@@ -4763,14 +4779,30 @@ async def get_paper_opportunities(
 async def get_paper_positions(
     days: int = 30,
     limit: int = 200,
+    offset: int = 0,
     status: Literal["", "open", "settled"] = "",
+    feed_mode: str = "",
 ):
     """Virtual positions; their entry legs are paper, not accepted bets."""
+    if feed_mode and feed_mode not in ("prematch", "live"):
+        raise HTTPException(status_code=400, detail="Unknown feed_mode")
+    store = _paper_store_or_init()
+    window = max(1, days)
     return {
-        "positions": _paper_store_or_init().list_positions(
-            days=max(1, days), limit=limit, status=status
+        "positions": store.list_positions(
+            days=window,
+            limit=limit,
+            status=status,
+            feed_mode=feed_mode,
+            offset=max(0, offset),
         ),
+        "total": store.count_positions(
+            days=window, status=status, feed_mode=feed_mode
+        ),
+        "limit": max(1, min(limit, 5000)),
+        "offset": max(0, offset),
         "status": status or "all",
+        "feed_mode": feed_mode or "all",
         "no_bet_placed": True,
     }
 
@@ -4778,7 +4810,53 @@ async def get_paper_positions(
 @router.get("/paper/summary")
 async def get_paper_summary(days: int = 30):
     """Simulated ROI, hit rate and CLV with explicit denominators."""
-    return _paper_store_or_init().summary(days=max(1, days))
+    store = _paper_store_or_init()
+    summary = store.summary(days=max(1, days))
+    retention = retention_health(storage_path=store.path)
+    tables = retention["tables"]
+    summary["store"] = {
+        "path": store.path,
+        "bytes": retention["sqlite"]["bytes"],
+        "rows": {
+            "recorded_opportunities": int(
+                tables.get("recorded_opportunities", {}).get("rows", 0)
+            ),
+            "paper_positions": int(
+                tables.get("paper_positions", {}).get("rows", 0)
+            ),
+        },
+        "retention": {
+            "paper_days": retention["windows"]["paper_days"],
+            "paper_max_rows": retention["windows"]["paper_max_rows"],
+        },
+        "last_maintenance": retention["last_maintenance"],
+    }
+    return summary
+
+
+@router.get("/paper/export.csv")
+async def export_paper_csv(
+    days: int = 30,
+    run_mode: str = "",
+    feed_mode: str = "",
+    status: Literal["", "open", "settled"] = "",
+):
+    """CSV round-trip of recorded opportunities and paper positions."""
+    if run_mode and run_mode not in RUN_MODES:
+        raise HTTPException(status_code=400, detail="Unknown run_mode")
+    if feed_mode and feed_mode not in ("prematch", "live"):
+        raise HTTPException(status_code=400, detail="Unknown feed_mode")
+    csv_text = _paper_store_or_init().export_csv(
+        days=max(1, days),
+        run_mode=run_mode,
+        feed_mode=feed_mode,
+        status=status,
+    )
+    return PlainTextResponse(
+        csv_text,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="bh-arb-paper.csv"'},
+    )
 
 
 @router.post("/paper/positions/{position_id}/settle")

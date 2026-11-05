@@ -21,7 +21,7 @@ def test_football_panel_stays_football_only():
 
 
 def test_switch_tab_accepts_other_and_renders_it():
-    assert "['review', 'history', 'evidence', 'other'].includes(tab)" in JS
+    assert "['review', 'paper', 'history', 'evidence', 'other'].includes(tab)" in JS
     assert "if (target === 'other') renderOtherSports();" in JS
     assert "setOtherSportFilter" in JS
 

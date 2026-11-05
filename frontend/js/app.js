@@ -17,7 +17,7 @@
 // ─── State ────────────────────────────────────────────────────────────────────
 let currentMode = 'prematch';       // 'prematch' (upcoming) | 'live' (in-play)
 let activeScanMode = null;          // mode of the currently running scan
-let activeTab = 'surebets';         // 'surebets' | 'other' | 'review' | 'history' | 'evidence'
+let activeTab = 'surebets';         // 'surebets' | 'other' | 'review' | 'paper' | 'history' | 'evidence'
 let otherSportFilter = 'all';       // sport id or 'all' for the Other sports tab
 let configuredSports = [];          // sports the backend says it scans
 let candidateApiKey = (() => { try { return sessionStorage.getItem('apiKey') || ''; } catch (e) { return ''; } })();
@@ -42,14 +42,16 @@ let language = (() => { try { return localStorage.getItem('language') || 'en'; }
 
 const I18N = {
     en: {
-        'tab.surebets': 'Surebets', 'tab.diagnostics': 'Diagnostics', 'tab.history': 'History',
+        'tab.surebets': 'Surebets', 'tab.diagnostics': 'Diagnostics', 'tab.paper': 'Paper',
+        'tab.history': 'History',
         'tab.evidence': 'Evidence', 'tab.other': 'Other sports', 'action.scan': 'Scan now',
         'settings.language': 'Language', 'settings.languageLabel': 'Interface language',
         'settings.staking': 'Staking', 'settings.scanning': 'Scanning',
         'settings.sound': 'Chime on a new surebet above 3%',
     },
     bs: {
-        'tab.surebets': 'Sigurni dobici', 'tab.diagnostics': 'Dijagnostika', 'tab.history': 'Historija',
+        'tab.surebets': 'Sigurni dobici', 'tab.diagnostics': 'Dijagnostika', 'tab.paper': 'Papir',
+        'tab.history': 'Historija',
         'tab.evidence': 'Dokazi', 'tab.other': 'Drugi sportovi', 'action.scan': 'Skeniraj',
         'settings.language': 'Jezik', 'settings.languageLabel': 'Jezik interfejsa',
         'settings.staking': 'Ulog', 'settings.scanning': 'Skeniranje',
@@ -92,6 +94,10 @@ let freshnessSnapshot = null;       // P0-4: scan age, TTL and per-book freshnes
 let freshnessBannerSignature = null; // avoids rebuilding the banner's button every tick
 let noSurebetReasons = null;        // the diagnostic copy table, fetched once at start-up
 let currentCandidates = [];         // the review page on screen
+let paperState = {                  // N2-1: paper ledger filters and page offsets
+    runMode: '', feedMode: '', status: '', oppOffset: 0, posOffset: 0, limit: 25,
+};
+const PAPER_PAGE_SIZE = 25;
 let evidenceOffset = 0;             // group-evidence page offset
 let evidenceTotal = 0;
 const EVIDENCE_PAGE_SIZE = 50;
@@ -265,6 +271,12 @@ function handleDataAction(event) {
         case 'evidence-next': setEvidenceOffset(evidenceOffset + EVIDENCE_PAGE_SIZE); break;
         case 'evidence-open': loadEvidenceDetail(element.dataset.groupId); break;
         case 'evidence-close': showEvidenceList(); break;
+        case 'paper-refresh': loadPaper(); break;
+        case 'paper-opp-prev': paperPage('opportunities', -1); break;
+        case 'paper-opp-next': paperPage('opportunities', 1); break;
+        case 'paper-pos-prev': paperPage('positions', -1); break;
+        case 'paper-pos-next': paperPage('positions', 1); break;
+        case 'paper-settle': settlePaperPosition(element.dataset.positionId); break;
     }
 }
 
@@ -301,6 +313,12 @@ function handleDataChange(event) {
         setAutoRescan(parseInt(element.value, 10));
     } else if (element.id === 'filter-run-mode') {
         setScanRunMode(element.value);
+    } else if (element.id === 'paper-run-mode') {
+        setPaperFilter('runMode', element.value);
+    } else if (element.id === 'paper-feed-mode') {
+        setPaperFilter('feedMode', element.value);
+    } else if (element.id === 'paper-status') {
+        setPaperFilter('status', element.value);
     } else if (element.id === 'sound-toggle') {
         toggleSound();
     } else if (element.matches('.exp-check input[type="checkbox"]')) {
@@ -381,7 +399,7 @@ async function loadConfig() {
 
 // ─── Navigation ───────────────────────────────────────────────────────────────
 function switchTab(tab) {
-    const target = ['review', 'history', 'evidence', 'other'].includes(tab) ? tab : 'surebets';
+    const target = ['review', 'paper', 'history', 'evidence', 'other'].includes(tab) ? tab : 'surebets';
     activeTab = target;
     document.querySelectorAll('.results-tabs [role="tab"]').forEach(button => {
         const isActive = button.dataset.tab === target;
@@ -395,6 +413,7 @@ function switchTab(tab) {
         panel.setAttribute('aria-hidden', String(!isActive));
     });
     if (target === 'review') loadCandidates();
+    if (target === 'paper') loadPaper();
     if (target === 'history') loadHistory();
     if (target === 'evidence') loadEvidence(true);
     if (target === 'other') renderOtherSports();
@@ -2579,6 +2598,246 @@ function renderScanCost(data) {
             + `<td>${fmt(perMatch, 's')}</td>`
             + '</tr>';
     }).join('');
+}
+
+// ─── Paper ledger (N2-1) ──────────────────────────────────────────────────────
+// Read-mostly. Every number is shown with its denominator, and no control here
+// can place a bet or copy a live slip.
+function paperQueryString(params) {
+    return Object.entries(params)
+        .filter(([, value]) => value !== '' && value != null)
+        .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+        .join('&');
+}
+
+function paperQuery() {
+    return paperQueryString({
+        days: '30',
+        limit: String(PAPER_PAGE_SIZE),
+        offset: String(paperState.oppOffset),
+        run_mode: paperState.runMode,
+        feed_mode: paperState.feedMode,
+    });
+}
+
+function paperPositionQuery() {
+    return paperQueryString({
+        days: '30',
+        limit: String(PAPER_PAGE_SIZE),
+        offset: String(paperState.posOffset),
+        feed_mode: paperState.feedMode,
+        status: paperState.status,
+    });
+}
+
+function paperPageLabel(offset, total) {
+    if (!total) return '0 of 0';
+    const first = Math.min(total, offset + 1);
+    const last = Math.min(total, offset + PAPER_PAGE_SIZE);
+    return `${first}–${last} of ${total}`;
+}
+
+function updatePaperExportLink() {
+    const link = document.getElementById('paper-export');
+    if (!link) return;
+    link.href = '/api/paper/export.csv?' + paperQueryString({
+        days: '30',
+        run_mode: paperState.runMode,
+        feed_mode: paperState.feedMode,
+        status: paperState.status,
+    });
+}
+
+async function loadPaper() {
+    try {
+        const [summaryRes, oppRes, posRes] = await Promise.all([
+            apiFetch('/api/paper/summary?days=30'),
+            apiFetch(`/api/paper/opportunities?${paperQuery()}`),
+            apiFetch(`/api/paper/positions?${paperPositionQuery()}`),
+        ]);
+        if (!summaryRes.ok || !oppRes.ok || !posRes.ok) {
+            throw new Error(`paper ledger returned ${summaryRes.status}/${oppRes.status}/${posRes.status}`);
+        }
+        const summary = await summaryRes.json();
+        const opportunities = await oppRes.json();
+        const positions = await posRes.json();
+        renderPaperSummary(summary);
+        renderPaperOpportunities(opportunities);
+        renderPaperPositions(positions);
+        updatePaperExportLink();
+    } catch (error) {
+        console.warn('Paper ledger load failed:', error);
+        setText('paper-store', 'Paper store: could not load the ledger.');
+    }
+}
+
+function renderPaperSummary(summary) {
+    const data = summary || {};
+    const days = Number(data.days) || 30;
+    setText('paper-recorded', formatCount(data.opportunities_recorded));
+    setText('paper-recorded-sub', `opportunities in the last ${days} day(s)`);
+    setText('paper-positions', formatCount(data.positions));
+    setText('paper-positions-sub', `paper positions in the last ${days} day(s)`);
+    setText('paper-open-settled', `${formatCount(data.open_positions)} / ${formatCount(data.settled_positions)}`);
+    setText('paper-open-settled-sub', `open / settled of ${formatCount(data.positions)} position(s)`);
+    setText('paper-roi', data.roi == null ? '—' : `${(Number(data.roi) * 100).toFixed(2)}%`);
+    setText('paper-roi-sub', data.roi == null
+        ? `no settled positions (0 of ${formatCount(data.positions)} position(s))`
+        : `profit ${money(data.profit)} on settled stake ${money(data.staked)} (${formatCount(data.settled_positions)} settled)`);
+    setText('paper-hit', data.hit_rate == null ? '—' : `${(Number(data.hit_rate) * 100).toFixed(2)}%`);
+    setText('paper-hit-sub', data.hit_rate == null
+        ? `no marked positions (0 of ${formatCount(data.positions)} position(s))`
+        : `${formatCount(data.hit_rate_positions)} marked position(s)`);
+    setText('paper-clv', data.clv == null ? '—' : `${(Number(data.clv) * 100).toFixed(2)}%`);
+    setText('paper-clv-sub', data.clv == null
+        ? 'no marked legs with a next-scan price'
+        : `${formatCount(data.clv_legs)} leg(s) with a next-scan price`);
+    const count = document.getElementById('paper-count');
+    if (count) count.textContent = formatCount(data.positions);
+    const store = data.store || {};
+    const rows = store.rows || {};
+    const retention = store.retention || {};
+    const last = store.last_maintenance && store.last_maintenance.finished_at
+        ? store.last_maintenance.finished_at
+        : 'never';
+    setText(
+        'paper-store',
+        `Paper store: ${formatBytes(store.bytes)} · ${formatCount(rows.recorded_opportunities)} recorded row(s) · `
+        + `${formatCount(rows.paper_positions)} position row(s) · retention ${formatCount(retention.paper_days)} day(s) / `
+        + `${formatCount(retention.paper_max_rows)} row cap · last maintenance ${last}`
+    );
+}
+
+function paperEvent(row) {
+    return `${row.home_team || '?'} – ${row.away_team || '?'}`;
+}
+
+function renderPaperOpportunities(payload) {
+    const body = document.getElementById('paper-opportunities-body');
+    if (!body) return;
+    const rows = Array.isArray(payload?.opportunities) ? payload.opportunities : [];
+    const total = Number(payload?.total) || 0;
+    setText('paper-opp-total', `${total} row(s)`);
+    setText('paper-opp-page', paperPageLabel(paperState.oppOffset, total));
+    if (!rows.length) {
+        body.innerHTML = '<tr><td colspan="6">No recorded opportunities in this window.</td></tr>';
+        return;
+    }
+    body.innerHTML = rows.map(row => {
+        const profit = row.profit_percent == null ? '—' : `${Number(row.profit_percent).toFixed(2)}%`;
+        const best = row.best_book
+            ? `${escapeHtml(row.best_book)} @ ${Number(row.best_odds).toFixed(2)}`
+            : '—';
+        return '<tr>'
+            + `<td class="mono">${escapeHtml(row.recorded_at || '')}</td>`
+            + `<td>${escapeHtml(paperEvent(row))}<span class="paper-sub">${escapeHtml(row.league || '')} · ${escapeHtml(row.kickoff || '')}</span></td>`
+            + `<td>${escapeHtml(row.market_type || '')}${row.line ? ` <span class="paper-sub">${escapeHtml(row.line)}</span>` : ''}</td>`
+            + `<td class="mono">${profit}</td>`
+            + `<td>${best}</td>`
+            + `<td>${escapeHtml(row.gate_verdict || '')}</td>`
+            + '</tr>';
+    }).join('');
+}
+
+function paperMarkCell(position) {
+    const mark = position.mark || {};
+    if (!mark || mark.marked_at == null) return '<span class="paper-sub">not marked yet</span>';
+    const matched = Number(mark.matched_legs) || 0;
+    const total = Number(mark.total_legs) || 0;
+    const label = mark.available ? 'available' : 'unavailable';
+    const cls = mark.available ? 'paper-mark-ok' : 'paper-mark-bad';
+    const reason = mark.reason ? `<span class="paper-sub">${escapeHtml(mark.reason)}</span>` : '';
+    return `<span class="${cls}">${label} (${matched}/${total})</span>${reason}`;
+}
+
+function paperSettleCell(position) {
+    if (position.status !== 'open') {
+        const profit = position.realized_profit == null ? '' : ` · ${money(position.realized_profit)} KM`;
+        return `<span class="paper-sub">settled${escapeHtml(profit)}</span>`;
+    }
+    const legs = Array.isArray(position.entry_legs) ? position.entry_legs : [];
+    const selects = legs.map(leg => {
+        const label = String(leg.outcome_label || '');
+        return `<label class="paper-sub">${escapeHtml(label)}`
+            + `<select data-paper-result data-position-id="${escapeHtml(position.id)}" data-leg-label="${escapeHtml(label)}">`
+            + '<option value="">—</option><option value="won">Won</option>'
+            + '<option value="lost">Lost</option><option value="void">Void</option>'
+            + '</select></label>';
+    }).join('');
+    return `<div class="paper-settle">${selects}`
+        + `<button type="button" class="btn btn-small btn-secondary" data-action="paper-settle" data-position-id="${escapeHtml(position.id)}">Settle</button>`
+        + '</div>';
+}
+
+function renderPaperPositions(payload) {
+    const body = document.getElementById('paper-positions-body');
+    if (!body) return;
+    const rows = Array.isArray(payload?.positions) ? payload.positions : [];
+    const total = Number(payload?.total) || 0;
+    setText('paper-pos-total', `${total} row(s)`);
+    setText('paper-pos-page', paperPageLabel(paperState.posOffset, total));
+    if (!rows.length) {
+        body.innerHTML = '<tr><td colspan="7">No paper positions in this window.</td></tr>';
+        return;
+    }
+    body.innerHTML = rows.map(position => {
+        const sim = position.simulated_profit == null
+            ? '—'
+            : `${money(position.simulated_profit)} KM`;
+        return '<tr>'
+            + `<td>${escapeHtml(paperEvent(position))}<span class="paper-sub">${escapeHtml(position.league || '')} · ${escapeHtml(position.kickoff || '')}</span></td>`
+            + `<td>${escapeHtml(position.market_type || '')}${position.line ? ` <span class="paper-sub">${escapeHtml(position.line)}</span>` : ''}</td>`
+            + `<td>${escapeHtml(position.status || '')}</td>`
+            + `<td class="mono">${money(position.stake)} KM</td>`
+            + `<td class="mono">${sim}</td>`
+            + `<td>${paperMarkCell(position)}</td>`
+            + `<td>${paperSettleCell(position)}</td>`
+            + '</tr>';
+    }).join('');
+}
+
+async function settlePaperPosition(positionId) {
+    const selects = [...document.querySelectorAll(
+        `[data-paper-result][data-position-id="${positionId}"]`
+    )];
+    if (!selects.length) return;
+    if (selects.some(select => !select.value)) {
+        showToast('Set a result for every leg before settling.');
+        return;
+    }
+    const legs = selects.map(select => ({
+        outcome_label: select.dataset.legLabel,
+        result: select.value,
+    }));
+    try {
+        const response = await apiFetch(
+            `/api/paper/positions/${encodeURIComponent(positionId)}/settle`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ legs }),
+            },
+            'This SureBet deployment requires an API key to settle a paper position.'
+        );
+        if (!response.ok) throw new Error(`settle returned ${response.status}`);
+        showToast('Paper position settled.');
+        loadPaper();
+    } catch (error) {
+        showToast(`Could not settle the paper position: ${error.message}`);
+    }
+}
+
+function paperPage(kind, direction) {
+    const key = kind === 'opportunities' ? 'oppOffset' : 'posOffset';
+    paperState[key] = Math.max(0, paperState[key] + direction * PAPER_PAGE_SIZE);
+    loadPaper();
+}
+
+function setPaperFilter(name, value) {
+    paperState[name] = value;
+    paperState.oppOffset = 0;
+    paperState.posOffset = 0;
+    loadPaper();
 }
 
 async function loadHealth() {

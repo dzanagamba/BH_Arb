@@ -84,9 +84,10 @@ def test_copy_handler_reads_the_dataset_not_a_javascript_string():
     assert "function copyAttributes(" in JS
     assert 'data-copy="${escapeHtml(value)}"' in JS
     assert "copyText(element.dataset.copy, element.dataset.copyMessage)" in JS
-    # JSON belongs in a fetch body, never in an HTML attribute. The three uses
-    # are the verify request, the link-sweep report and the bet log.
-    assert JS.count("JSON.stringify") == 3
+    # JSON belongs in a fetch body, never in an HTML attribute. The four uses
+    # are the verify request, the link-sweep report, the bet log and the paper
+    # position settle.
+    assert JS.count("JSON.stringify") == 4
     assert "${JSON.stringify(" not in JS
 
 

@@ -71,7 +71,7 @@ long-horizon.
 | N1-2 | Coverage/mapping alerts and SLOs | P1 | S | — | Done |
 | N1-3 | Per-book scan cost accounting | P1 | M | — | Done |
 | N1-4 | Release hardening: Docker smoke, SBOM, dependency updates | P1 | S | — | Done |
-| N2-1 | Paper ledger dashboard, CSV and retention view | P2 | M | N1-1 | Not started |
+| N2-1 | Paper ledger dashboard, CSV and retention view | P2 | M | N1-1 | Done |
 | N2-2 | Realistic paper fills: rejection, partial acceptance, caps | P2 | M | N2-1 | Not started |
 | N2-3 | Candidate remediation and strict-miss trends | P2 | M | — | Not started |
 | N2-4 | Seven-day local opportunity baseline and drift gates | P2 | M | — | Not started |
@@ -433,7 +433,7 @@ budget; the SBOM and dependency-update jobs should still run.
 
 ### N2-1 — Paper ledger dashboard, CSV and retention view
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P2
 **Effort:** M
 **Depends on:** N1-1
@@ -454,10 +454,10 @@ budget; the SBOM and dependency-update jobs should still run.
 
 **Acceptance criteria:**
 
-- [ ] No paper number appears without its denominator or “no bet placed” label.
-- [ ] A position can be settled from the dashboard.
-- [ ] CSV export round-trips every displayed row.
-- [ ] Record-only mode never shows a live surebet or a copy action.
+- [x] No paper number appears without its denominator or “no bet placed” label.
+- [x] A position can be settled from the dashboard.
+- [x] CSV export round-trips every displayed row.
+- [x] Record-only mode never shows a live surebet or a copy action.
 
 **Tests:**
 
@@ -783,6 +783,44 @@ For every task:
 
 Newest first. Each entry: date, task, status, commands, measured result, files
 changed, follow-ups.
+
+### 2026-11-05 — N2-1 — Done
+
+**Commands**
+
+```bash
+python -m pytest
+BH_ARB_TEST_RUNTIME_LEDGER=populated python -m pytest
+python -m pytest tests/test_paper_ui.py
+python -m ruff check .
+python -m mypy .
+python scripts/generate_market_mapping_doc.py --check
+node --check frontend/js/app.js
+```
+
+**Measured result**
+
+- Operator checkout: **1,553 passed, 2 skipped, 1 warning** in 58.64 s;
+  populated-ledger mode: **1,553 passed, 2 skipped, 1 warning** in 58.84 s.
+- `tests/test_paper_ui.py`: **7 passed** — paging/totals, filters, CSV
+  round-trip, API settle, unavailable reason, read-only paper tab and a
+  Node-driven empty/open/settled/unavailable render check.
+- Ruff clean, MyPy clean on **198 source files**, Node syntax check clean and
+  the generated market doc in sync.
+
+**Files changed**
+
+- `server/paper.py` — offset/filter paging, counts, CSV export, mark reasons.
+- `server/api.py` — paged paper endpoints, CSV endpoint, store/retention block.
+- `frontend/index.html`, `frontend/css/style.css`, `frontend/js/app.js` —
+  Paper tab, summary tiles with denominators, filters/paging, settle controls,
+  unavailable reason, export link.
+- `tests/test_paper_ui.py`, `tests/test_other_sports_frontend.py`,
+  `tests/test_frontend_xss.py`, `docs/PAPER_MODE.md`.
+
+**Follow-ups:** N2-2 (realistic paper fills) is the next eligible task. No
+certainty-gate, link-proof, settlement, price-source or one-leg-per-book rule
+changed; the paper UI remains read-mostly and never places a bet.
 
 ### 2026-11-05 — N1-4 — Done
 
