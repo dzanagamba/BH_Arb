@@ -106,6 +106,7 @@ from engine.opportunity_metrics import (
     summarize_scan,
     update_lifetimes,
 )
+from engine.parser_contracts import contract_health
 from engine.price_guard import filter_price_outliers
 from engine.pricing_invariant import (
     implied_sum,
@@ -3494,6 +3495,14 @@ async def health():
             "prematch": _scan_cost.get("prematch") or {},
             "live": _scan_cost.get("live") or {},
         },
+        # N2-6: dated parser contracts. The payload is a freshness/coverage
+        # diagnostic; a changed feed still needs a human re-capture and the
+        # existing admissibility evidence before any market is priced.
+        "parser_contracts": contract_health(
+            enabled_books=[
+                book for book, config in BOOKMAKERS.items() if config.get("enabled")
+            ]
+        ),
         "unmapped_markets": dict(unmapped_markets),
         "unmapped_markets_by_book": unmapped_by_book(),
         "verified_groups": sum(

@@ -1174,6 +1174,77 @@ async def capture_maxbet(client: httpx.AsyncClient, _bookmaker: str, mode: str) 
 
 
 # --------------------------------------------------------------------------
+# Betole
+# --------------------------------------------------------------------------
+
+BETOLE_API = "https://www.betole.ba/restapi/offer/ba/sport/S/desk"
+# Pick codes present on the prematch desk feed today. The feed does not carry
+# double chance or the 1.5/3.5 totals there, so those registry rows stay
+# uncovered and are declared in tests/test_market_fixtures.py.
+BETOLE_CAPTURE_CODES = ("1", "2", "3", "272", "273", "24", "22", "4", "5", "6")
+BETOLE_EXPECTED = ("1x2", "btts", "over_under_2_5")
+BETOLE_EXPERIMENTAL = ("first_half_1x2",)
+BETOLE_UNCOVERED = ("double_chance", "over_under_1_5", "over_under_3_5")
+
+
+async def capture_betole(client: httpx.AsyncClient, _bookmaker: str, mode: str) -> None:
+    if mode != "prematch":
+        _skip(
+            "betole", mode,
+            "the registry declares no live rows for this book, so a live capture "
+            "could not satisfy the declared-market invariant without an admissibility "
+            "decision (N2-6 must not make one)",
+        )
+        return
+    url = BETOLE_API
+    try:
+        response = await client.get(
+            url,
+            headers={"User-Agent": UA, "Accept": "application/json, text/plain, */*"},
+            params={"desktopVersion": "2.47.6.7", "locale": "ba", "from": "0"},
+        )
+        response.raise_for_status()
+    except Exception as error:  # noqa: BLE001
+        _skip("betole", mode, f"host unreachable from this machine: {type(error).__name__}: {error}")
+        return
+    events = (response.json() or {}).get("esMatches") or []
+    for event in events:
+        if event.get("live") or event.get("blocked"):
+            continue
+        odds = event.get("odds") or {}
+        if not all(_active(odds.get(code)) for code in BETOLE_CAPTURE_CODES):
+            continue
+        trimmed = {code: odds[code] for code in BETOLE_CAPTURE_CODES}
+        _finish(
+            {
+                "bookmaker": "betole",
+                "mode": mode,
+                "captured_at": CAPTURE_DATE,
+                "endpoint": url,
+                "source": "live_api_response",
+                "payload_kind": "betole_desk_odds",
+                "provenance": (
+                    f"odds{{}} of one prematch football event (id {event.get('id')!r}, "
+                    f"{event.get('home')!r} v {event.get('away')!r}) from the live Betole "
+                    "desk feed, trimmed to the pick codes the prematch desk actually serves "
+                    "for 1X2, BTTS, the 2.5 total and the experimental first-half 1X2. "
+                    "The prematch desk carries no double chance or 1.5/3.5 totals, and the "
+                    "registry declares no live rows for this book."
+                ),
+                "dropped_fields": ["all unregistered pick codes"],
+                "excluded_ids_present": [],
+                "bets": trimmed,
+                "expected_markets": list(BETOLE_EXPECTED),
+                "uncovered_registry_rows": list(BETOLE_UNCOVERED),
+                "experimental_markets": list(BETOLE_EXPERIMENTAL),
+            },
+            list(BETOLE_EXPECTED),
+        )
+        return
+    _skip("betole", mode, "no prematch event carried every capture pick code")
+
+
+# --------------------------------------------------------------------------
 # driver
 # --------------------------------------------------------------------------
 
@@ -1187,6 +1258,7 @@ CAPTORS = {
     "mozzartbet": capture_mozzartbet,
     "evlbet": capture_evlbet,
     "maxbet": capture_maxbet,
+    "betole": capture_betole,
 }
 BOTH_MODES = {
     "mdshop", "admiralbet", "wwin", "premier_kladionica",

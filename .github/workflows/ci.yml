@@ -59,6 +59,13 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt -r requirements-dev.txt
 
+      # N2-6: the frozen market fixtures and their dated parser contracts must
+      # describe the same payload. A changed id/label/shape or an expired
+      # capture fails here, before a live scan silently loses a market.
+      - name: Parser contracts
+        if: matrix.python-version == '3.11'
+        run: python scripts/refresh_fixtures.py --check
+
       - name: Tests with coverage
         if: matrix.python-version == '3.11'
         run: |

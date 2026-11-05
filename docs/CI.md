@@ -43,6 +43,15 @@ modes locally with:
 python scripts/check_test_isolation.py
 ```
 
+## Parser contracts
+
+The 3.11 leg also runs `python scripts/refresh_fixtures.py --check`. It fails
+when a frozen market fixture no longer matches its dated contract (top-level
+keys, source-id set, labels, nested shape), when an enabled book has no
+contract, or when a capture is older than the 120-day policy. A capture failure
+is reported separately and never treated as a feed change. See
+`docs/PARSER_CONTRACTS.md` for the refresh cadence and the diff format.
+
 ## Coverage
 
 The measured baseline on 2026-11-04 was **81.55%** (reported as 82%) across

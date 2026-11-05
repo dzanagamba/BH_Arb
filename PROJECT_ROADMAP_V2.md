@@ -76,7 +76,7 @@ long-horizon.
 | N2-3 | Candidate remediation and strict-miss trends | P2 | M | — | Done |
 | N2-4 | Seven-day local opportunity baseline and drift gates | P2 | M | — | Deferred |
 | N2-5 | Complete Bosnian localization and automated a11y checks | P2 | M | N0-3 | Done |
-| N2-6 | Parser fixture refresh and drift detection | P2 | M | — | Not started |
+| N2-6 | Parser fixture refresh and drift detection | P2 | M | — | Done |
 | N3-1 | Property-based pricing/identity tests and load budgets | P3 | M | N0-1 | Not started |
 | N3-2 | Scheduled market/sport admissibility re-audit | P3 | M | N2-6 | Not started |
 
@@ -634,7 +634,7 @@ labels. Those are data, not UI chrome.
 
 ### N2-6 — Parser fixture refresh and drift detection
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P2
 **Effort:** M
 **Depends on:** none
@@ -657,10 +657,10 @@ market or event shape.
 
 **Acceptance criteria:**
 
-- [ ] Every enabled book has a dated fixture and a contract fingerprint.
-- [ ] A changed market id set fails with a diff, not a vague parse error.
-- [ ] An expired fixture is visible via a script/health field.
-- [ ] A new market still needs the existing admissibility evidence.
+- [x] Every enabled book has a dated fixture and a contract fingerprint.
+- [x] A changed market id set fails with a diff, not a vague parse error.
+- [x] An expired fixture is visible via a script/health field.
+- [x] A new market still needs the existing admissibility evidence.
 
 **Tests:**
 
@@ -785,6 +785,61 @@ For every task:
 
 Newest first. Each entry: date, task, status, commands, measured result, files
 changed, follow-ups.
+
+### 2026-11-05 — N2-6 — Done
+
+**Commands**
+
+```bash
+python -m pytest
+BH_ARB_TEST_RUNTIME_LEDGER=populated python -m pytest
+python -m pytest tests/test_parser_contracts.py tests/test_market_fixtures.py
+python scripts/refresh_fixtures.py --check
+python scripts/refresh_fixtures.py --write
+python scripts/capture_market_fixtures.py --books betole
+python -m ruff check .
+python -m mypy .
+python scripts/generate_market_mapping_doc.py --check
+```
+
+**Measured result**
+
+- Operator checkout: **1,613 passed, 4 skipped, 1 warning** in 71.36 s;
+  populated-ledger mode: **1,613 passed, 4 skipped, 1 warning** in 71.51 s.
+- `tests/test_parser_contracts.py`: **10 passed** — real contracts match, every
+  enabled book has a dated fingerprint, required keys hold, a changed market id
+  / label / nested shape fails with an exact diff, an expired capture is aged,
+  health exposes coverage/staleness, a contract refresh leaves the registry
+  untouched, and a capture failure is not reported as drift.
+- `scripts/refresh_fixtures.py --check`: **17 contracts, 0 missing books, 0
+  stale**, exit 0.
+- Captured a dated Betole prematch fixture (2026-11-05): 1X2, BTTS, 2.5 total
+  and the experimental first-half 1X2; the prematch desk serves no double chance
+  or 1.5/3.5 totals, so those rows stay declared uncovered. The registry has no
+  live rows for Betole, so a live capture would require an admissibility
+  decision this task must not make; health reports the missing mode.
+- Ruff clean, MyPy clean on **208 source files**, Node syntax checks clean and
+  the generated market doc in sync.
+
+**Files changed**
+
+- `engine/parser_contracts.py` — contract computation, fingerprints, structured
+  diff, staleness, coverage and health block.
+- `scripts/refresh_fixtures.py` — `--check`, `--write`, `--capture`, distinct
+  capture-failure status, no network in the CI form.
+- `scripts/capture_market_fixtures.py` — Betole prematch capturer.
+- `tests/fixtures/markets/contracts.json`, `betole_prematch.json` — 17 dated
+  contracts and the new capture.
+- `tests/test_parser_contracts.py`, `tests/test_market_fixtures.py` — contract
+  and experimental-market coverage.
+- `server/api.py` — `/api/health.parser_contracts`.
+- `.github/workflows/ci.yml`, `docs/CI.md`, `docs/PARSER_CONTRACTS.md`,
+  `README.md`.
+
+**Follow-ups:** N3-1 (property-based pricing/identity tests and load budgets) is
+the next eligible task. N2-6 automates the reminder and the diff, never an
+admission: a new id still needs the existing admissibility evidence. N2-4
+remains deferred by the operator.
 
 ### 2026-11-05 — N2-5 — Done
 

@@ -353,6 +353,16 @@ landmarks, names, tab semantics, live regions and the keyboard path, and
 reviewed exception list and the keyboard-only run are in
 `docs/ACCESSIBILITY.md`.
 
+### Parser fixtures and drift
+
+Each frozen market payload has a dated contract in
+`tests/fixtures/markets/contracts.json`: required keys, source ids, labels and
+nested shape. `python scripts/refresh_fixtures.py --check` (also in CI) fails on
+a changed payload, a missing enabled book or a capture older than 120 days, and
+prints the exact id/label/shape diff. `/api/health.parser_contracts` exposes the
+same coverage and staleness. A diff never edits the registry; a new market still
+needs its admissibility evidence. See `docs/PARSER_CONTRACTS.md`.
+
 ### Deep-link verification
 
 `scripts/verify_deeplinks.py` proves a bookmaker’s per-event links with real

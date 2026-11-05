@@ -67,7 +67,7 @@ from models.schemas import Market, MarketType
 MODULE = sys.modules[__name__]
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "markets"
-FIXTURES = sorted(FIXTURE_DIR.glob("*.json"))
+FIXTURES = sorted(path for path in FIXTURE_DIR.glob("*.json") if path.name != "contracts.json")
 
 CORE_MARKET_TYPES = (
     MarketType.MATCH_RESULT,
@@ -107,21 +107,25 @@ UNCOVERED_ROWS: dict[tuple[str, str, str], str] = {
         )
         for line in ("1_5", "2_5", "3_5")
     },
-    # betole is disabled in config/settings.py and is not in this layer's scope.
-    # Its desk feed IS reachable and carries picks 1/2/3 and 272/273, but
-    # _parse_betole_markets also emits the experimental first_half_1x2 market
-    # from picks 4/5/6, which the feed serves and which has no registry row. So
-    # a real betole payload can never satisfy "emitted == declared registry rows"
-    # for this layer, which is the invariant every capture is checked against.
-    **{(("betole", "prematch", mt.value)): "book is disabled in config/settings.py; see above"
-       for mt in CORE_MARKET_TYPES},
+    ("betole", "prematch", "double_chance"): (
+        "the live prematch desk feed serves picks 1/2/3, 272/273 and 24/22, but no "
+        "7/8/9 double-chance group. The capture proves the absence; the row stays "
+        "declared and uncovered."
+    ),
+    ("betole", "prematch", "over_under_1_5"): (
+        "the prematch desk feed serves only the 2.5 total (24/22), not 242/21. The "
+        "capture proves the absence."
+    ),
+    ("betole", "prematch", "over_under_3_5"): (
+        "the prematch desk feed serves only the 2.5 total (24/22), not 25/219. The "
+        "capture proves the absence."
+    ),
 }
 
 # Books that must have at least one captured payload, so a book cannot quietly
 # lose its coverage. EVLBet and betole are listed with the reason they are exempt.
 BOOKS_WITHOUT_FIXTURES: dict[str, str] = {
     "evlbet": "its flat offer endpoint served an empty list (see UNCOVERED_ROWS)",
-    "betole": "disabled book whose parser emits an unregistered market (see UNCOVERED_ROWS)",
 }
 
 # Rows the feed DOES serve but the code cannot reach. These are kept apart from
@@ -255,6 +259,11 @@ def _run_parser(data: dict[str, Any]) -> list[Market]:
 
         return _parse_markets({"odds": bets}, mode=mode, bookmaker=book)
 
+    if book == "betole":
+        from scrapers.betole import _parse_betole_markets
+
+        return _parse_betole_markets(bets, mode=mode)
+
     if book == "evlbet":
         from scrapers.evlbet import EvlbetScraper
 
@@ -285,13 +294,19 @@ def test_captured_payload_emits_exactly_the_declared_markets(path: Path):
     registry = MarketRegistry()
 
     emitted = _emitted(data)
-    assert emitted == set(data["expected_markets"]), (
+    experimental = set(data.get("experimental_markets") or [])
+    assert emitted == set(data["expected_markets"]) | experimental, (
         f"{book}/{mode}: parser emitted {sorted(emitted)} but the capture declares "
-        f"{sorted(data['expected_markets'])}"
+        f"{sorted(set(data['expected_markets']) | experimental)}"
     )
     for market_type in data["expected_markets"]:
         assert registry.ids_for(book, mode, MarketType(market_type)), (
             f"{book}/{mode}/{market_type} is emitted but not declared in the registry"
+        )
+    for market_type in experimental:
+        assert not registry.ids_for(book, mode, MarketType(market_type)), (
+            f"{book}/{mode}/{market_type} is listed as experimental but has a registry row; "
+            "move it into expected_markets"
         )
 
 
@@ -322,7 +337,10 @@ def test_every_emitted_market_obeys_its_registry_label_rule(path: Path):
     book, mode = data["bookmaker"], data["mode"]
     registry = MarketRegistry()
 
+    experimental = set(data.get("experimental_markets") or [])
     for market in _run_parser(data):
+        if market.market_type.value in experimental:
+            continue
         specs = [
             spec
             for source_id in registry.ids_for(book, mode, market.market_type)
@@ -380,7 +398,9 @@ def test_ids_the_capture_excludes_are_excluded_on_purpose(path: Path):
         )
     # An excluded ID must not smuggle its market into the emitted set. The exact
     # -set assertion above already fails if it does; this states the intent.
-    assert _emitted(data) == set(data["expected_markets"])
+    assert _emitted(data) == set(data["expected_markets"]) | set(
+        data.get("experimental_markets") or []
+    )
 
 
 def _source_ids_in(data: dict[str, Any]) -> set[str]:
@@ -400,6 +420,8 @@ def _source_ids_in(data: dict[str, Any]) -> set[str]:
         return {str(row[1]) for row in data["lookup"]["set_tip"]}
     if book == "maxbet":
         return {str(b["id"]) for b in bets}
+    if book == "betole":
+        return set(str(code) for code in bets) if isinstance(bets, dict) else set()
     if book == "evlbet":
         offer = bets[0].get("BasicOffer") or {}
         return {str(offer.get("BetTypeKey") or offer.get("GameId") or "12005")}
