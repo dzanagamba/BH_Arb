@@ -223,6 +223,7 @@ Copy `.env.example` to `.env` and set only what you need:
 | `ALERT_TELEGRAM_BOT_TOKEN` / `ALERT_TELEGRAM_CHAT_ID` | *(empty)* | Telegram alert transport; both are required. |
 | `ALERT_MIN_PROFIT_PERCENT` / `ALERT_DEDUPE_MINUTES` | `3.0` / `60` | Minimum profit and per-signature dedupe window. |
 | `RSS_BUDGET_MB` | `1024` | Soft memory budget reported by `/api/health`. |
+| `BOOK_MAX_STAKE_<BOOK>` | from `config/bookmaker_risk.json` | Advisory per-book stake ceiling shown in the slip. See [`docs/BOOK_RISK.md`](docs/BOOK_RISK.md). |
 
 Optional AI ranking uses an OpenAI-compatible endpoint. It can only order the
 Diagnostics queue; it cannot create or approve a pairing.
@@ -238,6 +239,12 @@ Tuning that belongs in code lives in `config/settings.py`: `MIN_PROFIT_PERCENT`
 `KICKOFF_WINDOW_MINUTES` (`120`), `MAX_SUREBET_PROFIT_PERCENT` (`20`),
 `ODDS_TTL_SECONDS` (600), `LIVE_ODDS_TTL_SECONDS` (60), `PRICE_SOURCES` and
 `BROWSER_CONCURRENCY`.
+
+Book risk profiles (`sharp` / `soft` / `exchange` / `unknown`) live in
+`config/bookmaker_risk.json`. They are advisory metadata only: they never enter
+the certainty gate, the price-source rule, or the stake math. The policy and
+the no-evasion/no-placement stance are in
+[`docs/BOOK_RISK.md`](docs/BOOK_RISK.md).
 
 ## Match & mapping certainty
 

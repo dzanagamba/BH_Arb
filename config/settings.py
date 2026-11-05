@@ -1,4 +1,6 @@
+import json
 import os
+from typing import TypedDict
 
 from dotenv import load_dotenv
 
@@ -83,11 +85,83 @@ BOOKMAKERS = {
     },
 }
 
-# --- Advisory stake limits (P3-3) ---
+# --- Advisory book risk profiles (P3-6) ---
+# Operator guidance only. These fields are read by /api/config and the dashboard;
+# the certainty gate, matcher, price-source rule and stake math never import them.
+RISK_PROFILE_VALUES = ("sharp", "soft", "exchange", "unknown")
+_RISK_PROFILE_FILE = os.path.join(os.path.dirname(__file__), "bookmaker_risk.json")
+
+
+class BookRiskProfile(TypedDict):
+    profile: str
+    advisory_max_stake: int
+    typical_max_stake_note: str
+    limit_risk: str
+
+
+def _unknown_risk_profile() -> BookRiskProfile:
+    return {
+        "profile": "unknown",
+        "advisory_max_stake": 500,
+        "typical_max_stake_note": "No typical stake recorded; check the book's own limits.",
+        "limit_risk": "Unknown risk profile: the operator must check the book's limit policy.",
+    }
+
+
+def load_book_risk_profiles(path: str = _RISK_PROFILE_FILE) -> dict[str, BookRiskProfile]:
+    """Load advisory profiles, failing safe to `unknown` for a missing/bad file."""
+    profiles = {book: _unknown_risk_profile() for book in BOOKMAKERS}
+    try:
+        with open(path, encoding="utf-8") as handle:
+            payload = json.load(handle)
+        books = payload.get("books", payload) if isinstance(payload, dict) else {}
+        if not isinstance(books, dict):
+            return profiles
+        for book in BOOKMAKERS:
+            entry = books.get(book)
+            if not isinstance(entry, dict):
+                continue
+            raw_profile = entry.get("profile", "unknown")
+            profile = raw_profile if raw_profile in RISK_PROFILE_VALUES else "unknown"
+            try:
+                max_stake = int(entry.get("advisory_max_stake", 500))
+            except (TypeError, ValueError):
+                max_stake = 500
+            profiles[book] = {
+                "profile": profile,
+                "advisory_max_stake": max(1, max_stake),
+                "typical_max_stake_note": str(
+                    entry.get("typical_max_stake_note")
+                    or "No typical stake recorded; check the book's own limits."
+                ),
+                "limit_risk": str(
+                    entry.get("limit_risk")
+                    or "Unknown risk profile: the operator must check the book's limit policy."
+                ),
+            }
+    except (OSError, ValueError, TypeError):
+        pass
+    return profiles
+
+
+BOOK_RISK_PROFILES: dict[str, BookRiskProfile] = load_book_risk_profiles()
+
+
+def book_risk_profile(bookmaker: str) -> BookRiskProfile:
+    """Return the advisory profile, or an explicit unknown for an unlisted book."""
+    return BOOK_RISK_PROFILES.get(bookmaker, _unknown_risk_profile())
+
+
+# --- Advisory stake limits (P3-3, sourced from the P3-6 profiles) ---
 # A soft, per-book ceiling shown in the slip. It never blocks a scan or a bet;
 # the operator can still record whatever was accepted.
 BOOK_STAKE_LIMITS: dict[str, int] = {
-    book: int(os.getenv(f"BOOK_MAX_STAKE_{book.upper()}", "500"))
+    book: int(
+        os.getenv(
+            f"BOOK_MAX_STAKE_{book.upper()}",
+            str(book_risk_profile(book)["advisory_max_stake"]),
+        )
+    )
     for book in BOOKMAKERS
 }
 

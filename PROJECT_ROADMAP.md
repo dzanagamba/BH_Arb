@@ -1,8 +1,8 @@
 # BH_Arb — Project Audit & Development Roadmap
 
-**Last updated:** 2026-11-04
+**Last updated:** 2026-11-05
 **Repository:** `dzanagamba/BH_Arb` (`main`)
-**Status of this document:** audit complete; P0-1 through P0-7 and P1-1 through P1-5 and P1-7 done; P1-6 waived by operator; P2/P3 implementation continuing
+**Status of this document:** audit complete; P0-1 through P0-7, P1-1 through P1-5, P1-7, P2-1 through P2-10 and P3-1 through P3-6 done; P1-6 waived by operator; P3-7 remains
 **Purpose:** a durable, session-by-session plan so work can resume without re-reading the whole repository.
 
 > **How to use this document**
@@ -280,7 +280,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 | P3-3 | Advisory execution workflow and limits | P3 | M | P3-2 | Done |
 | P3-4 | Alerts, PWA, accessibility, and Bosnian UI | P3 | M | P1-5 | Done |
 | P3-5 | Authentication and key management hardening | P3 | M | P1-3 | Done |
-| P3-6 | Book risk profiles and advisory pacing | P3 | M | P1-7 | Not started |
+| P3-6 | Book risk profiles and advisory pacing | P3 | M | P1-7 | Done |
 | P3-7 | Record-only / paper-trading mode | P3 | M | P3-1 | Not started |
 
 **Recommended first session:** P0-1, then P0-3 (both small, measurable, and they remove the largest payload and the most misleading documentation). Then P0-4 and the two research-driven tasks, P0-6 and P0-7: without a crossing-rate baseline and a feed-integrity score, the dashboard cannot tell "no edge" from "broken data." P0-2 is a separate hardening session.
@@ -1323,7 +1323,7 @@ no adapter is enabled.
 
 ### P3-6 — Book risk profiles and advisory pacing
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P3
 **Effort:** M
 **Depends on:** P1-7
@@ -1342,10 +1342,10 @@ no adapter is enabled.
 
 **Acceptance criteria:**
 
-- [ ] Every enabled book has a risk profile or an explicit `unknown`.
-- [ ] The dashboard shows the profile and an advisory warning.
-- [ ] A high stake at a soft book is visibly flagged.
-- [ ] No evasion, multi-account, or auto-placement feature is added.
+- [x] Every enabled book has a risk profile or an explicit `unknown`.
+- [x] The dashboard shows the profile and an advisory warning.
+- [x] A high stake at a soft book is visibly flagged.
+- [x] No evasion, multi-account, or auto-placement feature is added.
 
 **Tests:**
 
@@ -1424,6 +1424,36 @@ Before writing a claim about behavior, run the command that proves it and paste 
 ## 6. Execution log
 
 Newest first. Each entry: date, task, status, commands, measured result, files changed, follow-ups.
+
+### 2026-11-05 — P3-6: Book risk profiles and advisory pacing
+
+**Task:** P3-6 (depends on P1-7, complete).
+**Status:** Done.
+
+**Commands and results:**
+
+- `python -m pytest` → **1,465 passed**, 1 warning, 52.19 s with the gitignored runtime ledger `config/generated/mapping_evidence.json` moved aside (the clean state a checkout/CI has).
+- The same run with that local ledger present had one pre-existing failure in `tests/test_e2e_certified.py::test_captured_markets_reach_the_verified_group_through_the_registry`: the regenerated ledger supplied the WWIN pairing as `source="ledger"`, so the test's expected allowlist record was absent. The test passes when the runtime ledger is absent; it is unrelated to this task.
+- `python -m pytest tests/test_book_risk_profiles.py tests/test_slip_partial_acceptance.py tests/test_frontend_review.py tests/test_certainty.py -q` → 93 passed.
+- `python -m ruff check .` → clean.
+- `python -m mypy .` → clean on 179 source files.
+- `python scripts/generate_market_mapping_doc.py --check` → `MARKET_MAPPING.md is in sync with config/bookmaker_markets.json`.
+- `/api/config` measurement: 10 books, 9 enabled; profiles `soft` for all enabled books and explicit `unknown` for disabled `evlbet`; no enabled book missing a typical-stake note or limit-risk note.
+
+**What changed:**
+
+- `config/bookmaker_risk.json` (new): advisory `profile`, `advisory_max_stake`, `typical_max_stake_note` and `limit_risk` for every configured book.
+- `config/settings.py`: fail-safe loader (`unknown` for a missing/malformed file or bad profile), `BOOK_RISK_PROFILES`/`book_risk_profile()`, and `BOOK_STAKE_LIMITS` now defaults from the profile while keeping `BOOK_MAX_STAKE_<BOOK>` overrides.
+- `server/api.py`: `/api/config` exposes `risk_profile`, `typical_max_stake_note` and `limit_risk` with the existing `max_stake`.
+- `frontend/js/app.js` + `frontend/css/style.css`: profile badge and typical-stake note per slip leg, profile tooltip on bookmaker chips, and a distinct **High stake at a soft book** warning above the advisory ceiling.
+- `tests/test_book_risk_profiles.py` (new): config coverage, fail-safe loader, dashboard hooks, advisory warning, and proof that a profile cannot change the gate or the price source.
+- `docs/BOOK_RISK.md` (new), README configuration/tuning rows, and `.env.example` comment.
+
+**Trust rules:** unchanged and explicitly advisory. Profiles are not imported by `engine/certainty.py`, `engine/matcher.py` or `engine/arbitrage.py`; they cannot change identity, the price-source rule or stake math. No auto-placement, login, stake jitter, multi-account or other limit evasion was added.
+
+**Follow-ups:** P3-7 (record-only / paper-trading mode) is the last open task.
+
+---
 
 ### 2026-11-04 — P3-5: Authentication and key management hardening
 

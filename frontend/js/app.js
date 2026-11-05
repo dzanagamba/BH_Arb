@@ -480,6 +480,8 @@ function initBookmakerChips() {
             chip.className = 'chip' + (cfg.enabled !== false ? ' active' : '');
             chip.style.setProperty('--chip-color', cfg.color || BOOKMAKER_COLORS[id] || '#888');
             chip.textContent = cfg.name || capitalize(id);
+            chip.dataset.riskProfile = cfg.risk_profile || 'unknown';
+            chip.title = `${riskProfileLabel(cfg.risk_profile)} — ${cfg.limit_risk || 'check the book\'s limit policy'}`;
             chip.setAttribute('aria-pressed', String(cfg.enabled !== false));
             chip.addEventListener('click', () => toggleBookmakerAPI(chip, id));
             container.appendChild(chip);
@@ -1181,14 +1183,22 @@ function renderSlip() {
         const limit = Number(bookmakersConfig?.[leg.bookmaker]?.max_stake);
         return !leg.placed && limit > 0 && leg.plannedStake > limit;
     });
-    if (overLimit.length) {
-        const details = overLimit.map(leg => `${bookName(leg.bookmaker)} ${stakeFormat(leg.plannedStake)}/${stakeFormat(bookmakersConfig[leg.bookmaker].max_stake)}`).join(', ');
+    const softOverLimit = overLimit.filter(leg => bookRisk(leg.bookmaker).profile === 'soft');
+    const otherOverLimit = overLimit.filter(leg => bookRisk(leg.bookmaker).profile !== 'soft');
+    if (otherOverLimit.length) {
+        const details = otherOverLimit.map(leg => `${bookName(leg.bookmaker)} ${stakeFormat(leg.plannedStake)}/${stakeFormat(bookmakersConfig[leg.bookmaker].max_stake)}`).join(', ');
         warnings.push(`<div class="slip-alert">Above the advisory book limit: ${details} KM. Split or reduce before placing.</div>`);
+    }
+    if (softOverLimit.length) {
+        const details = softOverLimit.map(leg => `${bookName(leg.bookmaker)} ${stakeFormat(leg.plannedStake)}/${stakeFormat(bookmakersConfig[leg.bookmaker].max_stake)}`).join(', ');
+        warnings.push(`<div class="slip-alert slip-alert-bad" data-risk-warning="soft-book-stake">High stake at a soft book: ${details} KM. Retail books often cut stakes or limit accounts after repeated arbing. Reduce or split the stake; this warning is advisory and nothing is placed automatically.</div>`);
     }
 
     const listings = sb.listings || {};
     const legsHtml = plan.legs.map((leg, index) => {
         const name = bookName(leg.bookmaker);
+        const risk = bookRisk(leg.bookmaker);
+        const riskTitle = `${risk.typical} ${risk.limit}`.trim();
         const listing = listings[leg.bookmaker];
         const listedAs = listing ? `${listing.home} – ${listing.away}` : `${formatTeamName(sb.home_team)} – ${formatTeamName(sb.away_team)}`;
         // The destination is the only thing that may label a link. A fallback is
@@ -1219,7 +1229,10 @@ function renderSlip() {
             <div class="leg-step">${index + 1}</div>
             <div class="leg-body">
                 <div class="leg-head">
-                    <span class="leg-book">${escapeHtml(name)}</span>
+                    <span class="leg-book-wrap">
+                        <span class="leg-book">${escapeHtml(name)}</span>
+                        <span class="risk-badge" data-risk-profile="${escapeHtml(risk.profile)}" title="${escapeHtml(riskTitle)}">${escapeHtml(riskProfileLabel(risk.profile))}</span>
+                    </span>
                     ${url ? `<a class="btn btn-small dest-link" data-dest-kind="${escapeHtml(destKind)}" href="${escapeHtml(safeUrl(url))}" target="_blank" rel="noopener" title="${escapeHtml(dest.proof_summary || destKind || '')}">${escapeHtml(destLabel)} ↗</a>` : ''}
                     ${destKind === 'search' && !url ? `<button type="button" class="btn btn-small btn-secondary" ${copyAttributes(searchText, 'Search text copied')}>Copy search text</button>` : ''}
                     ${dest.ticket_script ? `<button type="button" class="btn btn-small btn-secondary" title="Paste this in the SportPlus page console; it only fills the slip" ${copyAttributes(dest.ticket_script, 'SportPlus prefill script copied — paste it into the SportPlus page console')}>${escapeHtml(dest.ticket_script_label || 'Copy prefill script')}</button>` : ''}
@@ -1229,6 +1242,7 @@ function renderSlip() {
                     <button type="button" class="link-btn" ${copyAttributes(searchText, copyLabel === 'copy search' ? 'Search text copied' : 'Match name copied')}>${copyLabel}</button>
                     ${listing?.league ? `<span class="leg-league">${escapeHtml(listing.league)}</span>` : ''}
                     ${destKind ? `<span class="leg-league">${escapeHtml(destKind === 'ticket_filled' ? 'ticket' : destKind === 'match_page' ? 'match page' : destKind)}</span>` : ''}
+                    <span class="leg-risk-note" title="${escapeHtml(risk.limit)}">${escapeHtml(risk.typical)}</span>
                 </div>
                 <div class="leg-bet">
                     <div><span class="leg-k">Pick</span><span class="leg-v">${escapeHtml(pickText)}${escapeHtml(lineText)}</span><span class="leg-sub">${escapeHtml(outcomeDescription(leg.outcome_label, sb.market_type, sb.sport))}</span>${stakeNote}</div>
@@ -2323,6 +2337,21 @@ function bookName(id) {
 
 function bookColor(id) {
     return bookmakersConfig[id]?.color || BOOKMAKER_COLORS[id] || '#888';
+}
+
+// Advisory only: the profile never changes the certainty gate, the price-source
+// rule or the stake math. It tells the operator what kind of book a leg is at.
+function bookRisk(id) {
+    const cfg = bookmakersConfig?.[id] || {};
+    return {
+        profile: cfg.risk_profile || 'unknown',
+        typical: cfg.typical_max_stake_note || 'No typical stake recorded.',
+        limit: cfg.limit_risk || 'Unknown risk profile: check the book\'s limit policy.',
+    };
+}
+
+function riskProfileLabel(profile) {
+    return ({ sharp: 'Sharp', soft: 'Soft book', exchange: 'Exchange', unknown: 'Unknown risk' })[profile] || 'Unknown risk';
 }
 
 function bookShort(id) {

@@ -59,6 +59,7 @@ from config.settings import (
     RSS_BUDGET_MB,
     SCAN_RATE_LIMIT,
     VERIFIED_KICKOFF_WINDOW_MINUTES,
+    book_risk_profile,
 )
 from engine.ai import MatchAI, PairProposal
 from engine.arbitrage import ArbitrageEngine
@@ -3001,6 +3002,9 @@ async def get_config():
                 "enabled": _is_enabled(k),
                 "color": v["color"],
                 "max_stake": BOOK_STAKE_LIMITS.get(k, 500),
+                "risk_profile": book_risk_profile(k)["profile"],
+                "typical_max_stake_note": book_risk_profile(k)["typical_max_stake_note"],
+                "limit_risk": book_risk_profile(k)["limit_risk"],
             }
             for k, v in BOOKMAKERS.items()
         },

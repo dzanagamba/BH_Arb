@@ -1,0 +1,65 @@
+{
+  "_note": "Advisory book-risk metadata for the dashboard. It is never read by the certainty gate, the matcher, the price-source rule or the stake math. Profiles are conservative operator guidance, not measured facts about an account.",
+  "books": {
+    "mozzartbet": {
+      "profile": "soft",
+      "advisory_max_stake": 500,
+      "typical_max_stake_note": "Retail book; a few hundred KM per bet is a realistic first order.",
+      "limit_risk": "Repeated arbitrage can lead to stake cuts or account limits."
+    },
+    "mdshop": {
+      "profile": "soft",
+      "advisory_max_stake": 500,
+      "typical_max_stake_note": "NSoft retail book; start small and expect per-market limits.",
+      "limit_risk": "Repeated arbitrage can lead to stake cuts or account limits."
+    },
+    "admiralbet": {
+      "profile": "soft",
+      "advisory_max_stake": 500,
+      "typical_max_stake_note": "NSoft retail book; start small and expect per-market limits.",
+      "limit_risk": "Repeated arbitrage can lead to stake cuts or account limits."
+    },
+    "betole": {
+      "profile": "soft",
+      "advisory_max_stake": 500,
+      "typical_max_stake_note": "Retail book; limits vary by market and account history.",
+      "limit_risk": "A soft book may cut the stake or void a palpable-error price."
+    },
+    "mbet": {
+      "profile": "soft",
+      "advisory_max_stake": 500,
+      "typical_max_stake_note": "Retail book; a few hundred KM per bet is a realistic first order.",
+      "limit_risk": "Repeated arbitrage can lead to stake cuts or account limits."
+    },
+    "sportplus": {
+      "profile": "soft",
+      "advisory_max_stake": 500,
+      "typical_max_stake_note": "Retail book; stake ceilings can differ between prematch and live.",
+      "limit_risk": "Repeated arbitrage can lead to stake cuts or account limits."
+    },
+    "evlbet": {
+      "profile": "unknown",
+      "advisory_max_stake": 500,
+      "typical_max_stake_note": "Disabled feed; no risk or stake data has been measured.",
+      "limit_risk": "Unknown: this book is disabled until a captured football feed exists."
+    },
+    "premier_kladionica": {
+      "profile": "soft",
+      "advisory_max_stake": 500,
+      "typical_max_stake_note": "Retail book; a few hundred KM per bet is a realistic first order.",
+      "limit_risk": "Repeated arbitrage can lead to stake cuts or account limits."
+    },
+    "wwin": {
+      "profile": "soft",
+      "advisory_max_stake": 500,
+      "typical_max_stake_note": "Retail book; limits vary by market and account history.",
+      "limit_risk": "Repeated arbitrage can lead to stake cuts or account limits."
+    },
+    "maxbet": {
+      "profile": "soft",
+      "advisory_max_stake": 500,
+      "typical_max_stake_note": "Retail book; a few hundred KM per bet is a realistic first order.",
+      "limit_risk": "Repeated arbitrage can lead to stake cuts or account limits."
+    }
+  }
+}
