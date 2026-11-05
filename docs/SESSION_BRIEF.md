@@ -4,7 +4,7 @@
 **Goal:** implement `PROJECT_ROADMAP_V2.md` without weakening the trust model.
 **Current task:** none — **N0-1 is Done**. First eligible task is **N0-2**
 (source-updated timestamps and frozen-price quarantine).
-**Last commit:** `28133a0` — N0-1 hermetic tests.
+**Last task commit:** `b1820d0` — N0-1 hermetic tests.
 
 ## Project state
 
