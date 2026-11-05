@@ -24,6 +24,12 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from config.settings import (
+    BOOK_STAKE_LIMITS,
+    PAPER_FILL_ENABLED,
+    PAPER_FILL_PARTIAL_ENABLED,
+    PAPER_FILL_PRICE_TOLERANCE,
+)
 from models.schemas import Surebet
 
 PAPER_BANKROLL_START = 1000.0
@@ -131,6 +137,37 @@ def _mark_reason(matched: int, total: int) -> str:
     return f"{total - matched} of {total} entry legs are no longer quoted"
 
 
+def _fill_reason(fills: list[dict[str, Any]]) -> str:
+    counts: dict[str, int] = {}
+    for fill in fills:
+        status = str(fill.get("status") or "")
+        counts[status] = counts.get(status, 0) + 1
+    parts = [
+        f"{counts[status]} {status}"
+        for status in ("rejected", "missing", "partial")
+        if counts.get(status)
+    ]
+    return ", ".join(parts)
+
+
+def _fill_complete(fills: list[dict[str, Any]]) -> bool:
+    return bool(fills) and all(
+        fill.get("status") in {"filled", "partial"} for fill in fills
+    )
+
+
+def _fill_worst_case(fills: list[dict[str, Any]]) -> float | None:
+    """Worst outcome with the simulated filled stakes, or None with no fill."""
+    total = sum(float(fill.get("filled_stake") or 0) for fill in fills)
+    if total <= 0:
+        return None
+    payouts = [
+        float(fill.get("filled_stake") or 0) * float(fill.get("entry_odds") or 0)
+        for fill in fills
+    ]
+    return round(min(payouts) - total, 2)
+
+
 class PaperStore:
     """SQLite ledger for recorded opportunities and paper positions."""
 
@@ -140,10 +177,18 @@ class PaperStore:
         *,
         bankroll_start: float = PAPER_BANKROLL_START,
         default_stake: float = PAPER_STAKE,
+        fill_enabled: bool = PAPER_FILL_ENABLED,
+        price_tolerance: float = PAPER_FILL_PRICE_TOLERANCE,
+        partial_enabled: bool = PAPER_FILL_PARTIAL_ENABLED,
+        book_caps: dict[str, int] | None = None,
     ) -> None:
         self.path = path
         self.bankroll_start = bankroll_start
         self.default_stake = default_stake
+        self.fill_enabled = fill_enabled
+        self.price_tolerance = max(0.0, float(price_tolerance))
+        self.partial_enabled = partial_enabled
+        self.book_caps = dict(book_caps if book_caps is not None else BOOK_STAKE_LIMITS)
 
     def _connect(self) -> sqlite3.Connection:
         Path(self.path).parent.mkdir(parents=True, exist_ok=True)
@@ -331,15 +376,36 @@ class PaperStore:
                     payload = json.loads(row["payload"])
                     if (payload.get("mark") or {}).get("disappeared_at"):
                         continue
+                    entry_legs = payload.get("entry_legs") or []
+                    fills: list[dict[str, Any]] = [
+                        {
+                            "bookmaker": str(leg.get("bookmaker") or ""),
+                            "outcome_label": str(leg.get("outcome_label") or ""),
+                            "status": "missing",
+                            "planned_stake": round(float(leg.get("stake") or 0), 2),
+                            "filled_stake": 0.0,
+                            "entry_odds": float(leg.get("odds") or 0),
+                            "current_odds": None,
+                            "reason": "opportunity disappeared from the next scan",
+                        }
+                        for leg in entry_legs
+                    ]
                     payload["mark"] = {
                         "marked_at": now,
                         "available": False,
                         "matched_legs": 0,
-                        "total_legs": len(payload.get("entry_legs") or []),
+                        "total_legs": len(entry_legs),
                         "clv": None,
                         "current": [],
                         "disappeared_at": now,
                         "reason": "opportunity disappeared from the next scan",
+                        "fills": fills,
+                        "fill_complete": False,
+                        "planned_stake": round(
+                            sum(fill["planned_stake"] for fill in fills), 2
+                        ),
+                        "filled_stake": 0.0,
+                        "worst_case_profit": None,
                     }
                     connection.execute(
                         "UPDATE paper_positions SET payload = ? WHERE id = ?",
@@ -391,25 +457,80 @@ class PaperStore:
             for leg in record.get("legs") or []
         }
         matched: list[dict[str, Any]] = []
+        fills: list[dict[str, Any]] = []
         weighted = 0.0
         weight = 0.0
         for leg in entry_legs:
-            now_leg = current.get((leg["bookmaker"], leg["outcome_label"]))
-            if not now_leg or float(now_leg.get("odds") or 0) <= 1.0:
+            bookmaker = str(leg.get("bookmaker") or "")
+            label = str(leg.get("outcome_label") or "")
+            entry_odds = float(leg.get("odds") or 0)
+            planned_stake = float(leg.get("stake") or 0)
+            now_leg = current.get((bookmaker, label))
+            current_odds = (
+                float(now_leg.get("odds") or 0) if now_leg is not None else None
+            )
+            if current_odds is None or current_odds <= 1.0:
+                fills.append(
+                    {
+                        "bookmaker": bookmaker,
+                        "outcome_label": label,
+                        "status": "missing",
+                        "planned_stake": round(planned_stake, 2),
+                        "filled_stake": 0.0,
+                        "entry_odds": entry_odds,
+                        "current_odds": None,
+                        "reason": "no current price",
+                    }
+                )
                 continue
-            clv = float(leg["odds"]) / float(now_leg["odds"]) - 1.0
-            weight_leg = float(leg.get("stake") or 0)
+
+            clv = entry_odds / current_odds - 1.0
             matched.append(
                 {
-                    "bookmaker": leg["bookmaker"],
-                    "outcome_label": leg["outcome_label"],
-                    "entry_odds": leg["odds"],
-                    "current_odds": now_leg["odds"],
+                    "bookmaker": bookmaker,
+                    "outcome_label": label,
+                    "entry_odds": entry_odds,
+                    "current_odds": current_odds,
                     "clv": round(clv, 6),
                 }
             )
+            weight_leg = planned_stake
             weighted += weight_leg * clv
             weight += weight_leg
+
+            move = abs(current_odds - entry_odds) / entry_odds if entry_odds else 0.0
+            cap = self.book_caps.get(bookmaker)
+            if self.fill_enabled and move > self.price_tolerance:
+                status = "rejected"
+                filled_stake = 0.0
+                reason = f"price moved from {entry_odds:g} to {current_odds:g}"
+            elif (
+                self.fill_enabled
+                and self.partial_enabled
+                and cap is not None
+                and planned_stake > float(cap)
+            ):
+                status = "partial"
+                filled_stake = float(cap)
+                reason = f"book cap {float(cap):g} KM"
+            else:
+                status = "filled"
+                filled_stake = planned_stake
+                reason = ""
+            fills.append(
+                {
+                    "bookmaker": bookmaker,
+                    "outcome_label": label,
+                    "status": status,
+                    "planned_stake": round(planned_stake, 2),
+                    "filled_stake": round(filled_stake, 2),
+                    "entry_odds": entry_odds,
+                    "current_odds": current_odds,
+                    "reason": reason,
+                }
+            )
+
+        fill_reason = _fill_reason(fills)
         payload["mark"] = {
             "marked_at": now,
             "available": len(matched) == len(entry_legs) and bool(entry_legs),
@@ -418,7 +539,16 @@ class PaperStore:
             "clv": round(weighted / weight, 6) if weight else None,
             "current": matched,
             "disappeared_at": None,
-            "reason": _mark_reason(len(matched), len(entry_legs)),
+            "reason": _mark_reason(len(matched), len(entry_legs)) or fill_reason,
+            "fills": fills,
+            "fill_complete": _fill_complete(fills),
+            "planned_stake": round(
+                sum(float(fill.get("planned_stake") or 0) for fill in fills), 2
+            ),
+            "filled_stake": round(
+                sum(float(fill.get("filled_stake") or 0) for fill in fills), 2
+            ),
+            "worst_case_profit": _fill_worst_case(fills),
         }
         return payload
 
@@ -514,6 +644,11 @@ class PaperStore:
             "mark_total_legs",
             "mark_clv",
             "mark_reason",
+            "fill_complete",
+            "planned_stake",
+            "filled_stake",
+            "worst_case_profit",
+            "fills_json",
             "legs_json",
             "disclaimer",
         ]
@@ -544,6 +679,11 @@ class PaperStore:
                     row.get("gate_verdict", ""),
                     row.get("best_odds", ""),
                     row.get("best_book", ""),
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
                     "",
                     "",
                     "",
@@ -593,6 +733,11 @@ class PaperStore:
                     mark.get("total_legs", ""),
                     mark.get("clv", ""),
                     mark.get("reason", ""),
+                    mark.get("fill_complete", ""),
+                    mark.get("planned_stake", ""),
+                    mark.get("filled_stake", ""),
+                    mark.get("worst_case_profit", ""),
+                    json.dumps(mark.get("fills") or [], sort_keys=True),
                     json.dumps(row.get("entry_legs") or [], sort_keys=True),
                     row.get("disclaimer", ""),
                 ]
@@ -737,11 +882,20 @@ class PaperStore:
             legs = payload.get("entry_legs") or []
             if not legs or any(leg.get("outcome_label") not in by_label for leg in legs):
                 return payload
+            mark = payload.get("mark") or {}
+            fills: dict[str, dict[str, Any]] = {}
+            for fill in mark.get("fills") or []:
+                if isinstance(fill, dict):
+                    fills[str(fill.get("outcome_label"))] = fill
             payout = 0.0
             staked = 0.0
             for leg in legs:
                 result = by_label[leg["outcome_label"]]
-                stake = float(leg.get("stake") or 0)
+                fill = fills.get(leg["outcome_label"])
+                raw_stake = (
+                    fill.get("filled_stake") if fill is not None else leg.get("stake")
+                )
+                stake = float(raw_stake or 0)
                 odds = float(leg.get("odds") or 0)
                 staked += stake
                 if result.get("result") == "won":
@@ -758,6 +912,7 @@ class PaperStore:
                     "staked": round(staked, 2),
                     "payout": round(payout, 2),
                     "realized_profit": profit,
+                    "settled_fill_complete": mark.get("fill_complete"),
                     "entry_legs": legs,
                 }
             )
@@ -787,6 +942,27 @@ class PaperStore:
         available = [
             position for position in marked if position["mark"].get("available") is True
         ]
+        execution_positions = [
+            position
+            for position in open_positions
+            if (position.get("mark") or {}).get("fill_complete") is True
+        ]
+        execution_stake = sum(
+            float((position.get("mark") or {}).get("filled_stake") or 0)
+            for position in execution_positions
+        )
+        execution_worst = sum(
+            float((position.get("mark") or {}).get("worst_case_profit") or 0)
+            for position in execution_positions
+        )
+        incomplete_positions = [
+            position
+            for position in open_positions
+            if position.get("mark") and not (position.get("mark") or {}).get("fill_complete")
+        ]
+        unmarked_positions = [
+            position for position in open_positions if not position.get("mark")
+        ]
         clv_values = [
             (float(position.get("stake") or 0), float(position["mark"]["clv"]))
             for position in marked
@@ -813,6 +989,31 @@ class PaperStore:
                 "roi_if_all_filled": (
                     round(open_profit / open_stake, 4) if open_stake else None
                 ),
+                "label": "optimistic: every leg fills at the recorded entry odds",
+                "denominator": "open paper positions in the window",
+            },
+            "execution_adjusted": {
+                "positions": len(execution_positions),
+                "filled_stake": round(execution_stake, 2),
+                "worst_case_profit": (
+                    round(execution_worst, 2) if execution_positions else None
+                ),
+                "roi": (
+                    round(execution_worst / execution_stake, 4)
+                    if execution_stake
+                    else None
+                ),
+                "incomplete_positions": len(incomplete_positions),
+                "unmarked_positions": len(unmarked_positions),
+                "label": "execution-adjusted worst case at the simulated fills",
+                "denominator": (
+                    "open positions with every leg filled or partially filled"
+                ),
+            },
+            "fill_rules": {
+                "enabled": self.fill_enabled,
+                "price_tolerance": self.price_tolerance,
+                "partial_enabled": self.partial_enabled,
             },
             "hit_rate": round(len(available) / len(marked), 4) if marked else None,
             "hit_rate_positions": len(marked),
@@ -827,6 +1028,9 @@ class PaperStore:
                 "hit_rate": "marked positions whose entry legs were all still quoted",
                 "clv": "entry stake weighted, legs with a next-scan price",
                 "simulated_open": "open positions at their entry odds, if every leg filled",
+                "execution_adjusted": (
+                    "open positions with every leg filled or partially filled"
+                ),
             },
             "disclaimer": PAPER_DISCLAIMER,
         }

@@ -312,6 +312,23 @@ SQLITE_SIZE_BUDGET_BYTES = int(
 PAPER_ROWS_BUDGET = int(
     os.getenv("PAPER_ROWS_BUDGET", str(RETENTION_PAPER_MAX_ROWS))
 )
+
+# --- Paper fills (N2-2) ---
+# A paper position is a simulation, not a proven acceptance. Fill rules are
+# deterministic: a price that moved beyond the tolerance is rejected, a missing
+# leg is missing, and a planned stake above the book's advisory cap is partially
+# filled at that cap. No probability model and no account/cash effect is used.
+PAPER_FILL_ENABLED = os.getenv("PAPER_FILL_ENABLED", "true").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+)
+PAPER_FILL_PRICE_TOLERANCE = float(
+    os.getenv("PAPER_FILL_PRICE_TOLERANCE", "0.0")
+)
+PAPER_FILL_PARTIAL_ENABLED = os.getenv(
+    "PAPER_FILL_PARTIAL_ENABLED", "true"
+).strip().lower() in ("1", "true", "yes")
 BETS_ROWS_BUDGET = int(os.getenv("BETS_ROWS_BUDGET", "50000"))
 MAPPING_LEDGER_BUDGET_BYTES = int(
     os.getenv("MAPPING_LEDGER_BUDGET_BYTES", str(64 * 1024 * 1024))

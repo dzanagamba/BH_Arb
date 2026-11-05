@@ -2692,6 +2692,16 @@ function renderPaperSummary(summary) {
     setText('paper-clv-sub', data.clv == null
         ? 'no marked legs with a next-scan price'
         : `${formatCount(data.clv_legs)} leg(s) with a next-scan price`);
+    const execution = data.execution_adjusted || {};
+    const optimistic = data.simulated_open || {};
+    const pct = value => value == null ? '—' : `${(Number(value) * 100).toFixed(2)}%`;
+    setText(
+        'paper-fill-summary',
+        `Execution-adjusted ROI ${pct(execution.roi)} on ${formatCount(execution.positions)} complete fill record(s) · `
+        + `worst case ${execution.worst_case_profit == null ? '—' : `${money(execution.worst_case_profit)} KM`} `
+        + `on ${money(execution.filled_stake)} KM filled · `
+        + `optimistic ${pct(optimistic.roi_if_all_filled)} on ${formatCount(optimistic.positions)} open position(s)`
+    );
     const count = document.getElementById('paper-count');
     if (count) count.textContent = formatCount(data.positions);
     const store = data.store || {};
@@ -2747,7 +2757,15 @@ function paperMarkCell(position) {
     const label = mark.available ? 'available' : 'unavailable';
     const cls = mark.available ? 'paper-mark-ok' : 'paper-mark-bad';
     const reason = mark.reason ? `<span class="paper-sub">${escapeHtml(mark.reason)}</span>` : '';
-    return `<span class="${cls}">${label} (${matched}/${total})</span>${reason}`;
+    const fills = Array.isArray(mark.fills) ? mark.fills : [];
+    const counts = {};
+    for (const fill of fills) counts[fill.status] = (counts[fill.status] || 0) + 1;
+    const fillText = Object.entries(counts).map(([status, count]) => `${count} ${status}`).join(', ') || 'no fill record';
+    const fill = mark.fill_complete ? 'fill complete' : 'fill incomplete';
+    const worst = mark.worst_case_profit == null ? 'n/a' : `${money(mark.worst_case_profit)} KM`;
+    return `<span class="${cls}">${label} (${matched}/${total})</span>`
+        + `<span class="paper-sub">${fill}: ${fillText} · filled ${money(mark.filled_stake)}/${money(mark.planned_stake)} · worst ${worst}</span>`
+        + reason;
 }
 
 function paperSettleCell(position) {

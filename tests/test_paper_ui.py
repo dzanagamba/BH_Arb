@@ -316,6 +316,9 @@ renderPaperSummary({{
     days: 30, opportunities_recorded: 3, positions: 2, open_positions: 1,
     settled_positions: 1, staked: 100, profit: 4.2, roi: 0.042,
     hit_rate: 0.5, hit_rate_positions: 2, clv: 0.01, clv_legs: 4,
+    execution_adjusted: {{ positions: 1, filled_stake: 90, worst_case_profit: 2.0,
+                          roi: 0.0222, incomplete_positions: 0, unmarked_positions: 0 }},
+    simulated_open: {{ positions: 1, roi_if_all_filled: 0.03 }},
     store: {{ bytes: 2048, rows: {{ recorded_opportunities: 3, paper_positions: 2 }},
               retention: {{ paper_days: 180, paper_max_rows: 200000 }},
               last_maintenance: {{ finished_at: '2026-11-05T00:00:00' }} }},
@@ -328,6 +331,7 @@ console.log(JSON.stringify({{
     roiSub: element('paper-roi-sub').textContent,
     hitSub: element('paper-hit-sub').textContent,
     clvSub: element('paper-clv-sub').textContent,
+    fillSummary: element('paper-fill-summary').textContent,
     store: element('paper-store').textContent,
 }}));
 """
@@ -355,4 +359,6 @@ def test_paper_frontend_renders_empty_open_settled_and_unavailable_states():
     assert "settled stake" in result["roiSub"]
     assert "marked position(s)" in result["hitSub"]
     assert "leg(s) with a next-scan price" in result["clvSub"]
+    assert "Execution-adjusted ROI" in result["fillSummary"]
+    assert "optimistic" in result["fillSummary"]
     assert "retention 180 day(s)" in result["store"]

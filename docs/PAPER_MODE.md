@@ -61,6 +61,50 @@ The next paper scan marks the position:
 `GET /api/paper/positions` lists positions. The mark is a **next available
 price**, not a true closing price and not a settlement.
 
+## Simulated fills (N2-2)
+
+A paper position no longer assumes every leg fills at the planned stake. On
+each mark the store applies deterministic rules and records one status per leg:
+
+| Status | When | Filled stake |
+|---|---|---|
+| `filled` | the price is still quoted and within tolerance, and the planned stake is at or below the book's advisory cap | planned stake |
+| `partial` | the price is unchanged but the planned stake exceeds `BOOK_STAKE_LIMITS[book]` | the advisory cap |
+| `rejected` | the current price moved by more than `PAPER_FILL_PRICE_TOLERANCE` | `0` |
+| `missing` | the leg is no longer quoted, or the opportunity disappeared | `0` |
+
+The rules are probability-free and deterministic. There is no model of an
+account accepting or rejecting a bet, no cash movement and no bookmaker
+interaction. The advisory cap comes from the same `BOOK_STAKE_LIMITS` /
+`bookmaker_risk.json` values the slip shows; a fill does not invent a new odds.
+
+Settings:
+
+| Variable | Default | Meaning |
+|---|---:|---|
+| `PAPER_FILL_ENABLED` | `true` | Apply rejection/partial rules. `false` keeps the old "every leg fills at the entry stake" behavior. |
+| `PAPER_FILL_PRICE_TOLERANCE` | `0.0` | Relative price move allowed before a leg is rejected. `0` rejects any move. |
+| `PAPER_FILL_PARTIAL_ENABLED` | `true` | Allow a stake above the book cap to fill partially at the cap. |
+
+The mark includes `fills` (per leg: planned/filled stake, entry/current odds and
+reason), `fill_complete` (every leg `filled` or `partial`), `filled_stake`,
+`planned_stake` and `worst_case_profit`. The worst case is the minimum payout
+across the recorded outcomes at the filled stakes, minus the filled stake; a
+rejected or missing outcome contributes a zero payout, so a partial hedge can
+be negative. With no filled stake it is `null`, not zero.
+
+`GET /api/paper/summary` keeps the two numbers separate:
+
+- `execution_adjusted`: open positions with a complete fill record
+  (`filled`/`partial` only). It reports the filled stake, worst-case profit, ROI
+  and its own denominator. It is `null` when no position has a complete fill
+  record, so an unfilled position is never called profitable.
+- `simulated_open`: the optimistic **“if all filled”** number, explicitly
+  labelled and using all open positions at their entry odds.
+
+Settling a marked position uses the per-leg `filled_stake`; an unmarked position
+falls back to the planned paper stake, which preserves the pre-N2-2 behavior.
+
 A paper position can be settled manually with the same leg results the manual
 bet log uses:
 
@@ -85,6 +129,9 @@ stake. No match-result feed is assumed.
 - `positions`, `open_positions`, `settled_positions`;
 - `staked`, `profit`, `roi`, `bankroll`: **settled positions only**;
 - `simulated_open`: open positions at their entry odds, if every leg filled;
+- `execution_adjusted`: complete fill records only, with filled stake,
+  worst-case profit and ROI;
+- `fill_rules`: whether fills, partial fills and the price tolerance are active;
 - `hit_rate`: marked positions whose entry legs were all still quoted, over
   `hit_rate_positions`;
 - `clv`, `clv_legs`: entry-stake-weighted next-price CLV, only for legs with a
@@ -132,11 +179,13 @@ the tables. Retention is bounded by `RETENTION_PAPER_DAYS` and
 
 - **No bet is placed.** The paper bankroll is a local simulation; there is no
   login, ticket, stake acceptance or money movement.
-- **Fills are assumed, not proven.** A paper position assumes every leg filled
-  at the recorded stake. Use the mark's `available` flag to see when a leg was
-  still quoted; the summary's `hit_rate` is an execution proxy, not a fill log.
+- **Fills are simulated, not proven.** The default now rejects a moved price,
+  treats a disappeared leg as missing and caps a stake at the book's advisory
+  limit, but this is still a deterministic model. It does not prove a real
+  bookmaker would accept the stake.
 - **No stake limits or account effects.** The simulation does not model a book
-  rejecting a stake, limiting an account or voiding a palpable error.
+  rejecting a stake, limiting an account or voiding a palpable error. The cap is
+  an advisory paper rule, not an account action.
 - **CLV is a next-scan mark.** It is not the true closing price and should not
   be compared with a settled bet's recorded closing line.
 - **The live advisory path is unchanged** when `run_mode` is omitted or

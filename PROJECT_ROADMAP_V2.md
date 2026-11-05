@@ -72,7 +72,7 @@ long-horizon.
 | N1-3 | Per-book scan cost accounting | P1 | M | — | Done |
 | N1-4 | Release hardening: Docker smoke, SBOM, dependency updates | P1 | S | — | Done |
 | N2-1 | Paper ledger dashboard, CSV and retention view | P2 | M | N1-1 | Done |
-| N2-2 | Realistic paper fills: rejection, partial acceptance, caps | P2 | M | N2-1 | Not started |
+| N2-2 | Realistic paper fills: rejection, partial acceptance, caps | P2 | M | N2-1 | Done |
 | N2-3 | Candidate remediation and strict-miss trends | P2 | M | — | Not started |
 | N2-4 | Seven-day local opportunity baseline and drift gates | P2 | M | — | Not started |
 | N2-5 | Complete Bosnian localization and automated a11y checks | P2 | M | N0-3 | Not started |
@@ -472,7 +472,7 @@ like a live ticket.
 
 ### N2-2 — Realistic paper fills: rejection, partial acceptance, caps
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P2
 **Effort:** M
 **Depends on:** N2-1
@@ -496,11 +496,11 @@ stake.
 
 **Acceptance criteria:**
 
-- [ ] The default summary never calls an unfilled position profitable.
-- [ ] Partial and rejected legs are representable per leg.
-- [ ] Execution-adjusted and optimistic ROI use different labels and
+- [x] The default summary never calls an unfilled position profitable.
+- [x] Partial and rejected legs are representable per leg.
+- [x] Execution-adjusted and optimistic ROI use different labels and
       denominators.
-- [ ] No cash or account effect is simulated.
+- [x] No cash or account effect is simulated.
 
 **Tests:**
 
@@ -783,6 +783,47 @@ For every task:
 
 Newest first. Each entry: date, task, status, commands, measured result, files
 changed, follow-ups.
+
+### 2026-11-05 — N2-2 — Done
+
+**Commands**
+
+```bash
+python -m pytest
+BH_ARB_TEST_RUNTIME_LEDGER=populated python -m pytest
+python -m pytest tests/test_paper_fills.py
+python -m ruff check .
+python -m mypy .
+python scripts/generate_market_mapping_doc.py --check
+node --check frontend/js/app.js
+```
+
+**Measured result**
+
+- Operator checkout: **1,561 passed, 2 skipped, 1 warning** in 59.19 s;
+  populated-ledger mode: **1,561 passed, 2 skipped, 1 warning** in 59.23 s.
+- `tests/test_paper_fills.py`: **8 passed** — full fill, per-book partial cap,
+  moved-price rejection, negative worst case, disappearance/missing, price
+  tolerance, disabled fills, filled-stake settlement and CSV fill columns.
+- Ruff clean, MyPy clean on **199 source files**, Node syntax check clean and
+  the generated market doc in sync.
+
+**Files changed**
+
+- `config/settings.py` — `PAPER_FILL_ENABLED`,
+  `PAPER_FILL_PRICE_TOLERANCE`, `PAPER_FILL_PARTIAL_ENABLED`.
+- `server/paper.py` — per-leg fill statuses and reasons, filled/planned stake,
+  worst case, execution-adjusted summary, filled-stake settlement and CSV fill
+  fields.
+- `frontend/index.html`, `frontend/js/app.js` — execution-adjusted vs optimistic
+  summary and fill details in the mark cell.
+- `tests/test_paper_fills.py`, `tests/test_paper_ui.py`,
+  `docs/PAPER_MODE.md`.
+
+**Follow-ups:** N2-3 (candidate remediation and strict-miss trends) is the next
+eligible task. A paper fill remains a deterministic simulation: no account,
+cash, acceptance or limit effect is modelled, and no certainty-gate or pricing
+rule changed.
 
 ### 2026-11-05 — N2-1 — Done
 
