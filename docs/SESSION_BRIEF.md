@@ -4,7 +4,7 @@
 **Goal:** implement `PROJECT_ROADMAP_V2.md` without weakening the trust model.
 **Current task:** none — **N0-1, N0-2 and N0-3 are Done**. First eligible task is
 **N0-4** (automatic closing-line capture for logged bets).
-**Last task commit:** `pending` — N0-3 CSP without inline styles.
+**Last task commit:** `f0f1f30` — N0-3 CSP without inline styles.
 
 ## Project state
 
