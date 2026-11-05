@@ -140,6 +140,12 @@ class PaperStore:
         connection.execute("PRAGMA journal_mode=WAL")
         return connection
 
+    def _connect_readonly(self) -> sqlite3.Connection:
+        uri = f"file:{Path(self.path).resolve().as_posix()}?mode=ro"
+        connection = sqlite3.connect(uri, uri=True, timeout=30)
+        connection.row_factory = sqlite3.Row
+        return connection
+
     def initialize(self) -> None:
         with self._connect() as connection:
             connection.executescript(
@@ -400,6 +406,125 @@ class PaperStore:
         with self._connect() as connection:
             rows = connection.execute(query, params).fetchall()
         return [json.loads(row["payload"]) for row in rows]
+
+    def prune(
+        self,
+        *,
+        days: int = 180,
+        max_rows: int = 200000,
+        dry_run: bool = False,
+    ) -> dict[str, int]:
+        """Bound the paper ledger by age and then by newest-row cap.
+
+        A dry run counts what would be removed and never opens the database for
+        writing. Open positions are not special: a position older than the
+        window is no longer a usable paper record.
+        """
+        result = {
+            "recorded_opportunities": 0,
+            "paper_positions": 0,
+            "recorded_opportunities_over_cap": 0,
+            "paper_positions_over_cap": 0,
+        }
+        if not Path(self.path).exists():
+            return result
+        cutoff = (datetime.now(UTC).replace(tzinfo=None) - timedelta(days=days)).isoformat()
+        cap = max(0, int(max_rows))
+        try:
+            if dry_run:
+                with self._connect_readonly() as connection:
+                    result["recorded_opportunities"] = int(
+                        connection.execute(
+                            "SELECT COUNT(*) FROM recorded_opportunities WHERE recorded_at < ?",
+                            (cutoff,),
+                        ).fetchone()[0]
+                    )
+                    result["paper_positions"] = int(
+                        connection.execute(
+                            "SELECT COUNT(*) FROM paper_positions WHERE opened_at < ?",
+                            (cutoff,),
+                        ).fetchone()[0]
+                    )
+                    if cap:
+                        remaining = int(
+                            connection.execute(
+                                "SELECT COUNT(*) FROM recorded_opportunities WHERE recorded_at >= ?",
+                                (cutoff,),
+                            ).fetchone()[0]
+                        )
+                        result["recorded_opportunities_over_cap"] = max(0, remaining - cap)
+                        remaining = int(
+                            connection.execute(
+                                "SELECT COUNT(*) FROM paper_positions WHERE opened_at >= ?",
+                                (cutoff,),
+                            ).fetchone()[0]
+                        )
+                        result["paper_positions_over_cap"] = max(0, remaining - cap)
+                return result
+
+            with self._connect() as connection:
+                with connection:
+                    result["recorded_opportunities"] = int(
+                        connection.execute(
+                            "DELETE FROM recorded_opportunities WHERE recorded_at < ?",
+                            (cutoff,),
+                        ).rowcount
+                        or 0
+                    )
+                    result["paper_positions"] = int(
+                        connection.execute(
+                            "DELETE FROM paper_positions WHERE opened_at < ?",
+                            (cutoff,),
+                        ).rowcount
+                        or 0
+                    )
+                    if cap:
+                        before = int(
+                            connection.execute(
+                                "SELECT COUNT(*) FROM recorded_opportunities"
+                            ).fetchone()[0]
+                        )
+                        connection.execute(
+                            """
+                            DELETE FROM recorded_opportunities
+                            WHERE id NOT IN (
+                                SELECT id FROM recorded_opportunities
+                                ORDER BY recorded_at DESC LIMIT ?
+                            )
+                            """,
+                            (cap,),
+                        )
+                        after = int(
+                            connection.execute(
+                                "SELECT COUNT(*) FROM recorded_opportunities"
+                            ).fetchone()[0]
+                        )
+                        result["recorded_opportunities_over_cap"] = max(0, before - after)
+
+                        before = int(
+                            connection.execute(
+                                "SELECT COUNT(*) FROM paper_positions"
+                            ).fetchone()[0]
+                        )
+                        connection.execute(
+                            """
+                            DELETE FROM paper_positions
+                            WHERE id NOT IN (
+                                SELECT id FROM paper_positions
+                                ORDER BY opened_at DESC LIMIT ?
+                            )
+                            """,
+                            (cap,),
+                        )
+                        after = int(
+                            connection.execute(
+                                "SELECT COUNT(*) FROM paper_positions"
+                            ).fetchone()[0]
+                        )
+                        result["paper_positions_over_cap"] = max(0, before - after)
+        except sqlite3.Error:
+            return result
+        return result
 
     def settle(
         self, position_id: str, results: list[dict[str, Any]]

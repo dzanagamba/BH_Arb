@@ -78,6 +78,24 @@ curl -fsS -H "X-API-Key: $API_KEY" http://127.0.0.1:8000/api/metrics
 
 `/api/health` is exempt from the API key so container health checks work
 unconditionally. `/api/metrics` is protected like every other `/api` route.
+Its `retention` block reports each store's bytes/rows, the configured windows,
+the last maintenance time and any crossed budget.
+
+### Retention and backups
+
+The lifespan starts a daily bounded maintenance job
+(`MAINTENANCE_ENABLED=true`, `MAINTENANCE_INTERVAL_HOURS=24`). It prunes old
+scans/link sweeps/paper rows, applies the mapping-evidence prune rule, archives
+old settled bets without deleting them, and optionally vacuums. Run it manually
+with:
+
+```bash
+python scripts/maintenance.py --dry-run
+python scripts/maintenance.py --vacuum --backup cache/backups
+```
+
+`--dry-run` changes nothing. The detailed windows and the restore drill are in
+`docs/STORAGE.md`. Bets are never deleted; the archive is an extra copy.
 
 ### Smoke test
 

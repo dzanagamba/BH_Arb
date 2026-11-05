@@ -67,7 +67,7 @@ long-horizon.
 | N0-2 | Source-updated timestamps and frozen-price quarantine | P0 | M | — | Done |
 | N0-3 | CSP without inline styles | P0 | M | — | Done |
 | N0-4 | Automatic closing-line capture for logged bets | P0 | M | N0-2 | Done |
-| N1-1 | Retention and maintenance automation | P1 | M | — | Not started |
+| N1-1 | Retention and maintenance automation | P1 | M | — | Done |
 | N1-2 | Coverage/mapping alerts and SLOs | P1 | S | — | Not started |
 | N1-3 | Per-book scan cost accounting | P1 | M | — | Not started |
 | N1-4 | Release hardening: Docker smoke, SBOM, dependency updates | P1 | S | — | Not started |
@@ -272,7 +272,7 @@ fabricate one from the next arbitrary scan or from a different market.
 
 ### N1-1 — Retention and maintenance automation
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P1
 **Effort:** M
 **Depends on:** none
@@ -296,11 +296,11 @@ operation instead of a documented manual suggestion.
 
 **Acceptance criteria:**
 
-- [ ] Old rows are pruned and recent rows are retained.
-- [ ] `--dry-run` changes nothing and reports the counts.
-- [ ] A backup restores identical counts and the newest scan/position.
-- [ ] Health exposes each store's size and last maintenance time.
-- [ ] No retention job can run concurrently with a scan write.
+- [x] Old rows are pruned and recent rows are retained.
+- [x] `--dry-run` changes nothing and reports the counts.
+- [x] A backup restores identical counts and the newest scan/position.
+- [x] Health exposes each store's size and last maintenance time.
+- [x] No retention job can run concurrently with a scan write.
 
 **Tests:**
 
@@ -783,6 +783,53 @@ For every task:
 
 Newest first. Each entry: date, task, status, commands, measured result, files
 changed, follow-ups.
+
+### 2026-11-05 — N1-1 — Done
+
+**Commands**
+
+```bash
+python -m pytest
+BH_ARB_TEST_RUNTIME_LEDGER=populated python -m pytest
+python -m pytest tests/test_maintenance.py
+python -m ruff check .
+python -m mypy .
+python scripts/generate_market_mapping_doc.py --check
+python scripts/maintenance.py --dry-run
+```
+
+**Measured result**
+
+- Operator checkout: **1,519 passed, 2 skipped, 1 warning** in 58.15 s;
+  populated-ledger mode: **1,519 passed, 2 skipped, 1 warning** in 58.50 s.
+- `tests/test_maintenance.py`: **8 passed** — old/recent rows for every store,
+  dry-run no-write, backup/restore counts and newest rows, paper row cap,
+  scan/maintenance overlap guard, health sizes/last run and both scheduler
+  paths.
+- Operator dry run: scans/link sweeps/paper/bets pruned 0, ledger 7,292 claims
+  with 0 evidence dropped, SQLite 86,016 bytes, no budget warnings; the
+  checkout's runtime state was unchanged.
+- Ruff clean, MyPy clean on **192 source files**, generated market doc in sync.
+
+**Files changed**
+
+- `config/settings.py` — retention windows, daily schedule, archive window and
+  soft size/row budgets.
+- `server/maintenance.py` — bounded runner, dry-run, archive, vacuum, backup,
+  process-wide guard and read-only store inventory.
+- `server/storage.py` — dry-run counts, link-sweep prune, maintenance marker.
+- `server/paper.py` — age and newest-row cap for recorded opportunities and
+  paper positions.
+- `server/bets.py` — settled-bet archive query; no delete path.
+- `server/scheduler.py`, `server/app.py` — daily maintenance loop in the
+  lifespan, off the scan path.
+- `server/api.py` — `/api/health.retention` and the scan-start guard.
+- `scripts/maintenance.py` — `--dry-run`, `--vacuum`, `--backup DIR`.
+- `tests/test_maintenance.py`, `docs/STORAGE.md`, `docs/DEPLOYMENT.md`.
+
+**Follow-ups:** N1-2 (coverage/mapping alerts and SLOs) is the next eligible
+task. No certainty-gate, link-proof, settlement, price-source or
+one-leg-per-book rule changed.
 
 ### 2026-11-05 — N0-4 — Done
 

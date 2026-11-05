@@ -39,6 +39,12 @@ class BetStore:
         connection.execute("PRAGMA journal_mode=WAL")
         return connection
 
+    def _connect_readonly(self) -> sqlite3.Connection:
+        uri = f"file:{Path(self.path).resolve().as_posix()}?mode=ro"
+        connection = sqlite3.connect(uri, uri=True, timeout=30)
+        connection.row_factory = sqlite3.Row
+        return connection
+
     def initialize(self) -> None:
         with self._connect() as connection:
             connection.executescript(
@@ -98,6 +104,36 @@ class BetStore:
                 "SELECT payload FROM bets WHERE status = 'open' ORDER BY created_at ASC LIMIT ?",
                 (max(1, min(limit, 5000)),),
             ).fetchall()
+        return [json.loads(row["payload"]) for row in rows]
+
+    def row_count(self) -> int:
+        """Number of logged bets, for the retention budget."""
+        if not Path(self.path).exists():
+            return 0
+        try:
+            with self._connect_readonly() as connection:
+                row = connection.execute("SELECT COUNT(*) FROM bets").fetchone()
+        except sqlite3.Error:
+            return 0
+        return int(row[0] or 0)
+
+    def settled_before(self, cutoff: str) -> list[dict[str, Any]]:
+        """Settled bets older than ``cutoff``; used for archive, never delete."""
+        if not Path(self.path).exists():
+            return []
+        try:
+            with self._connect_readonly() as connection:
+                rows = connection.execute(
+                    """
+                    SELECT payload FROM bets
+                    WHERE status = 'settled'
+                      AND COALESCE(settled_at, created_at) < ?
+                    ORDER BY COALESCE(settled_at, created_at) ASC
+                    """,
+                    (cutoff,),
+                ).fetchall()
+        except sqlite3.Error:
+            return []
         return [json.loads(row["payload"]) for row in rows]
 
     def settle(self, bet_id: str, results: list[dict[str, Any]]) -> dict[str, Any] | None:

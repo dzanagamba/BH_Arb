@@ -18,6 +18,7 @@ from config.settings import (
     AUTO_SCAN_LIVE_MINUTES,
     AUTO_SCAN_PREMATCH_MINUTES,
     CORS_ORIGINS,
+    MAINTENANCE_ENABLED,
 )
 from server.api import (
     _deep_link_decisions,
@@ -42,7 +43,7 @@ from server.observability import (
     set_request_id,
     valid_request_id,
 )
-from server.scheduler import scan_loop
+from server.scheduler import maintenance_loop, scan_loop
 
 # Fix Windows ProactorEventLoop policy for Playwright when running via uvicorn/fastapi CLI
 if sys.platform == "win32":
@@ -60,6 +61,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     ):
         if minutes > 0:
             tasks.append(asyncio.create_task(scan_loop(mode, minutes)))
+    if MAINTENANCE_ENABLED:
+        tasks.append(asyncio.create_task(maintenance_loop()))
     try:
         yield
     finally:

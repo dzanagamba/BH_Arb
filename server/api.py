@@ -145,6 +145,7 @@ from server.alerts import (
 )
 from server.auth import SCOPES, api_key_store
 from server.bets import BetStore
+from server.maintenance import maintenance_running, retention_health
 from server.mapping_coverage import build_coverage
 from server.observability import (
     metrics,
@@ -2778,10 +2779,10 @@ async def start_scan_if_idle(mode: str) -> bool:
     """
     status, _, _, _, _ = _state_for(mode)
     mode_lock = _lock_for(mode)
-    if mode_lock.locked() or status.is_scanning:
+    if maintenance_running() or mode_lock.locked() or status.is_scanning:
         return False
     async with mode_lock:
-        if status.is_scanning:
+        if maintenance_running() or status.is_scanning:
             return False
         status.is_scanning = True
     return True
@@ -2806,6 +2807,12 @@ async def trigger_scan(
 
     status, _, _, _, _ = _state_for(mode)
     mode_lock = _lock_for(mode)
+
+    if maintenance_running():
+        return {
+            "status": "maintenance",
+            "message": "A bounded maintenance run is in progress. Retry shortly.",
+        }
 
     # Fast-path: verify holds the mode lock during its scrape — don't block
     # for the whole verify, return immediately instead.
@@ -3023,6 +3030,9 @@ async def health():
                 _cache_size(_PREMATCH_CACHE_FILE), _cache_size(_LIVE_CACHE_FILE)
             ) > CACHE_SIZE_BUDGET_BYTES,
         },
+        # N1-1: every runtime store's size, its budget and the last bounded
+        # maintenance run. A crossed budget is a warning, never a scan stop.
+        "retention": retention_health(),
         # P1-5/P1-6: delivery counters and the soft resource budget. The
         # snapshot names transports, never their URLs or tokens.
         "alerts": alert_manager.snapshot(),

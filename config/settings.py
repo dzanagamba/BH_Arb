@@ -272,6 +272,54 @@ STALE_PRICE_RETENTION_SECONDS = int(
 # invents a price after this point and never touches a settled bet.
 CLOSING_CAPTURE_CUTOFF_MINUTES = int(os.getenv("CLOSING_CAPTURE_CUTOFF_MINUTES", "0"))
 
+# --- Retention and maintenance (N1-1) ---
+# Runtime stores grow forever unless a bounded job trims them. These windows are
+# deliberately generous: they keep a season of scans, a full paper history and
+# the complete bet log while bounding the files a long-running deployment must
+# back up. Bets are never deleted by default; only settled rows past the archive
+# window are copied to a dated archive file.
+RETENTION_SCANS_DAYS = int(os.getenv("RETENTION_SCANS_DAYS", "90"))
+RETENTION_LINK_SWEEPS_DAYS = int(os.getenv("RETENTION_LINK_SWEEPS_DAYS", "90"))
+RETENTION_PAPER_DAYS = int(os.getenv("RETENTION_PAPER_DAYS", "180"))
+# The row cap is the second bound: a busy paper ledger is trimmed oldest-first
+# even when it is inside the date window.
+RETENTION_PAPER_MAX_ROWS = int(os.getenv("RETENTION_PAPER_MAX_ROWS", "200000"))
+RETENTION_BETS_ARCHIVE_DAYS = int(os.getenv("RETENTION_BETS_ARCHIVE_DAYS", "365"))
+RETENTION_LOG_DAYS = int(os.getenv("RETENTION_LOG_DAYS", "30"))
+# Generated logs are optional (the default deployment logs to stdout). When a
+# log directory exists, maintenance only removes old *.log files from it.
+LOG_DIR = os.getenv(
+    "LOG_DIR",
+    os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs"),
+)
+# The daily job runs off the scan path. A scan starter refuses to begin while a
+# maintenance run holds the process-wide guard, so a prune or VACUUM cannot
+# overlap a scan write.
+MAINTENANCE_ENABLED = os.getenv("MAINTENANCE_ENABLED", "true").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+)
+MAINTENANCE_INTERVAL_HOURS = float(os.getenv("MAINTENANCE_INTERVAL_HOURS", "24"))
+MAINTENANCE_STARTUP_DELAY_SECONDS = float(
+    os.getenv("MAINTENANCE_STARTUP_DELAY_SECONDS", "60")
+)
+# Soft budgets reported by /api/health. Crossing one is a warning, not a scan
+# stop; retention is what brings the store back under the line.
+SQLITE_SIZE_BUDGET_BYTES = int(
+    os.getenv("SQLITE_SIZE_BUDGET_BYTES", str(256 * 1024 * 1024))
+)
+PAPER_ROWS_BUDGET = int(
+    os.getenv("PAPER_ROWS_BUDGET", str(RETENTION_PAPER_MAX_ROWS))
+)
+BETS_ROWS_BUDGET = int(os.getenv("BETS_ROWS_BUDGET", "50000"))
+MAPPING_LEDGER_BUDGET_BYTES = int(
+    os.getenv("MAPPING_LEDGER_BUDGET_BYTES", str(64 * 1024 * 1024))
+)
+LOG_SIZE_BUDGET_BYTES = int(
+    os.getenv("LOG_SIZE_BUDGET_BYTES", str(50 * 1024 * 1024))
+)
+
 # --- Scraper Settings ---
 NAVIGATION_TIMEOUT_MS = 60000  # Max navigation time (ms)
 # Headless browsers by default; set HEADLESS=false in .env to watch them

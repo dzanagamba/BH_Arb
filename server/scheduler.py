@@ -12,7 +12,13 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from server.api import run_scan, start_scan_if_idle
+from config.settings import (
+    MAINTENANCE_ENABLED,
+    MAINTENANCE_INTERVAL_HOURS,
+    MAINTENANCE_STARTUP_DELAY_SECONDS,
+)
+from server.api import live_status, run_scan, scan_status, start_scan_if_idle
+from server.maintenance import run_maintenance
 
 logger = logging.getLogger(__name__)
 
@@ -29,3 +35,55 @@ async def scan_loop(mode: str, minutes: int) -> None:
             raise
         except Exception:
             logger.exception("Scheduled %s scan failed; the loop will try again", mode)
+
+
+async def maintenance_loop(
+    *,
+    interval_hours: float | None = None,
+    startup_delay_seconds: float | None = None,
+) -> None:
+    """Run bounded retention once a day, off the scan path.
+
+    The loop skips a tick while either feed is scanning, and the runner itself
+    refuses to overlap a scan write through the process-wide guard. A failure
+    is logged and retried on the next tick: maintenance must never stop the
+    scheduler or a scan.
+    """
+    if not MAINTENANCE_ENABLED:
+        return
+    interval = (
+        MAINTENANCE_INTERVAL_HOURS if interval_hours is None else interval_hours
+    )
+    if interval <= 0:
+        return
+    delay = (
+        MAINTENANCE_STARTUP_DELAY_SECONDS
+        if startup_delay_seconds is None
+        else startup_delay_seconds
+    )
+    await asyncio.sleep(max(0.0, delay))
+    while True:
+        try:
+            busy = scan_status.is_scanning or live_status.is_scanning
+            if not busy:
+                report = await asyncio.to_thread(
+                    run_maintenance,
+                    vacuum=True,
+                    scan_active=lambda: (
+                        scan_status.is_scanning or live_status.is_scanning
+                    ),
+                )
+                if report.get("ok"):
+                    logger.info(
+                        "Maintenance finished: pruned=%s paper=%s vacuumed=%s",
+                        report.get("pruned"),
+                        report.get("paper"),
+                        report.get("vacuumed"),
+                    )
+                else:
+                    logger.info("Maintenance skipped: %s", report.get("skipped"))
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Maintenance failed; the loop will try again")
+        await asyncio.sleep(interval * 3600)

@@ -33,6 +33,17 @@ class Storage:
         connection.execute("PRAGMA synchronous=NORMAL")
         return connection
 
+    def _connect_readonly(self) -> sqlite3.Connection:
+        """Open without creating, migrating or touching WAL state.
+
+        A dry run must be able to count what it *would* prune without changing
+        the database file, so it never takes the write path above.
+        """
+        uri = f"file:{Path(self.path).resolve().as_posix()}?mode=ro"
+        connection = sqlite3.connect(uri, uri=True, timeout=30)
+        connection.row_factory = sqlite3.Row
+        return connection
+
     def initialize(self) -> None:
         with self._connect() as connection:
             connection.executescript(
@@ -272,12 +283,75 @@ class Storage:
             "link_sweeps": int(row["link_sweeps"]),
         }
 
-    def prune_scans(self, *, days: int = 90) -> int:
+    def prune_scans(self, *, days: int = 90, dry_run: bool = False) -> int:
+        """Delete scan rows older than ``days``; a dry run only counts them."""
+        if not Path(self.path).exists():
+            return 0
         cutoff = (datetime.now(UTC).replace(tzinfo=None) - timedelta(days=days)).isoformat()
+        try:
+            if dry_run:
+                with self._connect_readonly() as connection:
+                    row = connection.execute(
+                        "SELECT COUNT(*) FROM scans WHERE scan_time < ?", (cutoff,)
+                    ).fetchone()
+                return int(row[0] or 0)
+            with self._connect() as connection:
+                with connection:
+                    cursor = connection.execute(
+                        "DELETE FROM scans WHERE scan_time < ?", (cutoff,)
+                    )
+                    return int(cursor.rowcount or 0)
+        except sqlite3.Error:
+            return 0
+
+    def prune_link_sweeps(self, *, days: int = 90, dry_run: bool = False) -> int:
+        """Delete link-sweep rows older than ``days``; a dry run only counts."""
+        if not Path(self.path).exists():
+            return 0
+        cutoff = (datetime.now(UTC).replace(tzinfo=None) - timedelta(days=days)).isoformat()
+        try:
+            if dry_run:
+                with self._connect_readonly() as connection:
+                    row = connection.execute(
+                        "SELECT COUNT(*) FROM link_sweeps WHERE ended_at < ?", (cutoff,)
+                    ).fetchone()
+                return int(row[0] or 0)
+            with self._connect() as connection:
+                with connection:
+                    cursor = connection.execute(
+                        "DELETE FROM link_sweeps WHERE ended_at < ?", (cutoff,)
+                    )
+                    return int(cursor.rowcount or 0)
+        except sqlite3.Error:
+            return 0
+
+    def set_last_maintenance(self, payload: dict[str, Any]) -> None:
+        """Record the newest successful maintenance run in ``meta``."""
         with self._connect() as connection:
             with connection:
-                cursor = connection.execute("DELETE FROM scans WHERE scan_time < ?", (cutoff,))
-                return int(cursor.rowcount or 0)
+                connection.execute(
+                    "INSERT OR REPLACE INTO meta(key, value) VALUES('last_maintenance', ?)",
+                    (json.dumps(payload, sort_keys=True),),
+                )
+
+    def last_maintenance(self) -> dict[str, Any] | None:
+        """Return the newest recorded maintenance report, if any."""
+        if not Path(self.path).exists():
+            return None
+        try:
+            with self._connect_readonly() as connection:
+                row = connection.execute(
+                    "SELECT value FROM meta WHERE key = 'last_maintenance'"
+                ).fetchone()
+        except sqlite3.Error:
+            return None
+        if row is None:
+            return None
+        try:
+            payload = json.loads(row["value"])
+        except (TypeError, ValueError):
+            return None
+        return payload if isinstance(payload, dict) else None
 
     def vacuum(self) -> None:
         with self._connect() as connection:
