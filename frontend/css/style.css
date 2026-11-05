@@ -347,7 +347,6 @@ kbd {
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--bad) 18%, transparent);
 }
 .freshness-banner strong { font-weight: 700; }
-.freshness-banner .freshness-books { color: var(--muted); }
 .freshness-banner .btn { margin-left: auto; }
 body.feed-stale .sb-row { border-style: dashed; }
 body.feed-stale .row-profit b { color: var(--warn); }
@@ -897,7 +896,6 @@ body.feed-stale .row-profit b { color: var(--warn); }
     background: var(--panel);
 }
 .review-intro { margin: 0; max-width: 620px; color: var(--muted); }
-.review-bulk { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 
 .coverage-trend {
     margin-bottom: 14px;
@@ -1081,9 +1079,7 @@ body.feed-stale .row-profit b { color: var(--warn); }
     background: var(--panel);
     box-shadow: var(--shadow);
 }
-.candidate-card:has(input:checked) { border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
 .candidate-card[data-ai-verdict="negative"] { opacity: .7; }
-.candidate-select input { width: 16px; height: 16px; margin-top: 3px; accent-color: var(--accent); }
 .candidate-card-header { display: flex; align-items: baseline; gap: 10px; }
 .candidate-teams { font-weight: 650; }
 .candidate-vs { color: var(--faint); font-weight: 400; }
@@ -1101,10 +1097,7 @@ body.feed-stale .row-profit b { color: var(--warn); }
 .candidate-reason { padding: 1px 8px; border-radius: 99px; background: var(--panel-3); font-size: 11px; color: var(--muted); }
 .candidate-ai, .candidate-approval-note { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
 .candidate-ai-negative { color: var(--bad); }
-.candidate-actionable { color: var(--accent); }
-.candidate-blocked { color: var(--warn); }
 .candidate-actions { display: flex; flex-direction: column; gap: 6px; }
-.candidate-action-error { grid-column: 1 / -1; color: var(--bad); font-size: 12px; }
 
 /* ─── Group evidence ───────────────────────────────────────────────────── */
 .evidence-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }

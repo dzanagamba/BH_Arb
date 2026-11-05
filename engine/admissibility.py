@@ -39,7 +39,6 @@ MIN_FAMILIES = 3
 SAME_SETTLEMENT = True
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-EVIDENCE_DIR = REPO_ROOT / "docs" / "evidence"
 SPORT_DISCOVERY_EVIDENCE = "docs/evidence/2026-11-04-sport-discovery.json"
 FOOTBALL_LINES_EVIDENCE = "docs/evidence/2026-11-04-football-lines.json"
 PREMATCH_EVIDENCE = "docs/evidence/2026-11-04-prematch-scan.json"

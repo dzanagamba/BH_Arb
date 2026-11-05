@@ -106,17 +106,6 @@ class BetStore:
             ).fetchall()
         return [json.loads(row["payload"]) for row in rows]
 
-    def row_count(self) -> int:
-        """Number of logged bets, for the retention budget."""
-        if not Path(self.path).exists():
-            return 0
-        try:
-            with self._connect_readonly() as connection:
-                row = connection.execute("SELECT COUNT(*) FROM bets").fetchone()
-        except sqlite3.Error:
-            return 0
-        return int(row[0] or 0)
-
     def settled_before(self, cutoff: str) -> list[dict[str, Any]]:
         """Settled bets older than ``cutoff``; used for archive, never delete."""
         if not Path(self.path).exists():

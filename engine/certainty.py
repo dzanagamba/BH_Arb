@@ -599,16 +599,6 @@ class CertaintyGate:
             )
         return list(dict.fromkeys(entries))
 
-    @property
-    def alias_allowlist_entries(self) -> list[set[str]]:
-        """Return normalized unordered sets parsed from pipe-delimited allowlist entries."""
-        entries: list[set[str]] = []
-        for entry in self.alias_allowlist:
-            parts = {self._raw_team_key(part) for part in entry.split("|") if part.strip()}
-            if len(parts) == 2:
-                entries.append(parts)
-        return entries
-
     @staticmethod
     def _link_evidence(m: Match) -> tuple[MatchEvidence, bool]:
         """Return this match's link evidence record and whether it settles the link.

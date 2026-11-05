@@ -22,7 +22,7 @@ import re
 import unicodedata
 from dataclasses import dataclass
 
-from models.schemas import Market, MarketType, OddsValue
+from models.schemas import MarketType
 
 _SUPPORTED_LINES = {
     0.5: MarketType.OVER_UNDER_0_5,
@@ -136,13 +136,3 @@ def classify(
             )
 
     return None
-
-
-def classify_market(market: Market) -> MarketClassification | None:
-    """Classify an already-parsed ``Market`` from its outcome labels."""
-    return classify([odds.label for odds in market.odds])
-
-
-def classification_odds(market: Market, classification: MarketClassification) -> list[OddsValue]:
-    """Return the market's odds unchanged; kept as a seam for future filtering."""
-    return list(market.odds)

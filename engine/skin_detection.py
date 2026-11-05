@@ -22,7 +22,7 @@ from config.settings import (
     price_source,
     register_price_source_twin,
 )
-from models.schemas import Match, MatchGroup
+from models.schemas import MatchGroup
 
 MIN_SHARED_OUTCOMES = 200
 TWIN_RATE = 0.99
@@ -159,8 +159,3 @@ def summary(matrix: dict[str, dict[str, Any]]) -> dict[str, int]:
     for row in matrix.values():
         counts[str(row["classification"])] += 1
     return counts
-
-
-def match_pair_key(match: Match) -> str:
-    """Small helper for callers that need a stable book identity in reports."""
-    return f"{match.bookmaker}|{match.event_id or match.home_team + '|' + match.away_team}"

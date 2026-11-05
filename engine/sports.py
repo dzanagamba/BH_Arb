@@ -32,9 +32,6 @@ ICE_HOCKEY = Sport.ICE_HOCKEY.value
 # byte-for-byte the old one, and this list only decides which extra feeds are
 # parsed.
 ENABLED_SPORTS: tuple[str, ...] = (FOOTBALL, BASKETBALL, TENNIS)
-NON_FOOTBALL_SPORTS: tuple[str, ...] = tuple(
-    sport for sport in ENABLED_SPORTS if sport != FOOTBALL
-)
 
 # Book feed names -> canonical sport. A name absent here is not implemented; it
 # is counted as a coverage gap by the discovery probe, never guessed.
@@ -160,14 +157,6 @@ def family(market_type: MarketType) -> str:
     ):
         return "total"
     return ""
-
-
-def sport_market_allowed(sport: str, market_type: MarketType) -> bool:
-    """Whether a market type is part of a sport's defined vocabulary."""
-    if sport == FOOTBALL:
-        return True
-    spec = spec_for(sport)
-    return spec is not None and market_type in spec.families()
 
 
 def settlement_for(sport: str, market_type: MarketType) -> str:

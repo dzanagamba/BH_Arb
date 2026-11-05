@@ -321,14 +321,6 @@ class MappingLedger:
         claim = self.get(kind, key)
         return claim is not None and claim.is_authoritative(now)
 
-    def accepted_keys(self, kind: str, now: datetime | None = None) -> set[str]:
-        with self._lock:
-            return {
-                claim.key
-                for claim in self.claims.values()
-                if claim.kind == kind and claim.is_authoritative(now)
-            }
-
     # -- mutation ----------------------------------------------------------
 
     def _upsert(self, kind: str, key: str) -> MappingClaim:
@@ -526,7 +518,3 @@ class MappingLedger:
             "generated_at": _iso(),
             "claims": {key: claim.to_dict() for key, claim in sorted(self.claims.items())},
         }
-
-
-def load_ledger(path: str | Path | None = None) -> MappingLedger:
-    return MappingLedger(path).load()

@@ -122,13 +122,18 @@ def _table_inventory(path: Path) -> tuple[dict[str, dict[str, int]], dict[str, A
                 if name not in names:
                     continue
                 rows = int(
-                    connection.execute(f"SELECT COUNT(*) FROM {name}").fetchone()[0] or 0
+                    # name is a member of the fixed _TABLES allowlist above.
+                    connection.execute(
+                        f"SELECT COUNT(*) FROM {name}"  # nosec B608
+                    ).fetchone()[0]
+                    or 0
                 )
                 entry = {"rows": rows}
                 if name in _PAYLOAD_TABLES:
                     entry["payload_bytes"] = int(
                         connection.execute(
-                            f"SELECT COALESCE(SUM(LENGTH(payload)), 0) FROM {name}"
+                            # name is a member of the fixed _PAYLOAD_TABLES allowlist.
+                            f"SELECT COALESCE(SUM(LENGTH(payload)), 0) FROM {name}"  # nosec B608
                         ).fetchone()[0]
                         or 0
                     )

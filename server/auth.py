@@ -72,9 +72,6 @@ class ApiKeyStore:
         temp.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         os.replace(temp, path)
 
-    def has_keys(self) -> bool:
-        return bool(self.active_keys())
-
     def has_any_keys(self) -> bool:
         """True even when every key is revoked, so revocation cannot reopen the API."""
         return any(isinstance(record, dict) for record in self._load()["keys"])

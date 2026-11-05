@@ -73,10 +73,6 @@ def begin_book(
     )
 
 
-def current_book() -> BookCost | None:
-    return _current.get()
-
-
 def record_browser_seconds(seconds: float) -> None:
     """Add one browser-open interval to the active book, if any."""
     cost = _current.get()

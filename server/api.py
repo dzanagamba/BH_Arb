@@ -4247,44 +4247,6 @@ async def approve_candidate(
     }
 
 
-class BulkDecision(BaseModel):
-    ids: list[str]
-
-
-async def approve_candidates_bulk(
-    body: BulkDecision,
-    _auth: None = Depends(_require_api_key),
-):
-    """Approve several reviewed candidates at once (the reviewer chose each id).
-
-    Same grant as the single approve, per candidate. Ids that are gone, carry no
-    alias, or name a pair an approval cannot clear are reported back as skipped
-    rather than failing the whole batch. A skipped pair stays in the queue.
-    """
-    if not HUMAN_MAPPING_ENABLED:
-        raise HTTPException(
-            status_code=403,
-            detail=(
-                "Human mapping is disabled. The evidence ledger is the only trust "
-                "source; set HUMAN_MAPPING_ENABLED=true only for a migration."
-            ),
-        )
-    approved: list[str] = []
-    skipped: list[str] = []
-    for candidate_id in dict.fromkeys(body.ids[:CANDIDATE_PAGE_MAX]):
-        queue = _find_pending_candidate(candidate_id)
-        candidate = queue.get(candidate_id) if queue is not None else None
-        if (
-            candidate is not None
-            and candidate.alias_actionable
-            and _approve(candidate)
-        ):
-            approved.append(candidate_id)
-        else:
-            skipped.append(candidate_id)
-    return {"approved": approved, "skipped": skipped}
-
-
 async def reject_candidate(
     candidate_id: str,
     _auth: None = Depends(_require_api_key),

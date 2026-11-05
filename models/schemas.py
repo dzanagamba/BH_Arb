@@ -143,9 +143,6 @@ class Match(BaseModel):
     # Never inferred from ``fetched_at`` or the scan clock (N0-2).
     source_updated_at: datetime | None = None
 
-    def has_markets(self) -> bool:
-        return len(self.markets) > 0
-
 
 MatchEventStatus = Literal["verified", "suggested", "rejected"]
 
