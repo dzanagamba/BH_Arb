@@ -775,6 +775,8 @@ For every task:
 - User-facing or operator-facing docs are updated.
 - The execution log below has a dated entry with commands, measured results and
   files changed.
+- `docs/SESSION_BRIEF.md` is updated with the task status, next action, last
+  commit and any blocker, so the next session can resume from it.
 - No trust rule is weakened to make a number look better.
 
 ## 7. Execution log
