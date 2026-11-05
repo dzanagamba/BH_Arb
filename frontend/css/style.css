@@ -339,6 +339,23 @@ kbd {
 body.feed-stale .sb-row { border-style: dashed; }
 body.feed-stale .row-profit b { color: var(--warn); }
 
+/* P3-7: record-only/paper is an informational state, not a stale feed. */
+.run-mode-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin: 8px 0 0;
+    padding: 12px 14px;
+    border: 1px solid color-mix(in srgb, var(--warn) 50%, var(--line));
+    border-radius: var(--radius);
+    background: color-mix(in srgb, var(--warn) 8%, var(--panel));
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 500;
+}
+.run-mode-banner strong { font-weight: 700; }
+
 /* P0-7: a quarantined book is not a certainty-gate failure. It is a price
    source that is out of service for this scan, so the reason sits beside the
    book's name rather than inside a bet-slip leg. */

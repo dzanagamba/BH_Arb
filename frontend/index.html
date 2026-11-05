@@ -67,6 +67,8 @@
     <!-- P0-4: cached rows stay visible, but a feed past its TTL must never look
          like a current opportunity. The text is written by renderFreshnessBanner. -->
     <div class="freshness-banner" id="freshness-banner" role="alert" aria-live="polite" hidden></div>
+    <!-- P3-7: a record-only or paper scan publishes no live surebet. -->
+    <div class="run-mode-banner" id="run-mode-banner" role="status" aria-live="polite" hidden></div>
     <div class="feed-integrity" id="feed-integrity" role="status" aria-live="polite" hidden></div>
 
     <nav class="results-tabs" role="tablist" aria-label="Dashboard views">
@@ -316,6 +318,12 @@
 
     <section class="drawer-section">
         <h3 data-i18n="settings.scanning">Scanning</h3>
+        <label class="field"><span>Run mode</span>
+            <select class="input" id="filter-run-mode">
+                <option value="advisory">Advisory (show live surebets)</option>
+                <option value="record_only">Record only (no live surebets)</option>
+                <option value="paper">Paper trading (virtual bankroll)</option>
+            </select></label>
         <label class="field"><span>Rescan automatically</span>
             <select class="input" id="filter-autorescan">
                 <option value="0">Off</option>

@@ -319,5 +319,9 @@ class ScanStatus(BaseModel):
     bookmaker_progress: dict[str, str] = {}  # bookmaker_id -> scraping|done|error|skipped
     total_matches: int = 0
     surebets_found: int = 0
+    # P3-7: advisory | record_only | paper. A non-advisory run records compact
+    # opportunities and publishes no live surebet.
+    run_mode: str = "advisory"
+    recorded_opportunities: int = 0
     errors: list[str] = []
     last_scan_time: datetime | None = None

@@ -148,6 +148,7 @@ from server.observability import (
     reset_scan_id,
     set_scan_id,
 )
+from server.paper import PaperStore
 from server.storage import Storage, default_storage_path
 
 logger = logging.getLogger(__name__)
@@ -491,6 +492,11 @@ _HISTORY_MAX = 50
 # P3-1: SQLite is the query store; the JSON files stay compatibility exports.
 _storage: Storage | None = None
 _bet_store: BetStore | None = None
+# P3-7: record-only and paper scans write here, never to the live surebet list.
+_paper_store: PaperStore | None = None
+RUN_MODES = ("advisory", "record_only", "paper")
+_last_run_mode: dict[str, str] = {"prematch": "advisory", "live": "advisory"}
+_recorded_counts: dict[str, int] = {"prematch": 0, "live": 0}
 _LINK_SWEEP_FILE = os.path.join(CACHE_DIR, "link_sweeps.json")
 _LINK_SWEEP_MAX = 200
 _PREMATCH_CACHE_FILE = os.path.join(CACHE_DIR, "last_scan.json")
@@ -525,6 +531,15 @@ def _state_for(mode: str) -> tuple[ScanStatus, list, list, list, dict]:
                 cached_live_match_groups_report, cached_live_per_bookie)
     return (scan_status, cached_surebets, cached_matches,
             cached_match_groups_report, cached_per_bookie)
+
+
+def _paper_store_or_init() -> PaperStore:
+    """Return the paper ledger, initializing it on first use."""
+    global _paper_store
+    if _paper_store is None:
+        _paper_store = PaperStore(default_storage_path())
+        _paper_store.initialize()
+    return _paper_store
 
 
 # ---------------------------------------------------------------------------
@@ -865,11 +880,14 @@ async def _run_link_verification(
 
 def _load_history() -> None:
     """Restore scan history, migrating the JSON store into SQLite once."""
-    global scan_history, _storage, _bet_store
+    global scan_history, _storage, _bet_store, _paper_store
     try:
         if _bet_store is None:
             _bet_store = BetStore(default_storage_path())
             _bet_store.initialize()
+        if _paper_store is None:
+            _paper_store = PaperStore(default_storage_path())
+            _paper_store.initialize()
         if _storage is None:
             _storage = Storage(default_storage_path())
             _storage.initialize()
@@ -1571,14 +1589,23 @@ def learn_scan_mappings(
     return report.to_dict()
 
 
-async def run_scan(mode: str = "prematch", scheduled: bool = False):
+async def run_scan(
+    mode: str = "prematch",
+    scheduled: bool = False,
+    run_mode: str = "advisory",
+):
     """Execute a full scan of all enabled bookmakers concurrently.
 
     `mode` selects the feed: "prematch" (future matches) or "live" (in-play).
     Each mode has its own status object and cache file.
+    `run_mode` selects what the completed scan may publish: the normal advisory
+    path, a record-only snapshot, or a paper-trading scan. A non-advisory scan
+    never writes a live surebet; the compact rows go to the paper ledger.
     Uniform `scan_started_at` (naive UTC) is passed to all scrapers so date
     windows are identical (P0-5) and odds can be age-checked (P0-1).
     """
+    if run_mode not in RUN_MODES:
+        run_mode = "advisory"
     is_live = mode == "live"
     status, surebets_cache, matches_cache, report_cache, per_bookie = _state_for(mode)
     scan_started_at = datetime.now(UTC).replace(tzinfo=None)
@@ -1593,6 +1620,8 @@ async def run_scan(mode: str = "prematch", scheduled: bool = False):
     status.errors = []
     status.total_matches = 0
     status.surebets_found = 0
+    status.recorded_opportunities = 0
+    status.run_mode = run_mode
     status.current_bookmaker = "Starting..."
     # Counts are rebuilt per scan; a book disabled since the last scan must not
     # keep reporting its old count.
@@ -1870,9 +1899,44 @@ async def run_scan(mode: str = "prematch", scheduled: bool = False):
             )
 
         # --- Update state ---
-        status.surebets_found = len(surebets)
         scan_finished_at = datetime.now(UTC).replace(tzinfo=None)
         status.last_scan_time = scan_finished_at
+
+        # P3-7: a record-only or paper scan is still a real scan, but its
+        # opportunities belong to the paper ledger, not the live surebet list.
+        # Advisory is the default and keeps the previous behavior exactly.
+        recorded: list[dict] = []
+        paper_marks: dict[str, int] = {}
+        if run_mode == "advisory":
+            live_surebets = surebets
+            status.surebets_found = len(surebets)
+            status.recorded_opportunities = 0
+            _last_run_mode[mode] = "advisory"
+            _recorded_counts[mode] = 0
+        else:
+            store = _paper_store_or_init()
+            recorded = store.record_opportunities(
+                surebets,
+                feed_mode=mode,
+                run_mode=run_mode,
+                scan_time=scan_finished_at,
+            )
+            if run_mode == "paper":
+                paper_marks = store.open_positions_from_scan(
+                    recorded, scan_time=scan_finished_at
+                )
+            live_surebets = []
+            status.surebets_found = 0
+            status.recorded_opportunities = len(recorded)
+            _last_run_mode[mode] = run_mode
+            _recorded_counts[mode] = len(recorded)
+            logger.info(
+                "recorded %s verified opportunit%s in %s mode (%s)",
+                len(recorded),
+                "y" if len(recorded) == 1 else "ies",
+                run_mode,
+                paper_marks or "no paper positions",
+            )
 
         # P0-6: aggregates from the boards this scan actually priced, and the
         # bounded lifetime store keyed by event+market+line+period+settlement.
@@ -1892,8 +1956,10 @@ async def run_scan(mode: str = "prematch", scheduled: bool = False):
         _opportunity_history.insert(0, summary)
         del _opportunity_history[_OPPORTUNITY_HISTORY_MAX:]
 
-        # Serialize to dict for JSON responses
-        surebets_cache[:] = [s.model_dump(mode="json") for s in surebets]
+        # Serialize to dict for JSON responses. A non-advisory run deliberately
+        # writes an empty live list, so the dashboard cannot present a recorded
+        # opportunity as current.
+        surebets_cache[:] = [s.model_dump(mode="json") for s in live_surebets]
         matches_cache[:] = [m.model_dump(mode="json") for m in all_matches]
 
         # Persist to cache file
@@ -1911,8 +1977,9 @@ async def run_scan(mode: str = "prematch", scheduled: bool = False):
         metrics.set_gauge("bh_scan_duration_seconds", duration_seconds, mode=mode)
         metrics.inc("bh_scan_seconds_total", duration_seconds, mode=mode)
         metrics.inc("bh_scans_completed_total", mode=mode)
-        metrics.inc("bh_surebets_found_total", len(surebets), mode=mode)
-        metrics.set_gauge("bh_surebets_found", len(surebets), mode=mode)
+        metrics.inc("bh_surebets_found_total", len(live_surebets), mode=mode)
+        metrics.set_gauge("bh_surebets_found", len(live_surebets), mode=mode)
+        metrics.set_gauge("bh_recorded_opportunities", len(recorded), mode=mode)
         metrics.inc(
             "bh_surebets_dropped_total",
             len(price_dropped),
@@ -1931,24 +1998,28 @@ async def run_scan(mode: str = "prematch", scheduled: bool = False):
             "scan complete",
             extra={
                 "mode": mode,
+                "run_mode": run_mode,
                 "duration_seconds": duration_seconds,
                 "books": len(books_ok),
                 "books_total": sum(1 for book in BOOKMAKERS if _is_enabled(book)),
                 "groups": len(groups),
-                "surebets": len(surebets),
+                "surebets": len(live_surebets),
+                "recorded_opportunities": len(recorded),
                 "drops": len(price_dropped),
                 "cache_bytes": cache_bytes,
             },
         )
         # P1-5: decide what is worth saying, then queue it. Delivery is off the
         # scan path; an alert failure must never fail the scan that found it.
-        _notify_scan_alerts(
-            mode,
-            surebets,
-            status,
-            matches_cache,
-            cache_bytes=cache_bytes,
-        )
+        # Record-only and paper scans must not alert as if a live bet existed.
+        if run_mode == "advisory":
+            _notify_scan_alerts(
+                mode,
+                surebets,
+                status,
+                matches_cache,
+                cache_bytes=cache_bytes,
+            )
     except Exception as e:
         metrics.inc("bh_scans_failed_total", mode=mode)
         logger.error(
@@ -2358,6 +2429,8 @@ def _save_cache(mode: str = "prematch"):
             "matches_count": len(matches_cache),
             "match_groups": list(report_cache),
             "mode": mode,
+            "run_mode": _last_run_mode.get(mode, "advisory"),
+            "recorded_opportunities": _recorded_counts.get(mode, 0),
             "scan_time": scan_time,
             "fetched_at": scan_time,
         }
@@ -2491,6 +2564,12 @@ def _load_cache():
                     status.last_scan_time = parsed
                 except ValueError:
                     pass
+            _last_run_mode[mode] = (
+                data.get("run_mode") if data.get("run_mode") in RUN_MODES else "advisory"
+            )
+            _recorded_counts[mode] = int(data.get("recorded_opportunities") or 0)
+            status.run_mode = _last_run_mode[mode]
+            status.recorded_opportunities = _recorded_counts[mode]
             surebets_cache[:] = data.get("surebets", [])
             matches_cache[:] = data.get("matches", [])
             # A restored cache is re-stamped with any link proof that is still
@@ -2580,11 +2659,17 @@ async def trigger_scan(
     request: Request,
     background_tasks: BackgroundTasks,
     mode: str = "prematch",
+    run_mode: str = "advisory",
     _auth: None = Depends(_require_scope("scan")),
 ):
-    """Trigger a new scan of all bookmakers (mode=prematch|live). P0-7 per-mode lock."""
+    """Trigger a scan (mode=prematch|live, run_mode=advisory|record_only|paper)."""
     if mode not in ("prematch", "live"):
         raise HTTPException(status_code=400, detail="mode must be 'prematch' or 'live'")
+    if run_mode not in RUN_MODES:
+        raise HTTPException(
+            status_code=400,
+            detail="run_mode must be 'advisory', 'record_only' or 'paper'",
+        )
 
     status, _, _, _, _ = _state_for(mode)
     mode_lock = _lock_for(mode)
@@ -2606,10 +2691,11 @@ async def trigger_scan(
             "message": f"A {mode} scan is already in progress. Please wait.",
         }
 
-    background_tasks.add_task(run_scan, mode, False)
+    background_tasks.add_task(run_scan, mode, False, run_mode)
     return {
         "status": "started",
         "mode": mode,
+        "run_mode": run_mode,
         "message": "Scan started. Poll /api/status for progress.",
     }
 
@@ -2955,6 +3041,10 @@ async def get_results(mode: str = "prematch"):
         "total_matches": len(matches_cache),
         "surebets_count": len(surebets_cache),
         "mode": mode,
+        # P3-7: a record-only or paper run publishes no live surebet, so the
+        # dashboard can state what the last scan was instead of guessing.
+        "run_mode": _last_run_mode.get(mode, "advisory"),
+        "recorded_opportunities": _recorded_counts.get(mode, 0),
         "match_groups": len(report_cache),
         "group_statuses": group_statuses,
         "sport_stats": _sport_summary(matches_cache, report_cache, surebets_cache),
@@ -4137,6 +4227,61 @@ async def export_bets_csv(days: int = 30):
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": 'attachment; filename="bh-arb-bets.csv"'},
     )
+
+
+@router.get("/paper/opportunities")
+async def get_paper_opportunities(
+    days: int = 30,
+    limit: int = 200,
+    run_mode: str = "",
+):
+    """Compact snapshots recorded by record-only and paper scans."""
+    if run_mode and run_mode not in RUN_MODES:
+        raise HTTPException(status_code=400, detail="Unknown run_mode")
+    return {
+        "opportunities": _paper_store_or_init().list_opportunities(
+            days=max(1, days), limit=limit, run_mode=run_mode
+        ),
+        "run_mode": run_mode or "all",
+        "no_bet_placed": True,
+    }
+
+
+@router.get("/paper/positions")
+async def get_paper_positions(
+    days: int = 30,
+    limit: int = 200,
+    status: Literal["", "open", "settled"] = "",
+):
+    """Virtual positions; their entry legs are paper, not accepted bets."""
+    return {
+        "positions": _paper_store_or_init().list_positions(
+            days=max(1, days), limit=limit, status=status
+        ),
+        "status": status or "all",
+        "no_bet_placed": True,
+    }
+
+
+@router.get("/paper/summary")
+async def get_paper_summary(days: int = 30):
+    """Simulated ROI, hit rate and CLV with explicit denominators."""
+    return _paper_store_or_init().summary(days=max(1, days))
+
+
+@router.post("/paper/positions/{position_id}/settle")
+async def settle_paper_position(
+    position_id: str,
+    req: BetSettlementRequest,
+    _auth: None = Depends(_require_api_key),
+):
+    """Settle a paper position from operator-entered results; no bet exists."""
+    result = _paper_store_or_init().settle(
+        position_id, [leg.model_dump() for leg in req.legs]
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="Paper position not found")
+    return result
 
 
 @router.post("/bets/{bet_id}/settle")

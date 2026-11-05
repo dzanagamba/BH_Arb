@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-11-05
 **Repository:** `dzanagamba/BH_Arb` (`main`)
-**Status of this document:** audit complete; P0-1 through P0-7, P1-1 through P1-5, P1-7, P2-1 through P2-10 and P3-1 through P3-6 done; P1-6 waived by operator; P3-7 remains
+**Status of this document:** audit complete; P0-1 through P0-7, P1-1 through P1-5, P1-7, P2-1 through P2-10 and P3-1 through P3-7 done; P1-6 waived by operator; no unstarted implementation task remains
 **Purpose:** a durable, session-by-session plan so work can resume without re-reading the whole repository.
 
 > **How to use this document**
@@ -281,7 +281,7 @@ Community evidence is anecdotal: Reddit blocks automated fetching (HTTP 403), so
 | P3-4 | Alerts, PWA, accessibility, and Bosnian UI | P3 | M | P1-5 | Done |
 | P3-5 | Authentication and key management hardening | P3 | M | P1-3 | Done |
 | P3-6 | Book risk profiles and advisory pacing | P3 | M | P1-7 | Done |
-| P3-7 | Record-only / paper-trading mode | P3 | M | P3-1 | Not started |
+| P3-7 | Record-only / paper-trading mode | P3 | M | P3-1 | Done |
 
 **Recommended first session:** P0-1, then P0-3 (both small, measurable, and they remove the largest payload and the most misleading documentation). Then P0-4 and the two research-driven tasks, P0-6 and P0-7: without a crossing-rate baseline and a feed-integrity score, the dashboard cannot tell "no edge" from "broken data." P0-2 is a separate hardening session.
 
@@ -1358,7 +1358,7 @@ no adapter is enabled.
 
 ### P3-7 — Record-only / paper-trading mode
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P3
 **Effort:** M
 **Depends on:** P3-1
@@ -1378,10 +1378,10 @@ no adapter is enabled.
 
 **Acceptance criteria:**
 
-- [ ] Record-only mode cannot show a live surebet as current.
-- [ ] Paper results state that no bet was placed.
-- [ ] ROI and CLV are computed only where the data supports them.
-- [ ] The live path's behavior is unchanged when the mode is off.
+- [x] Record-only mode cannot show a live surebet as current.
+- [x] Paper results state that no bet was placed.
+- [x] ROI and CLV are computed only where the data supports them.
+- [x] The live path's behavior is unchanged when the mode is off.
 
 **Tests:**
 
@@ -1424,6 +1424,35 @@ Before writing a claim about behavior, run the command that proves it and paste 
 ## 6. Execution log
 
 Newest first. Each entry: date, task, status, commands, measured result, files changed, follow-ups.
+
+### 2026-11-05 — P3-7: Record-only and paper-trading mode
+
+**Task:** P3-7 (depends on P3-1, complete).
+**Status:** Done.
+
+**Commands and results:**
+
+- `python -m pytest` → **1,476 passed**, 1 warning, 52.78 s with the gitignored runtime ledger `config/generated/mapping_evidence.json` moved aside (the clean state a checkout/CI has). The previous local-ledger caveat in P3-6 still applies to `tests/test_e2e_certified.py`; this task did not touch it.
+- `python -m pytest tests/test_record_only.py tests/test_paper_bankroll.py -q` → 11 passed.
+- `python -m ruff check .` → clean.
+- `python -m mypy .` → clean on 182 source files.
+- `python scripts/generate_market_mapping_doc.py --check` → `MARKET_MAPPING.md is in sync with config/bookmaker_markets.json`.
+- Integration measurement: a synthetic three-book record-only scan recorded verified rows and left `/api/results` with `surebets: []`, `run_mode: "record_only"`, then a normal advisory scan produced the live list again. Paper scans opened one virtual position per stable key.
+
+**What changed:**
+
+- `server/paper.py` (new): compact opportunity snapshots (stable event key, market, line, timestamp, gate verdict, best odds/book and legs), SQLite `recorded_opportunities`/`paper_positions`, one position per key, next-scan availability and entry-stake-weighted CLV marks, manual settlement, and a bounded summary with explicit denominators.
+- `server/api.py`: `run_mode=advisory|record_only|paper` on `POST /api/scan`; non-advisory runs write no live surebet and clear the feed's live list; `/api/results` reports `run_mode` and `recorded_opportunities`; paper routes for opportunities, positions, summary and settlement; the cache persists the run mode.
+- `models/schemas.py`: `ScanStatus.run_mode` and `recorded_opportunities`.
+- Dashboard: Settings run-mode selector, `run_mode` in the scan request, and a banner saying no live surebet is shown in record-only/paper mode.
+- `tests/test_record_only.py` and `tests/test_paper_bankroll.py` (new): snapshot shape, no-live-write, advisory restoration, API validation, position dedupe, mark/CLV, disappearance, settled-only ROI/bankroll, missing-result behavior and the no-bet disclaimer.
+- `docs/PAPER_MODE.md` (new) and README.
+
+**Trust rules:** unchanged. The certainty gate, link proof, settlement, price-source and one-leg-per-book rules are untouched. Neither mode places a bet, logs in, moves money, or assumes a settlement result; a missing result leaves a paper position open, and the summary says `no_bet_placed: true`.
+
+**Follow-ups:** No unstarted implementation task remains. P1-6 stays waived by the operator; the roadmap's P0/P1/P2/P3 implementation work is otherwise complete.
+
+---
 
 ### 2026-11-05 — P3-6: Book risk profiles and advisory pacing
 

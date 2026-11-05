@@ -29,6 +29,9 @@ let pollingInterval = null;
 let activeBookmakers = new Set(['mozzartbet', 'mdshop', 'admiralbet', 'betole', 'mbet', 'sportplus', 'evlbet', 'premier_kladionica', 'wwin']);
 let bookmakersConfig = {};
 let globalInvestment = 100;
+// P3-7: advisory (default), record_only or paper. A non-advisory scan never
+// publishes a live surebet, so the results banner must say so.
+let scanRunMode = 'advisory';
 let stakeRounding = '1';            // 'exact' | '1' | '5' — whole KM by default
 let soundMuted = true;
 let audioContext = null;
@@ -296,6 +299,8 @@ function handleDataChange(event) {
         setStakeRounding(element.value);
     } else if (element.id === 'filter-autorescan') {
         setAutoRescan(parseInt(element.value, 10));
+    } else if (element.id === 'filter-run-mode') {
+        setScanRunMode(element.value);
     } else if (element.id === 'sound-toggle') {
         toggleSound();
     } else if (element.matches('.exp-check input[type="checkbox"]')) {
@@ -324,11 +329,20 @@ function restorePreferences() {
     try {
         stakeRounding = localStorage.getItem('stakeRounding') || '1';
         soundMuted = localStorage.getItem('soundMuted') !== '0';
+        const savedRunMode = localStorage.getItem('scanRunMode');
+        if (['advisory', 'record_only', 'paper'].includes(savedRunMode)) scanRunMode = savedRunMode;
     } catch (e) { /* localStorage unavailable */ }
     const roundingEl = document.getElementById('filter-rounding');
     if (roundingEl) roundingEl.value = stakeRounding;
     const sound = document.getElementById('sound-toggle');
     if (sound) sound.checked = !soundMuted;
+    const runModeEl = document.getElementById('filter-run-mode');
+    if (runModeEl) runModeEl.value = scanRunMode;
+}
+
+function setScanRunMode(value) {
+    scanRunMode = ['advisory', 'record_only', 'paper'].includes(value) ? value : 'advisory';
+    try { localStorage.setItem('scanRunMode', scanRunMode); } catch (e) { /* ignore */ }
 }
 
 async function loadConfig() {
@@ -547,7 +561,7 @@ async function scanNow() {
     const btn = document.getElementById('scan-btn');
     if (btn.disabled) return;
     try {
-        const res = await apiFetch(`/api/scan?mode=${currentMode}`, { method: 'POST', headers: candidateActionHeaders() });
+        const res = await apiFetch(`/api/scan?mode=${currentMode}&run_mode=${encodeURIComponent(scanRunMode)}`, { method: 'POST', headers: candidateActionHeaders() });
         const data = await res.json();
         if (res.status === 429) {
             showError(data.detail || 'Too many scans — wait a moment.');
@@ -672,6 +686,7 @@ async function loadResults(silent = false) {
         resultsSnapshot = data;
         freshnessSnapshot = data.freshness || null;
         renderFreshnessBanner();
+        renderRunModeBanner();
         renderFeedIntegrity();
 
         setText('stat-matches', data.total_matches != null ? data.total_matches.toLocaleString() : '—');
@@ -756,6 +771,28 @@ function renderFreshnessBanner() {
     }
     banner.innerHTML = `${message} These odds are not current — re-check a slip or run a new scan.
         <button type="button" class="btn btn-primary btn-small" data-action="scan-now">Scan now</button>`;
+}
+
+// P3-7: the last completed scan may not have been advisory. Say so instead of
+// letting an earlier live list look like the result of a record-only run.
+function renderRunModeBanner() {
+    const banner = document.getElementById('run-mode-banner');
+    if (!banner) return;
+    const runMode = resultsSnapshot?.run_mode || 'advisory';
+    if (runMode === 'advisory') {
+        banner.hidden = true;
+        banner.innerHTML = '';
+        return;
+    }
+    const count = Number(resultsSnapshot?.recorded_opportunities || 0);
+    const label = runMode === 'paper' ? 'Paper trading' : 'Record-only';
+    const noun = count === 1 ? 'opportunity' : 'opportunities';
+    const detail = runMode === 'paper'
+        ? ` ${count} verified ${noun} recorded and tracked in the virtual paper ledger.`
+        : ` ${count} verified ${noun} recorded in the paper ledger.`;
+    banner.hidden = false;
+    banner.innerHTML = `<strong>${escapeHtml(label)} scan.</strong>${escapeHtml(detail)}
+        No live surebet is shown and no bet was placed. Switch Run mode back to Advisory to scan for live opportunities.`;
 }
 
 // P0-7: only unhealthy books are shown here. A healthy feed needs no badge,

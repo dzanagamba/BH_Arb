@@ -141,10 +141,10 @@ POST /api/scan
   search. Opening one group fetches its full gate evidence and bookmaker legs;
   the list never downloads every group's evidence at once.
 - **History** — per-scan counts and errors for both feeds.
-- **Settings** — stake, rounding, auto-rescan, alert sound, enabled bookmakers,
-  experimental markets and the health line. Unhealthy books also appear in a
-  feed-integrity strip above the tabs, with the reason they are degraded or
-  quarantined from pricing.
+- **Settings** — stake, rounding, scan run mode (advisory / record-only /
+  paper), auto-rescan, alert sound, enabled bookmakers, experimental markets and
+  the health line. Unhealthy books also appear in a feed-integrity strip above
+  the tabs, with the reason they are degraded or quarantined from pricing.
 
 `python scripts/opportunity_baseline.py --days 7` prints the aggregate
 opportunity-rate baseline for the recorded scan history. The first local
@@ -173,6 +173,23 @@ The dashboard slip shows **exact profit** and **realized profit** side by side,
 plus the rounding effect. The realized number is never labelled as the exact
 one. Stakes round to cents (`exact`), whole units (`1`) or multiples of five
 (`5`).
+
+## Record-only and paper trading
+
+A scan can run in three modes through `POST /api/scan?run_mode=…`:
+
+- `advisory` (default) — the normal live surebet list; unchanged.
+- `record_only` — stores a compact snapshot of each verified opportunity and
+  publishes **no live surebet**. `/api/paper/opportunities` returns the ledger.
+- `paper` — does the same and maintains virtual positions, a paper bankroll,
+  execution hit rate and next-scan CLV through `/api/paper/summary`.
+
+A non-advisory scan writes an empty live list for that feed and the dashboard
+shows a banner saying no live surebet is shown. Paper positions are marked
+against the next scan and can be settled manually; a missing leg result leaves
+the position open. Neither mode places a bet, logs in, or models account
+effects. Every paper response carries `no_bet_placed: true`, and ROI/CLV are only
+reported with explicit denominators. See [`docs/PAPER_MODE.md`](docs/PAPER_MODE.md).
 
 ## Deployment
 
