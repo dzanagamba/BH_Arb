@@ -4,7 +4,7 @@
 **Goal:** implement `PROJECT_ROADMAP_V2.md` without weakening the trust model.
 **Current task:** none — **N0-1 through N0-4 are Done**. First eligible task is
 **N1-1** (retention and maintenance automation).
-**Last task commit:** `pending` — N0-4 automatic closing-line capture.
+**Last task commit:** `23abf3d` — N0-4 automatic closing-line capture.
 
 ## Project state
 
