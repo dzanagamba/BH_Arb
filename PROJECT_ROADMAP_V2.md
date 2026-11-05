@@ -20,7 +20,7 @@ Verified on 2026-11-05:
 
 | Check | Result |
 |---|---|
-| Offline suite | **1,476 passed**, 1 warning, ~53 s |
+| Offline suite | **1,481 passed**, 2 skipped, 1 warning, ~57 s (after N0-1) |
 | Lint | `ruff check .` clean |
 | Types | `mypy .` clean on 182 source files |
 | Generated market doc | in sync |
@@ -63,7 +63,7 @@ long-horizon.
 
 | ID | Task | Priority | Effort | Depends on | Status |
 |---|---|---|---|---|---|
-| N0-1 | Hermetic tests independent of runtime state | P0 | S | — | Not started |
+| N0-1 | Hermetic tests independent of runtime state | P0 | S | — | Done |
 | N0-2 | Source-updated timestamps and frozen-price quarantine | P0 | M | — | Not started |
 | N0-3 | CSP without inline styles | P0 | M | — | Not started |
 | N0-4 | Automatic closing-line capture for logged bets | P0 | M | N0-2 | Not started |
@@ -91,7 +91,7 @@ the two numbers the project still needs to trust: “is this price current?” a
 
 ### N0-1 — Hermetic tests independent of runtime state
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P0
 **Effort:** S
 **Depends on:** none
@@ -118,11 +118,11 @@ ledger and decision stores.
 
 **Acceptance criteria:**
 
-- [ ] `pytest` passes with a populated `config/generated/mapping_evidence.json`.
-- [ ] `pytest` passes with no generated ledger and no cache files.
-- [ ] No test writes into the repository's `config/generated/`, `cache/`, or
+- [x] `pytest` passes with a populated `config/generated/mapping_evidence.json`.
+- [x] `pytest` passes with no generated ledger and no cache files.
+- [x] No test writes into the repository's `config/generated/`, `cache/`, or
       `config/bookmaker_*` files.
-- [ ] The test result no longer depends on the operator's last live scan.
+- [x] The test result no longer depends on the operator's last live scan.
 
 **Tests:**
 
@@ -784,7 +784,51 @@ For every task:
 Newest first. Each entry: date, task, status, commands, measured result, files
 changed, follow-ups.
 
-*(No task has started yet.)*
+### 2026-11-05 — N0-1 — Done
+
+**Commands**
+
+```bash
+python -m pytest                                      # empty ledger
+BH_ARB_TEST_RUNTIME_LEDGER=populated python -m pytest # populated ledger
+python scripts/check_test_isolation.py --pytest-args "tests/test_runtime_isolation.py tests/test_e2e_certified.py tests/test_replay.py -q"
+python -m ruff check .
+python -m mypy .
+python scripts/generate_market_mapping_doc.py --check
+```
+
+**Measured result**
+
+- Operator checkout with the 41 MB populated ledger: **1,481 passed, 2 skipped**
+  (was 1 failed / 1,475 passed before the fix). The 2 skips are the opt-in
+  `real_runtime_state` corpus check and its deeplink-config sibling.
+- Same checkout with `BH_ARB_TEST_RUNTIME_LEDGER=populated`: **1,481 passed,
+  2 skipped**.
+- Throwaway copy with no `config/generated/` and no `cache/`: **1,481 passed,
+  2 skipped** in both ledger modes.
+- The session guard reported no changes to the checkout's `config/generated/` or
+  `cache/`.
+- Ruff, MyPy (184 files) and the generated market doc are clean.
+
+**Files changed**
+
+- `tests/conftest.py` — autouse runtime-state redirect, populated-ledger seed,
+  `real_runtime_state` marker and a session guard against repo writes.
+- `tests/test_runtime_isolation.py` — new direct proofs of the redirect, writes,
+  SQLite store and env modes.
+- `tests/test_e2e_certified.py` — explicit clean-ledger fixture and a
+  populated-ledger variant of the gate claim.
+- `tests/test_replay.py`, `scripts/replay_mappings.py` — replay takes an explicit
+  `--ledger`, so it no longer reads the operator's generated evidence.
+- `tests/test_deeplinks.py` — the captured-scan corpus check is now opt-in.
+- `scripts/check_test_isolation.py`, `.github/workflows/ci.yml` — local and CI
+  checks for both ledger modes.
+- `docs/CI.md`, `README.md` — isolation rule and commands.
+
+**Follow-ups:** none. N3-1 (property tests) can now rely on the shared isolation
+fixture. N0-2 is the next eligible task.
+
+*(No earlier task has started.)*
 
 ---
 

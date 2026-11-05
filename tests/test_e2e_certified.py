@@ -98,6 +98,8 @@ from typing import Any
 import pytest
 
 from config.settings import BOOKMAKERS, MAX_SUREBET_PROFIT_PERCENT, ODDS_TTL_SECONDS
+from engine import mapping_evidence as mapping_evidence_module
+from engine import matcher as matcher_module
 from engine.arbitrage import ArbitrageEngine
 from engine.market_registry import MarketRegistry
 from engine.matcher import MatchMatcher
@@ -114,6 +116,22 @@ def _disable_price_guard(monkeypatch):
     """The certified captures are three different real fixtures, so a cross-book
     price comparison is meaningless here; the guard has its own unit tests."""
     monkeypatch.setattr(api, "PRICE_GUARD_ENABLED", False)
+
+
+@pytest.fixture(autouse=True)
+def _clean_gate_ledger(monkeypatch, tmp_path, _isolated_runtime_state):
+    """Pin this module's default matcher to an empty ledger.
+
+    The suite-wide isolation fixture already redirects the generated ledger, but
+    this module makes the source explicit: its default matcher must read a clean
+    ledger even when the run is deliberately seeded with a populated one. The
+    populated-ledger variant below passes its own path instead. The dependency
+    on ``_isolated_runtime_state`` makes the redirect run first, so this fixture
+    is the final word on the path.
+    """
+    clean = tmp_path / "clean-ledger" / "mapping_evidence.json"
+    monkeypatch.setattr(matcher_module, "MAPPING_EVIDENCE_FILE", str(clean))
+    monkeypatch.setattr(mapping_evidence_module, "DEFAULT_PATH", clean)
 
 # Frozen copies of the 2026-09-25 captures. This test pins their prices (see
 # EXPECTED_LEGS), so it must not follow tests/fixtures/markets/ when that is refreshed.
@@ -309,9 +327,11 @@ def _flipped(markets: dict[str, dict[str, float]]) -> dict[str, dict[str, float]
     }
 
 
-def _one_group(matches: list[Match]) -> MatchGroup:
+def _one_group(
+    matches: list[Match], evidence_path: str | Path | None = None
+) -> MatchGroup:
     """The single verified group these three books must produce."""
-    groups = MatchMatcher().group_matches(matches)
+    groups = MatchMatcher(evidence_path=evidence_path).group_matches(matches)
     assert len(groups) == 1, f"expected exactly one verified group, got {len(groups)}"
     group = groups[0]
     assert group.status == "verified"
@@ -411,6 +431,53 @@ def test_captured_markets_reach_the_verified_group_through_the_registry():
     )
     assert "zeljeznicar|željezničar" not in proving_entries, (
         "diacritics are lossless, so that slot was proved without the allowlist"
+    )
+
+
+def test_a_populated_ledger_verifies_the_same_identity_without_the_allowlist(
+    populated_ledger,
+):
+    """The populated-ledger variant of the gate claim above.
+
+    An operator's local ledger may already carry the same alias the shipped
+    allowlist proves. The gate is allowed to reach the same verdict from that
+    claim -- the identity rule is the same -- but the attribution changes from
+    ``allowlist`` to ``ledger``. This test keeps that second path honest, and
+    the clean-ledger test above keeps the first one. Neither depends on which
+    file the operator happens to have on disk.
+    """
+    from engine.mapping_evidence import team_alias_key
+
+    group = _one_group(_linked(), evidence_path=populated_ledger)
+    assert (group.canonical_home, group.canonical_away) == (
+        "fk_sarajevo",
+        "fk_zeljeznicar",
+    )
+
+    team_evidence = [e for e in group.evidence if e.rule == "team_identity"]
+    ledger_evidence = [e for e in team_evidence if e.source == "ledger"]
+    assert ledger_evidence, (
+        "the seeded ledger claim must be what proves the alias, so at least one "
+        "pairing must attribute its identity to the ledger"
+    )
+    assert not [e for e in team_evidence if e.source == "allowlist"], (
+        "a proven ledger claim supersedes the allowlist; crediting both would "
+        "hide which proof the gate actually used"
+    )
+    key = team_alias_key("FK Sarajevo", "Sarajevo")
+    assert any(key in e.evidence_keys for e in ledger_evidence), (
+        "the ledger record must name the claim key that proved the pairing"
+    )
+    assert any(e.reason == "swapped" for e in ledger_evidence)
+
+    # The gate's verdict, not just its evidence: the same three books still price
+    # the same surebet in the same frame.
+    surebet = _match_result_surebet([group])
+    assert surebet is not None
+    assert surebet.total_margin == pytest.approx(EXPECTED_MARGIN, abs=1e-4)
+    assert (surebet.home_team, surebet.away_team) == (
+        "fk_sarajevo",
+        "fk_zeljeznicar",
     )
 
 

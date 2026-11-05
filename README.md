@@ -401,6 +401,10 @@ documented in [`docs/CI.md`](docs/CI.md).
 
 - Tests must stay offline: use fakes, `httpx.MockTransport` or
   `tests/fixtures/`. A test must never call a bookmaker.
+- Tests must not read or write the checkout's runtime state. `tests/conftest.py`
+  redirects the generated ledger, `cache/` and the SQLite store to a temporary
+  tree; run both ledger modes with `python scripts/check_test_isolation.py`.
+  Never delete the operator's ledger to make a test pass.
 - Frontend tests run the shipped JavaScript under Node 22 and skip without it.
 - `tests/test_readme_claims.py` checks the factual claims in this file against
   the code. `MARKET_MAPPING.md` is generated; regenerate it, never hand-edit it.

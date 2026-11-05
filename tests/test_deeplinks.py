@@ -189,13 +189,16 @@ def _fallback_corpus(declarations: dict) -> list[dict]:
 
 
 @pytest.mark.real_deeplinks
+@pytest.mark.real_runtime_state
 def test_a_declared_no_route_book_never_carries_a_per_event_url_in_the_capture():
     """The captured scan must agree with every `supports_event_id: false`.
 
-    Reads `cache/last_scan.json`, which is gitignored (`.gitignore:20`), so a
-    fresh clone has no corpus and this SKIPS rather than passing — the skip is
-    the point of the next test, which exercises the same predicate on data built
-    from the config and therefore runs everywhere.
+    Reads `cache/last_scan.json`, which is gitignored (`.gitignore:20`) and is
+    operator runtime state, so the test is skipped unless
+    ``BH_ARB_TEST_RUNTIME_STATE=1`` is set. That keeps the default suite
+    independent of this machine's last live scan (N0-1); the predicate itself is
+    covered unconditionally by the next test, which builds its data from the
+    config.
     """
     cache = REPO_ROOT / "cache" / "last_scan.json"
     if not cache.exists():

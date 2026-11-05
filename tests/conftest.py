@@ -1,5 +1,29 @@
 """Shared test setup.
 
+Runtime state isolation (N0-1)
+------------------------------
+The suite must produce the same result on a clean checkout and on an operator
+machine with a populated ``config/generated/mapping_evidence.json``, ``cache/``
+and SQLite store. The autouse ``_isolated_runtime_state`` fixture redirects every
+generated path into a per-test temporary directory before the test runs:
+
+* ``engine.matcher.MAPPING_EVIDENCE_FILE`` and
+  ``engine.mapping_evidence.DEFAULT_PATH`` (the generated ledger),
+* ``config.settings.CACHE_DIR``, ``server.api.CACHE_DIR`` and every JSON cache
+  file the server reads or writes,
+* ``STORAGE_PATH`` and the lazily-created SQLite stores (history, bets, paper).
+
+Config *inputs* (``config/bookmaker_markets.json``, the deeplink declarations,
+the reviewed allowlist) are deliberately not redirected: they are the shipped
+source of truth, not runtime state. The operator's real ledger and cache are
+never deleted or rewritten by a test.
+
+A test that intentionally reads the operator's runtime state opts out with
+``pytest.mark.real_runtime_state`` and is skipped unless
+``BH_ARB_TEST_RUNTIME_STATE=1`` is set. ``BH_ARB_TEST_RUNTIME_LEDGER=populated``
+seeds the redirected ledger with one accepted claim, so CI can prove the suite
+also passes with a populated ledger without touching the checkout.
+
 Most gate tests need a book that *declares* a per-event route, so they can show
 that an unproven link on such a book blocks `verified`. In the shipped config
 only Mozzartbet declares one (MDShop and Admiralbet were set to
@@ -11,6 +35,12 @@ declaration map the gate reads.
 A module that checks the *real* shipped config opts out with
 ``pytestmark = pytest.mark.real_deeplinks``.
 """
+
+from __future__ import annotations
+
+import os
+import sys
+from pathlib import Path
 
 import pytest
 
@@ -29,6 +59,51 @@ EXAMPLE_ROUTE_BOOKS = {
     },
 }
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+# Opt-in for tests that must read the operator's real runtime state.
+REAL_STATE_ENV = "BH_ARB_TEST_RUNTIME_STATE"
+# "empty" (default) or "populated": seed the redirected ledger with one claim.
+RUNTIME_LEDGER_ENV = "BH_ARB_TEST_RUNTIME_LEDGER"
+
+# The alias the certified end-to-end fixture needs ("FK Sarajevo" vs
+# "Sarajevo"). A populated ledger carrying this claim is exactly the local state
+# that used to supersede the allowlist proof in tests/test_e2e_certified.py.
+POPULATED_LEDGER_ALIAS = ("FK Sarajevo", "Sarajevo")
+
+# Every module-level JSON store the server owns. Names are the attributes on
+# ``server.api``; values are the file names under the redirected cache.
+_API_RUNTIME_FILES = {
+    "_BOOKMAKER_STATE_FILE": "bookmaker_state.json",
+    "_MARKET_STATE_FILE": "market_state.json",
+    "SUPPRESSED_CANDIDATES_FILE": "suppressed_candidates.json",
+    "_HISTORY_FILE": "scan_history.json",
+    "_LINK_SWEEP_FILE": "link_sweeps.json",
+    "_PREMATCH_CACHE_FILE": "last_scan.json",
+    "_LIVE_CACHE_FILE": "last_live_scan.json",
+    "_OPPORTUNITY_METRICS_FILE": "opportunity_metrics.json",
+    "_FEED_INTEGRITY_FILE": "feed_integrity.json",
+    "_COVERAGE_BUDGET_FILE": "coverage_budget.json",
+    "DEEP_LINK_VERIFICATIONS_FILE": "deep_link_verifications.json",
+    "DEEP_LINK_DECISIONS_FILE": "deep_link_decisions.json",
+}
+
+
+def _runtime_state_snapshot() -> dict[str, tuple[int, int]]:
+    """Fingerprint every file the suite must leave untouched."""
+    snapshot: dict[str, tuple[int, int]] = {}
+    for directory in (REPO_ROOT / "config" / "generated", REPO_ROOT / "cache"):
+        if not directory.exists():
+            continue
+        for path in directory.rglob("*"):
+            if path.is_file():
+                stat = path.stat()
+                snapshot[str(path.relative_to(REPO_ROOT))] = (
+                    stat.st_mtime_ns,
+                    stat.st_size,
+                )
+    return snapshot
+
 
 def _reset_deeplink_state() -> None:
     """Clear the declaration cache and the provenance of its last file read."""
@@ -39,10 +114,125 @@ def _reset_deeplink_state() -> None:
     common._deeplink_load_error = None
 
 
+def write_populated_ledger(path: Path) -> Path:
+    """Write one accepted alias claim, the shape an operator ledger may carry.
+
+    The claim is narrow on purpose: it is the exact fixture alias the certified
+    e2e test uses, so a test run can prove the gate reaches the same verdict
+    whether the claim comes from the allowlist or from the ledger.
+    """
+    from engine.mapping_evidence import Evidence, MappingLedger, team_alias_key
+
+    ledger = MappingLedger(path)
+    ledger.accept(
+        "team_alias",
+        team_alias_key(*POPULATED_LEDGER_ALIAS),
+        [
+            Evidence(
+                type="exact_shared_fixture",
+                detail={"seed": "N0-1 runtime isolation"},
+                scan="test-runtime-isolation",
+                books=("mbet", "wwin"),
+            )
+        ],
+        "N0-1 test seed",
+    )
+    ledger.save()
+    return path
+
+
+@pytest.fixture
+def populated_ledger(tmp_path: Path) -> Path:
+    """A ledger carrying the one claim an operator's local ledger may carry."""
+    return write_populated_ledger(tmp_path / "populated-ledger" / "mapping_evidence.json")
+
+
 def pytest_configure(config):
     config.addinivalue_line(
         "markers", "real_deeplinks: run against the shipped config/bookmaker_deeplinks.json"
     )
+    config.addinivalue_line(
+        "markers",
+        "real_runtime_state: read the operator's runtime state; requires "
+        f"{REAL_STATE_ENV}=1",
+    )
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _repository_runtime_state_untouched():
+    """Fail the run if any test wrote into the checkout's runtime directories.
+
+    This is the end-to-end half of the isolation rule: the per-test fixture
+    redirects the paths, and this guard proves nothing slipped past it. It
+    compares names, sizes and mtimes; it never reads or rewrites the files.
+    """
+    before = _runtime_state_snapshot()
+    yield
+    after = _runtime_state_snapshot()
+    added = sorted(set(after) - set(before))
+    removed = sorted(set(before) - set(after))
+    changed = sorted(
+        path for path in set(before) & set(after) if before[path] != after[path]
+    )
+    if added or removed or changed:
+        pytest.fail(
+            "the test suite changed repository runtime state; redirect the write "
+            "to tmp_path instead (N0-1): "
+            f"added={added} removed={removed} changed={changed}"
+        )
+
+
+@pytest.fixture(autouse=True)
+def _isolated_runtime_state(
+    request: pytest.FixtureRequest,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path_factory: pytest.TempPathFactory,
+):
+    """Redirect every generated runtime path into a per-test temporary tree.
+
+    The temporary tree is created through ``tmp_path_factory`` rather than
+    ``tmp_path`` so a test that asserts the exact contents of its own
+    ``tmp_path`` still sees only what it created.
+    """
+    if request.node.get_closest_marker("real_runtime_state"):
+        if os.getenv(REAL_STATE_ENV) != "1":
+            pytest.skip(
+                "reads the operator's runtime state; set "
+                f"{REAL_STATE_ENV}=1 to run it against this machine's data"
+            )
+        yield
+        return
+
+    from config import settings
+    from engine import mapping_evidence, matcher
+    from server import api
+
+    runtime = tmp_path_factory.mktemp("runtime")
+    generated = runtime / "config" / "generated"
+    cache = runtime / "cache"
+    generated.mkdir(parents=True, exist_ok=True)
+    cache.mkdir(parents=True, exist_ok=True)
+    ledger_path = generated / "mapping_evidence.json"
+    if os.getenv(RUNTIME_LEDGER_ENV, "empty") == "populated":
+        write_populated_ledger(ledger_path)
+
+    monkeypatch.setattr(matcher, "MAPPING_EVIDENCE_FILE", str(ledger_path))
+    monkeypatch.setattr(mapping_evidence, "DEFAULT_PATH", ledger_path)
+    monkeypatch.setattr(settings, "CACHE_DIR", str(cache))
+    monkeypatch.setattr(api, "CACHE_DIR", str(cache))
+    monkeypatch.setenv("STORAGE_PATH", str(cache / "bh_arb.sqlite3"))
+    for attribute, filename in _API_RUNTIME_FILES.items():
+        monkeypatch.setattr(api, attribute, str(cache / filename))
+    # Lazily-created stores must be rebuilt against the redirected STORAGE_PATH.
+    for attribute in ("_storage", "_bet_store", "_paper_store"):
+        monkeypatch.setattr(api, attribute, None)
+
+    # A module that copied CACHE_DIR at import time keeps its own reference.
+    verify_module = sys.modules.get("scripts.verify_deeplinks")
+    if verify_module is not None:
+        monkeypatch.setattr(verify_module, "CACHE_DIR", str(cache))
+
+    yield
 
 
 @pytest.fixture(autouse=True)

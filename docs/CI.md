@@ -11,6 +11,37 @@ P1-4 hardening. Every push and pull request runs three jobs:
 Python 3.11 stays the required runtime (it is what the container and the systemd
 unit use). 3.12 is a forward-compatibility check, not a second support promise.
 
+## Hermetic tests and runtime state
+
+The offline suite must give the same result on a clean checkout and on an
+operator machine with a populated `config/generated/mapping_evidence.json`,
+`cache/` and SQLite store (N0-1). `tests/conftest.py` enforces this:
+
+* An autouse fixture redirects `engine.matcher.MAPPING_EVIDENCE_FILE`,
+  `engine.mapping_evidence.DEFAULT_PATH`, `config.settings.CACHE_DIR`, every
+  JSON cache file in `server/api.py`, and `STORAGE_PATH` into a per-test
+  temporary tree.
+* A session-scoped guard fingerprints `config/generated/` and `cache/` at the
+  start and fails the run if any test added, removed or changed a file there.
+* Shipped config inputs (`config/bookmaker_markets.json`, the deeplink
+  declarations, the reviewed allowlist) are not redirected: they are source, not
+  runtime state.
+
+A test that intentionally reads this machine's runtime state is marked
+`@pytest.mark.real_runtime_state` and is skipped unless
+`BH_ARB_TEST_RUNTIME_STATE=1` is set. Never delete or rewrite the operator's
+ledger to make a test pass; redirect the path instead.
+
+The CI `tests` job runs the suite twice on Python 3.11: once with no generated
+ledger (the coverage run) and once with
+`BH_ARB_TEST_RUNTIME_LEDGER=populated`, which seeds the redirected ledger with
+the one alias claim that used to break `tests/test_e2e_certified.py`. Run both
+modes locally with:
+
+```bash
+python scripts/check_test_isolation.py
+```
+
 ## Coverage
 
 The measured baseline on 2026-11-04 was **81.55%** (reported as 82%) across

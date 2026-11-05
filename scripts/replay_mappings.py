@@ -144,6 +144,7 @@ def replay(
     mode: str,
     no_learn: bool,
     iterations: int = 5,
+    ledger_path: str | None = None,
 ) -> dict[str, Any]:
     matches = load_matches(paths)
     shift_kickoffs(matches)
@@ -151,12 +152,18 @@ def replay(
     fixed_point = True
     learned = 0
     used_iterations = 0
-    evidence_path: str | None = None
+    # With --no-learn the matcher reads the seed ledger directly. An explicit
+    # --ledger keeps a replay independent of the operator's generated evidence;
+    # without one the historical default (the current ledger) still applies.
+    evidence_path: str | None = ledger_path
     if not no_learn:
-        ledger = MappingLedger(
-            Path(tempfile.mkdtemp(prefix="replay-evidence-")) / "evidence.json"
-        ).load()
-        if mode == "seeded":
+        if mode == "cold":
+            ledger = MappingLedger(
+                Path(tempfile.mkdtemp(prefix="replay-evidence-")) / "evidence.json"
+            ).load()
+        elif ledger_path:
+            ledger = MappingLedger(ledger_path).load()
+        else:
             ledger = MappingLedger().load()
         for used_iterations in range(1, iterations + 1):
             ledger, report = learn(matches, ledger, scan=f"replay-{used_iterations}")
@@ -165,6 +172,7 @@ def replay(
                 break
             fixed_point = False
         learned = len(ledger.claims)
+        # Learned claims are written to a scratch file, never back to --ledger.
         evidence_path = str(
             Path(tempfile.mkdtemp(prefix="replay-evidence-")) / "evidence.json"
         )
@@ -251,6 +259,15 @@ def main(argv: list[str] | None = None) -> int:
         help="maximum learner passes before reporting a non-fixed point",
     )
     parser.add_argument(
+        "--ledger",
+        default=None,
+        help=(
+            "seed evidence ledger to read; learned claims go to a scratch file. "
+            "Omit to use the generated ledger, which makes a replay depend on the "
+            "operator's local state"
+        ),
+    )
+    parser.add_argument(
         "--check",
         action="store_true",
         help="exit 1 on a false merge or an unresolved evidence-backed pair",
@@ -258,7 +275,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     mode = "cold" if args.cold else "seeded"
-    report = replay(args.paths, mode, args.no_learn, args.iterations)
+    report = replay(args.paths, mode, args.no_learn, args.iterations, args.ledger)
     print(json.dumps(report, indent=2, sort_keys=True))
 
     if not args.check:

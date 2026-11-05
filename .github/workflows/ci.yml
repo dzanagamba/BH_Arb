@@ -65,6 +65,14 @@ jobs:
           python -m pytest --cov --cov-report=term-missing --cov-report=xml
           python -m coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY"
 
+      # N0-1: the same suite must pass when the redirected generated ledger
+      # carries an accepted claim, as an operator's local ledger does.
+      - name: Tests with a populated generated ledger
+        if: matrix.python-version == '3.11'
+        run: python -m pytest
+        env:
+          BH_ARB_TEST_RUNTIME_LEDGER: populated
+
       - name: Tests
         if: matrix.python-version != '3.11'
         run: python -m pytest
