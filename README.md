@@ -434,6 +434,7 @@ python -m pytest
 python -m ruff check .
 python -m mypy .
 python scripts/generate_market_mapping_doc.py --check
+python scripts/audit_admissibility.py --check
 
 # Opt-in property load budgets (skipped in the normal fast suite)
 BH_ARB_TEST_SLOW=1 python -m pytest tests/test_perf_budgets.py
@@ -459,6 +460,10 @@ documented in [`docs/CI.md`](docs/CI.md).
   `tests/test_properties_pricing.py` and `tests/test_properties_identity.py`.
   The load budgets are opt-in (`BH_ARB_TEST_SLOW=1`); see
   [`docs/PROPERTY_TESTS.md`](docs/PROPERTY_TESTS.md).
+- Sport and market admissibility is re-audited against a dated baseline
+  (`scripts/audit_admissibility.py --check`, N3-2). A new family is a warning,
+  never an admission; see
+  [`docs/ADMISSIBILITY_AUDIT.md`](docs/ADMISSIBILITY_AUDIT.md).
 - `tests/test_readme_claims.py` checks the factual claims in this file against
   the code. `MARKET_MAPPING.md` is generated; regenerate it, never hand-edit it.
 - `tests/fixtures/e2e_certified/` is frozen. Do not edit or re-capture it.

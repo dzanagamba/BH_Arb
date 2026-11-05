@@ -67,6 +67,7 @@ from config.settings import (
     VERIFIED_KICKOFF_WINDOW_MINUTES,
     book_risk_profile,
 )
+from engine.admissibility import health_summary as admissibility_health
 from engine.ai import MatchAI, PairProposal
 from engine.arbitrage import ArbitrageEngine
 from engine.candidate_remediation import (
@@ -3503,6 +3504,9 @@ async def health():
                 book for book, config in BOOKMAKERS.items() if config.get("enabled")
             ]
         ),
+        # N3-2: the dated sport/market admissibility audit. It reports the
+        # shipped baseline's status; it never enables a sport or market.
+        "admissibility_audit": admissibility_health(),
         "unmapped_markets": dict(unmapped_markets),
         "unmapped_markets_by_book": unmapped_by_book(),
         "verified_groups": sum(

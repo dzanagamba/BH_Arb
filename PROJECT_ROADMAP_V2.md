@@ -78,7 +78,7 @@ long-horizon.
 | N2-5 | Complete Bosnian localization and automated a11y checks | P2 | M | N0-3 | Done |
 | N2-6 | Parser fixture refresh and drift detection | P2 | M | — | Done |
 | N3-1 | Property-based pricing/identity tests and load budgets | P3 | M | N0-1 | Done |
-| N3-2 | Scheduled market/sport admissibility re-audit | P3 | M | N2-6 | Not started |
+| N3-2 | Scheduled market/sport admissibility re-audit | P3 | M | N2-6 | Done |
 
 **Recommended first session:** N0-1, then N0-3 (both small and immediately
 verifiable). Then N0-2/N0-4, because source freshness and automatic CLV improve
@@ -713,7 +713,7 @@ fixtures. They are a second net, not a new trust rule.
 
 ### N3-2 — Scheduled market/sport admissibility re-audit
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P3
 **Effort:** M
 **Depends on:** N2-6
@@ -734,10 +734,10 @@ one audit as permanent.
 
 **Acceptance criteria:**
 
-- [ ] A scheduled report records per-book family and settlement coverage.
-- [ ] A disappeared admitted family is visible; a new one is not auto-admitted.
-- [ ] Every enabled family/sport has a dated evidence entry.
-- [ ] No threshold is lowered to make a sport fit.
+- [x] A scheduled report records per-book family and settlement coverage.
+- [x] A disappeared admitted family is visible; a new one is not auto-admitted.
+- [x] Every enabled family/sport has a dated evidence entry.
+- [x] No threshold is lowered to make a sport fit.
 
 **Tests:**
 
@@ -785,6 +785,63 @@ For every task:
 
 Newest first. Each entry: date, task, status, commands, measured result, files
 changed, follow-ups.
+
+### 2026-11-05 — N3-2 — Done
+
+**Commands**
+
+```bash
+python -m pytest
+BH_ARB_TEST_RUNTIME_LEDGER=populated python -m pytest
+python -m pytest --cov --cov-report=term
+python -m pytest tests/test_admissibility_audit.py tests/test_sports.py \
+  tests/test_multisport_arbitrage.py tests/test_market_fixtures.py
+python scripts/audit_admissibility.py --check
+python -m ruff check .
+python -m mypy .
+python scripts/generate_market_mapping_doc.py --check
+```
+
+**Measured result**
+
+- Operator checkout: **1,645 passed, 6 skipped, 1 warning** in 67.79 s;
+  populated-ledger mode: **1,645 passed, 6 skipped, 1 warning** in 69.19 s.
+- Coverage run: **1,645 passed, 6 skipped** in 211.91 s; total coverage **84.02%**
+  (floor 80%).
+- `tests/test_admissibility_audit.py`: **16 passed** — stable schema, dated
+  evidence for every enabled sport/market, the three-book rule, a disabled
+  sport that becomes admissible still not admitted, disappeared family/book,
+  settlement change, lowered threshold, new family/market warnings, missing
+  evidence, the shipped baseline, both CLI outcomes and the health block.
+- `scripts/audit_admissibility.py --check`: **4 sports, 12 markets, 0 failures,
+  0 warnings**, exit 0. The report records per-book family counts and
+  settlements for basketball/tennis (and the blocked hockey probe), registry
+  declarations per football market, and measured price sources for 0.5/4.5/5.5.
+- Named existing suites: **140 passed** in 3.91 s.
+- Ruff clean, MyPy clean on **214 source files**, generated market doc in sync.
+
+**Files changed**
+
+- `engine/admissibility.py` — stable report builder, per-book family/settlement
+  normalization, three-book/three-family rule, change detector, evidence
+  validation and bounded health summary.
+- `scripts/audit_admissibility.py` — offline report, `--check`, dated
+  `--write-baseline`, evidence-path overrides.
+- `server/api.py` — `/api/health.admissibility_audit`.
+- `docs/evidence/2026-11-05-admissibility-baseline.json` — the dated baseline.
+- `tests/test_admissibility_audit.py` — 16 tests.
+- `.github/workflows/ci.yml`, `docs/ADMISSIBILITY_AUDIT.md`, `docs/CI.md`,
+  `docs/MULTISPORT_EVIDENCE.md`, `README.md`.
+- `tests/test_properties_pricing.py` — the funded-rounding property now floors
+  the raw stakes; the earlier version floored the cent-rounded exact stakes and
+  allowed a 0.012 false gain. This is an N3-1 test fix found by the coverage run.
+- `PROJECT_ROADMAP_V2.md`, `docs/SESSION_BRIEF.md`.
+
+**Follow-ups:** All roadmap tasks are Done except N2-4, which remains **Deferred**
+by the operator. The audit is offline and CI-scheduled on every push; the live
+bookmaker probe stays a reviewed operator action. A new family or price source
+is a warning and never changes an admitted flag. No certainty-gate, link-proof,
+settlement, price-source or one-leg-per-book rule changed.
 
 ### 2026-11-05 — N3-1 — Done
 

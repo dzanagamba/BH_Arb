@@ -33,6 +33,11 @@ jobs:
       - name: Generated market doc is in sync
         run: python scripts/generate_market_mapping_doc.py --check
 
+      # N3-2: a disappeared admitted family, a settlement change or a lowered
+      # threshold fails here. The live bookmaker probe stays out of CI.
+      - name: Sport/market admissibility audit
+        run: python scripts/audit_admissibility.py --check
+
   tests:
     runs-on: ubuntu-latest
     strategy:

@@ -250,10 +250,12 @@ def test_rounding_is_bounded_and_downward_rounding_never_gains(
 
     # A deliberately downward split is the conservative execution model. The
     # unspent cents stay in the bankroll, so profit is measured against the
-    # whole investment: a floor can only lower the returned amount, never
-    # invent profit. That conservative loss is non-negative.
+    # whole investment: a floor of the raw stakes can only lower the returned
+    # amount, never invent profit. That conservative loss is non-negative.
+    raw_stakes = [investment * (1.0 / odd) / margin for odd in odds]
     worst_funded_return = min(
-        (math.floor(row["stake"] / step) * step) * row["odds"] for row in rows
+        (math.floor(stake / step) * step) * odd
+        for stake, odd in zip(raw_stakes, odds, strict=True)
     )
     exact_profit = investment / margin - investment
     funded_profit = worst_funded_return - investment

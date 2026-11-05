@@ -4,7 +4,7 @@ P1-4/N1-4 hardening. Every push and pull request runs four jobs:
 
 | Job | What it does |
 |---|---|
-| `quality` | Ruff, MyPy and the generated-market-doc check on Python 3.11. |
+| `quality` | Ruff, MyPy, the generated-market-doc check and the dated sport/market admissibility audit on Python 3.11. |
 | `tests` | Full pytest suite on Python 3.11 and 3.12. The 3.11 leg also measures coverage, writes a markdown summary to the workflow run page, and uploads `coverage.xml`. The 3.11 leg then runs the opt-in property load budgets separately. |
 | `security` | `pip-audit` against both requirement files and Bandit at medium severity and above. |
 | `sbom` | CycloneDX JSON from `requirements.txt` (the file the image installs), verified non-empty and uploaded as `sbom-cyclonedx`. |
@@ -51,6 +51,16 @@ keys, source-id set, labels, nested shape), when an enabled book has no
 contract, or when a capture is older than the 120-day policy. A capture failure
 is reported separately and never treated as a feed change. See
 `docs/PARSER_CONTRACTS.md` for the refresh cadence and the diff format.
+
+## Admissibility audit
+
+The `quality` job runs `python scripts/audit_admissibility.py --check` (N3-2).
+It compares a fresh offline report with
+`docs/evidence/2026-11-05-admissibility-baseline.json` and fails when an admitted
+sport/market/family disappears, a settlement changes or the three-book rule was
+lowered. New families are warnings and are never auto-admitted. The live
+bookmaker probe (`scripts/measure_sports.py`) stays out of CI; see
+`docs/ADMISSIBILITY_AUDIT.md` for the weekly operator procedure.
 
 ## Property tests and load budgets
 

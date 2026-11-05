@@ -1,0 +1,1051 @@
+{
+  "enabled_books": [
+    "admiralbet",
+    "betole",
+    "maxbet",
+    "mbet",
+    "mdshop",
+    "mozzartbet",
+    "premier_kladionica",
+    "sportplus",
+    "wwin"
+  ],
+  "enabled_sports": [
+    "football",
+    "basketball",
+    "tennis"
+  ],
+  "evidence": {
+    "football_lines": {
+      "available": true,
+      "observed_at": "2026-11-04T10:04:02+00:00",
+      "path": "docs/evidence/2026-11-04-football-lines.json",
+      "scope": "football line coverage"
+    },
+    "prematch_scan": {
+      "available": true,
+      "observed_at": "2026-11-04T10:50:58+00:00",
+      "path": "docs/evidence/2026-11-04-prematch-scan.json",
+      "scope": "dated football scan"
+    },
+    "sport_discovery": {
+      "available": true,
+      "observed_at": "2026-11-04T00:53:08+00:00",
+      "path": "docs/evidence/2026-11-04-sport-discovery.json",
+      "scope": "sport and per-book family coverage"
+    }
+  },
+  "generated_at": "2026-11-05T00:00:00+00:00",
+  "markets": {
+    "1x2": {
+      "admitted": true,
+      "declared_books": {
+        "live": [
+          "maxbet",
+          "mbet",
+          "mozzartbet",
+          "premier_kladionica",
+          "sportplus",
+          "wwin"
+        ],
+        "prematch": [
+          "admiralbet",
+          "betole",
+          "maxbet",
+          "mbet",
+          "mdshop",
+          "mozzartbet",
+          "premier_kladionica",
+          "sportplus",
+          "wwin"
+        ]
+      },
+      "enabled": true,
+      "evidence": {
+        "available": true,
+        "measured": false,
+        "observed_at": "2026-11-04T10:50:58+00:00",
+        "path": "docs/evidence/2026-11-04-prematch-scan.json",
+        "price_sources": [],
+        "scope": "dated prematch scan (football market families)",
+        "source_rows": {}
+      },
+      "experimental": false,
+      "market": "1x2",
+      "note": "dated prematch scan; market-level rows are in the generated registry and MARKET_MAPPING.md, not in this report",
+      "settlement": "full_time",
+      "sport": "football"
+    },
+    "asian_handicap": {
+      "admitted": true,
+      "declared_books": {
+        "live": [],
+        "prematch": []
+      },
+      "enabled": true,
+      "evidence": {
+        "available": true,
+        "measured": false,
+        "observed_at": "2026-11-04T10:50:58+00:00",
+        "path": "docs/evidence/2026-11-04-prematch-scan.json",
+        "price_sources": [],
+        "scope": "dated prematch scan (football market families)",
+        "source_rows": {}
+      },
+      "experimental": false,
+      "market": "asian_handicap",
+      "note": "dated prematch scan; market-level rows are in the generated registry and MARKET_MAPPING.md, not in this report",
+      "settlement": "full_time",
+      "sport": "football"
+    },
+    "btts": {
+      "admitted": true,
+      "declared_books": {
+        "live": [
+          "maxbet",
+          "mbet",
+          "mozzartbet",
+          "premier_kladionica",
+          "sportplus",
+          "wwin"
+        ],
+        "prematch": [
+          "admiralbet",
+          "betole",
+          "maxbet",
+          "mbet",
+          "mdshop",
+          "mozzartbet",
+          "premier_kladionica",
+          "sportplus",
+          "wwin"
+        ]
+      },
+      "enabled": true,
+      "evidence": {
+        "available": true,
+        "measured": false,
+        "observed_at": "2026-11-04T10:50:58+00:00",
+        "path": "docs/evidence/2026-11-04-prematch-scan.json",
+        "price_sources": [],
+        "scope": "dated prematch scan (football market families)",
+        "source_rows": {}
+      },
+      "experimental": false,
+      "market": "btts",
+      "note": "dated prematch scan; market-level rows are in the generated registry and MARKET_MAPPING.md, not in this report",
+      "settlement": "full_time",
+      "sport": "football"
+    },
+    "double_chance": {
+      "admitted": true,
+      "declared_books": {
+        "live": [
+          "maxbet",
+          "mbet",
+          "mozzartbet",
+          "premier_kladionica",
+          "sportplus",
+          "wwin"
+        ],
+        "prematch": [
+          "admiralbet",
+          "betole",
+          "maxbet",
+          "mbet",
+          "mdshop",
+          "mozzartbet",
+          "premier_kladionica",
+          "sportplus",
+          "wwin"
+        ]
+      },
+      "enabled": true,
+      "evidence": {
+        "available": true,
+        "measured": false,
+        "observed_at": "2026-11-04T10:50:58+00:00",
+        "path": "docs/evidence/2026-11-04-prematch-scan.json",
+        "price_sources": [],
+        "scope": "dated prematch scan (football market families)",
+        "source_rows": {}
+      },
+      "experimental": false,
+      "market": "double_chance",
+      "note": "dated prematch scan; market-level rows are in the generated registry and MARKET_MAPPING.md, not in this report",
+      "settlement": "full_time",
+      "sport": "football"
+    },
+    "first_half_1x2": {
+      "admitted": true,
+      "declared_books": {
+        "live": [],
+        "prematch": []
+      },
+      "enabled": true,
+      "evidence": {
+        "available": true,
+        "measured": false,
+        "observed_at": "2026-11-04T10:50:58+00:00",
+        "path": "docs/evidence/2026-11-04-prematch-scan.json",
+        "price_sources": [],
+        "scope": "dated prematch scan (football market families)",
+        "source_rows": {}
+      },
+      "experimental": false,
+      "market": "first_half_1x2",
+      "note": "dated prematch scan; market-level rows are in the generated registry and MARKET_MAPPING.md, not in this report",
+      "settlement": "full_time",
+      "sport": "football"
+    },
+    "first_half_ou": {
+      "admitted": true,
+      "declared_books": {
+        "live": [],
+        "prematch": []
+      },
+      "enabled": true,
+      "evidence": {
+        "available": true,
+        "measured": false,
+        "observed_at": "2026-11-04T10:50:58+00:00",
+        "path": "docs/evidence/2026-11-04-prematch-scan.json",
+        "price_sources": [],
+        "scope": "dated prematch scan (football market families)",
+        "source_rows": {}
+      },
+      "experimental": false,
+      "market": "first_half_ou",
+      "note": "enabled; the dated scan recorded no offer. The price guard still applies if a book starts publishing it.",
+      "settlement": "full_time",
+      "sport": "football"
+    },
+    "over_under_0_5": {
+      "admitted": true,
+      "declared_books": {
+        "live": [
+          "admiralbet",
+          "maxbet",
+          "mdshop",
+          "premier_kladionica",
+          "wwin"
+        ],
+        "prematch": [
+          "admiralbet",
+          "maxbet",
+          "mdshop",
+          "premier_kladionica",
+          "wwin"
+        ]
+      },
+      "enabled": true,
+      "evidence": {
+        "available": true,
+        "measured": true,
+        "observed_at": "2026-11-04T10:04:02+00:00",
+        "path": "docs/evidence/2026-11-04-football-lines.json",
+        "price_sources": [
+          "maxbet",
+          "nsoft",
+          "premier_kladionica",
+          "wwin"
+        ],
+        "scope": "measured cross-book line coverage",
+        "source_rows": {
+          "maxbet": 46,
+          "nsoft": 264,
+          "premier_kladionica": 645,
+          "wwin": 6
+        }
+      },
+      "experimental": false,
+      "market": "over_under_0_5",
+      "note": "measured cross-book line coverage in the dated report",
+      "settlement": "full_time",
+      "sport": "football"
+    },
+    "over_under_1_5": {
+      "admitted": true,
+      "declared_books": {
+        "live": [
+          "admiralbet",
+          "maxbet",
+          "mbet",
+          "mdshop",
+          "mozzartbet",
+          "premier_kladionica",
+          "sportplus",
+          "wwin"
+        ],
+        "prematch": [
+          "admiralbet",
+          "betole",
+          "maxbet",
+          "mbet",
+          "mdshop",
+          "mozzartbet",
+          "premier_kladionica",
+          "sportplus",
+          "wwin"
+        ]
+      },
+      "enabled": true,
+      "evidence": {
+        "available": true,
+        "measured": false,
+        "observed_at": "2026-11-04T10:50:58+00:00",
+        "path": "docs/evidence/2026-11-04-prematch-scan.json",
+        "price_sources": [],
+        "scope": "dated prematch scan (football market families)",
+        "source_rows": {}
+      },
+      "experimental": false,
+      "market": "over_under_1_5",
+      "note": "dated prematch scan; market-level rows are in the generated registry and MARKET_MAPPING.md, not in this report",
+      "settlement": "full_time",
+      "sport": "football"
+    },
+    "over_under_2_5": {
+      "admitted": true,
+      "declared_books": {
+        "live": [
+          "admiralbet",
+          "maxbet",
+          "mbet",
+          "mdshop",
+          "mozzartbet",
+          "premier_kladionica",
+          "sportplus",
+          "wwin"
+        ],
+        "prematch": [
+          "admiralbet",
+          "betole",
+          "maxbet",
+          "mbet",
+          "mdshop",
+          "mozzartbet",
+          "premier_kladionica",
+          "sportplus",
+          "wwin"
+        ]
+      },
+      "enabled": true,
+      "evidence": {
+        "available": true,
+        "measured": false,
+        "observed_at": "2026-11-04T10:50:58+00:00",
+        "path": "docs/evidence/2026-11-04-prematch-scan.json",
+        "price_sources": [],
+        "scope": "dated prematch scan (football market families)",
+        "source_rows": {}
+      },
+      "experimental": false,
+      "market": "over_under_2_5",
+      "note": "dated prematch scan; market-level rows are in the generated registry and MARKET_MAPPING.md, not in this report",
+      "settlement": "full_time",
+      "sport": "football"
+    },
+    "over_under_3_5": {
+      "admitted": true,
+      "declared_books": {
+        "live": [
+          "admiralbet",
+          "maxbet",
+          "mbet",
+          "mdshop",
+          "mozzartbet",
+          "premier_kladionica",
+          "sportplus",
+          "wwin"
+        ],
+        "prematch": [
+          "admiralbet",
+          "betole",
+          "maxbet",
+          "mbet",
+          "mdshop",
+          "mozzartbet",
+          "premier_kladionica",
+          "sportplus",
+          "wwin"
+        ]
+      },
+      "enabled": true,
+      "evidence": {
+        "available": true,
+        "measured": false,
+        "observed_at": "2026-11-04T10:50:58+00:00",
+        "path": "docs/evidence/2026-11-04-prematch-scan.json",
+        "price_sources": [],
+        "scope": "dated prematch scan (football market families)",
+        "source_rows": {}
+      },
+      "experimental": false,
+      "market": "over_under_3_5",
+      "note": "dated prematch scan; market-level rows are in the generated registry and MARKET_MAPPING.md, not in this report",
+      "settlement": "full_time",
+      "sport": "football"
+    },
+    "over_under_4_5": {
+      "admitted": true,
+      "declared_books": {
+        "live": [
+          "admiralbet",
+          "maxbet",
+          "mbet",
+          "mdshop",
+          "mozzartbet",
+          "premier_kladionica",
+          "wwin"
+        ],
+        "prematch": [
+          "admiralbet",
+          "maxbet",
+          "mbet",
+          "mdshop",
+          "mozzartbet",
+          "premier_kladionica",
+          "wwin"
+        ]
+      },
+      "enabled": true,
+      "evidence": {
+        "available": true,
+        "measured": true,
+        "observed_at": "2026-11-04T10:04:02+00:00",
+        "path": "docs/evidence/2026-11-04-football-lines.json",
+        "price_sources": [
+          "maxbet",
+          "mbet",
+          "nsoft",
+          "premier_kladionica",
+          "wwin"
+        ],
+        "scope": "measured cross-book line coverage",
+        "source_rows": {
+          "maxbet": 991,
+          "mbet": 805,
+          "nsoft": 731,
+          "premier_kladionica": 982,
+          "wwin": 318
+        }
+      },
+      "experimental": false,
+      "market": "over_under_4_5",
+      "note": "measured cross-book line coverage in the dated report",
+      "settlement": "full_time",
+      "sport": "football"
+    },
+    "over_under_5_5": {
+      "admitted": true,
+      "declared_books": {
+        "live": [
+          "admiralbet",
+          "maxbet",
+          "mbet",
+          "mdshop",
+          "mozzartbet",
+          "premier_kladionica",
+          "wwin"
+        ],
+        "prematch": [
+          "admiralbet",
+          "maxbet",
+          "mbet",
+          "mdshop",
+          "mozzartbet",
+          "premier_kladionica",
+          "wwin"
+        ]
+      },
+      "enabled": true,
+      "evidence": {
+        "available": true,
+        "measured": true,
+        "observed_at": "2026-11-04T10:04:02+00:00",
+        "path": "docs/evidence/2026-11-04-football-lines.json",
+        "price_sources": [
+          "maxbet",
+          "mbet",
+          "nsoft",
+          "premier_kladionica",
+          "wwin"
+        ],
+        "scope": "measured cross-book line coverage",
+        "source_rows": {
+          "maxbet": 530,
+          "mbet": 728,
+          "nsoft": 460,
+          "premier_kladionica": 713,
+          "wwin": 21
+        }
+      },
+      "experimental": false,
+      "market": "over_under_5_5",
+      "note": "measured cross-book line coverage in the dated report",
+      "settlement": "full_time",
+      "sport": "football"
+    }
+  },
+  "rule": {
+    "auto_admit": false,
+    "min_books": 3,
+    "min_families": 3,
+    "same_settlement": true
+  },
+  "schema_version": "1",
+  "sports": {
+    "basketball": {
+      "admissible": true,
+      "admitted": true,
+      "books": {
+        "admiralbet": {
+          "families": {
+            "handicap": 101,
+            "moneyline": 89,
+            "total": 103
+          },
+          "matches": 103,
+          "note": "",
+          "settlements": {
+            "handicap": "regulation",
+            "moneyline": "full_time_incl_ot",
+            "total": "regulation"
+          }
+        },
+        "maxbet": {
+          "families": {
+            "moneyline": 32,
+            "total": 6
+          },
+          "matches": 32,
+          "note": "",
+          "settlements": {
+            "moneyline": "full_time_incl_ot",
+            "total": "regulation"
+          }
+        },
+        "mbet": {
+          "families": {
+            "handicap": 29,
+            "moneyline": 81,
+            "total": 90
+          },
+          "matches": 90,
+          "note": "",
+          "settlements": {
+            "handicap": "regulation",
+            "moneyline": "full_time_incl_ot",
+            "total": "regulation"
+          }
+        },
+        "mdshop": {
+          "families": {
+            "handicap": 101,
+            "moneyline": 89,
+            "total": 103
+          },
+          "matches": 103,
+          "note": "",
+          "settlements": {
+            "handicap": "regulation",
+            "moneyline": "full_time_incl_ot",
+            "total": "regulation"
+          }
+        },
+        "sportplus": {
+          "families": {
+            "handicap": 55,
+            "moneyline": 76,
+            "total": 56
+          },
+          "matches": 76,
+          "note": "",
+          "settlements": {
+            "handicap": "regulation",
+            "moneyline": "full_time_incl_ot",
+            "total": "regulation"
+          }
+        }
+      },
+      "enabled": true,
+      "evidence": {
+        "available": true,
+        "observed_at": "2026-11-04T00:53:08+00:00",
+        "path": "docs/evidence/2026-11-04-sport-discovery.json",
+        "scope": "measured per-book family coverage"
+      },
+      "family_settlements": {
+        "handicap": "regulation",
+        "moneyline": "full_time_incl_ot",
+        "total": "regulation"
+      },
+      "missing_families": [],
+      "qualifying_books": [
+        "admiralbet",
+        "mbet",
+        "mdshop",
+        "sportplus"
+      ],
+      "rule": {
+        "min_books": 3,
+        "min_families": 3,
+        "same_settlement": true
+      },
+      "sport": "basketball",
+      "status": "admitted"
+    },
+    "football": {
+      "admissible": true,
+      "admitted": true,
+      "books": {
+        "admiralbet": {
+          "families": {
+            "1x2": 1,
+            "btts": 1,
+            "double_chance": 1,
+            "over_under_0_5": 2,
+            "over_under_1_5": 2,
+            "over_under_2_5": 2,
+            "over_under_3_5": 2,
+            "over_under_4_5": 2,
+            "over_under_5_5": 2
+          },
+          "matches": 0,
+          "note": "declared in the market registry",
+          "settlements": {
+            "1x2": "full_time",
+            "btts": "full_time",
+            "double_chance": "full_time",
+            "over_under_0_5": "full_time",
+            "over_under_1_5": "full_time",
+            "over_under_2_5": "full_time",
+            "over_under_3_5": "full_time",
+            "over_under_4_5": "full_time",
+            "over_under_5_5": "full_time"
+          }
+        },
+        "betole": {
+          "families": {
+            "1x2": 4,
+            "btts": 4,
+            "double_chance": 5,
+            "over_under_1_5": 5,
+            "over_under_2_5": 5,
+            "over_under_3_5": 5
+          },
+          "matches": 0,
+          "note": "declared in the market registry",
+          "settlements": {
+            "1x2": "full_time",
+            "btts": "full_time",
+            "double_chance": "full_time",
+            "over_under_1_5": "full_time",
+            "over_under_2_5": "full_time",
+            "over_under_3_5": "full_time"
+          }
+        },
+        "maxbet": {
+          "families": {
+            "1x2": 1,
+            "btts": 1,
+            "double_chance": 1,
+            "over_under_0_5": 1,
+            "over_under_1_5": 1,
+            "over_under_2_5": 1,
+            "over_under_3_5": 1,
+            "over_under_4_5": 1,
+            "over_under_5_5": 1
+          },
+          "matches": 0,
+          "note": "declared in the market registry",
+          "settlements": {
+            "1x2": "full_time",
+            "btts": "full_time",
+            "double_chance": "full_time",
+            "over_under_0_5": "full_time",
+            "over_under_1_5": "full_time",
+            "over_under_2_5": "full_time",
+            "over_under_3_5": "full_time",
+            "over_under_4_5": "full_time",
+            "over_under_5_5": "full_time"
+          }
+        },
+        "mbet": {
+          "families": {
+            "1x2": 1,
+            "btts": 1,
+            "double_chance": 1,
+            "over_under_1_5": 1,
+            "over_under_2_5": 1,
+            "over_under_3_5": 1,
+            "over_under_4_5": 1,
+            "over_under_5_5": 1
+          },
+          "matches": 0,
+          "note": "declared in the market registry",
+          "settlements": {
+            "1x2": "full_time",
+            "btts": "full_time",
+            "double_chance": "full_time",
+            "over_under_1_5": "full_time",
+            "over_under_2_5": "full_time",
+            "over_under_3_5": "full_time",
+            "over_under_4_5": "full_time",
+            "over_under_5_5": "full_time"
+          }
+        },
+        "mdshop": {
+          "families": {
+            "1x2": 1,
+            "btts": 1,
+            "double_chance": 1,
+            "over_under_0_5": 2,
+            "over_under_1_5": 2,
+            "over_under_2_5": 2,
+            "over_under_3_5": 2,
+            "over_under_4_5": 2,
+            "over_under_5_5": 2
+          },
+          "matches": 0,
+          "note": "declared in the market registry",
+          "settlements": {
+            "1x2": "full_time",
+            "btts": "full_time",
+            "double_chance": "full_time",
+            "over_under_0_5": "full_time",
+            "over_under_1_5": "full_time",
+            "over_under_2_5": "full_time",
+            "over_under_3_5": "full_time",
+            "over_under_4_5": "full_time",
+            "over_under_5_5": "full_time"
+          }
+        },
+        "mozzartbet": {
+          "families": {
+            "1x2": 1,
+            "btts": 1,
+            "double_chance": 1,
+            "over_under_1_5": 1,
+            "over_under_2_5": 1,
+            "over_under_3_5": 1,
+            "over_under_4_5": 1,
+            "over_under_5_5": 1
+          },
+          "matches": 0,
+          "note": "declared in the market registry",
+          "settlements": {
+            "1x2": "full_time",
+            "btts": "full_time",
+            "double_chance": "full_time",
+            "over_under_1_5": "full_time",
+            "over_under_2_5": "full_time",
+            "over_under_3_5": "full_time",
+            "over_under_4_5": "full_time",
+            "over_under_5_5": "full_time"
+          }
+        },
+        "premier_kladionica": {
+          "families": {
+            "1x2": 1,
+            "btts": 1,
+            "double_chance": 1,
+            "over_under_0_5": 1,
+            "over_under_1_5": 1,
+            "over_under_2_5": 1,
+            "over_under_3_5": 1,
+            "over_under_4_5": 1,
+            "over_under_5_5": 1
+          },
+          "matches": 0,
+          "note": "declared in the market registry",
+          "settlements": {
+            "1x2": "full_time",
+            "btts": "full_time",
+            "double_chance": "full_time",
+            "over_under_0_5": "full_time",
+            "over_under_1_5": "full_time",
+            "over_under_2_5": "full_time",
+            "over_under_3_5": "full_time",
+            "over_under_4_5": "full_time",
+            "over_under_5_5": "full_time"
+          }
+        },
+        "sportplus": {
+          "families": {
+            "1x2": 1,
+            "btts": 1,
+            "double_chance": 1,
+            "over_under_1_5": 2,
+            "over_under_2_5": 3,
+            "over_under_3_5": 2
+          },
+          "matches": 0,
+          "note": "declared in the market registry",
+          "settlements": {
+            "1x2": "full_time",
+            "btts": "full_time",
+            "double_chance": "full_time",
+            "over_under_1_5": "full_time",
+            "over_under_2_5": "full_time",
+            "over_under_3_5": "full_time"
+          }
+        },
+        "wwin": {
+          "families": {
+            "1x2": 1,
+            "btts": 1,
+            "double_chance": 1,
+            "over_under_0_5": 1,
+            "over_under_1_5": 1,
+            "over_under_2_5": 1,
+            "over_under_3_5": 1,
+            "over_under_4_5": 1,
+            "over_under_5_5": 1
+          },
+          "matches": 0,
+          "note": "declared in the market registry",
+          "settlements": {
+            "1x2": "full_time",
+            "btts": "full_time",
+            "double_chance": "full_time",
+            "over_under_0_5": "full_time",
+            "over_under_1_5": "full_time",
+            "over_under_2_5": "full_time",
+            "over_under_3_5": "full_time",
+            "over_under_4_5": "full_time",
+            "over_under_5_5": "full_time"
+          }
+        }
+      },
+      "coverage_source": "market registry declarations",
+      "enabled": true,
+      "evidence": {
+        "available": true,
+        "observed_at": "2026-11-04T10:50:58+00:00",
+        "path": "docs/evidence/2026-11-04-prematch-scan.json",
+        "scope": "dated football scan plus registry declarations"
+      },
+      "family_settlements": {
+        "1x2": "full_time",
+        "asian_handicap": "full_time",
+        "btts": "full_time",
+        "double_chance": "full_time",
+        "first_half_1x2": "full_time",
+        "first_half_ou": "full_time",
+        "over_under_0_5": "full_time",
+        "over_under_1_5": "full_time",
+        "over_under_2_5": "full_time",
+        "over_under_3_5": "full_time",
+        "over_under_4_5": "full_time",
+        "over_under_5_5": "full_time"
+      },
+      "missing_families": [],
+      "note": "Football's families are individual markets; their dated evidence rows are under 'markets'. The three-family sport probe is for the non-football sports.",
+      "qualifying_books": [
+        "admiralbet",
+        "betole",
+        "maxbet",
+        "mbet",
+        "mdshop",
+        "mozzartbet",
+        "premier_kladionica",
+        "sportplus",
+        "wwin"
+      ],
+      "rule": {
+        "min_books": 3,
+        "min_families": 3,
+        "same_settlement": true
+      },
+      "sport": "football",
+      "status": "admitted"
+    },
+    "ice_hockey": {
+      "admissible": false,
+      "admitted": false,
+      "books": {
+        "maxbet": {
+          "families": {
+            "handicap": 1,
+            "moneyline_3way": 1
+          },
+          "matches": 22,
+          "note": "total id 212 includes overtime; no regular-time total was offered in this window",
+          "settlements": {
+            "handicap": "regulation",
+            "moneyline_3way": "regulation"
+          }
+        },
+        "mbet": {
+          "families": {
+            "handicap": 1,
+            "moneyline_3way": 1,
+            "total": 1
+          },
+          "matches": 55,
+          "note": "oih:fs is the 3-way full-time market; oih:g is match goals",
+          "settlements": {
+            "handicap": "regulation",
+            "moneyline_3way": "regulation",
+            "total": "regulation"
+          }
+        },
+        "mdshop+admiralbet": {
+          "families": {
+            "moneyline_3way": 1,
+            "total": 1
+          },
+          "matches": 21,
+          "note": "135 is 3-way regulation; 137 is match goals; no full-match handicap ID was observed",
+          "settlements": {
+            "moneyline_3way": "regulation",
+            "total": "regulation"
+          }
+        },
+        "sportplus": {
+          "families": {
+            "handicap": 1,
+            "moneyline_3way": 1,
+            "total": 1
+          },
+          "matches": 53,
+          "note": "regular time (Zbroj golova); winner incl. OT is a separate market",
+          "settlements": {
+            "handicap": "regulation",
+            "moneyline_3way": "regulation",
+            "total": "regulation"
+          }
+        }
+      },
+      "enabled": false,
+      "evidence": {
+        "available": true,
+        "observed_at": "2026-11-04T00:53:08+00:00",
+        "path": "docs/evidence/2026-11-04-sport-discovery.json",
+        "scope": "measured per-book family coverage"
+      },
+      "family_settlements": {
+        "handicap": "regulation",
+        "moneyline_3way": "regulation",
+        "total": "regulation"
+      },
+      "missing_families": [],
+      "qualifying_books": [
+        "mbet",
+        "sportplus"
+      ],
+      "rule": {
+        "min_books": 3,
+        "min_families": 3,
+        "same_settlement": true
+      },
+      "sport": "ice_hockey",
+      "status": "not_enabled"
+    },
+    "tennis": {
+      "admissible": true,
+      "admitted": true,
+      "books": {
+        "admiralbet": {
+          "families": {
+            "handicap": 46,
+            "moneyline": 184,
+            "total": 46
+          },
+          "matches": 184,
+          "note": "",
+          "settlements": {
+            "handicap": "full_match",
+            "moneyline": "full_match",
+            "total": "full_match"
+          }
+        },
+        "maxbet": {
+          "families": {
+            "handicap": 27,
+            "moneyline": 324,
+            "total": 27
+          },
+          "matches": 324,
+          "note": "",
+          "settlements": {
+            "handicap": "full_match",
+            "moneyline": "full_match",
+            "total": "full_match"
+          }
+        },
+        "mbet": {
+          "families": {
+            "handicap": 29,
+            "moneyline": 186,
+            "total": 125
+          },
+          "matches": 186,
+          "note": "",
+          "settlements": {
+            "handicap": "full_match",
+            "moneyline": "full_match",
+            "total": "full_match"
+          }
+        },
+        "mdshop": {
+          "families": {
+            "handicap": 46,
+            "moneyline": 184,
+            "total": 46
+          },
+          "matches": 184,
+          "note": "",
+          "settlements": {
+            "handicap": "full_match",
+            "moneyline": "full_match",
+            "total": "full_match"
+          }
+        },
+        "sportplus": {
+          "families": {
+            "handicap": 45,
+            "moneyline": 96,
+            "total": 47
+          },
+          "matches": 96,
+          "note": "",
+          "settlements": {
+            "handicap": "full_match",
+            "moneyline": "full_match",
+            "total": "full_match"
+          }
+        }
+      },
+      "enabled": true,
+      "evidence": {
+        "available": true,
+        "observed_at": "2026-11-04T00:53:08+00:00",
+        "path": "docs/evidence/2026-11-04-sport-discovery.json",
+        "scope": "measured per-book family coverage"
+      },
+      "family_settlements": {
+        "handicap": "full_match",
+        "moneyline": "full_match",
+        "total": "full_match"
+      },
+      "missing_families": [],
+      "qualifying_books": [
+        "admiralbet",
+        "maxbet",
+        "mbet",
+        "mdshop",
+        "sportplus"
+      ],
+      "rule": {
+        "min_books": 3,
+        "min_families": 3,
+        "same_settlement": true
+      },
+      "sport": "tennis",
+      "status": "admitted"
+    }
+  }
+}
