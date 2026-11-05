@@ -5,7 +5,7 @@
 **Current task:** none — **N0-1 and N0-2 are Done**. First eligible task is
 **N0-3** (CSP without inline styles); N0-4 (automatic CLV) now also has its
 N0-2 dependency.
-**Last task commit:** `pending` — N0-2 frozen-price quarantine.
+**Last task commit:** `3d428d4` — N0-2 frozen-price quarantine.
 
 ## Project state
 
