@@ -266,6 +266,12 @@ STALE_PRICE_RETENTION_SECONDS = int(
     os.getenv("STALE_PRICE_RETENTION_SECONDS", str(7 * 24 * 3600))
 )
 
+# --- Automatic closing-line capture (N0-4) ---
+# A logged bet's closing line is the last matching price before kickoff. The
+# cutoff is minutes before kickoff; 0 means "up to kickoff". Capture never
+# invents a price after this point and never touches a settled bet.
+CLOSING_CAPTURE_CUTOFF_MINUTES = int(os.getenv("CLOSING_CAPTURE_CUTOFF_MINUTES", "0"))
+
 # --- Scraper Settings ---
 NAVIGATION_TIMEOUT_MS = 60000  # Max navigation time (ms)
 # Headless browsers by default; set HEADLESS=false in .env to watch them

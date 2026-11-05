@@ -43,6 +43,7 @@ from config.settings import (
     BROWSER_CONCURRENCY,
     CACHE_DIR,
     CACHE_SIZE_BUDGET_BYTES,
+    CLOSING_CAPTURE_CUTOFF_MINUTES,
     DEEP_LINK_VERIFY_RATE_LIMIT,
     DEEPLINK_DECLARATION_MAX_AGE_DAYS,
     DEFAULT_INVESTMENT,
@@ -497,6 +498,8 @@ _storage: Storage | None = None
 _bet_store: BetStore | None = None
 # P3-7: record-only and paper scans write here, never to the live surebet list.
 _paper_store: PaperStore | None = None
+# N0-4: last scan's closing-line capture counts, per feed.
+_closing_capture: dict[str, dict[str, Any]] = {"prematch": {}, "live": {}}
 RUN_MODES = ("advisory", "record_only", "paper")
 _last_run_mode: dict[str, str] = {"prematch": "advisory", "live": "advisory"}
 _recorded_counts: dict[str, int] = {"prematch": 0, "live": 0}
@@ -548,6 +551,15 @@ def _paper_store_or_init() -> PaperStore:
         _paper_store = PaperStore(default_storage_path())
         _paper_store.initialize()
     return _paper_store
+
+
+def _bet_store_or_init() -> BetStore:
+    """Return the manual bet log, initializing it on first use."""
+    global _bet_store
+    if _bet_store is None:
+        _bet_store = BetStore(default_storage_path())
+        _bet_store.initialize()
+    return _bet_store
 
 
 # ---------------------------------------------------------------------------
@@ -1932,6 +1944,21 @@ async def run_scan(
         scan_finished_at = datetime.now(UTC).replace(tzinfo=None)
         status.last_scan_time = scan_finished_at
 
+        # N0-4: capture the last pre-kickoff price for every open logged bet.
+        # This is a measurement, never a settlement; a failure must not stop the
+        # scan or change what is priced.
+        try:
+            _closing_capture[mode] = _bet_store_or_init().capture_closing(
+                groups,
+                now=scan_finished_at,
+                mode=mode,
+                cutoff_minutes=CLOSING_CAPTURE_CUTOFF_MINUTES,
+                excluded_books=quarantined,
+            )
+        except Exception as exc:
+            logger.warning("Closing-line capture failed: %s", exc)
+            status.errors.append(f"Closing-line capture failed: {str(exc)[:200]}")
+
         # P3-7: a record-only or paper scan is still a real scan, but its
         # opportunities belong to the paper ledger, not the live surebet list.
         # Advisory is the default and keeps the previous behavior exactly.
@@ -2912,6 +2939,8 @@ async def health():
             "prematch": _stale_price_payload("prematch", include_rows=False),
             "live": _stale_price_payload("live", include_rows=False),
         },
+        # N0-4: last scan's closing-line capture counts per feed.
+        "closing_capture": _closing_capture,
         # P2-7: measured price agreement and any config-declared twin that the
         # scan did not reproduce. Low-sample pairs say insufficient_data.
         "skin_detection": _skin_detection,
@@ -3367,6 +3396,11 @@ class BetLegPayload(BaseModel):
     accepted_stake: float | None = None
     closing_odds: float | None = None
     result: str = ""
+    # The exact source market of this leg, used by closing-line capture (N0-4).
+    market_type: str = ""
+    line: str = ""
+    settlement: str = ""
+    period: str = ""
 
 
 class BetCreateRequest(BaseModel):
@@ -3378,6 +3412,12 @@ class BetCreateRequest(BaseModel):
     investment: float
     legs: list[BetLegPayload]
     notes: str = ""
+    # Stable event identity and kickoff, so a later scan can capture a closing
+    # line without guessing which fixture this bet was on (N0-4).
+    event_key: str = ""
+    kickoff: datetime | None = None
+    league: str = ""
+    sport: str = "football"
 
 
 class BetSettlementLeg(BaseModel):
@@ -4322,6 +4362,40 @@ def _require_bet_store() -> BetStore:
     return _bet_store
 
 
+def _enrich_bet_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """Fill event and market identity from the cached surebet when omitted.
+
+    The dashboard sends these fields; this keeps older clients and manual API
+    callers capturable instead of silently producing a bet with no kickoff or no
+    source market. It never overwrites a value the caller supplied (N0-4).
+    """
+    surebet_id = str(payload.get("surebet_id") or "")
+    if not surebet_id:
+        return payload
+    mode = str(payload.get("mode") or "prematch")
+    cache = cached_live_surebets if mode == "live" else cached_surebets
+    target = next((item for item in cache if item.get("id") == surebet_id), None)
+    if target is None:
+        return payload
+    for key in ("event_key", "kickoff", "league", "sport"):
+        if not payload.get(key):
+            payload[key] = target.get(key) or ""
+    stakes = {
+        (str(stake.get("bookmaker") or ""), str(stake.get("outcome_label") or "")): stake
+        for stake in target.get("stakes") or []
+    }
+    for leg in payload.get("legs") or []:
+        stake = stakes.get(
+            (str(leg.get("bookmaker") or ""), str(leg.get("outcome_label") or ""))
+        )
+        if stake is None:
+            continue
+        for key in ("market_type", "line", "settlement", "period"):
+            if not leg.get(key):
+                leg[key] = stake.get(key) or ""
+    return payload
+
+
 @router.post("/bets")
 async def create_bet(
     req: BetCreateRequest,
@@ -4332,7 +4406,7 @@ async def create_bet(
         raise HTTPException(status_code=400, detail="Investment must be positive")
     if not req.legs:
         raise HTTPException(status_code=400, detail="A bet needs at least one leg")
-    payload = req.model_dump(mode="json")
+    payload = _enrich_bet_payload(req.model_dump(mode="json"))
     payload["legs"] = [
         {**leg, "result": leg.get("result") or ""} for leg in payload["legs"]
     ]
@@ -4347,8 +4421,13 @@ async def get_bets(days: int = 30, limit: int = 200):
 
 @router.get("/bets/summary")
 async def get_bet_summary(days: int = 30):
-    """Bankroll, ROI and CLV with explicit denominators."""
-    return _require_bet_store().summary(days=max(1, days))
+    """Bankroll, ROI, CLV and closing-capture denominators."""
+    summary = _require_bet_store().summary(days=max(1, days))
+    summary["last_capture"] = {
+        "prematch": _closing_capture.get("prematch") or {},
+        "live": _closing_capture.get("live") or {},
+    }
+    return summary
 
 
 @router.get("/bets/export.csv")

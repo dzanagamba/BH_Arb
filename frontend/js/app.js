@@ -1597,6 +1597,10 @@ async function logBet(id) {
         home_team: sb.home_team,
         away_team: sb.away_team,
         market_type: sb.market_type,
+        event_key: sb.event_key || '',
+        kickoff: sb.kickoff || '',
+        league: sb.league || '',
+        sport: sb.sport || 'football',
         investment: state.investment,
         notes: 'Logged from the bet slip',
         legs: plan.legs.map(leg => ({
@@ -1606,6 +1610,10 @@ async function logBet(id) {
             stake: leg.plannedStake,
             accepted_odds: leg.placed ? leg.takenOdds : leg.takenOdds,
             accepted_stake: leg.placed ? leg.plannedStake : leg.plannedStake,
+            market_type: leg.market_type || sb.market_type,
+            line: leg.line || '',
+            settlement: leg.settlement || '',
+            period: leg.period || '',
         })),
     };
     try {
@@ -2523,7 +2531,11 @@ async function loadHealth() {
                 const bet = await betResponse.json();
                 const roi = bet.roi == null ? '—' : `${(Number(bet.roi) * 100).toFixed(2)}%`;
                 const clv = bet.clv == null ? '—' : `${(Number(bet.clv) * 100).toFixed(2)}%`;
-                setText('bet-summary', `Bet log: ${bet.settled_bets}/${bet.bets} settled · ROI ${roi} · bankroll ${money(bet.bankroll)} KM · CLV ${clv} (${bet.clv_legs} legs)`);
+                const closing = bet.closing_capture || {};
+                const closingLegs = `${Number(closing.legs_with_closing || 0)}/${Number(closing.legs_total || 0)}`;
+                const sources = Object.entries(closing.by_source || {})
+                    .map(([source, count]) => `${source} ${count}`).join(', ');
+                setText('bet-summary', `Bet log: ${bet.settled_bets}/${bet.bets} settled · ROI ${roi} · bankroll ${money(bet.bankroll)} KM · CLV ${clv} (${bet.clv_legs} legs) · closing ${closingLegs}${sources ? ` (${sources})` : ''}`);
             }
         } catch (e) { /* the bet log is optional */ }
         refreshNoSurebetState();

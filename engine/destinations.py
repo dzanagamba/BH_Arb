@@ -541,6 +541,12 @@ def attach_destinations(surebet: Surebet, group, mode: str = "prematch") -> int:
         stake.market_type = surebet.market_type.value
         stake.selection = str(stake.outcome_label or "")
         stake.line = selection_line(stake.outcome_label)
+        source_market = _find_market(match, surebet.market_type, stake.outcome_label)
+        if source_market is not None:
+            # The exact source market's settlement/period, not the surebet's
+            # nominal type: a cross-market DC leg can come from 1X2 (N0-4).
+            stake.settlement = source_market.settlement or "full_time"
+            stake.period = source_market.period or "full_time"
         stake.destination = build_destination(
             match, stake, surebet.market_type, mode=mode
         )

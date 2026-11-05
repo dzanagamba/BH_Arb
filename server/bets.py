@@ -17,9 +17,12 @@ import io
 import json
 import sqlite3
 import uuid
+from collections import Counter
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
+
+from engine.closing_line import capture_closing as capture_closing_lines
 
 BANKROLL_START = 1000.0
 
@@ -88,6 +91,15 @@ class BetStore:
             ).fetchall()
         return [json.loads(row["payload"]) for row in rows]
 
+    def list_open_bets(self, *, limit: int = 1000) -> list[dict[str, Any]]:
+        """Every open bet, regardless of age: closing capture is not a report window."""
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT payload FROM bets WHERE status = 'open' ORDER BY created_at ASC LIMIT ?",
+                (max(1, min(limit, 5000)),),
+            ).fetchall()
+        return [json.loads(row["payload"]) for row in rows]
+
     def settle(self, bet_id: str, results: list[dict[str, Any]]) -> dict[str, Any] | None:
         """Settle every leg and compute the realized profit.
 
@@ -136,7 +148,12 @@ class BetStore:
         return payload
 
     def set_closing(self, bet_id: str, closing: list[dict[str, Any]]) -> dict[str, Any] | None:
-        """Record the closing price per leg without settling the bet."""
+        """Record a manual closing price per leg without settling the bet.
+
+        A manual entry is authoritative and labelled ``manual``; a later scan
+        never overwrites it. It also clears any earlier capture reason.
+        """
+        now = datetime.now(UTC).replace(tzinfo=None).isoformat(timespec="seconds")
         with self._connect() as connection:
             row = self._row(connection, bet_id)
             if row is None:
@@ -147,6 +164,9 @@ class BetStore:
                 item = by_label.get(leg.get("outcome_label"))
                 if item and item.get("closing_odds") is not None:
                     leg["closing_odds"] = float(item["closing_odds"])
+                    leg["closing_source"] = "manual"
+                    leg["closing_captured_at"] = now
+                    leg["closing_reason"] = ""
             with connection:
                 connection.execute(
                     "UPDATE bets SET payload=? WHERE id=?",
@@ -154,14 +174,50 @@ class BetStore:
                 )
         return payload
 
+    def capture_closing(
+        self,
+        groups: list[Any],
+        *,
+        now: datetime,
+        mode: str = "prematch",
+        cutoff_minutes: int = 0,
+        excluded_books: set[str] | None = None,
+    ) -> dict[str, Any]:
+        """Capture closing lines for open bets from one scan's verified groups.
+
+        The pure matching lives in ``engine.closing_line``. Only changed payloads
+        are written, and only rows still ``open`` are updated, so a settle that
+        raced the scan cannot be overwritten.
+        """
+        updates, stats = capture_closing_lines(
+            self.list_open_bets(),
+            groups,
+            now=now,
+            mode=mode,
+            cutoff_minutes=cutoff_minutes,
+            excluded_books=excluded_books,
+        )
+        if updates:
+            with self._connect() as connection:
+                with connection:
+                    for bet_id, payload in updates.items():
+                        connection.execute(
+                            "UPDATE bets SET payload=? WHERE id=? AND status='open'",
+                            (json.dumps(payload, sort_keys=True), bet_id),
+                        )
+        stats["scan_time"] = now.isoformat(timespec="seconds")
+        return stats
+
     def summary(self, *, days: int = 30) -> dict[str, Any]:
         bets = self.list_bets(days=days, limit=1000)
         settled = [bet for bet in bets if bet.get("status") == "settled"]
         staked = sum(float(bet.get("staked") or 0) for bet in settled)
         profit = sum(float(bet.get("profit") or 0) for bet in settled)
         clv_values: list[tuple[float, float]] = []
+        all_legs: list[dict[str, Any]] = []
         for bet in bets:
             for leg in bet.get("legs") or []:
+                all_legs.append(leg)
                 accepted = leg.get("accepted_odds")
                 closing = leg.get("closing_odds")
                 if accepted and closing and float(closing) > 1.0:
@@ -177,6 +233,16 @@ class BetStore:
             if clv_weight
             else None
         )
+        closing_legs = [leg for leg in all_legs if leg.get("closing_odds") is not None]
+        closing_sources = Counter(
+            str(leg.get("closing_source") or "unknown") for leg in closing_legs
+        )
+        missing_legs = [leg for leg in all_legs if leg.get("closing_odds") is None]
+        capture_reasons = Counter(
+            str(leg.get("closing_reason"))
+            for leg in missing_legs
+            if leg.get("closing_reason")
+        )
         return {
             "days": days,
             "bets": len(bets),
@@ -188,10 +254,20 @@ class BetStore:
             "bankroll": round(self.bankroll_start + profit, 2),
             "clv": round(clv, 4) if clv is not None else None,
             "clv_legs": len(clv_values),
+            "closing_legs": len(closing_legs),
+            "closing_sources": dict(sorted(closing_sources.items())),
+            "closing_capture": {
+                "legs_total": len(all_legs),
+                "legs_with_closing": len(closing_legs),
+                "legs_missing": len(missing_legs),
+                "by_source": dict(sorted(closing_sources.items())),
+                "reasons": dict(sorted(capture_reasons.items())),
+            },
             "denominators": {
                 "staked": "settled bets only",
                 "roi": "profit / settled stake",
                 "clv": "accepted-stake weighted, legs with a closing price",
+                "closing_capture": "legs with a closing source / all logged legs",
             },
         }
 
@@ -213,6 +289,8 @@ class BetStore:
                 "stake",
                 "accepted_stake",
                 "closing_odds",
+                "closing_source",
+                "closing_reason",
                 "result",
             ]
         )
@@ -233,6 +311,8 @@ class BetStore:
                         leg.get("stake", ""),
                         leg.get("accepted_stake") or "",
                         leg.get("closing_odds") or "",
+                        leg.get("closing_source") or "",
+                        leg.get("closing_reason") or "",
                         leg.get("result") or "",
                     ]
                 )

@@ -273,6 +273,10 @@ class SurebetStake(BaseModel):
     market_type: str = ""
     selection: str = ""
     line: str = ""
+    # The settlement/period of the exact market this leg's price came from.
+    # Closing-line capture compares these rather than assuming full_time (N0-4).
+    settlement: str = ""
+    period: str = ""
     # When this leg's price was collected (naive UTC). The freshness block on
     # /api/results is summarised per book; this keeps the age attached to the
     # exact leg a reviewer is about to place.
@@ -327,6 +331,9 @@ class Surebet(BaseModel):
     listings: dict[str, dict[str, str]] = {}
     # Why the certainty gate trusts that every leg is the same match, in words.
     evidence: list[str] = []
+    # Stable event identity across scans (N0-4). Closing-line capture uses this
+    # exact key; it is never inferred from a team-name similarity at capture time.
+    event_key: str = ""
     odds_fetched_at: datetime | None = None  # oldest leg's fetch time (naive UTC)
     odds_source_updated_at: datetime | None = None  # oldest feed update time, when published
     found_at: datetime

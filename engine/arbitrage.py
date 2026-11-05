@@ -580,6 +580,7 @@ class ArbitrageEngine:
                 if result:
                     result.listings = _collect_listings(group)
                     result.evidence = _evidence_summary(group)
+                    result.event_key = event_identity(group)
                     result.odds_fetched_at = _oldest_fetch(group)
                     result.odds_source_updated_at = _oldest_source_updated(group)
                     _attach_stake_fetches(result, group)

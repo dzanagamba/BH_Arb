@@ -232,6 +232,7 @@ def _isolated_runtime_state(
     monkeypatch.setattr(api, "_stale_price_store", {"prematch": {}, "live": {}})
     monkeypatch.setattr(api, "_stale_price_evidence", {"prematch": [], "live": []})
     monkeypatch.setattr(api, "_stale_price_checked_at", {"prematch": "", "live": ""})
+    monkeypatch.setattr(api, "_closing_capture", {"prematch": {}, "live": {}})
 
     # A module that copied CACHE_DIR at import time keeps its own reference.
     verify_module = sys.modules.get("scripts.verify_deeplinks")

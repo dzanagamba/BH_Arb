@@ -20,7 +20,7 @@ Verified on 2026-11-05:
 
 | Check | Result |
 |---|---|
-| Offline suite | **1,499 passed**, 2 skipped, 1 warning, ~58 s (after N0-3) |
+| Offline suite | **1,511 passed**, 2 skipped, 1 warning, ~58 s (after N0-4) |
 | Lint | `ruff check .` clean |
 | Types | `mypy .` clean on 182 source files |
 | Generated market doc | in sync |
@@ -66,7 +66,7 @@ long-horizon.
 | N0-1 | Hermetic tests independent of runtime state | P0 | S | — | Done |
 | N0-2 | Source-updated timestamps and frozen-price quarantine | P0 | M | — | Done |
 | N0-3 | CSP without inline styles | P0 | M | — | Done |
-| N0-4 | Automatic closing-line capture for logged bets | P0 | M | N0-2 | Not started |
+| N0-4 | Automatic closing-line capture for logged bets | P0 | M | N0-2 | Done |
 | N1-1 | Retention and maintenance automation | P1 | M | — | Not started |
 | N1-2 | Coverage/mapping alerts and SLOs | P1 | S | — | Not started |
 | N1-3 | Per-book scan cost accounting | P1 | M | — | Not started |
@@ -230,7 +230,7 @@ not add a bundler for this.
 
 ### N0-4 — Automatic closing-line capture for logged bets
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P0
 **Effort:** M
 **Depends on:** N0-2
@@ -253,11 +253,11 @@ instead of requiring the operator to type closing odds.
 
 **Acceptance criteria:**
 
-- [ ] A logged bet gets a closing line only from a matching pre-kickoff scan.
-- [ ] A missing/mismatched price leaves CLV null and says why.
-- [ ] Manual closing entry still works and is labelled.
-- [ ] Summary reports how many legs have a closing source and which.
-- [ ] No result is inferred after settlement.
+- [x] A logged bet gets a closing line only from a matching pre-kickoff scan.
+- [x] A missing/mismatched price leaves CLV null and says why.
+- [x] Manual closing entry still works and is labelled.
+- [x] Summary reports how many legs have a closing source and which.
+- [x] No result is inferred after settlement.
 
 **Tests:**
 
@@ -783,6 +783,48 @@ For every task:
 
 Newest first. Each entry: date, task, status, commands, measured result, files
 changed, follow-ups.
+
+### 2026-11-05 — N0-4 — Done
+
+**Commands**
+
+```bash
+python -m pytest                                      # empty ledger
+BH_ARB_TEST_RUNTIME_LEDGER=populated python -m pytest # populated ledger
+python -m pytest                                       # clean copy, no config/generated or cache
+node --check frontend/js/app.js
+python -m ruff check .
+python -m mypy .
+python scripts/generate_market_mapping_doc.py --check
+```
+
+**Measured result**
+
+- Operator checkout: **1,511 passed, 2 skipped** in both ledger modes.
+- Throwaway copy with no `config/generated/` and no `cache/`: **1,511 passed,
+  2 skipped** in both ledger modes.
+- `tests/test_auto_clv.py` covers pre-kickoff capture, missing price, wrong
+  settlement, line mismatch, missing book, missing kickoff, post-kickoff freeze,
+  settled bets, manual override and the summary sources.
+- Ruff, MyPy (189 files), Node syntax check and the generated market doc are
+  clean.
+
+**Files changed**
+
+- `engine/closing_line.py` — exact event/market/line/settlement/outcome
+  matching, pre-kickoff capture, freeze and reason codes.
+- `server/bets.py` — open-bet scan, capture write, manual source labelling,
+  closing summary and CSV source/reason columns.
+- `server/api.py` — bet identity enrichment, scan capture, `/api/bets/summary`
+  and `/api/health` capture counts.
+- `engine/arbitrage.py`, `engine/destinations.py`, `models/schemas.py` —
+  `event_key` and per-leg settlement/period on served surebets.
+- `frontend/js/app.js` — log the identity fields; show closing coverage on the
+  bet-log line.
+- `config/settings.py` — `CLOSING_CAPTURE_CUTOFF_MINUTES`.
+- `tests/test_auto_clv.py`, `docs/BET_LOG.md`.
+
+**Follow-ups:** none. N1-1 (retention/maintenance) is the next eligible task.
 
 ### 2026-11-05 — N0-3 — Done
 
