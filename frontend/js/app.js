@@ -241,11 +241,11 @@ const SPORT_LABELS = {
 // active language. Keeping the tables English makes them readable and makes the
 // catalog coverage test exact.
 function reasonLabel(code) {
-    return tr(reasonLabel(code));
+    return tr(REASON_LABELS[code] || code);
 }
 
 function feedReasonLabel(reason) {
-    return tr(feedReasonLabel(reason));
+    return tr(FEED_REASON_LABELS[reason] || reason);
 }
 
 function marketLabel(market) {
@@ -532,6 +532,7 @@ function switchMode(mode) {
     hideError();
     selectedSurebetId = null;
     loadResults(true);
+    loadHealth();
     if (activeTab === 'review') loadCandidates();
     if (activeTab === 'evidence') loadEvidence(true);
 }
@@ -2141,8 +2142,10 @@ function renderCandidatesMessage(message) {
 // figures, and this tab re-renders every poll.
 const CANDIDATE_PAGE_SIZE = 100;
 
-function candidateActionHeaders() {
-    return candidateApiKey ? { 'X-API-Key': candidateApiKey } : {};
+function candidateActionHeaders(headers = {}) {
+    const merged = { ...headers };
+    if (candidateApiKey) merged['X-API-Key'] = candidateApiKey;
+    return merged;
 }
 
 async function apiFetch(url, options = {}, promptText = 'This SureBet deployment requires an API key.') {

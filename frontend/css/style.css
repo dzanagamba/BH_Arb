@@ -1029,6 +1029,9 @@ body.feed-stale .row-profit b { color: var(--warn); }
     font-size: 13px;
 }
 .paper-summary { margin-bottom: 14px; }
+/* Paper tiles carry full sentences ("no settled positions (0 of 0 position(s))"),
+   so let the subtitle wrap instead of clipping mid-word at desktop widths. */
+.paper-summary .kpi-sub { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.3; }
 .paper-filters { margin-bottom: 14px; }
 .paper-grid {
     display: grid;

@@ -63,3 +63,20 @@ def test_browser_alerts_are_permission_gated():
 def test_the_service_worker_is_registered_without_a_bundler():
     assert "navigator.serviceWorker.register('/sw.js')" in JS
     assert Path("frontend/sw.js").exists()
+
+
+def test_the_server_serves_the_manifest_and_service_worker():
+    """The files existed but were not routed, so the browser got a 404."""
+    from fastapi.testclient import TestClient
+
+    from server.app import app
+
+    client = TestClient(app)
+    manifest = client.get("/manifest.webmanifest")
+    worker = client.get("/sw.js")
+
+    assert manifest.status_code == 200
+    assert manifest.json()["name"] == MANIFEST["name"]
+    assert worker.status_code == 200
+    assert worker.text == SW
+    assert worker.headers["service-worker-allowed"] == "/"

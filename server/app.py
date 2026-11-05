@@ -10,7 +10,7 @@ from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from config.settings import (
@@ -226,6 +226,29 @@ if os.path.exists(os.path.join(FRONTEND_DIR, "css")):
     app.mount("/css", StaticFiles(directory=os.path.join(FRONTEND_DIR, "css")), name="css")
 if os.path.exists(os.path.join(FRONTEND_DIR, "js")):
     app.mount("/js", StaticFiles(directory=os.path.join(FRONTEND_DIR, "js")), name="js")
+
+
+@app.get("/manifest.webmanifest", include_in_schema=False)
+async def serve_manifest() -> FileResponse:
+    """Serve the PWA manifest from the frontend directory."""
+    return FileResponse(
+        os.path.join(FRONTEND_DIR, "manifest.webmanifest"),
+        media_type="application/manifest+json",
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
+@app.get("/sw.js", include_in_schema=False)
+async def serve_service_worker() -> FileResponse:
+    """Serve the service worker at the scope root; it is not under /js."""
+    return FileResponse(
+        os.path.join(FRONTEND_DIR, "sw.js"),
+        media_type="application/javascript",
+        headers={
+            "Cache-Control": "no-cache",
+            "Service-Worker-Allowed": "/",
+        },
+    )
 
 
 @app.get("/", include_in_schema=False)

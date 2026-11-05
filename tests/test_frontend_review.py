@@ -5,6 +5,7 @@ from pathlib import Path
 
 HTML = Path("frontend/index.html").read_text(encoding="utf-8")
 JS = Path("frontend/js/app.js").read_text(encoding="utf-8")
+CSS = Path("frontend/css/style.css").read_text(encoding="utf-8")
 CERTAINTY_SOURCE = Path("engine/certainty.py")
 KNOWN_REASON_CODES = frozenset(
     {
@@ -105,6 +106,59 @@ def test_js_has_read_only_candidate_hooks():
     assert "readOnlyNote" in JS
     assert "approveCandidate" not in JS
     assert "rejectCandidate" not in JS
+
+
+def _js_function_body(name: str) -> str:
+    """The body of a small top-level JS function, for a recursion check."""
+    match = re.search(rf"function {re.escape(name)}\([^)]*\) \{{(.*?)\n\}}", JS, re.DOTALL)
+    assert match, f"{name}() is missing"
+    return match.group(1)
+
+
+def test_reason_label_helpers_look_up_their_table_instead_of_recurring():
+    """A self-call here used to overflow the stack on the first gate reason.
+
+    The dashboard then showed 0 surebets and 'Could not load candidates' even
+    when the API held results. Pin the lookup, not just the label table.
+    """
+    for function, table in (
+        ("reasonLabel", "REASON_LABELS"),
+        ("feedReasonLabel", "FEED_REASON_LABELS"),
+    ):
+        body = _js_function_body(function)
+        assert f"{table}[" in body, f"{function}() must read {table}"
+        assert f"{function}(" not in body, f"{function}() calls itself"
+
+
+def test_api_fetch_keeps_the_callers_content_type():
+    """`apiFetch` merges the API key into the caller's headers, not over them.
+
+    Dropping `Content-Type: application/json` made every JSON POST arrive as
+    text/plain and fail with a 422, including the odds re-check.
+    """
+    body = _js_function_body("candidateActionHeaders")
+    assert "{ ...headers }" in body
+    assert "X-API-Key" in body
+
+
+def test_switching_feed_refreshes_the_health_diagnostics_immediately():
+    """Results/candidates are reloaded on a mode switch; health must be too.
+
+    Without this, the Live tab showed the previous prematch queue and scan cost
+    until the 30-second health poll.
+    """
+    body = _js_function_body("switchMode")
+    assert "currentMode = mode" in body
+    assert "loadResults(true)" in body
+    assert "loadHealth()" in body
+
+
+def test_paper_summary_subtitles_wrap_instead_of_clipping():
+    assert ".paper-summary .kpi-sub" in CSS
+    rule = CSS[CSS.index(".paper-summary .kpi-sub"):]
+    rule = rule[: rule.index("}")]
+    assert "white-space: normal" in rule
+    assert "overflow: visible" in rule
 
 
 def test_status_badge_never_claims_verified_without_backend_status():
