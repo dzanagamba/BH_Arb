@@ -149,15 +149,21 @@ def _evidence_summary(group: MatchGroup) -> list[str]:
 def _priced_markets(match: Match) -> list[Market]:
     """The markets a listing may be priced from.
 
+    A market refused by the frozen-price quarantine is not a price at all: the
+    book may still be healthy for other rows, but this one may not supply a leg
+    (N0-2). The filter is here, before the ambiguity guard, so a stale copy of a
+    market can never win a best-price comparison.
+
     One listing quoting the same outcome in two markets of one type is two
     different bets under one name (NSoft live once sent the match total and the
     home team's total both as "Over/Under 2.5"). Taking the better price would
     price a bet that does not exist, so the whole type is dropped for that
     listing instead.
     """
+    markets = [market for market in match.markets if not market.stale_price]
     seen: dict[MarketType, set[str]] = {}
     ambiguous: set[MarketType] = set()
-    for market in match.markets:
+    for market in markets:
         # The multi-line non-football families legitimately repeat a type for
         # each line ("total" at 211.5, 212.5, ...). Their labels carry the line,
         # so a repeated label is the same bet and the engine takes the best
@@ -175,16 +181,36 @@ def _priced_markets(match: Match) -> list[Market]:
             ambiguous.add(market.market_type)
         quoted |= labels
     if not ambiguous:
-        return match.markets
+        return markets
     logger.warning(
         f"[{match.bookmaker}] {match.home_team} - {match.away_team}: "
         f"{sorted(t.value for t in ambiguous)} quoted twice; not priced"
     )
-    return [m for m in match.markets if m.market_type not in ambiguous]
+    return [m for m in markets if m.market_type not in ambiguous]
 
 
 def _oldest_fetch(group: MatchGroup) -> datetime | None:
     times = [m.fetched_at for m in group.matches if m.fetched_at]
+    return min(times) if times else None
+
+
+def _oldest_source_updated(group: MatchGroup) -> datetime | None:
+    """The oldest feed-provided update time in the group, when any book has one.
+
+    A group with no source timestamps returns None. It must not fall back to
+    ``fetched_at``: that would turn "the book never said" into "the book said
+    now", which is the failure mode this field exists to separate (N0-2).
+    """
+    times: list[datetime] = []
+    for match in group.matches:
+        if match.source_updated_at:
+            times.append(match.source_updated_at)
+        for market in match.markets:
+            if market.source_updated_at:
+                times.append(market.source_updated_at)
+            for odd in market.odds:
+                if odd.source_updated_at:
+                    times.append(odd.source_updated_at)
     return min(times) if times else None
 
 
@@ -195,16 +221,34 @@ def _attach_stake_fetches(surebet: Surebet, group: MatchGroup) -> None:
     the conservative age for any price the book contributed. A leg whose book
     has no recorded fetch stays `None` rather than borrowing another book's
     timestamp, which would make an unknown-age leg look current.
+
+    The feed's own ``source_updated_at`` is attached the same way and stays
+    empty when the book publishes none. It is never copied from ``fetched_at``.
     """
     fetch_by_book: dict[str, datetime] = {}
+    source_by_book: dict[str, datetime] = {}
     for match in group.matches:
-        if match.fetched_at is None:
-            continue
-        current = fetch_by_book.get(match.bookmaker)
-        if current is None or match.fetched_at < current:
-            fetch_by_book[match.bookmaker] = match.fetched_at
+        if match.fetched_at is not None:
+            current = fetch_by_book.get(match.bookmaker)
+            if current is None or match.fetched_at < current:
+                fetch_by_book[match.bookmaker] = match.fetched_at
+        source_times = [
+            value
+            for value in (
+                match.source_updated_at,
+                *(market.source_updated_at for market in match.markets),
+                *(odd.source_updated_at for market in match.markets for odd in market.odds),
+            )
+            if value is not None
+        ]
+        if source_times:
+            current_source = source_by_book.get(match.bookmaker)
+            oldest = min(source_times)
+            if current_source is None or oldest < current_source:
+                source_by_book[match.bookmaker] = oldest
     for stake in surebet.stakes:
         stake.fetched_at = fetch_by_book.get(stake.bookmaker)
+        stake.source_updated_at = source_by_book.get(stake.bookmaker)
 
 
 def _settlement_for_market(market: Market) -> str:
@@ -537,6 +581,7 @@ class ArbitrageEngine:
                     result.listings = _collect_listings(group)
                     result.evidence = _evidence_summary(group)
                     result.odds_fetched_at = _oldest_fetch(group)
+                    result.odds_source_updated_at = _oldest_source_updated(group)
                     _attach_stake_fetches(result, group)
                     attach_destinations(result, group, mode=mode)
                     surebets.append(result)

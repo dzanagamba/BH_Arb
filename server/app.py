@@ -28,6 +28,7 @@ from server.api import (
     _load_deep_link_verifications,
     _load_history,
     _load_market_state,
+    _load_stale_price_state,
     _load_suppressed_candidates,
     _load_suppressed_premises,
     _suppressed_candidates,
@@ -211,6 +212,7 @@ def _restore_state() -> None:
     _load_bookmaker_state()
     _load_market_state()
     _load_history()
+    _load_stale_price_state()
     _suppressed_candidates.update(_load_suppressed_candidates())
     _suppressed_premises.update(_load_suppressed_premises())
 

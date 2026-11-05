@@ -181,10 +181,12 @@ def compute_feed_integrity(
     previous: dict[str, dict],
     now: datetime,
     ttl_sec: int,
+    stale_price_rows: dict[str, int] | None = None,
 ) -> dict[str, dict]:
     """Build one scan's integrity scorecard for every enabled book."""
     missing, expected = _missing_and_expected(groups)
     outlier_counts, comparable = _outlier_counts(groups)
+    stale_rows = stale_price_rows or {}
     result: dict[str, dict] = {}
 
     for bookmaker, name in bookmakers.items():
@@ -286,6 +288,7 @@ def compute_feed_integrity(
             },
             "consecutive_healthy_scans": healthy_streak,
             "consecutive_unhealthy_scans": unhealthy_streak,
+            "stale_price_rows": int(stale_rows.get(bookmaker, 0)),
             "last_successful_scan": last_successful,
             "scan_time": now.isoformat(),
             "history": history,

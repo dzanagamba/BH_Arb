@@ -102,6 +102,15 @@ POST /api/scan
   diagnosis but is labelled historical. The dashboard shows a banner and
   disables copy actions; **Re-check odds** stays available as the only path that
   re-establishes a leg's current price.
+- **A frozen price is refused, not just aged.** `fetched_at` (when we collected
+  a row) and `source_updated_at` (when the book says it moved) are separate.
+  A row is refused as **price frozen** when the feed timestamp is older than the
+  mode's TTL, or when it has not moved for three scans while an independent peer
+  did move. A stable market with stable peers is never refused, and a feed with
+  no timestamp falls back to the existing fetch-time TTL. The evidence is in
+  `stale_prices` on `/api/results` and `/api/health`, and `stale_price_rows` on
+  each feed-integrity scorecard. This is a price-source restriction, not a
+  certainty-gate change.
 - **Opportunity rate is measured, not inferred.** The same pricing pass that
   emits surebets also counts boards, crossings, crossings above the profit floor,
   and actionable opportunities. `/api/results` and `/api/health` expose

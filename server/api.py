@@ -58,6 +58,7 @@ from config.settings import (
     RATE_LIMIT_WINDOW_SECONDS,
     RSS_BUDGET_MB,
     SCAN_RATE_LIMIT,
+    STALE_PRICE_UNCHANGED_SCANS,
     VERIFIED_KICKOFF_WINDOW_MINUTES,
     book_risk_profile,
 )
@@ -102,6 +103,8 @@ from engine.skin_detection import (
 from engine.skin_detection import (
     summary as skin_summary,
 )
+from engine.stale_price import REASON_LABEL as STALE_PRICE_LABEL
+from engine.stale_price import evaluate_stale_prices
 from models.schemas import (
     CandidateReview,
     MarketType,
@@ -509,6 +512,11 @@ _crossing_lifetimes: dict[str, dict[str, dict]] = {"prematch": {}, "live": {}}
 # P0-7: per-book integrity state, one scorecard per feed, with bounded history.
 _FEED_INTEGRITY_FILE = os.path.join(CACHE_DIR, "feed_integrity.json")
 _COVERAGE_BUDGET_FILE = os.path.join(CACHE_DIR, "coverage_budget.json")
+# N0-2: bounded per-book price observations and the rows refused this scan.
+_STALE_PRICE_FILE = os.path.join(CACHE_DIR, "stale_price_state.json")
+_stale_price_store: dict[str, dict[str, dict]] = {"prematch": {}, "live": {}}
+_stale_price_evidence: dict[str, list[dict]] = {"prematch": [], "live": []}
+_stale_price_checked_at: dict[str, str] = {"prematch": "", "live": ""}
 _coverage_budget: dict[str, dict[str, Any]] = {"prematch": {}, "live": {}}
 _coverage_history: dict[str, list[dict[str, int]]] = {
     "prematch": [],
@@ -1832,6 +1840,27 @@ async def run_scan(
         # group stays available for diagnostics and evidence.
         status.current_bookmaker = "Checking feed integrity..."
         integrity_now = datetime.now(UTC).replace(tzinfo=None)
+        # N0-2: update the per-book price observations and refuse frozen rows
+        # before the integrity scorecard and the pricing pass read the groups.
+        stale_result = evaluate_stale_prices(
+            groups,
+            _stale_price_store.get(mode) or {},
+            mode=mode,
+            now=integrity_now,
+            ttl_sec=LIVE_ODDS_TTL_SECONDS if is_live else ODDS_TTL_SECONDS,
+        )
+        _stale_price_store[mode] = stale_result.store
+        _stale_price_evidence[mode] = stale_result.evidence
+        _stale_price_checked_at[mode] = stale_result.checked_at.isoformat()
+        if stale_result.evidence:
+            logger.warning(
+                "Frozen-price quarantine: %s row(s) refused (%s)",
+                len(stale_result.evidence),
+                ", ".join(
+                    f"{book}={count}"
+                    for book, count in sorted(stale_result.by_book.items())
+                ),
+            )
         enabled_bookmakers = {
             bookmaker: str(config["name"])
             for bookmaker, config in BOOKMAKERS.items()
@@ -1848,6 +1877,7 @@ async def run_scan(
             previous=_feed_integrity.get(mode) or {},
             now=integrity_now,
             ttl_sec=LIVE_ODDS_TTL_SECONDS if is_live else ODDS_TTL_SECONDS,
+            stale_price_rows=stale_result.by_book,
         )
         quarantined = quarantined_books(_feed_integrity[mode])
         pricing_groups = priceable_groups(groups, quarantined)
@@ -1966,6 +1996,7 @@ async def run_scan(
         _save_cache(mode)
         _save_opportunity_metrics()
         _save_feed_integrity()
+        _save_stale_price_state()
         _append_history(len(groups), mode)
 
         _refresh_pairing_summary(mode, matches_cache, report_cache)
@@ -2337,6 +2368,80 @@ def _save_feed_integrity() -> None:
         logger.warning("Feed integrity save failed: %s", exc)
 
 
+def _load_stale_price_state() -> None:
+    """Restore the bounded observation store and last scan's refusals."""
+    global _stale_price_store, _stale_price_evidence, _stale_price_checked_at
+    try:
+        with open(_STALE_PRICE_FILE, encoding="utf-8") as file:
+            data = json.load(file)
+    except (OSError, ValueError):
+        return
+    if not isinstance(data, dict):
+        return
+    stores = data.get("stores")
+    evidence = data.get("evidence")
+    checked = data.get("checked_at")
+    for mode in ("prematch", "live"):
+        rows = stores.get(mode) if isinstance(stores, dict) else None
+        if isinstance(rows, dict):
+            _stale_price_store[mode] = {
+                str(key): row
+                for key, row in rows.items()
+                if isinstance(row, dict)
+            }
+        last = evidence.get(mode) if isinstance(evidence, dict) else None
+        if isinstance(last, list):
+            _stale_price_evidence[mode] = [
+                row for row in last if isinstance(row, dict)
+            ]
+        stamp = checked.get(mode) if isinstance(checked, dict) else None
+        if isinstance(stamp, str):
+            _stale_price_checked_at[mode] = stamp
+
+
+def _save_stale_price_state() -> None:
+    """Persist only the bounded store and the compact refusal evidence."""
+    try:
+        _atomic_write_json(
+            _STALE_PRICE_FILE,
+            {
+                "stores": _stale_price_store,
+                "evidence": _stale_price_evidence,
+                "checked_at": _stale_price_checked_at,
+            },
+            "stale_price_state",
+            indent=None,
+        )
+    except Exception as exc:  # a diagnostic must never stop a scan
+        logger.warning("Stale-price state save failed: %s", exc)
+
+
+def _stale_price_payload(mode: str, *, include_rows: bool = True) -> dict[str, Any]:
+    """The frozen-price evidence for one feed, bounded by the scan's rows."""
+    rows = _stale_price_evidence.get(mode) or []
+    by_book: dict[str, int] = {}
+    for row in rows:
+        book = str(row.get("bookmaker") or "")
+        if book:
+            by_book[book] = by_book.get(book, 0) + 1
+    payload: dict[str, Any] = {
+        "mode": mode,
+        "count": len(rows),
+        "books": dict(sorted(by_book.items())),
+        "threshold_scans": STALE_PRICE_UNCHANGED_SCANS,
+        "checked_at": _stale_price_checked_at.get(mode) or None,
+        "label": STALE_PRICE_LABEL,
+        "rule": (
+            "refuse a row when the feed's own update time is older than the "
+            "mode's TTL, or when its price has not moved for the threshold "
+            "scans while an independent peer did move"
+        ),
+    }
+    if include_rows:
+        payload["rows"] = rows
+    return payload
+
+
 def _load_coverage_budget() -> None:
     """Restore the rolling per-book/sport/market counts for P2-9."""
     global _coverage_budget, _coverage_history
@@ -2396,6 +2501,7 @@ def _feed_integrity_payload(mode: str) -> dict[str, Any]:
         "degraded": sorted(
             book for book, entry in books.items() if entry.get("state") == "degraded"
         ),
+        "stale_prices": _stale_price_payload(mode, include_rows=False),
         "checked_at": max(
             (
                 str(entry.get("scan_time"))
@@ -2800,6 +2906,12 @@ async def health():
             "prematch": _feed_integrity_payload("prematch"),
             "live": _feed_integrity_payload("live"),
         },
+        # N0-2: rows refused because the book's feed shows a frozen price.
+        # The full row list stays in /api/results; health keeps the counts.
+        "stale_prices": {
+            "prematch": _stale_price_payload("prematch", include_rows=False),
+            "live": _stale_price_payload("live", include_rows=False),
+        },
         # P2-7: measured price agreement and any config-declared twin that the
         # scan did not reproduce. Low-sample pairs say insufficient_data.
         "skin_detection": _skin_detection,
@@ -3065,6 +3177,9 @@ async def get_results(mode: str = "prematch"):
         # P0-7: which books were priced this scan, and why a refused book was
         # refused. The certainty gate's identity verdicts are separate.
         "feed_integrity": _feed_integrity_payload(mode),
+        # N0-2: the exact rows refused as frozen, with the feed timestamp and
+        # peer-movement evidence that refused them.
+        "stale_prices": _stale_price_payload(mode),
     }
 
 
@@ -3747,15 +3862,32 @@ async def verify_surebet(req: VerifyRequest, _auth: None = Depends(_require_api_
     except ValueError:
         market_type = None
 
+    # N0-2: a verify is a pricing pass too. Apply the frozen-price rule against
+    # the last scan's observations, but do not persist a partial observation
+    # store: this scrape covered only the books in this bet.
+    stale_result = evaluate_stale_prices(
+        [group],
+        dict(_stale_price_store.get(req.mode) or {}),
+        mode=req.mode,
+        now=datetime.now(UTC).replace(tzinfo=None),
+        ttl_sec=LIVE_ODDS_TTL_SECONDS if is_live else ODDS_TTL_SECONDS,
+    )
+    stale_rows = stale_result.evidence
+
     labels = [s["outcome_label"] for s in target["stakes"]]
     current = engine.evaluate_market(group, market_type, labels=labels) if market_type else None
     if current is None:
         return {
             "surebet_id": target["id"],
-            "message": "The outcomes this surebet needs are no longer all offered",
+            "message": (
+                "A leg's price is frozen and was refused"
+                if stale_rows
+                else "The outcomes this surebet needs are no longer all offered"
+            ),
             "cached_margin": target["total_margin"],
             "cached_profit_percent": target["profit_percent"],
             "still_profitable": False,
+            "stale_prices": stale_rows,
             "errors": errors,
         }
 
@@ -3793,6 +3925,7 @@ async def verify_surebet(req: VerifyRequest, _auth: None = Depends(_require_api_
         # higher MIN_PROFIT_PERCENT would report an unchanged dust bet as gone.
         "still_profitable": current["margin"] < 1.0,
         "meets_min_profit": current["profit_percent"] >= MIN_PROFIT_PERCENT,
+        "stale_prices": stale_rows,
         "errors": errors,
     }
 

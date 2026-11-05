@@ -41,6 +41,13 @@ class OddsValue(BaseModel):
     """Single named odds value."""
     label: str          # e.g., "1", "X", "2", "Over 2.5", "Under 2.5", "GG", "NG"
     value: float        # Decimal odds, e.g., 1.85
+    # When the BOOK says this price last moved, as naive UTC. Distinct from
+    # ``Match.fetched_at`` (when we collected it); empty when the feed publishes
+    # no timestamp. Never filled from the scan clock (N0-2).
+    source_updated_at: datetime | None = None
+    # Set by the frozen-price quarantine when this row may not be priced.
+    stale_price: bool = False
+    stale_reason: str = ""
 
 
 class Market(BaseModel):
@@ -63,6 +70,13 @@ class Market(BaseModel):
     # (tennis). A mismatch is not a naming difference; it is a different bet.
     settlement: str = "full_time"
     period: str = "full_time"
+    # A feed that publishes one update time for the whole market may carry it
+    # here; per-outcome ``OddsValue.source_updated_at`` wins when both are set.
+    source_updated_at: datetime | None = None
+    # Set when at least one outcome in this market is refused as stale. The
+    # whole market is dropped for that book, never just the winning side.
+    stale_price: bool = False
+    stale_reason: str = ""
 
 
 class RawOffer(BaseModel):
@@ -125,6 +139,9 @@ class Match(BaseModel):
     is_swapped: bool = False
     is_live: bool = False
     fetched_at: datetime | None = None  # naive UTC wall-clock when odds were fetched (P0-1)
+    # When the book last moved its prices, when its feed publishes that fact.
+    # Never inferred from ``fetched_at`` or the scan clock (N0-2).
+    source_updated_at: datetime | None = None
 
     def has_markets(self) -> bool:
         return len(self.markets) > 0
@@ -260,6 +277,10 @@ class SurebetStake(BaseModel):
     # /api/results is summarised per book; this keeps the age attached to the
     # exact leg a reviewer is about to place.
     fetched_at: datetime | None = None
+    # When the book's own feed says the price last moved, when it publishes one.
+    # Kept separate from ``fetched_at`` so a fresh collection of a frozen price
+    # is visible as such (N0-2).
+    source_updated_at: datetime | None = None
     destination: LegDestination | None = None
 
 
@@ -307,6 +328,7 @@ class Surebet(BaseModel):
     # Why the certainty gate trusts that every leg is the same match, in words.
     evidence: list[str] = []
     odds_fetched_at: datetime | None = None  # oldest leg's fetch time (naive UTC)
+    odds_source_updated_at: datetime | None = None  # oldest feed update time, when published
     found_at: datetime
 
 

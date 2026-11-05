@@ -84,6 +84,7 @@ _API_RUNTIME_FILES = {
     "_OPPORTUNITY_METRICS_FILE": "opportunity_metrics.json",
     "_FEED_INTEGRITY_FILE": "feed_integrity.json",
     "_COVERAGE_BUDGET_FILE": "coverage_budget.json",
+    "_STALE_PRICE_FILE": "stale_price_state.json",
     "DEEP_LINK_VERIFICATIONS_FILE": "deep_link_verifications.json",
     "DEEP_LINK_DECISIONS_FILE": "deep_link_decisions.json",
 }
@@ -226,6 +227,11 @@ def _isolated_runtime_state(
     # Lazily-created stores must be rebuilt against the redirected STORAGE_PATH.
     for attribute in ("_storage", "_bet_store", "_paper_store"):
         monkeypatch.setattr(api, attribute, None)
+    # N0-2 runtime state is per-test too: a previous test's price observations
+    # must not decide whether this test's rows are frozen.
+    monkeypatch.setattr(api, "_stale_price_store", {"prematch": {}, "live": {}})
+    monkeypatch.setattr(api, "_stale_price_evidence", {"prematch": [], "live": []})
+    monkeypatch.setattr(api, "_stale_price_checked_at", {"prematch": "", "live": ""})
 
     # A module that copied CACHE_DIR at import time keeps its own reference.
     verify_module = sys.modules.get("scripts.verify_deeplinks")

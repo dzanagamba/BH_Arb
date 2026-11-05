@@ -253,6 +253,19 @@ MAX_TWO_SOURCE_PROFIT_PERCENT = 10.0
 ODDS_TTL_SECONDS = 600         # Prematch: max age of odds before considered stale (10 min)
 LIVE_ODDS_TTL_SECONDS = 60     # Live: in-play odds expire after one minute
 
+# --- Frozen-price quarantine (N0-2) ---
+# A book's row is refused when its own feed timestamp says the price is older
+# than the mode's TTL, or when the price has not moved for this many scans while
+# at least one independent peer did move. The second rule is deliberately not a
+# "price did not move" rule: a stable market with stable peers is normal.
+STALE_PRICE_UNCHANGED_SCANS = int(os.getenv("STALE_PRICE_UNCHANGED_SCANS", "3"))
+# Bounded per-book observation store: keep the newest rows and drop observations
+# not seen for a week. This is runtime state, not a trust record.
+STALE_PRICE_MAX_ROWS = int(os.getenv("STALE_PRICE_MAX_ROWS", "50000"))
+STALE_PRICE_RETENTION_SECONDS = int(
+    os.getenv("STALE_PRICE_RETENTION_SECONDS", str(7 * 24 * 3600))
+)
+
 # --- Scraper Settings ---
 NAVIGATION_TIMEOUT_MS = 60000  # Max navigation time (ms)
 # Headless browsers by default; set HEADLESS=false in .env to watch them

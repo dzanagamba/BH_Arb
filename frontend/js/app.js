@@ -803,8 +803,9 @@ function renderFeedIntegrity() {
     const payload = resultsSnapshot?.feed_integrity || {};
     const books = Object.values(payload.books || {});
     const unhealthy = books.filter(book => book.state && book.state !== 'healthy');
-    strip.hidden = unhealthy.length === 0;
-    if (!unhealthy.length) { strip.innerHTML = ''; return; }
+    const frozen = Number(payload.stale_prices?.count || 0);
+    strip.hidden = unhealthy.length === 0 && frozen === 0;
+    if (!unhealthy.length && frozen === 0) { strip.innerHTML = ''; return; }
     const badges = unhealthy.map(book => {
         const state = book.state === 'quarantined' ? 'quarantined' : 'degraded';
         const reasons = (book.reasons || []).map(reason => FEED_REASON_LABELS[reason] || reason);
@@ -815,7 +816,14 @@ function renderFeedIntegrity() {
             + (state === 'quarantined' ? ' · not priced' : '')
             + '</span>';
     }).join('');
-    strip.innerHTML = `<span class="feed-integrity-title">Feed integrity</span>${badges}`;
+    // N0-2: a frozen price is refused, not quarantined; say so without
+    // pretending the whole book is out.
+    const frozenBadge = frozen
+        ? `<span class="feed-integrity-badge" data-state="degraded" title="A price unchanged while peers moved, or older than the book's update budget, is refused for this scan.">`
+            + `<b>price frozen</b> ${frozen} row${frozen === 1 ? '' : 's'} refused`
+            + '</span>'
+        : '';
+    strip.innerHTML = `<span class="feed-integrity-title">Feed integrity</span>${badges}${frozenBadge}`;
 }
 
 function surebetSignature(sb) {

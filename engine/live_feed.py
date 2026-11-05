@@ -78,7 +78,13 @@ class LiveFeedState:
         if frame.kind == "snapshot":
             self._rows.clear()
         for row in frame.rows:
-            self._rows[self._row_key(row)] = dict(row)
+            stored = dict(row)
+            # The frame's provider timestamp is the feed's own statement about
+            # when the row moved. Keep a per-row value when the adapter sent
+            # one; never invent it from the receive clock (N0-2).
+            if frame.source_updated_at and not stored.get("source_updated_at"):
+                stored["source_updated_at"] = frame.source_updated_at
+            self._rows[self._row_key(row)] = stored
         if len(self._rows) > self.max_rows:
             # Keep the newest keys rather than grow without bound.
             keep = list(self._rows)[-self.max_rows :]

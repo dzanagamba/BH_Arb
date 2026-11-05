@@ -20,7 +20,7 @@ Verified on 2026-11-05:
 
 | Check | Result |
 |---|---|
-| Offline suite | **1,481 passed**, 2 skipped, 1 warning, ~57 s (after N0-1) |
+| Offline suite | **1,494 passed**, 2 skipped, 1 warning, ~57 s (after N0-2) |
 | Lint | `ruff check .` clean |
 | Types | `mypy .` clean on 182 source files |
 | Generated market doc | in sync |
@@ -64,7 +64,7 @@ long-horizon.
 | ID | Task | Priority | Effort | Depends on | Status |
 |---|---|---|---|---|---|
 | N0-1 | Hermetic tests independent of runtime state | P0 | S | — | Done |
-| N0-2 | Source-updated timestamps and frozen-price quarantine | P0 | M | — | Not started |
+| N0-2 | Source-updated timestamps and frozen-price quarantine | P0 | M | — | Done |
 | N0-3 | CSP without inline styles | P0 | M | — | Not started |
 | N0-4 | Automatic closing-line capture for logged bets | P0 | M | N0-2 | Not started |
 | N1-1 | Retention and maintenance automation | P1 | M | — | Not started |
@@ -138,7 +138,7 @@ harness must redirect it, not destroy it.
 
 ### N0-2 — Source-updated timestamps and frozen-price quarantine
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P0
 **Effort:** M
 **Depends on:** none
@@ -166,12 +166,12 @@ the price,” and stop pricing a row that has been frozen while peers move.
 
 **Acceptance criteria:**
 
-- [ ] `fetched_at` and `source_updated_at` are distinct in served data.
-- [ ] A frozen book cannot supply a priced leg after the configured rule fires.
-- [ ] A missing source timestamp fails safe to the existing fetch-time TTL, not
+- [x] `fetched_at` and `source_updated_at` are distinct in served data.
+- [x] A frozen book cannot supply a priced leg after the configured rule fires.
+- [x] A missing source timestamp fails safe to the existing fetch-time TTL, not
       to “fresh.”
-- [ ] A stable market with no peer movement is not quarantined.
-- [ ] The certainty gate's identity decisions are untouched.
+- [x] A stable market with no peer movement is not quarantined.
+- [x] The certainty gate's identity decisions are untouched.
 
 **Tests:**
 
@@ -783,6 +783,54 @@ For every task:
 
 Newest first. Each entry: date, task, status, commands, measured result, files
 changed, follow-ups.
+
+### 2026-11-05 — N0-2 — Done
+
+**Commands**
+
+```bash
+python -m pytest                                      # empty ledger
+BH_ARB_TEST_RUNTIME_LEDGER=populated python -m pytest # populated ledger
+python -m pytest                                       # clean copy, no config/generated or cache
+python -m ruff check .
+python -m mypy .
+python scripts/generate_market_mapping_doc.py --check
+```
+
+**Measured result**
+
+- Operator checkout: **1,494 passed, 2 skipped** in both ledger modes.
+- Throwaway copy with no `config/generated/` and no `cache/`: **1,494 passed,
+  2 skipped** in both ledger modes.
+- `tests/test_stale_price.py` covers a fresh feed timestamp, a missing timestamp,
+  a feed timestamp past the budget, an unchanged price with stable peers, an
+  unchanged price while an independent peer moves, a changed-price reset, the
+  bounded store, the served clocks, MaxBet timestamp parsing, and the API/feed
+  evidence.
+- Ruff, MyPy (186 files) and the generated market doc are clean.
+
+**Files changed**
+
+- `models/schemas.py` — `source_updated_at` on `Match`, `Market`, `OddsValue`,
+  `SurebetStake` and `Surebet`; per-row stale flags.
+- `engine/stale_price.py` — bounded observation store, two refusal rules, peer
+  movement by independent price source, evidence rows.
+- `engine/arbitrage.py` — stale markets are never priced; served stakes carry
+  both `fetched_at` and `source_updated_at`.
+- `engine/feed_integrity.py` — per-book `stale_price_rows`.
+- `engine/live_feed.py` — frame `source_updated_at` propagated to rows without
+  one.
+- `scrapers/maxbet.py` — parse per-outcome `updateDate`/`providerTimestamp`.
+- `server/api.py`, `server/app.py` — scan/verify integration, persistence,
+  `/api/results`, `/api/health` and feed-integrity evidence.
+- `frontend/js/app.js` — **price frozen** badge in the feed-integrity strip.
+- `config/settings.py` — threshold, row cap and retention settings.
+- `tests/test_stale_price.py`, `tests/test_live_feed.py`, `tests/conftest.py`.
+- `docs/FEED_STATUS.md`, `README.md`.
+
+**Follow-ups:** N0-4 can build on the source timestamps and the observation
+store. No trust rule changed; the certainty gate, settlement identity and
+one-leg-per-book/source rules are untouched.
 
 ### 2026-11-05 — N0-1 — Done
 

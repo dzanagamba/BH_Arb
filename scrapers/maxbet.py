@@ -113,6 +113,16 @@ def _label_for(outcome: dict) -> str | None:
     return label
 
 
+def _outcome_source_updated_at(outcome: dict) -> datetime | None:
+    """The book's own per-outcome update time, when the payload carries one.
+
+    MaxBet's raw odds carry ``updateDate``/``providerTimestamp``. The capture
+    trims them, so fixtures leave this empty; a live payload that has them must
+    not lose them (N0-2). Unparseable or absent values stay ``None``.
+    """
+    return parse_dt(outcome.get("updateDate") or outcome.get("providerTimestamp"))
+
+
 def parse_maxbet_odds(odds: list, mode: str = "prematch") -> list[Market]:
     """Parse a match's ``odds[]`` array into registry-validated markets."""
     markets: list[Market] = []
@@ -134,6 +144,7 @@ def parse_maxbet_odds(odds: list, mode: str = "prematch") -> list[Market]:
             continue
 
         values: dict[str, float] = {}
+        source_times: dict[str, datetime | None] = {}
         for outcome in market.get("outcomes") or []:
             if not isinstance(outcome, dict):
                 continue
@@ -151,11 +162,19 @@ def parse_maxbet_odds(odds: list, mode: str = "prematch") -> list[Market]:
             if value < 1.01 or label not in spec.labels or label in values:
                 continue
             values[label] = value
+            source_times[label] = _outcome_source_updated_at(outcome)
 
         if len(values) >= spec.min_legs and set(values) <= spec.labels:
             markets.append(Market(
                 market_type=spec.market_type,
-                odds=[OddsValue(label=label, value=value) for label, value in values.items()],
+                odds=[
+                    OddsValue(
+                        label=label,
+                        value=value,
+                        source_updated_at=source_times.get(label),
+                    )
+                    for label, value in values.items()
+                ],
                 source_id=str(odd_type_id),
             ))
     return markets
@@ -197,6 +216,7 @@ def parse_sport_odds(odds: list, sport: str, mode: str = "prematch") -> list[Mar
             and item.get("marketAvailableForBetting") is not False
         ]
         values: dict[str, float] = {}
+        source_times: dict[str, datetime | None] = {}
         for outcome in outcomes:
             try:
                 value = float(outcome.get("oddValue") or 0.0)
@@ -205,10 +225,12 @@ def parse_sport_odds(odds: list, sport: str, mode: str = "prematch") -> list[Mar
             if value < 1.01:
                 continue
             label = str(outcome.get("outcome") or "").strip()
+            label_for_value = ""
             if odd_type_id == 175:
                 if label not in ("1", "2"):
                     continue
-                values[label] = value
+                label_for_value = label
+                values[label_for_value] = value
             elif odd_type_id in (16, 176):
                 hcp = (market.get("specifiers") or {}).get("hcp")
                 try:
@@ -216,9 +238,11 @@ def parse_sport_odds(odds: list, sport: str, mode: str = "prematch") -> list[Mar
                 except (TypeError, ValueError):
                     continue
                 if label.startswith(("H1", "HG1")):
-                    values[f"1 {line:g}"] = value
+                    label_for_value = f"1 {line:g}"
                 elif label.startswith(("H2", "HG2")):
-                    values[f"2 {-line:g}"] = value
+                    label_for_value = f"2 {-line:g}"
+                if label_for_value:
+                    values[label_for_value] = value
             else:
                 side = _outcome_side(outcome)
                 total = (market.get("specifiers") or {}).get("total")
@@ -227,7 +251,10 @@ def parse_sport_odds(odds: list, sport: str, mode: str = "prematch") -> list[Mar
                 except (TypeError, ValueError):
                     continue
                 if side:
-                    values[f"{'Over' if side == 'over' else 'Under'} {abs(line):g}"] = value
+                    label_for_value = f"{'Over' if side == 'over' else 'Under'} {abs(line):g}"
+                    values[label_for_value] = value
+            if label_for_value:
+                source_times[label_for_value] = _outcome_source_updated_at(outcome)
 
         if odd_type_id == 175:
             if set(values) != set(spec.moneyline_labels):
@@ -235,7 +262,14 @@ def parse_sport_odds(odds: list, sport: str, mode: str = "prematch") -> list[Mar
             markets.append(
                 Market(
                     market_type=spec.moneyline,
-                    odds=[OddsValue(label=label, value=values[label]) for label in spec.moneyline_labels],
+                    odds=[
+                        OddsValue(
+                            label=label,
+                            value=values[label],
+                            source_updated_at=source_times.get(label),
+                        )
+                        for label in spec.moneyline_labels
+                    ],
                     source_id=str(odd_type_id),
                     settlement=spec.moneyline_settlement,
                 )
@@ -246,7 +280,14 @@ def parse_sport_odds(odds: list, sport: str, mode: str = "prematch") -> list[Mar
             markets.append(
                 Market(
                     market_type=spec.handicap,
-                    odds=[OddsValue(label=label, value=value) for label, value in values.items()],
+                    odds=[
+                        OddsValue(
+                            label=label,
+                            value=value,
+                            source_updated_at=source_times.get(label),
+                        )
+                        for label, value in values.items()
+                    ],
                     source_id=str(odd_type_id),
                     settlement=spec.handicap_settlement,
                 )
@@ -257,7 +298,14 @@ def parse_sport_odds(odds: list, sport: str, mode: str = "prematch") -> list[Mar
             markets.append(
                 Market(
                     market_type=spec.total,
-                    odds=[OddsValue(label=label, value=value) for label, value in values.items()],
+                    odds=[
+                        OddsValue(
+                            label=label,
+                            value=value,
+                            source_updated_at=source_times.get(label),
+                        )
+                        for label, value in values.items()
+                    ],
                     source_id=str(odd_type_id),
                     settlement=spec.total_settlement,
                 )

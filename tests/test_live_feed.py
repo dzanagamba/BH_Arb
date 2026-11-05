@@ -90,6 +90,24 @@ def test_the_latest_row_store_is_bounded():
     assert len(state.rows()) == 2
 
 
+def test_a_frame_carries_its_provider_timestamp_without_inventing_one():
+    state = _state()
+    state.apply(
+        FeedFrame(
+            seq=1,
+            kind="snapshot",
+            rows=[_row("e1", "GG", 2.0), {**_row("e2", "GG", 2.1), "source_updated_at": "row-time"}],
+            source_updated_at="frame-time",
+        )
+    )
+
+    rows = {row["event_id"]: row for row in state.rows()}
+    assert rows["e1"]["source_updated_at"] == "frame-time"
+    assert rows["e2"]["source_updated_at"] == "row-time", (
+        "a row's own timestamp wins; the frame time is only a fallback"
+    )
+
+
 def test_replay_covers_snapshot_and_delta_without_a_network():
     replay = ReplayLiveFeed(
         [
