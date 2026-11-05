@@ -70,7 +70,7 @@ long-horizon.
 | N1-1 | Retention and maintenance automation | P1 | M | — | Done |
 | N1-2 | Coverage/mapping alerts and SLOs | P1 | S | — | Done |
 | N1-3 | Per-book scan cost accounting | P1 | M | — | Done |
-| N1-4 | Release hardening: Docker smoke, SBOM, dependency updates | P1 | S | — | Not started |
+| N1-4 | Release hardening: Docker smoke, SBOM, dependency updates | P1 | S | — | Done |
 | N2-1 | Paper ledger dashboard, CSV and retention view | P2 | M | N1-1 | Not started |
 | N2-2 | Realistic paper fills: rejection, partial acceptance, caps | P2 | M | N2-1 | Not started |
 | N2-3 | Candidate remediation and strict-miss trends | P2 | M | — | Not started |
@@ -399,7 +399,7 @@ sizes and outcomes.
 
 ### N1-4 — Release hardening: Docker smoke, SBOM, dependency updates
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P1
 **Effort:** S
 **Depends on:** none
@@ -419,10 +419,10 @@ automatic.
 
 **Acceptance criteria:**
 
-- [ ] A PR can prove the image builds and serves `/api/health`.
-- [ ] The SBOM is produced from the same requirements files the image uses.
-- [ ] Dependency update PRs are grouped and run the full CI.
-- [ ] A failed Docker smoke fails the release workflow.
+- [x] A PR can prove the image builds and serves `/api/health`.
+- [x] The SBOM is produced from the same requirements files the image uses.
+- [x] Dependency update PRs are grouped and run the full CI.
+- [x] A failed Docker smoke fails the release workflow.
 
 **Tests:** the workflow itself; no application-test changes required.
 
@@ -783,6 +783,54 @@ For every task:
 
 Newest first. Each entry: date, task, status, commands, measured result, files
 changed, follow-ups.
+
+### 2026-11-05 — N1-4 — Done
+
+**Commands**
+
+```bash
+python -m pytest
+BH_ARB_TEST_RUNTIME_LEDGER=populated python -m pytest
+python -m pytest tests/test_deployment_assets.py
+python -m ruff check .
+python -m mypy .
+python scripts/generate_market_mapping_doc.py --check
+python - <<'PY'  # YAML parse of every workflow and Dependabot config
+PY
+cyclonedx-py requirements requirements.txt --of JSON --output-reproducible -o sbom.cdx.json
+python scripts/docker_smoke.py --image bh-arb:n14-smoke --port 18000
+```
+
+**Measured result**
+
+- Operator checkout: **1,546 passed, 2 skipped, 1 warning** in 58.19 s;
+  populated-ledger mode: **1,546 passed, 2 skipped, 1 warning** in 58.82 s.
+- `tests/test_deployment_assets.py`: **14 passed**, including the Docker cache,
+  SBOM, Dependabot grouping and release-workflow assertions.
+- SBOM generation locally produced **8 components** with CycloneDX spec **1.6**
+  from `requirements.txt`; all workflow/Dependabot YAML parsed.
+- Ruff clean, MyPy clean on **197 source files**, generated market doc in sync.
+- **Local Docker smoke blocked:** this machine's user is not in the `docker`
+  group, so `docker build` cannot reach `/var/run/docker.sock` (`permission
+  denied`). The workflow itself is the PR/release gate and is structurally
+  validated; a CI runner with Docker access will execute it.
+
+**Files changed**
+
+- `requirements-dev.txt` — `cyclonedx-bom==8.0.1` for the SBOM job.
+- `.github/workflows/ci.yml` — new `sbom` job and artifact upload.
+- `.github/workflows/docker.yml` — Buildx + GHA layer cache.
+- `.github/workflows/release.yml` — tag/manual SBOM + Docker smoke; smoke
+  failure fails the release.
+- `.github/dependabot.yml` — grouped runtime, dev and GitHub Actions updates.
+- `Dockerfile` — separate pip and Chromium layers with the documented build
+  time; `.gitignore`/`.dockerignore` exclude SBOM artifacts.
+- `docs/RELEASE.md`, `docs/CI.md`, `docs/DEPLOYMENT.md`, `README.md`.
+- `tests/test_deployment_assets.py`.
+
+**Follow-ups:** N2-1 (paper ledger dashboard, CSV and retention view) is the next
+eligible task. The local Docker smoke remains an environment limitation, not a
+repository blocker.
 
 ### 2026-11-05 — N1-3 — Done
 

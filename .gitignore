@@ -43,6 +43,10 @@ test-results/
 coverage.xml
 htmlcov/
 
+# Release SBOM artifacts (generated in CI; never commit)
+sbom*.json
+sbom*.xml
+
 # Logs
 *.log
 

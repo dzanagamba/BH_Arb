@@ -225,7 +225,9 @@ a restart. The first build installs Chromium and takes roughly 5–10 minutes
 For UID/GID matching, systemd, health checks, and the exact backup/restore list
 (`cache/`, `config/generated/mapping_evidence.json`,
 `config/team_alias_allowlist.json`, `config/bookmaker_deeplinks.json`), see
-[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md). Release gates (Docker smoke,
+CycloneDX SBOM, grouped dependency updates and the local equivalents) are in
+[`docs/RELEASE.md`](docs/RELEASE.md).
 
 ## Configuration
 

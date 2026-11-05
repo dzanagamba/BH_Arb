@@ -23,7 +23,11 @@ curl -fsS http://127.0.0.1:8000/api/health
 ```
 
 The first build installs Chromium and its system libraries. Expect roughly
-5–10 minutes and a 1–1.5 GB image; later builds reuse the dependency layer.
+5–10 minutes and a 1–1.5 GB image; later builds reuse the dependency layer. The
+Dockerfile keeps the browser install in its own layer, and the CI workflows
+restore it with a GitHub Actions layer cache, so an app-only change does not
+download Chromium again. The release workflow (`docs/RELEASE.md`) also emits a
+CycloneDX SBOM from the same `requirements.txt` the image installs.
 
 The dashboard is at `http://127.0.0.1:8000/`. The published port is bound to
 loopback by default. Publishing it on `0.0.0.0` is only safe behind a firewall

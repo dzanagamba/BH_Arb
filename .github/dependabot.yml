@@ -1,0 +1,46 @@
+version: 2
+# Dependency updates stay reviewable: runtime and dev bumps are separate PRs,
+# and every Dependabot PR runs the normal pull_request CI (quality, tests,
+# security and SBOM). The Docker smoke stays path-triggered because the Chromium
+# layer is the expensive part.
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+    groups:
+      runtime-dependencies:
+        patterns:
+          - "fastapi"
+          - "uvicorn"
+          - "playwright"
+          - "pydantic"
+          - "rapidfuzz"
+          - "httpx"
+          - "python-dotenv"
+          - "tzdata"
+      dev-dependencies:
+        patterns:
+          - "pytest*"
+          - "coverage"
+          - "ruff"
+          - "mypy"
+          - "pip-audit"
+          - "bandit"
+          - "cyclonedx-bom"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "github-actions"
+    groups:
+      github-actions:
+        patterns:
+          - "*"

@@ -25,6 +25,8 @@ playwright-report
 test-results
 .superpowers
 ScraperLogic.md
+sbom*.json
+sbom*.xml
 
 # Secrets. .env.example documents the variables; .env never enters the image.
 .env

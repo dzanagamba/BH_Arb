@@ -117,5 +117,47 @@ def test_docker_workflow_is_optional_and_runs_the_smoke_test():
         encoding="utf-8"
     )
     assert "workflow_dispatch" in workflow
-    assert "docker build" in workflow
+    assert "docker/build-push-action" in workflow
+    assert "cache-from: type=gha" in workflow
     assert "scripts/docker_smoke.py" in workflow
+
+
+def test_ci_generates_the_sbom_from_the_runtime_requirements():
+    workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "cyclonedx-py requirements requirements.txt" in workflow
+    assert "sbom.cdx.json" in workflow
+    assert "upload-artifact" in workflow
+    assert "sbom-cyclonedx" in workflow
+
+
+def test_dependabot_groups_runtime_dev_and_github_actions():
+    config = (REPO_ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8")
+    assert 'package-ecosystem: "pip"' in config
+    assert 'package-ecosystem: "github-actions"' in config
+    assert "runtime-dependencies:" in config
+    assert "dev-dependencies:" in config
+    assert '"fastapi"' in config
+    assert '"pytest*"' in config
+    assert "groups:" in config
+
+
+def test_release_workflow_proves_the_image_and_fails_on_smoke():
+    workflow = (REPO_ROOT / ".github" / "workflows" / "release.yml").read_text(
+        encoding="utf-8"
+    )
+    assert '"v*"' in workflow
+    assert "cyclonedx-py requirements requirements.txt" in workflow
+    assert "docker/build-push-action" in workflow
+    assert "scripts/docker_smoke.py" in workflow
+    assert "cache-from: type=gha" in workflow
+
+
+def test_release_doc_has_the_checklist_and_local_equivalents():
+    release = (REPO_ROOT / "docs" / "RELEASE.md").read_text(encoding="utf-8")
+    assert "Release checklist" in release
+    assert "python scripts/docker_smoke.py" in release
+    assert "cyclonedx-py requirements requirements.txt" in release
+    assert "5–10 minutes" in release
+    assert "Dependabot" in release

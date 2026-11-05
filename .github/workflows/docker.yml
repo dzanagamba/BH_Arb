@@ -28,8 +28,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build image
-        run: docker build -t bh-arb:ci .
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (GHA layer cache restores the Chromium layer)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: bh-arb:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Smoke test (health, non-root, cache survives restart)
         run: python scripts/docker_smoke.py --no-build --image bh-arb:ci --port 18000

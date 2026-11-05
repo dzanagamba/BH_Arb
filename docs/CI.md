@@ -1,12 +1,13 @@
 # CI, coverage and security scans
 
-P1-4 hardening. Every push and pull request runs three jobs:
+P1-4/N1-4 hardening. Every push and pull request runs four jobs:
 
 | Job | What it does |
 |---|---|
 | `quality` | Ruff, MyPy and the generated-market-doc check on Python 3.11. |
 | `tests` | Full pytest suite on Python 3.11 and 3.12. The 3.11 leg also measures coverage, writes a markdown summary to the workflow run page, and uploads `coverage.xml`. |
 | `security` | `pip-audit` against both requirement files and Bandit at medium severity and above. |
+| `sbom` | CycloneDX JSON from `requirements.txt` (the file the image installs), verified non-empty and uploaded as `sbom-cyclonedx`. |
 
 Python 3.11 stays the required runtime (it is what the container and the systemd
 unit use). 3.12 is a forward-compatibility check, not a second support promise.
@@ -80,6 +81,33 @@ suite was re-run on pytest 9.
 If a future advisory has **no fixed version**, or is provably not reachable in
 this project, add `--ignore-vuln <ID>` to the relevant CI step **and** record
 the id, the reason and the review date here. Never silently skip an advisory.
+
+## SBOM
+
+The `sbom` job generates CycloneDX JSON from the exact `requirements.txt` the
+image installs:
+
+```bash
+cyclonedx-py requirements requirements.txt \
+  --of JSON --output-reproducible -o sbom.cdx.json
+```
+
+The job asserts `bomFormat == "CycloneDX"`, a spec version and at least one
+component, then uploads `sbom-cyclonedx` for 90 days. The release workflow runs
+the same step, so a release artifact and a PR artifact come from the same file.
+`cyclonedx-bom==8.0.1` is in `requirements-dev.txt`; it is not part of the
+runtime image.
+
+The SBOM is an inventory, not a vulnerability report. `pip-audit` remains the
+vulnerability gate.
+
+## Release and dependency updates
+
+`.github/workflows/release.yml` runs on a `v*` tag or manually: it regenerates
+the SBOM and runs the Docker smoke. A failed smoke fails the release workflow.
+`.github/dependabot.yml` groups runtime dependencies, dev dependencies and
+GitHub Actions into separate weekly PRs; every PR runs this full CI. See
+`docs/RELEASE.md` for the checklist and local equivalents.
 
 ## Static security scan
 

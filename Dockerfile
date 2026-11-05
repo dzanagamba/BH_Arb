@@ -29,8 +29,13 @@ WORKDIR /app
 
 # Dependencies first, so an application edit does not redownload them.
 COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt \
-    && playwright install --with-deps chromium \
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Chromium is the size driver (~400 MB of browser plus system libraries) and
+# the slowest cold-build step, roughly 5–10 minutes on a clean runner. Keeping
+# it in its own layer lets an app-only change restore it from the CI GHA layer
+# cache; a requirements change still rebuilds it because the layer above moved.
+RUN playwright install --with-deps chromium \
     && chmod -R o+rX /ms-playwright
 
 # Application code, owned by the runtime user. config/ is writable because the
