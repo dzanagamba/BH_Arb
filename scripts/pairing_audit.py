@@ -74,6 +74,74 @@ def _team_score(left: dict[str, Any], right: dict[str, Any]) -> float:
     return max(direct, swapped)
 
 
+def _book_pair(row: dict[str, Any]) -> str:
+    """The two books a strict miss sits between, order-independent."""
+    return "|".join(
+        sorted({str(row.get("bookmaker", "")), str(row.get("other_bookmaker", ""))})
+    )
+
+
+def _spelling_pattern(row: dict[str, Any]) -> str:
+    """A stable signature of how the two books spell the same fixture.
+
+    The same fixture missed by the same pair of books produces the same
+    pattern across scans, which is what makes a recurring blocker visible. The
+    identity normalizer is used so case, accents and org noise do not split one
+    pattern into a dozen.
+    """
+
+    def side(left: Any, right: Any) -> str:
+        return f"{name_identity.normalize(str(left or ''))}~{name_identity.normalize(str(right or ''))}"
+
+    return (
+        f"{side(row.get('home_team'), row.get('other_home'))}|"
+        f"{side(row.get('away_team'), row.get('other_away'))}"
+    )
+
+
+def _strict_miss_groups(
+    rows: list[dict[str, Any]], matches: int
+) -> list[dict[str, Any]]:
+    """Group repeated misses by book pair, league and spelling pattern.
+
+    Denominators are explicit: ``share`` is over strict misses and
+    ``match_share`` over all listings in the scan. A group is a ranking aid, not
+    a coverage claim.
+    """
+    groups: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
+    for row in rows:
+        key = (
+            _book_pair(row),
+            str(row.get("league", "")),
+            _spelling_pattern(row),
+        )
+        groups.setdefault(key, []).append(row)
+    total = len(rows)
+    result: list[dict[str, Any]] = []
+    for (book_pair, league, pattern), members in groups.items():
+        example = members[0]
+        result.append(
+            {
+                "book_pair": book_pair,
+                "bookmakers": book_pair.split("|") if book_pair else [],
+                "league": league,
+                "pattern": pattern,
+                "count": len(members),
+                "share": round(len(members) / total, 4) if total else 0.0,
+                "match_share": round(len(members) / matches, 4) if matches else 0.0,
+                "example": {
+                    "home_team": example.get("home_team", ""),
+                    "away_team": example.get("away_team", ""),
+                    "other_home": example.get("other_home", ""),
+                    "other_away": example.get("other_away", ""),
+                    "similarity": example.get("similarity", 0.0),
+                },
+            }
+        )
+    result.sort(key=lambda row: (-row["count"], row["book_pair"], row["league"], row["pattern"]))
+    return result
+
+
 def audit(cache: dict[str, Any]) -> dict[str, Any]:
     matches = [match for match in cache.get("matches", []) if isinstance(match, dict)]
     groups = [group for group in cache.get("match_groups", []) if isinstance(group, dict)]
@@ -132,6 +200,7 @@ def audit(cache: dict[str, Any]) -> dict[str, Any]:
                         "other_bookmaker": other.get("bookmaker", ""),
                         "other_home": other.get("home_team", ""),
                         "other_away": other.get("away_team", ""),
+                        "other_league": other.get("league_normalized", ""),
                         "similarity": round(_team_score(match, other), 3),
                     }
         if best is not None:
@@ -152,6 +221,7 @@ def audit(cache: dict[str, Any]) -> dict[str, Any]:
 
     sizes = Counter(len(group.get("bookmakers", [])) for group in groups)
     miss_rate = round(len(strict_misses) / len(matches), 4) if matches else 0.0
+    strict_miss_groups = _strict_miss_groups(strict_misses, len(matches))
     return {
         "scan_time": cache.get("scan_time"),
         "matches": len(matches),
@@ -163,6 +233,8 @@ def audit(cache: dict[str, Any]) -> dict[str, Any]:
         "strict_misses": len(strict_misses),
         "strict_miss_rate": miss_rate,
         "strict_miss_examples": strict_misses[:25],
+        "strict_miss_group_count": len(strict_miss_groups),
+        "strict_miss_groups": strict_miss_groups[:25],
         "duplicate_book_groups": duplicate_book_groups,
     }
 

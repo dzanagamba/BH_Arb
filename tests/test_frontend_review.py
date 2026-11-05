@@ -125,9 +125,9 @@ def test_candidate_queue_is_read_as_a_bounded_page():
     assert "CANDIDATE_PAGE_SIZE" in JS
     assert "limit=${CANDIDATE_PAGE_SIZE}" in JS
     assert "offset=0" in JS
-    assert "actionable_only=true" in JS, (
-        "the tab must ask for the pairs an approval can clear, not the whole "
-        "refused population: the rest carry an Approve button that cannot work"
+    assert "closeable_only=true" in JS, (
+        "N2-3 includes league mappings, so the tab must ask for every pair a "
+        "mapping can close, not only the alias-actionable ones"
     )
     assert "data.total" in JS
     assert "actionable_total" in JS
@@ -211,3 +211,14 @@ def test_rendered_links_are_scheme_checked():
     assert "function safeUrl" in JS
     assert "parsed.protocol === 'http:'" in JS
     assert "escapeHtml(safeUrl(url))" in JS
+
+
+def test_recurring_blocker_panel_and_proposals_are_read_only():
+    """N2-3: the panel ranks review work; no control applies a suggestion."""
+    assert 'id="remediation-panel"' in HTML
+    assert 'id="remediation-groups"' in HTML
+    assert "REMEDIATION_LABELS" in JS
+    assert "renderRemediation" in JS
+    assert "candidate.remediation" in JS
+    assert "proposal only" in JS
+    assert "coverage-progress claim" in HTML

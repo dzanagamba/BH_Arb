@@ -368,11 +368,15 @@ def test_candidate_records_both_sides_of_the_claim(monkeypatch):
 
     assert candidate.side_a == PairSide(
         bookmaker="mdshop", event_ref="1",
-        home_team="Lech Poznan", away_team="Thun", link_verified=False,
+        home_team="Lech Poznan", away_team="Thun",
+        league="Liga Evrope", league_normalized="europa_league",
+        link_verified=False,
     )
     assert candidate.side_b == PairSide(
         bookmaker="mbet", event_ref="2",
-        home_team="Lech Pznan", away_team="FC Thun", link_verified=False,
+        home_team="Lech Pznan", away_team="FC Thun",
+        league="Liga Konferencija", league_normalized="conference_league",
+        link_verified=False,
     )
 
 

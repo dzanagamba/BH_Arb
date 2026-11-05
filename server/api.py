@@ -69,6 +69,15 @@ from config.settings import (
 )
 from engine.ai import MatchAI, PairProposal
 from engine.arbitrage import ArbitrageEngine
+from engine.candidate_remediation import (
+    PROPOSAL_NOTE,
+    alias_proposals,
+    candidate_class,
+    group_candidates,
+    league_proposal,
+    remediation_counts,
+    remediation_summary,
+)
 from engine.certainty import CertaintyGate
 from engine.coverage_budget import (
     evaluate as evaluate_coverage_budget,
@@ -114,6 +123,7 @@ from engine.skin_detection import (
 from engine.stale_price import REASON_LABEL as STALE_PRICE_LABEL
 from engine.stale_price import evaluate_stale_prices
 from models.schemas import (
+    CandidateRemediation,
     CandidateReview,
     MarketType,
     Match,
@@ -319,6 +329,18 @@ cached_surebets: list[dict] = []
 cached_matches: list[dict] = []
 cached_match_groups_report: list[dict] = []
 _pairing_summary: dict[str, dict[str, Any]] = {}
+# N2-3: bounded per-scan strict-miss trend, newest last. Each point carries the
+# numerator and denominator of the scan it describes, so a drop cannot be read
+# without its sample size.
+_pairing_trend: dict[str, list[dict[str, Any]]] = {"prematch": [], "live": []}
+_PAIRING_TREND_MAX = 100
+# N2-3: bounded per-scan candidate blocker groups, newest last. A group is a
+# review-work ranking, never a coverage-progress claim.
+_candidate_blocker_trend: dict[str, list[dict[str, Any]]] = {
+    "prematch": [],
+    "live": [],
+}
+_CANDIDATE_TREND_MAX = 100
 cached_per_bookie: dict[str, int] = {}  # bookmaker_id -> match count
 cached_live_surebets: list[dict] = []
 cached_live_matches: list[dict] = []
@@ -1040,6 +1062,7 @@ CANDIDATE_REVIEW_HISTORY_MAX = 200   # in-memory log; the allowlist file is the 
 # They come from the per-book deep-link system check, never from a name, so no
 # human decision can clear them.
 LINK_REJECTION_REASONS = frozenset({"link_unverified", "no_event_link"})
+RemediationAction = Literal["alias", "league", "alias+league", "none"]
 
 
 def _decision_premise(link_blocked: bool) -> str:
@@ -1099,6 +1122,7 @@ class _FoundPair(NamedTuple):
 
     candidate: CandidateReview
     alias_actionable: bool
+    closeable: bool
     human_blockers: int
     kickoff_delta_minutes: float
     team_similarity: float
@@ -1328,6 +1352,109 @@ def _alias_actionable(
     return gate.evaluate_pair(linked[0], linked[1]).status == "verified"
 
 
+def _what_if_action(
+    reasons: list[str],
+    alias_entries: list[str],
+    league_pair: tuple[str, str] | None,
+    left: Match,
+    right: Match,
+    gate: CertaintyGate,
+    *,
+    alias_actionable: bool,
+    base_equivalences: set[tuple[str, str]],
+) -> RemediationAction:
+    """Which mapping, if either, would clear the pair — as a proposal only.
+
+    ``alias_actionable`` is the existing, conservative answer for a team-alias
+    approval. A league equivalence is a second kind of mapping a human can
+    supply, so it is asked the same way: grant only that mapping, mark both
+    links verified (the state the system check produces), and read the gate's
+    verdict. The gate instance is reused, so every evaluation resets the
+    aliases and equivalences to a known base; nothing is persisted.
+    """
+    human = set(reasons) - LINK_REJECTION_REASONS
+    if not human <= {"team_unresolved", "league_mismatch"}:
+        return "none"
+    if alias_actionable:
+        return "alias"
+    if league_pair is None or "league_mismatch" not in reasons:
+        return "none"
+
+    def verified_with(aliases: list[str], league: tuple[str, str] | None) -> bool:
+        gate.alias_allowlist = set(aliases)
+        gate.league_equivalences = set(base_equivalences)
+        if league is not None:
+            gate.league_equivalences.add(league)
+        linked = [
+            match.model_copy(update={"deep_link_verified": True})
+            for match in (left, right)
+        ]
+        return gate.evaluate_pair(linked[0], linked[1]).status == "verified"
+
+    league_ok = verified_with([], league_pair)
+    both_ok = verified_with(alias_entries, league_pair)
+    if both_ok and league_ok:
+        return "league"
+    if both_ok:
+        return "alias+league"
+    return "none"
+
+
+def _build_remediation(
+    *,
+    reasons: list[str],
+    entries: list[str],
+    league_pair: tuple[str, str] | None,
+    action: RemediationAction,
+    left: Match,
+    right: Match,
+    ledger: MappingLedger | None,
+    confidence: float,
+) -> CandidateRemediation:
+    """Assemble the inert proposal block for one candidate.
+
+    Everything here is read-only: the ledger is queried, the raw spellings are
+    copied, and no allowlist, claim or gate verdict is written. ``action`` is
+    the hypothetical verdict computed by ``_what_if_action``.
+    """
+    proposals = (
+        alias_proposals(entries, ledger, confidence) if action != "none" else []
+    )
+    if action != "none" and league_pair is not None:
+        proposal = league_proposal(
+            left.league,
+            right.league,
+            ledger,
+            normalized_left=left.league_normalized,
+            normalized_right=right.league_normalized,
+            confidence=confidence,
+        )
+        if proposal is not None:
+            proposals.append(proposal)
+    notes = [PROPOSAL_NOTE]
+    if action == "none":
+        notes.append(
+            "No team alias or league mapping clears the remaining gate reasons."
+        )
+    if action != "none" and league_pair is not None:
+        notes.append(
+            "A league equivalence is a proposal for review; it is not written by "
+            "this queue and only evidence can accept it."
+        )
+    if set(reasons) & LINK_REJECTION_REASONS:
+        notes.append(
+            "The link half is a separate machine check; no alias or league "
+            "proposal clears it."
+        )
+    return CandidateRemediation(
+        action=action,
+        closeable=action in {"alias", "league", "alias+league"},
+        gate_reasons=list(reasons),
+        proposals=proposals,
+        notes=notes,
+    )
+
+
 def _what_if_gate(matcher: MatchMatcher) -> CertaintyGate:
     """Build the gate that answers "would an approval clear this pair?".
 
@@ -1420,6 +1547,8 @@ async def _collect_candidates(
     all_matches: list[Match],
     matcher: MatchMatcher,
     groups: list[MatchGroup] | None = None,
+    *,
+    rank_with_ai: bool = True,
 ) -> dict[str, CandidateReview]:
     """Find plausible same-event pairs the matcher could not verify and queue
     them for review.
@@ -1428,6 +1557,9 @@ async def _collect_candidates(
     cheap team-token prefilter before the full gate runs. AI only ranks; it never
     approves. A pair a human already decided on is not re-queued while the state
     that decision was taken on still holds.
+
+    ``rank_with_ai=False`` lets an offline report build the same queue without a
+    network call; it changes nothing about the verdicts or the proposals.
     """
     gate = CertaintyGate(
         kickoff_window_minutes=CANDIDATE_KICKOFF_WINDOW_MIN,
@@ -1436,6 +1568,10 @@ async def _collect_candidates(
     # Second gate, reused for the "would an approval fix this?" question. Built by
     # `_what_if_gate` so it decides with the verified window, not this wider one.
     what_if_gate = _what_if_gate(matcher)
+    # The declared equivalences are the base every hypothetical resets to; the
+    # gate object is reused, so a proposal can never leak into the next pair.
+    base_equivalences = set(what_if_gate.league_equivalences)
+    ledger = getattr(matcher, "_ledger", None)
     gate.normalize(all_matches)
 
     buckets: dict[int, list[Match]] = {}
@@ -1485,8 +1621,44 @@ async def _collect_candidates(
                 ):
                     continue  # a human already decided this exact pair
                 positions = _team_positions(left, right)
+                entries = _alias_entries(positions)
                 actionable = _alias_actionable(
                     result.reasons, positions, left, right, what_if_gate
+                )
+                league_labels = (
+                    left.league_normalized or left.league,
+                    right.league_normalized or right.league,
+                )
+                league_pair = (
+                    (
+                        (league_labels[0], league_labels[1])
+                        if league_labels[0] < league_labels[1]
+                        else (league_labels[1], league_labels[0])
+                    )
+                    if "league_mismatch" in result.reasons
+                    and all(league_labels)
+                    and league_labels[0] != league_labels[1]
+                    else None
+                )
+                action = _what_if_action(
+                    result.reasons,
+                    entries,
+                    league_pair,
+                    left,
+                    right,
+                    what_if_gate,
+                    alias_actionable=actionable,
+                    base_equivalences=base_equivalences,
+                )
+                remediation = _build_remediation(
+                    reasons=result.reasons,
+                    entries=entries,
+                    league_pair=league_pair,
+                    action=action,
+                    left=left,
+                    right=right,
+                    ledger=ledger,
+                    confidence=similarity / 100.0,
                 )
                 found.append(_FoundPair(
                     candidate=CandidateReview(
@@ -1501,6 +1673,8 @@ async def _collect_candidates(
                             event_ref=_match_event_ref(left),
                             home_team=left.home_team,
                             away_team=left.away_team,
+                            league=left.league,
+                            league_normalized=left.league_normalized,
                             link_verified=left.deep_link_verified,
                         ),
                         side_b=PairSide(
@@ -1508,6 +1682,8 @@ async def _collect_candidates(
                             event_ref=_match_event_ref(right),
                             home_team=right.home_team,
                             away_team=right.away_team,
+                            league=right.league,
+                            league_normalized=right.league_normalized,
                             link_verified=right.deep_link_verified,
                         ),
                         team_positions=positions,
@@ -1516,9 +1692,11 @@ async def _collect_candidates(
                         ai_confidence=0.0,
                         ai_reason="",
                         rule_rejections=result.reasons,
+                        remediation=remediation,
                         created_at=datetime.now(UTC).replace(tzinfo=None),
                     ),
                     alias_actionable=actionable,
+                    closeable=remediation.closeable,
                     human_blockers=len(
                         [r for r in result.reasons if r not in LINK_REJECTION_REASONS]
                     ),
@@ -1532,6 +1710,7 @@ async def _collect_candidates(
     # the tightest kickoff and closest names. The AI cap is taken from the top of
     # this order, so the hosted calls land on pairs a human could actually close.
     found.sort(key=lambda pair: (
+        not pair.closeable,
         not pair.alias_actionable,
         pair.human_blockers,
         pair.kickoff_delta_minutes,
@@ -1542,10 +1721,11 @@ async def _collect_candidates(
     logger.info(
         f"Review candidates: {len(candidates)} unverified pairs from {len(all_matches)} matches "
         f"({sum(1 for pair in found if pair.alias_actionable)} alias-actionable, "
+        f"{sum(1 for pair in found if pair.closeable)} closeable by a proposed mapping, "
         f"{len(decided)} suppressed by earlier decisions)"
     )
 
-    ai = _shared_client_ai() if found else None
+    ai = _shared_client_ai() if (found and rank_with_ai) else None
     if ai is None:
         return candidates
     try:
@@ -2201,8 +2381,9 @@ async def run_scan(
         _save_feed_integrity()
         _save_stale_price_state()
         _append_history(len(groups), mode)
+        _record_candidate_trend(mode, scan_finished_at)
 
-        _refresh_pairing_summary(mode, matches_cache, report_cache)
+        _refresh_pairing_summary(mode, matches_cache, report_cache, scan_finished_at)
 
         duration_seconds = round(time.perf_counter() - scan_started_monotonic, 3)
         cache_file = _LIVE_CACHE_FILE if is_live else _PREMATCH_CACHE_FILE
@@ -2364,17 +2545,24 @@ def _notify_scan_alerts(
 
 
 def _refresh_pairing_summary(
-    mode: str, matches: list[dict], groups: list[dict]
+    mode: str,
+    matches: list[dict],
+    groups: list[dict],
+    scan_time: datetime | None = None,
 ) -> None:
     """Recompute the pairing health metric from the rows being served.
 
     Called after a scan and after a cache restore. The audit reads the same
     rows the dashboard serves, so the number cannot drift from the list it
     describes; a restart recomputes it after stale groups are dropped.
+
+    N2-3 adds the grouped strict misses and appends one bounded trend point per
+    scan. The point keeps its own numerator and denominator, so a quieter scan
+    is never mistaken for an improvement.
     """
     try:
         pairing = audit_pairing({"matches": matches, "match_groups": groups})
-        _pairing_summary[mode] = {
+        summary = {
             key: pairing.get(key)
             for key in (
                 "matches",
@@ -2383,12 +2571,70 @@ def _refresh_pairing_summary(
                 "duplicate_listings",
                 "strict_misses",
                 "strict_miss_rate",
+                "strict_miss_group_count",
+                "strict_miss_groups",
                 "duplicate_book_groups",
             )
         }
+        _pairing_summary[mode] = summary
+        point = {
+            "scan_time": _naive_utc(
+                scan_time or datetime.now(UTC)
+            ).isoformat(timespec="seconds"),
+            "matches": int(pairing.get("matches") or 0),
+            "strict_misses": int(pairing.get("strict_misses") or 0),
+            "strict_miss_rate": float(pairing.get("strict_miss_rate") or 0.0),
+            "strict_miss_group_count": int(
+                pairing.get("strict_miss_group_count") or 0
+            ),
+            "top_groups": [
+                {
+                    "book_pair": row.get("book_pair", ""),
+                    "league": row.get("league", ""),
+                    "count": row.get("count", 0),
+                    "share": row.get("share", 0.0),
+                }
+                for row in (pairing.get("strict_miss_groups") or [])[:5]
+            ],
+        }
+        trend = _pairing_trend.setdefault(mode, [])
+        if trend and trend[-1].get("scan_time") == point["scan_time"]:
+            trend[-1] = point
+        else:
+            trend.append(point)
+            del trend[:-_PAIRING_TREND_MAX]
     except Exception as exc:  # a metric must never stop a scan
         logger.warning("Pairing audit failed: %s", exc)
         _pairing_summary[mode] = {"error": str(exc)[:200]}
+
+
+def _record_candidate_trend(mode: str, scan_time: datetime | None = None) -> None:
+    """Append the current queue's blocker groups and their denominators.
+
+    Best effort, off the scan's critical path: a trend failure must not turn a
+    successful scan into an error.
+    """
+    try:
+        queue = list(_candidates_for(mode).values())
+        counts = remediation_counts(queue)
+        point = {
+            "scan_time": _naive_utc(
+                scan_time or datetime.now(UTC)
+            ).isoformat(timespec="seconds"),
+            "total": len(queue),
+            "closeable": (
+                counts["alias"] + counts["league"] + counts["alias+league"]
+            ),
+            "groups": group_candidates(queue, limit=10),
+        }
+        trend = _candidate_blocker_trend.setdefault(mode, [])
+        if trend and trend[-1].get("scan_time") == point["scan_time"]:
+            trend[-1] = point
+        else:
+            trend.append(point)
+            del trend[:-_CANDIDATE_TREND_MAX]
+    except Exception as exc:  # diagnostics must never stop a scan
+        logger.warning("Candidate blocker trend failed: %s", exc)
 
 
 def _cache_size(path: str) -> int:
@@ -2986,7 +3232,13 @@ def _load_cache():
             # see `_restorable_match_groups` for why a stored `verified` row can
             # be older than the proofs it was decided on.
             report_cache[:] = _restorable_match_groups(data.get("match_groups"), mode)
-            _refresh_pairing_summary(mode, matches_cache, report_cache)
+            cached_scan_time: datetime | None = None
+            if scan_time:
+                try:
+                    cached_scan_time = datetime.fromisoformat(str(scan_time).replace("Z", "+00:00"))
+                except ValueError:
+                    cached_scan_time = None
+            _refresh_pairing_summary(mode, matches_cache, report_cache, cached_scan_time)
             status.total_matches = len(matches_cache)
             status.surebets_found = len(surebets_cache)
             logger.info(
@@ -3255,6 +3507,16 @@ async def health():
             "prematch": _candidate_breakdown(list(pending_candidates.values())),
             "live": _candidate_breakdown(list(pending_live_candidates.values())),
         },
+        # N2-3: ranked, proposal-only remediation. The queue total is the
+        # denominator; groups are review-work ranking, never coverage progress.
+        "candidate_remediation": {
+            "prematch": remediation_summary(list(pending_candidates.values()), limit=10),
+            "live": remediation_summary(list(pending_live_candidates.values()), limit=10),
+        },
+        "candidate_blocker_trend": _candidate_blocker_trend,
+        # N2-3: strict-miss groups and their per-scan trend, each point with its
+        # own matches/strict-misses denominator.
+        "pairing_trend": _pairing_trend,
         "suppressed_candidates": len(_suppressed_candidates),
         # Matches whose per-event link is unproven AND can still block. See
         # `_unverified_link_count` for why the predicate is the gate's and why
@@ -3765,6 +4027,7 @@ async def get_candidates(
     offset: int = 0,
     mode: ScanMode = "prematch",
     actionable_only: bool = False,
+    closeable_only: bool = False,
     _auth: None = Depends(_require_api_key),
 ):
     """List match candidates awaiting human review, one bounded page at a time.
@@ -3774,11 +4037,11 @@ async def get_candidates(
     can say "showing N of M" instead of pretending the page is the queue.
 
     ``actionable_only`` draws the page from the pairs an approval can actually
-    close (``alias_actionable``), which is what the Review tab asks for: the rest
-    are refused for a reason no human decision moves, so a card with an Approve
-    button would promise a fix that does not exist. ``actionable_total`` is the
-    closable part of the queue whether or not the filter is requested, so the tab
-    can state what it is not showing.
+    close (``alias_actionable``), which is what the Review tab used to ask for.
+    ``closeable_only`` is the N2-3 form: it also includes pairs a league
+    equivalence would close, because a league mapping is a second kind of human
+    action. ``actionable_total`` and ``closeable_total`` are always reported, so
+    the tab can state what it is not showing.
     """
     page = max(1, min(limit, CANDIDATE_PAGE_MAX))
     start = max(0, offset)
@@ -3786,15 +4049,22 @@ async def get_candidates(
     total = len(queue)
     actionable_total = sum(1 for candidate in queue if candidate.alias_actionable)
     blocker_counts = _candidate_breakdown(queue)
-    if actionable_only:
+    counts = remediation_counts(queue)
+    closeable_total = counts["alias"] + counts["league"] + counts["alias+league"]
+    if closeable_only:
+        queue = [candidate for candidate in queue if _candidate_closeable(candidate)]
+    elif actionable_only:
         queue = [candidate for candidate in queue if candidate.alias_actionable]
     window = queue[start:start + page]
     return {
         "mode": mode,
         "total": total,
         "actionable_total": actionable_total,
+        "closeable_total": closeable_total,
         "blocker_counts": blocker_counts,
+        "remediation_counts": counts,
         "actionable_only": actionable_only,
+        "closeable_only": closeable_only,
         "count": len(window),
         "limit": page,
         "offset": start,
@@ -3805,6 +4075,18 @@ async def get_candidates(
     }
 
 
+def _candidate_closeable(candidate: CandidateReview) -> bool:
+    """Whether an alias or league mapping could still close the pair.
+
+    Production candidates carry the assessed ``remediation`` block. A
+    candidate built before this field existed falls back to the alias answer,
+    which is the only human action the old queue knew about.
+    """
+    if candidate.remediation is not None:
+        return candidate.remediation.closeable
+    return candidate.alias_actionable
+
+
 def _candidate_blocker(candidate: CandidateReview) -> str:
     """The one class a reviewer needs to understand why this is queued.
 
@@ -3813,14 +4095,7 @@ def _candidate_blocker(candidate: CandidateReview) -> str:
     no human action closes. A candidate can have several reasons; this answers
     "what would move it", not "list every reason".
     """
-    if candidate.alias_actionable:
-        return "alias"
-    blockers = _approval_blockers(candidate)
-    if any("league" in reason for reason in blockers):
-        return "league"
-    if candidate.link_blocked:
-        return "link"
-    return "other"
+    return candidate_class(candidate)
 
 
 def _candidate_breakdown(queue: list[CandidateReview]) -> dict[str, int]:

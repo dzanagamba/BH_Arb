@@ -922,6 +922,64 @@ body.feed-stale .row-profit b { color: var(--warn); }
 .coverage-dot-flags { background: var(--warn); }
 .coverage-dot-unmapped { background: var(--blue); }
 
+/* N2-3: recurring blockers and proposal-only remediation. */
+.remediation-panel {
+    margin-bottom: 14px;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    background: var(--panel-2);
+}
+.remediation-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px 14px;
+}
+#remediation-summary { font-size: 11px; color: var(--muted); }
+.remediation-note { margin: 6px 0 0; font-size: 11px; color: var(--muted); }
+.remediation-groups { list-style: none; margin: 10px 0; padding: 0; display: grid; gap: 4px; }
+.remediation-group {
+    display: grid;
+    grid-template-columns: 3.2em minmax(9em, auto) minmax(0, 1fr) auto;
+    align-items: baseline;
+    gap: 8px;
+    padding: 5px 8px;
+    border-radius: var(--radius-sm);
+    background: var(--panel-3);
+    font-size: 12px;
+}
+.remediation-group[data-action="alias"] .remediation-count,
+.remediation-group[data-action="league"] .remediation-count,
+.remediation-group[data-action="alias+league"] .remediation-count { color: var(--accent); }
+.remediation-group[data-action="none"] .remediation-count,
+.remediation-group[data-action="system_link"] .remediation-count { color: var(--muted); }
+.remediation-count { font-weight: 700; }
+.remediation-action { color: var(--text); }
+.remediation-meta { color: var(--muted); overflow-wrap: anywhere; }
+.remediation-share { color: var(--muted); font-size: 11px; white-space: nowrap; }
+.remediation-empty { padding: 6px 8px; font-size: 12px; color: var(--muted); }
+.remediation-trend { margin-top: 8px; }
+.remediation-line { stroke: var(--warn); }
+.remediation-dot-miss { background: var(--warn); }
+
+.candidate-remediation {
+    margin-top: 8px;
+    padding: 7px 9px;
+    border-radius: var(--radius-sm);
+    background: var(--panel-3);
+}
+.candidate-remediation-head { margin: 0; font-size: 12px; }
+.candidate-remediation-action { font-weight: 650; color: var(--text); }
+.candidate-remediation[data-action="none"] .candidate-remediation-action { color: var(--muted); }
+.candidate-proposal-only { color: var(--muted); font-size: 11px; }
+.candidate-proposals { list-style: none; margin: 5px 0 0; padding: 0; display: grid; gap: 3px; }
+.candidate-proposal { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.candidate-proposal-kind { color: var(--text); }
+.candidate-proposal-ledger { color: var(--faint); font-size: 11px; }
+
+
 .scan-cost {
     margin-bottom: 14px;
     padding: 12px 14px;

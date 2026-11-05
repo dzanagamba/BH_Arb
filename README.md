@@ -326,7 +326,19 @@ feed’s scan never wipes the other’s. They are shown in the dashboard’s
 so open `http://localhost:8000` and click **Diagnostics**. It is populated by
 `GET /api/candidates?mode=prematch|live` and is read-only: there is no approve
 or reject endpoint. AI proposals can raise a queue entry’s position and nothing
-else.
+else. Each card carries a **proposal-only** remediation block: the exact team
+aliases or league equivalence that would be needed, what the evidence ledger
+already says about them, and the exact gate reasons. The **Top recurring
+blockers** panel groups the queue by book pair, league and reason with the queue
+size as its denominator; the strict-miss trend shows the same grouping over
+scans. Nothing in that panel applies a mapping. The same report is available
+offline:
+
+```bash
+python scripts/candidate_remediation.py --top 20
+```
+
+See `docs/CANDIDATE_REMEDIATION.md` for the ranking and denominator rules.
 
 ### Deep-link verification
 

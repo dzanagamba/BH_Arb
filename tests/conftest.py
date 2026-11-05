@@ -243,6 +243,13 @@ def _isolated_runtime_state(
     monkeypatch.setattr(api, "_zero_result_streaks", {"prematch": {}, "live": {}})
     monkeypatch.setattr(api, "_scan_cost", {"prematch": {}, "live": {}})
     monkeypatch.setattr(api, "_scan_cost_history", [])
+    # N2-3 trends are per-test: a previous test's queue must not appear in this
+    # test's recurring-blocker panel or strict-miss trend.
+    monkeypatch.setattr(api, "_pairing_summary", {})
+    monkeypatch.setattr(api, "_pairing_trend", {"prematch": [], "live": []})
+    monkeypatch.setattr(
+        api, "_candidate_blocker_trend", {"prematch": [], "live": []}
+    )
 
     # A module that copied CACHE_DIR at import time keeps its own reference.
     verify_module = sys.modules.get("scripts.verify_deeplinks")

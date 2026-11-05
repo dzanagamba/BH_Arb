@@ -189,6 +189,27 @@
         <div class="review-toolbar">
             <p class="review-intro">Pairings the scanner could not prove, with the evidence it used. This view is read-only: the evidence ledger learns team, league and market spellings automatically on every scan; nothing here changes a mapping.</p>
         </div>
+        <!-- N2-3: ranked, proposal-only remediation. Counts carry the queue as
+             their denominator; nothing in this panel applies a suggestion. -->
+        <div class="remediation-panel" id="remediation-panel" hidden>
+            <div class="remediation-head">
+                <span class="coverage-trend-title">Top recurring blockers</span>
+                <span class="mono" id="remediation-summary">—</span>
+            </div>
+            <p class="remediation-note" id="remediation-note">Queue size is a diagnostic, not a coverage-progress claim. A proposal is never applied here.</p>
+            <ul class="remediation-groups" id="remediation-groups"></ul>
+            <div class="remediation-trend">
+                <svg class="coverage-spark" id="remediation-spark" viewBox="0 0 240 44"
+                     role="img" aria-label="Strict misses per recent scan"
+                     preserveAspectRatio="none">
+                    <polyline class="coverage-line remediation-line" id="remediation-line" points=""></polyline>
+                </svg>
+                <div class="coverage-trend-legend">
+                    <span><i class="coverage-dot remediation-dot-miss"></i> Strict misses per scan (numerator)</span>
+                    <span class="mono" id="remediation-trend-summary">—</span>
+                </div>
+            </div>
+        </div>
         <!-- N1-2: bounded per-scan trend, drawn from /api/health. -->
         <div class="coverage-trend" id="coverage-trend" hidden>
             <div class="coverage-trend-head">

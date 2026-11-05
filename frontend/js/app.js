@@ -124,6 +124,16 @@ const REASON_LABELS = Object.freeze({
     sport_mismatch: 'Different sport',
 });
 
+// N2-3: what a proposal would close. These are labels for review work, not
+// trust states: no value here changes a gate verdict.
+const REMEDIATION_LABELS = Object.freeze({
+    alias: 'Closeable by team alias',
+    league: 'Closeable by league mapping',
+    'alias+league': 'Needs alias + league mapping',
+    none: 'No mapping clears it',
+    system_link: 'Machine link check pending',
+});
+
 // P0-6: why a zero-surebet scan has no result. The denominator is the point:
 // "no crossing" and "all crossings guarded" are different operational facts.
 const ZERO_RESULT_LABELS = Object.freeze({
@@ -2185,22 +2195,24 @@ async function sweepLinks() {
 
 async function loadCandidates() {
     try {
-        // Only the pairs an approval can clear. A full scan queues thousands,
-        // and most are refused for a league gap, a kickoff no decision moves or
-        // a name pair below the reviewed-alias floor: a card with an Approve
-        // button there promises a fix that does not exist. The server still
-        // reports the full `total` and the closable `actionable_total` so the
-        // tab can say exactly what it is not showing.
+        // Only the pairs a mapping can clear. A full scan queues thousands, and
+        // most are refused for a league gap, a kickoff no decision moves or a
+        // name pair below the reviewed-alias floor: a card there promises a fix
+        // that does not exist. `closeable_only` includes both team aliases and
+        // league mappings (N2-3); the server still reports the full `total`, the
+        // alias-only `actionable_total` and the closeable `closeable_total` so
+        // the tab can say exactly what it is not showing.
         const response = await candidateListFetch(
-            `/api/candidates?actionable_only=true&limit=${CANDIDATE_PAGE_SIZE}&offset=0&mode=${currentMode}`
+            `/api/candidates?closeable_only=true&limit=${CANDIDATE_PAGE_SIZE}&offset=0&mode=${currentMode}`
         );
         if (response.ok === false) throw new Error(`Candidate request failed (${response.status})`);
         const data = await response.json();
         renderCandidates(
             Array.isArray(data.candidates) ? data.candidates : [],
             Number(data.total) || 0,
-            Number(data.actionable_total) || 0,
+            Number(data.closeable_total ?? data.actionable_total) || 0,
             data.blocker_counts || {},
+            data.remediation_counts || {},
         );
     } catch (error) {
         console.error('Candidates load failed:', error);
@@ -2208,12 +2220,12 @@ async function loadCandidates() {
     }
 }
 
-function renderCandidates(candidates, total, actionableTotal, blockerCounts = {}) {
+function renderCandidates(candidates, total, closeableTotal, blockerCounts = {}, remediationCounts = {}) {
     const list = document.getElementById('candidates-list');
     const count = document.getElementById('review-count');
     const queue = Array.isArray(candidates) ? candidates : [];
     if (!list) return;
-    if (count) count.textContent = actionableTotal;
+    if (count) count.textContent = closeableTotal;
     currentCandidates = queue;
     // Keep only selections that are still on the page.
 
@@ -2245,7 +2257,7 @@ function renderCandidates(candidates, total, actionableTotal, blockerCounts = {}
     });
 
     const pageNote = total > queue.length
-        ? `<p class="candidates-page-note">Showing ${queue.length} of ${actionableTotal} pairings an approval can clear, of ${total} queued in total. The rest cannot be closed by a human decision.</p>`
+        ? `<p class="candidates-page-note">Showing ${queue.length} of ${closeableTotal} pairings a mapping can close, of ${total} queued in total. The rest cannot be closed by a team alias or league mapping.</p>`
         : '';
     const blockers = {
         alias: Number(blockerCounts.alias) || 0,
@@ -2253,8 +2265,15 @@ function renderCandidates(candidates, total, actionableTotal, blockerCounts = {}
         link: Number(blockerCounts.link) || 0,
         other: Number(blockerCounts.other) || 0,
     };
+    const remediation = {
+        alias: Number(remediationCounts.alias) || 0,
+        league: Number(remediationCounts.league) || 0,
+        both: Number(remediationCounts['alias+league']) || 0,
+        systemLink: Number(remediationCounts.system_link) || 0,
+        none: Number(remediationCounts.none) || 0,
+    };
     const blockerNote = total
-        ? `<p class="candidates-page-note">Queue: ${blockers.alias} actionable · ${blockers.league} league-blocked · ${blockers.link} link-pending · ${blockers.other} informational.</p>`
+        ? `<p class="candidates-page-note">Queue: ${blockers.alias} actionable · ${blockers.league} league-blocked · ${blockers.link} link-pending · ${blockers.other} informational. Closeable by a proposed mapping: ${remediation.alias} alias · ${remediation.league} league · ${remediation.both} alias+league · ${remediation.systemLink} system-link · ${remediation.none} none of ${total}.</p>`
         : '';
 
     list.innerHTML = blockerNote + pageNote + orderedCandidates.map((candidate) => {
@@ -2297,6 +2316,27 @@ function renderCandidates(candidates, total, actionableTotal, blockerCounts = {}
                 return `<li class="candidate-reason" title="${escapeHtml(rawCode)}">${escapeHtml(label)}</li>`;
             }).join('')
             : '<li class="candidate-reason candidate-reason-none">No reason recorded</li>';
+        const candidateRemediation = candidate.remediation || null;
+        const actionKey = candidateRemediation ? String(candidateRemediation.action || 'none') : 'none';
+        const actionLabel = REMEDIATION_LABELS[actionKey] || REMEDIATION_LABELS.none;
+        const proposalItems = candidateRemediation && Array.isArray(candidateRemediation.proposals)
+            ? candidateRemediation.proposals.map(proposal => {
+                const kind = proposal.kind === 'league_equivalence' ? 'league mapping' : 'team alias';
+                const ledger = proposal.ledger_status && proposal.ledger_status !== 'absent'
+                    ? `${proposal.ledger_status} ${(Number(proposal.ledger_confidence) * 100).toFixed(0)}%`
+                    : 'absent from ledger';
+                return `<li class="candidate-proposal" title="${escapeHtml(`${proposal.entry} — ledger ${ledger}; proposal only`)}">`
+                    + `<span class="candidate-proposal-kind">${escapeHtml(kind)}</span> `
+                    + `<span class="mono">${escapeHtml(proposal.entry || '')}</span> `
+                    + `<span class="candidate-proposal-ledger">ledger ${escapeHtml(ledger)}</span></li>`;
+            }).join('')
+            : '';
+        const remediationBlock = candidateRemediation
+            ? `<div class="candidate-remediation" data-action="${escapeHtml(actionKey)}">
+                    <p class="candidate-remediation-head"><span class="candidate-remediation-action">${escapeHtml(actionLabel)}</span> <span class="candidate-proposal-only">proposal only — nothing is applied</span></p>
+                    ${proposalItems ? `<ul class="candidate-proposals" aria-label="Proposed mappings">${proposalItems}</ul>` : ''}
+                </div>`
+            : '';
         return `
             <article class="candidate-card" data-id="${id}" data-confidence="${confidence}"${aiNegative ? ' data-ai-verdict="negative"' : ''}>
                 <div class="candidate-body">
@@ -2307,6 +2347,7 @@ function renderCandidates(candidates, total, actionableTotal, blockerCounts = {}
                     <div class="candidate-meta">${league} · ${kickoff} · ${bookmakers}</div>
                     <ul class="candidate-positions" aria-label="How the two bookmakers spell each team">${positionItems}</ul>
                     <ul class="candidate-reasons" aria-label="Why the certainty gate refused">${reasonItems}</ul>
+                    ${remediationBlock}
                     ${aiVerdict}
                     <p class="candidate-approval-note">${escapeHtml(readOnlyNote)}</p>
                 </div>
@@ -2528,6 +2569,59 @@ function coveragePolyline(points, key) {
         const y = height - (values[index] / max) * (height - 4) - 2;
         return `${x.toFixed(1)},${y.toFixed(1)}`;
     }).join(' ');
+}
+
+function renderRemediation(data) {
+    const panel = document.getElementById('remediation-panel');
+    const list = document.getElementById('remediation-groups');
+    if (!panel || !list) return;
+    const remediation = data?.candidate_remediation?.[currentMode] || {};
+    const groups = Array.isArray(remediation.groups) ? remediation.groups : [];
+    const points = Array.isArray(data?.pairing_trend?.[currentMode])
+        ? data.pairing_trend[currentMode]
+        : [];
+    if (!groups.length && !points.length) {
+        panel.hidden = true;
+        list.innerHTML = '';
+        return;
+    }
+    panel.hidden = false;
+    const counts = remediation.counts || {};
+    const total = Number(remediation.total) || 0;
+    const closeable = Number(remediation.closeable) || 0;
+    setText(
+        'remediation-summary',
+        `${currentMode}: ${closeable}/${total} closeable · `
+        + `alias ${Number(counts.alias) || 0} · league ${Number(counts.league) || 0} · `
+        + `alias+league ${Number(counts['alias+league']) || 0} · `
+        + `system-link ${Number(counts.system_link) || 0} · none ${Number(counts.none) || 0}`
+    );
+    const note = document.getElementById('remediation-note');
+    if (note && remediation.note) note.textContent = remediation.note;
+    list.innerHTML = groups.length
+        ? groups.map(row => {
+            const action = REMEDIATION_LABELS[row.action] || row.action || 'unknown';
+            const rawReasons = Array.isArray(row.reasons) ? row.reasons : [];
+            const reasons = rawReasons.map(code => REASON_LABELS[code] || code).join(', ')
+                || 'no reason recorded';
+            const share = (Number(row.share || 0) * 100).toFixed(1);
+            return `<li class="remediation-group" data-action="${escapeHtml(String(row.action || 'none'))}" title="${escapeHtml(rawReasons.join(', '))}">`
+                + `<span class="remediation-count mono">${Number(row.count) || 0}</span>`
+                + `<span class="remediation-action">${escapeHtml(action)}</span>`
+                + `<span class="remediation-meta">${escapeHtml(row.book_pair || '')} · ${escapeHtml(row.league || '')} · ${escapeHtml(reasons)}</span>`
+                + `<span class="remediation-share mono">${escapeHtml(share)}% of ${total}</span>`
+                + `</li>`;
+        }).join('')
+        : '<li class="remediation-empty">No blocked candidates in this queue.</li>';
+    const line = document.getElementById('remediation-line');
+    if (line) line.setAttribute('points', coveragePolyline(points, 'strict_misses'));
+    const last = points[points.length - 1] || {};
+    setText(
+        'remediation-trend-summary',
+        points.length
+            ? `${Number(last.strict_misses) || 0} miss(es) of ${Number(last.matches) || 0} listing(s) · ${(Number(last.strict_miss_rate || 0) * 100).toFixed(2)}%`
+            : 'no scan yet'
+    );
 }
 
 function renderCoverageTrend(data) {
@@ -2867,6 +2961,7 @@ async function loadHealth() {
         healthSnapshot = data;
         renderCoverageTrend(data);
         renderScanCost(data);
+        renderRemediation(data);
         const bar = document.getElementById('health-bar');
         if (!bar) return;
         const fmtAge = (sec) => sec == null ? '—' : sec < 60 ? `${Math.round(sec)}s ago` : `${Math.round(sec/60)}m ago`;

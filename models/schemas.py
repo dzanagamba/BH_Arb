@@ -168,12 +168,18 @@ class PairSide(BaseModel):
     A candidate exists because two books disagree about the same fixture, so a
     reviewable claim has to carry BOTH sides. One side alone cannot be turned
     into a team alias — that would alias a club against its own opponent.
+
+    ``league`` is the raw label the book served and ``league_normalized`` the
+    gate's form of it. A league-mapping proposal is made from the normalized
+    pair, because that is the form the ledger and the gate compare.
     """
 
     bookmaker: str
     event_ref: str = ""
     home_team: str
     away_team: str
+    league: str = ""
+    league_normalized: str = ""
     link_verified: bool = False
 
 
@@ -188,6 +194,47 @@ class TeamPositionPair(BaseModel):
     position: Literal["home", "away"]
     team_a: str
     team_b: str
+
+
+class RemediationProposal(BaseModel):
+    """One ranked mapping suggestion for a queued candidate.
+
+    A proposal is a diagnostic, never an approval. It names the exact allowlist
+    or league-equivalence entry that would be needed, states what the evidence
+    ledger already says about that entry, and stays inert: nothing in the
+    product applies it.
+    """
+
+    kind: Literal["team_alias", "league_equivalence"]
+    entry: str
+    left: str
+    right: str
+    confidence: float = 0.0
+    # The ledger's own verdict on this entry: absent, accepted, quarantined or
+    # rejected. `accepted` does not mean the candidate is verified; it says this
+    # particular mapping is already trusted.
+    ledger_status: str = "absent"
+    ledger_confidence: float = 0.0
+    ledger_evidence: list[str] = []
+    proposal_only: bool = True
+    applied: bool = False
+
+
+class CandidateRemediation(BaseModel):
+    """What a reviewer could do about a candidate, and what no action clears.
+
+    ``action`` answers "which mapping would close it" as a proposal:
+    ``alias`` (team spellings), ``league`` (a league equivalence alone),
+    ``alias+league`` (both are needed) or ``none``. ``gate_reasons`` are the
+    exact codes the certainty gate emitted, never a paraphrase.
+    """
+
+    action: Literal["alias", "league", "alias+league", "none"] = "none"
+    closeable: bool = False
+    gate_reasons: list[str] = []
+    proposals: list[RemediationProposal] = []
+    label: str = "proposal"
+    notes: list[str] = []
 
 
 class CandidateReview(BaseModel):
@@ -217,6 +264,10 @@ class CandidateReview(BaseModel):
     ai_reason: str = ""
     ai_same_event: bool | None = None
     rule_rejections: list[str] = []
+    # Ranked proposals and the exact gate reasons. Computed at collection time
+    # from the raw spellings, the ledger and the hypothetical gate verdict; it
+    # can never approve, apply or upgrade a pairing.
+    remediation: CandidateRemediation | None = None
     status: Literal["pending", "approved", "rejected"] = "pending"
     created_at: datetime
     resolved_at: datetime | None = None

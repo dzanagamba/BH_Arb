@@ -73,7 +73,7 @@ long-horizon.
 | N1-4 | Release hardening: Docker smoke, SBOM, dependency updates | P1 | S | — | Done |
 | N2-1 | Paper ledger dashboard, CSV and retention view | P2 | M | N1-1 | Done |
 | N2-2 | Realistic paper fills: rejection, partial acceptance, caps | P2 | M | N2-1 | Done |
-| N2-3 | Candidate remediation and strict-miss trends | P2 | M | — | Not started |
+| N2-3 | Candidate remediation and strict-miss trends | P2 | M | — | Done |
 | N2-4 | Seven-day local opportunity baseline and drift gates | P2 | M | — | Not started |
 | N2-5 | Complete Bosnian localization and automated a11y checks | P2 | M | N0-3 | Not started |
 | N2-6 | Parser fixture refresh and drift detection | P2 | M | — | Not started |
@@ -515,7 +515,7 @@ real acceptance.
 
 ### N2-3 — Candidate remediation and strict-miss trends
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P2
 **Effort:** M
 **Depends on:** none
@@ -537,11 +537,11 @@ reviewable work without lowering the gate.
 
 **Acceptance criteria:**
 
-- [ ] A reviewer sees which candidates are closeable by an alias or league
+- [x] A reviewer sees which candidates are closeable by an alias or league
       mapping and which are not.
-- [ ] Suggestions cannot alter `verified` status.
-- [ ] Recurring strict misses are tracked over time with denominators.
-- [ ] The queue size does not become a coverage-progress claim.
+- [x] Suggestions cannot alter `verified` status.
+- [x] Recurring strict misses are tracked over time with denominators.
+- [x] The queue size does not become a coverage-progress claim.
 
 **Tests:**
 
@@ -783,6 +783,65 @@ For every task:
 
 Newest first. Each entry: date, task, status, commands, measured result, files
 changed, follow-ups.
+
+### 2026-11-05 — N2-3 — Done
+
+**Commands**
+
+```bash
+python -m pytest
+BH_ARB_TEST_RUNTIME_LEDGER=populated python -m pytest
+python -m pytest tests/test_candidate_remediation.py
+python -m ruff check .
+python -m mypy .
+python scripts/generate_market_mapping_doc.py --check
+python scripts/candidate_remediation.py --top 5
+node --check frontend/js/app.js
+```
+
+**Measured result**
+
+- Operator checkout: **1,580 passed, 2 skipped, 1 warning** in 92.23 s;
+  populated-ledger mode: **1,580 passed, 2 skipped, 1 warning** in 83.35 s.
+- `tests/test_candidate_remediation.py`: **18 passed** — alias/league/
+  alias+league/none actions, exact gate reasons, quarantined-ledger evidence,
+  proposal-only guarantees, recurring grouping with queue denominators, strict
+  miss grouping (book pair, league, spelling), the per-scan trend, the API and
+  health payloads, and the offline CLI (including the no-cache exit).
+- Real cached scan (`cache/last_scan.json`, 8,844 listings): the CLI rebuilt
+  **8,622 candidates**, of which **2,633** are closeable by a proposed mapping
+  (alias 1,065, league 1,098, alias+league 470) and 5,989 are not; it printed
+  the top proposals with ledger state and `applied=False`. No runtime file was
+  written.
+- Ruff clean, MyPy clean on **202 source files**, Node syntax check clean and
+  the generated market doc in sync.
+
+**Files changed**
+
+- `engine/candidate_remediation.py` — proposal builders, ledger evidence,
+  closeable/action classification, queue grouping and denominator-carrying
+  summary. No trust write path.
+- `models/schemas.py` — `PairSide.league`/`league_normalized`,
+  `RemediationProposal`, `CandidateRemediation`, `CandidateReview.remediation`.
+- `server/api.py` — hypothetical alias/league verdicts (discarded immediately),
+  per-candidate remediation, `/api/candidates` closeable counts,
+  `/api/health.candidate_remediation` and `pairing_trend`, bounded
+  strict-miss and blocker trends.
+- `scripts/pairing_audit.py` — `strict_miss_groups` by book pair, league and
+  spelling pattern with miss and listing denominators.
+- `scripts/candidate_remediation.py` — offline top-N closeable report
+  (`--cache`, `--top`, `--json`), AI ranking disabled, no network.
+- `frontend/index.html`, `frontend/js/app.js`, `frontend/css/style.css` —
+  "Top recurring blockers" panel, strict-miss sparkline, per-card proposal
+  block with ledger state and gate reasons.
+- `tests/test_candidate_remediation.py`, `tests/test_frontend_review.py`,
+  `tests/test_scan_candidates.py`, `tests/conftest.py`.
+- `docs/CANDIDATE_REMEDIATION.md`, `README.md`.
+
+**Follow-ups:** N2-4 (seven-day local opportunity baseline and drift gates) is
+the next eligible task. A proposal is a ranked diagnostic: it cannot change
+`verified`, the ledger, the allowlist or a candidate's status, and the link half
+remains a machine check.
 
 ### 2026-11-05 — N2-2 — Done
 
