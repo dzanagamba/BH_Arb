@@ -1,9 +1,9 @@
 # Development tooling (tests, linters, type checker) — install after requirements.txt
-pytest==9.0.3
+pytest==9.2.0
 pytest-cov==7.1.0
 coverage==7.17.1
-ruff==0.9.10
-mypy==1.15.0
+ruff==0.17.3
+mypy==2.4.1
 # Property-based tests for pricing/identity invariants (N3-1); dev-only.
 hypothesis==6.150.0
 
