@@ -276,7 +276,7 @@ kbd {
 .scan-bar-wrap { height: 3px; margin: 10px -24px 0; background: var(--line); overflow: hidden; }
 .scan-bar {
     height: 100%;
-    width: 0;
+    width: calc(var(--scan-progress, 0) * 1%);
     background: linear-gradient(90deg, var(--accent-strong), var(--accent));
     box-shadow: 0 0 12px var(--accent);
     transition: width .4s;
@@ -778,7 +778,7 @@ body.feed-stale .row-profit b { color: var(--warn); }
 
 .slip-progress { display: flex; align-items: center; gap: 10px; margin: 16px 0 4px; color: var(--muted); font-size: 12px; font-weight: 600; }
 .slip-progress-bar { flex: 1; height: 4px; border-radius: 99px; background: var(--panel-3); overflow: hidden; }
-.slip-progress-bar i { display: block; height: 100%; border-radius: 99px; background: var(--accent); transition: width .3s; }
+.slip-progress-bar i { display: block; height: 100%; width: calc(var(--progress, 0) * 1%); border-radius: 99px; background: var(--accent); transition: width .3s; }
 
 .legs { list-style: none; margin: 10px 0 12px; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 .leg {

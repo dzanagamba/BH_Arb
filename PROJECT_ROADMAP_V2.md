@@ -20,7 +20,7 @@ Verified on 2026-11-05:
 
 | Check | Result |
 |---|---|
-| Offline suite | **1,494 passed**, 2 skipped, 1 warning, ~57 s (after N0-2) |
+| Offline suite | **1,499 passed**, 2 skipped, 1 warning, ~58 s (after N0-3) |
 | Lint | `ruff check .` clean |
 | Types | `mypy .` clean on 182 source files |
 | Generated market doc | in sync |
@@ -65,7 +65,7 @@ long-horizon.
 |---|---|---|---|---|---|
 | N0-1 | Hermetic tests independent of runtime state | P0 | S | — | Done |
 | N0-2 | Source-updated timestamps and frozen-price quarantine | P0 | M | — | Done |
-| N0-3 | CSP without inline styles | P0 | M | — | Not started |
+| N0-3 | CSP without inline styles | P0 | M | — | Done |
 | N0-4 | Automatic closing-line capture for logged bets | P0 | M | N0-2 | Not started |
 | N1-1 | Retention and maintenance automation | P1 | M | — | Not started |
 | N1-2 | Coverage/mapping alerts and SLOs | P1 | S | — | Not started |
@@ -187,7 +187,7 @@ peer-movement or feed-timestamp evidence.
 
 ### N0-3 — CSP without inline styles
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P0
 **Effort:** M
 **Depends on:** none
@@ -212,10 +212,10 @@ injection a non-executable dead end.
 
 **Acceptance criteria:**
 
-- [ ] CSP has no `style-src 'unsafe-inline'`.
-- [ ] No shipped HTML or generated HTML contains a `style="..."` attribute.
-- [ ] Dashboard layout, themes, counters and book colors are unchanged.
-- [ ] Existing XSS and CSP nonce tests pass.
+- [x] CSP has no `style-src 'unsafe-inline'`.
+- [x] No shipped HTML or generated HTML contains a `style="..."` attribute.
+- [x] Dashboard layout, themes, counters and book colors are unchanged.
+- [x] Existing XSS and CSP nonce tests pass.
 
 **Tests:**
 
@@ -783,6 +783,52 @@ For every task:
 
 Newest first. Each entry: date, task, status, commands, measured result, files
 changed, follow-ups.
+
+### 2026-11-05 — N0-3 — Done
+
+**Commands**
+
+```bash
+python -m pytest                                      # empty ledger
+BH_ARB_TEST_RUNTIME_LEDGER=populated python -m pytest # populated ledger
+python -m pytest                                       # clean copy, no config/generated or cache
+node --check frontend/js/app.js
+python -m ruff check .
+python -m mypy .
+python scripts/generate_market_mapping_doc.py --check
+```
+
+**Measured result**
+
+- Operator checkout: **1,499 passed, 2 skipped** in both ledger modes.
+- Throwaway copy with no `config/generated/` and no `cache/`: **1,499 passed,
+  2 skipped** in both ledger modes.
+- `style-src` is now `'self' https://fonts.googleapis.com` with no
+  `'unsafe-inline'`; no shipped HTML or generated HTML carries a style
+  attribute. The dashboard uses `[hidden]`, CSS classes and CSSOM custom
+  properties for colours and progress widths.
+- Ruff, MyPy (187 files), Node syntax check and the generated market doc are
+  clean.
+
+**Files changed**
+
+- `server/app.py` — removed `style-src 'unsafe-inline'` and updated the policy
+  rationale.
+- `frontend/index.html` — five `style="display:none"` toggles replaced with
+  `hidden`.
+- `frontend/js/app.js` — display toggles use `hidden`; book colours and progress
+  widths use `style.setProperty` on generated elements; no style attribute
+  templates remain.
+- `frontend/css/style.css` — progress widths driven by `--progress` and
+  `--scan-progress`; existing `[hidden] { display:none !important; }` rule is
+  now the single display toggle.
+- `tests/test_csp_styles.py` — CSP, no-inline-style and CSSOM checks.
+- `tests/test_frontend_empty_state.py` — bookmaker-wall predicate updated for the
+  `[hidden]` rule instead of inline `style.display`.
+- `docs/ACCEPTANCE.md`, `docs/PRODUCTION_READINESS.md` — CSP gap marked closed.
+
+**Follow-ups:** none. Dashboard layout, themes, counters and book colours are
+unchanged; only the mechanism that sets them changed.
 
 ### 2026-11-05 — N0-2 — Done
 

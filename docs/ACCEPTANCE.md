@@ -420,11 +420,14 @@ attribute context. A scraped name such as
 `O'Brien "X" <img src=x onerror=alert(1)>` stays text and its copy button passes
 the exact string to the clipboard.
 
-`style-src` still admits `'unsafe-inline'`: generated rows set CSS custom
-properties and widths (`style="--color:…"`), which a nonce cannot cover. This
-is the remaining documented gap; script execution is closed.
+`style-src` also has no `'unsafe-inline'`: the dashboard sets colours and
+progress widths as CSS custom properties through the CSSOM
+(`element.style.setProperty`), not as inline style attributes, and no inline
+`<style>` block is shipped. `style-src` is `'self'` plus the Google Fonts
+stylesheet origin.
 
-Tests: `tests/test_csp_nonce.py`, `tests/test_frontend_xss.py`.
+Tests: `tests/test_csp_nonce.py`, `tests/test_csp_styles.py`,
+`tests/test_frontend_xss.py`.
 
 ## Soak
 
@@ -626,8 +629,8 @@ EVLBet remains disabled and is an evidence-backed absence, not a silent omission
 * The legacy approve/reject HTTP routes are removed; the dashboard is read-only.
   The direct migration functions remain for legacy tests but are not reachable.
 * Execution limits, bankroll and the 24-hour soak are not done.
-* `script-src` is nonce-based with no `'unsafe-inline'`; `style-src` still admits
-  inline styles because generated rows set CSS custom properties and widths.
+* `script-src` is nonce-based with no `'unsafe-inline'`; `style-src` is
+  `'self'` plus the Google Fonts stylesheet origin, with no inline styles.
 * In-play remains deferred.
 
 **Verdict:** the prematch scanner is working and finds real, re-verified

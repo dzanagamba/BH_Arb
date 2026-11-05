@@ -131,10 +131,10 @@ async def security_headers(request, call_next):
     nonce, and the dashboard's two script tags are stamped with it by
     `serve_dashboard`, so `script-src` no longer needs `'unsafe-inline'`.
 
-    `style-src` still admits inline styles: the dashboard sets CSS custom
-    properties and widths on generated elements (`style="--color:…"`), and a
-    nonce cannot cover style attributes. That is a deliberate, documented gap;
-    script injection is the executable risk this policy closes.
+    `style-src` also has no `'unsafe-inline'`: the dashboard writes colours and
+    progress widths through the CSSOM (`element.style.setProperty`), which CSP
+    does not treat as an inline style attribute. The only external stylesheet is
+    the Google Fonts link; no inline `<style>` block is shipped.
     """
     nonce = secrets.token_urlsafe(16)
     request.state.csp_nonce = nonce
@@ -146,7 +146,7 @@ async def security_headers(request, call_next):
         "Content-Security-Policy",
         "default-src 'self'; "
         f"script-src 'self' 'nonce-{nonce}'; "
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "style-src 'self' https://fonts.googleapis.com; "
         "font-src https://fonts.gstatic.com; "
         "img-src 'self' data:; "
         "connect-src 'self'; "

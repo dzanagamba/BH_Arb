@@ -929,54 +929,58 @@ def test_health_bar_check_fails_when_the_bar_line_changes():
 
 
 def _bookies_problems(js: str, css: str) -> list[str]:
-    """The bookmaker wall is hidden with something the stylesheet cannot defeat.
+    """The bookmaker wall is hidden without an inline style attribute.
 
-    Found in the browser, not reasoned about: `.empty-state-bookies` is
-    ``display: flex``, an author rule, and an author rule outranks the user
-    agent's ``[hidden] { display: none }``. So setting ``.hidden = true`` on that
-    row does nothing at all, and the wall of logos stayed on screen underneath
-    every diagnostic except the one that is asking for a scan. ``style.display``
-    is set inline, where the stylesheet cannot reach it.
+    ``.empty-state-bookies`` is ``display: flex``, so a bare ``[hidden]`` rule
+    would lose to it. The stylesheet's ``[hidden] { display: none !important; }``
+    is what makes the attribute sufficient, and N0-3 requires the attribute
+    rather than ``style.display`` so no inline style is shipped.
     """
     problems: list[str] = []
-    rule = re.search(r"\.empty-state-bookies\s*\{([^}]*)\}", css)
-    if not rule:
-        problems.append(".empty-state-bookies is no longer in the stylesheet")
-    elif "display" not in rule.group(1):
+    hidden_rule = re.search(r"\[hidden\]\s*\{([^}]*)\}", css)
+    if not hidden_rule:
+        problems.append("the stylesheet has no [hidden] rule")
+    elif "display" not in hidden_rule.group(1) or "!important" not in hidden_rule.group(1):
         problems.append(
-            ".empty-state-bookies no longer sets `display`, so this check can no longer "
-            "justify using style.display instead of the hidden attribute"
+            "[hidden] must set display: none !important, or the display:flex row "
+            "wins and the wall stays on screen"
         )
     for name in ("renderNoSurebetState", "renderDiagnosticUnavailable"):
         body = _js_function(js, name)
-        if not re.search(r"bookies\.style\.display\s*=", body):
-            problems.append(f"{name}() does not hide the bookmaker wall through style.display")
-        if re.search(r"bookies\.hidden\s*=", body):
+        if not re.search(r"bookies\.hidden\s*=", body):
+            problems.append(f"{name}() does not hide the bookmaker wall through hidden")
+        if re.search(r"bookies\.style\.display\s*=", body):
             problems.append(
-                f"{name}() uses the hidden attribute on a display:flex row, which the "
-                "stylesheet wins; the wall would stay on screen"
+                f"{name}() sets an inline style attribute; use the hidden attribute "
+                "and the stylesheet's [hidden] rule"
             )
     return problems
 
 
-def test_the_bookmaker_wall_is_hidden_in_a_way_the_stylesheet_cannot_defeat():
+def test_the_bookmaker_wall_is_hidden_with_the_hidden_attribute():
     problems = _bookies_problems(JS, CSS)
     assert problems == [], "; ".join(problems)
 
 
-def test_bookies_check_fails_on_the_hidden_attribute_and_on_a_missing_rule():
-    """Drives the exact mistake the browser showed, so it cannot come back."""
-    attribute = JS.replace("bookies.style.display = reason.id", "bookies.hidden = reason.id !==")
-    attribute = attribute.replace("never_scanned' ? '' : 'none';", "never_scanned';")
-    assert attribute != JS, "the mutation did not apply; the companion is untested"
-    problems = _bookies_problems(attribute, CSS)
-    assert any("hidden attribute" in problem for problem in problems), problems
-    assert any("style.display" in problem for problem in problems), problems
+def test_bookies_check_fails_on_an_inline_toggle_and_on_a_weak_hidden_rule():
+    """Drives both mistakes the predicate exists to catch."""
+    inline = JS.replace(
+        "if (bookies) bookies.hidden = reason.id !== 'never_scanned';",
+        "if (bookies) bookies.style.display = reason.id === 'never_scanned' ? '' : 'none';",
+    )
+    assert inline != JS, "the mutation did not apply; the companion is untested"
+    problems = _bookies_problems(inline, CSS)
+    assert any("inline style" in problem for problem in problems), problems
+    assert any("does not hide" in problem for problem in problems), problems
 
-    restyled = re.sub(r"\.empty-state-bookies\s*\{[^}]*\}", ".empty-state-bookies {}", CSS)
-    assert restyled != CSS, "the second mutation did not apply; the companion is untested"
-    problems = _bookies_problems(JS, restyled)
-    assert any("no longer sets `display`" in problem for problem in problems), problems
+    weak = re.sub(
+        r"\[hidden\]\s*\{[^}]*\}",
+        "[hidden] { display: none; }",
+        CSS,
+    )
+    assert weak != CSS, "the second mutation did not apply; the companion is untested"
+    problems = _bookies_problems(JS, weak)
+    assert any("!important" in problem for problem in problems), problems
 
 
 def test_no_second_poll_was_added_and_nothing_refetches_the_numbers():

@@ -502,10 +502,18 @@ function initBookmakerChips() {
         });
     }
     if (wall) {
-        wall.innerHTML = bookieList
+        wall.innerHTML = '';
+        bookieList
             .filter(([, cfg]) => cfg.enabled !== false)
-            .map(([id, cfg]) => `<span class="book-tag" style="--color:${escapeHtml(cfg.color || BOOKMAKER_COLORS[id] || '#888')}">${escapeHtml(cfg.name || capitalize(id))}</span>`)
-            .join('');
+            .forEach(([id, cfg]) => {
+                const tag = document.createElement('span');
+                tag.className = 'book-tag';
+                // CSSOM assignment, not a style attribute: CSP style-src does
+                // not block it and the value is never parsed as HTML.
+                tag.style.setProperty('--color', cfg.color || BOOKMAKER_COLORS[id] || '#888');
+                tag.textContent = cfg.name || capitalize(id);
+                wall.appendChild(tag);
+            });
     }
 }
 
@@ -604,14 +612,14 @@ function setAutoRescan(minutes) {
     }
     const countdownEl = document.getElementById('autorescan-countdown');
     if (!minutes || minutes <= 0) {
-        if (countdownEl) countdownEl.style.display = 'none';
+        if (countdownEl) countdownEl.hidden = true;
         return;
     }
     let remaining = minutes * 60;
     autoRescanTimer = setInterval(() => {
         remaining -= 1;
         if (countdownEl) {
-            countdownEl.style.display = '';
+            countdownEl.hidden = false;
             const m = Math.floor(remaining / 60);
             const s = (remaining % 60).toString().padStart(2, '0');
             countdownEl.textContent = `next scan ${m}:${s}`;
@@ -655,12 +663,12 @@ function updateScanProgress(status) {
     }
     const total = Object.values(bookmakersConfig).filter(c => c.enabled !== false).length || 4;
     const done = (status.bookmakers_done || []).length;
-    if (barEl) barEl.style.width = Math.min(92, (done / total) * 85 + 5) + '%';
+    if (barEl) barEl.style.setProperty('--scan-progress', String(Math.min(92, (done / total) * 85 + 5)));
 }
 
 async function onScanComplete(status) {
     const barEl = document.getElementById('scan-bar');
-    if (barEl) barEl.style.width = '100%';
+    if (barEl) barEl.style.setProperty('--scan-progress', '100');
     hideScanProgress();
     const btn = document.getElementById('scan-btn');
     btn.disabled = false;
@@ -1014,8 +1022,8 @@ function renderSurebets(surebets) {
         return;
     }
     grid.hidden = false;
-    document.getElementById('empty-state').style.display = 'none';
-    document.getElementById('no-results').style.display = 'none';
+    document.getElementById('empty-state').hidden = true;
+    document.getElementById('no-results').hidden = true;
 
     surebets.forEach(sb => grid.appendChild(buildSurebetRow(sb)));
     if (!selectedSurebetId || !surebets.some(sb => sb.id === selectedSurebetId)) {
@@ -1044,7 +1052,7 @@ function buildSurebetRow(sb) {
     const whenText = whenClass === ' soon' ? `in ${Math.max(1, Math.round(minutesAway))} min` : when;
     const legs = placementOrder(sb.stakes).map(s => `
         <span class="leg-pill" title="${escapeHtml(bookName(s.bookmaker))}: ${escapeHtml(outcomeDescription(s.outcome_label, sb.market_type, sb.sport))} at ${s.odds.toFixed(2)}">
-            <span class="book-dot" style="--color:${escapeHtml(bookColor(s.bookmaker))}">${escapeHtml(bookShort(s.bookmaker))}</span>
+            <span class="book-dot" data-book-color="${escapeHtml(s.bookmaker)}">${escapeHtml(bookShort(s.bookmaker))}</span>
             <span class="leg-pick">${escapeHtml(s.outcome_label)}</span>
             <span class="leg-odds">${s.odds.toFixed(2)}</span>
         </span>`).join('');
@@ -1060,6 +1068,7 @@ function buildSurebetRow(sb) {
         </span>
         <span class="row-legs">${legs}</span>${badge}
     `;
+    applyDynamicStyles(row);
     row.addEventListener('click', () => selectSurebet(sb.id));
     return row;
 }
@@ -1270,7 +1279,7 @@ function renderSlip() {
         const stakeText = leg.plannedStake.toFixed(stakeRounding === 'exact' ? 2 : 0);
         const label = escapeHtml(leg.outcome_label);
         return `
-        <li class="leg${leg.placed ? ' leg-placed' : ''}" style="--color:${escapeHtml(bookColor(leg.bookmaker))}" data-label="${label}">
+        <li class="leg${leg.placed ? ' leg-placed' : ''}" data-book-color="${escapeHtml(leg.bookmaker)}" data-label="${label}">
             <div class="leg-step">${index + 1}</div>
             <div class="leg-body">
                 <div class="leg-head">
@@ -1356,7 +1365,7 @@ function renderSlip() {
 
         <div class="slip-progress">
             <span>${placedCount ? `${placedCount} of ${plan.legs.length} placed` : `Place ${plan.legs.length} bets, top to bottom`}</span>
-            <span class="slip-progress-bar"><i style="width:${(placedCount / plan.legs.length) * 100}%"></i></span>
+            <span class="slip-progress-bar"><i data-progress="${(placedCount / plan.legs.length) * 100}"></i></span>
         </div>
         <ol class="legs">${legsHtml}</ol>
 
@@ -1377,6 +1386,7 @@ function renderSlip() {
             <button type="button" class="btn btn-secondary" data-action="copy-surebet" data-slip-id="${escapeHtml(sb.id)}"${staleFeed() ? ' disabled aria-disabled="true" data-stale-blocked="true"' : ''}>Copy slip</button>
         </div>
     `;
+    applyDynamicStyles(pane);
     applyStatusBadge(pane.querySelector('.status-badge'), sb.status || sb.match_status);
 }
 
@@ -1790,24 +1800,24 @@ function renderNoSurebetState() {
         diagnosticFlags(healthSnapshot, resultsSnapshot, counts)
     );
     if (!reason) {
-        emptyState.style.display = 'none';
-        noResults.style.display = 'none';
+        emptyState.hidden = true;
+        noResults.hidden = true;
         return;
     }
     const intoNoResults = reason.panel === 'no-results';
     const panel = intoNoResults ? noResults : emptyState;
     const other = intoNoResults ? emptyState : noResults;
-    panel.style.display = '';
-    other.style.display = 'none';
+    panel.hidden = false;
+    other.hidden = true;
     panel.dataset.noSurebetReason = reason.id;
     other.removeAttribute('data-no-surebet-reason');
     // The bookmaker row is an invitation to scan, so it only shows for the case
-    // that asks for one. `style.display`, not `hidden`: the row is
-    // `display: flex` in the stylesheet, which outranks `[hidden]`.
+    // that asks for one. The stylesheet's `[hidden]` rule outranks the row's
+    // `display: flex`, so the attribute is enough.
     const bookies = emptyState.querySelector('.empty-state-bookies');
-    if (bookies) bookies.style.display = reason.id === 'never_scanned' ? '' : 'none';
+    if (bookies) bookies.hidden = reason.id !== 'never_scanned';
     const cta = emptyState.querySelector('.empty-cta');
-    if (cta) cta.style.display = reason.id === 'never_scanned' ? '' : 'none';
+    if (cta) cta.hidden = reason.id !== 'never_scanned';
     writeDiagnosticPanel(panel, reason, renderCaseCopy(
         reason,
         diagnosticValues(healthSnapshot, resultsSnapshot, counts),
@@ -1819,11 +1829,11 @@ function renderDiagnosticUnavailable() {
     const emptyState = document.getElementById('empty-state');
     const noResults = document.getElementById('no-results');
     if (noResults) {
-        noResults.style.display = 'none';
+        noResults.hidden = true;
         noResults.removeAttribute('data-no-surebet-reason');
     }
     if (!emptyState) return;
-    emptyState.style.display = '';
+    emptyState.hidden = false;
     emptyState.dataset.noSurebetReason = 'diagnostics_unavailable';
     const title = emptyState.querySelector('.empty-state-title');
     const body = emptyState.querySelector('.empty-state-desc');
@@ -1832,9 +1842,9 @@ function renderDiagnosticUnavailable() {
         ? DIAGNOSTIC_UNAVAILABLE.countsUnread
         : DIAGNOSTIC_UNAVAILABLE.noCopyTable;
     const bookies = emptyState.querySelector('.empty-state-bookies');
-    if (bookies) bookies.style.display = 'none';
+    if (bookies) bookies.hidden = true;
     const cta = emptyState.querySelector('.empty-cta');
-    if (cta) cta.style.display = 'none';
+    if (cta) cta.hidden = true;
     const actions = document.getElementById('empty-state-actions');
     if (actions) {
         actions.innerHTML = '';
@@ -1848,7 +1858,7 @@ function refreshNoSurebetState() {
     const emptyState = document.getElementById('empty-state');
     const noResults = document.getElementById('no-results');
     const panelIsUp = [emptyState, noResults]
-        .some(panel => panel && panel.style.display !== 'none');
+        .some(panel => panel && !panel.hidden);
     if (!panelIsUp) return;
     renderNoSurebetState();
 }
@@ -2315,12 +2325,12 @@ async function loadHistory() {
 
 // ─── UI helpers ───────────────────────────────────────────────────────────────
 function showScanProgress() {
-    document.getElementById('scan-progress').style.display = '';
-    document.getElementById('scan-bar').style.width = '5%';
+    document.getElementById('scan-progress').hidden = false;
+    document.getElementById('scan-bar').style.setProperty('--scan-progress', '5');
 }
 
 function hideScanProgress() {
-    document.getElementById('scan-progress').style.display = 'none';
+    document.getElementById('scan-progress').hidden = true;
 }
 
 function setStatus(state, text) {
@@ -2331,11 +2341,11 @@ function setStatus(state, text) {
 
 function showError(msg) {
     document.getElementById('error-banner-text').textContent = msg;
-    document.getElementById('error-banner').style.display = '';
+    document.getElementById('error-banner').hidden = false;
 }
 
 function hideError() {
-    document.getElementById('error-banner').style.display = 'none';
+    document.getElementById('error-banner').hidden = true;
 }
 
 async function shutdownServer() {
@@ -2378,6 +2388,20 @@ function setText(id, value) {
 
 function bookName(id) {
     return bookmakersConfig[id]?.name || capitalize(id);
+}
+
+function applyDynamicStyles(root) {
+    if (!root || !root.querySelectorAll) return;
+    // Colours and progress widths are set as CSS custom properties through the
+    // CSSOM. They are never serialised into an inline style attribute, so the
+    // CSP needs no 'unsafe-inline' for styles.
+    root.querySelectorAll('[data-book-color]').forEach(element => {
+        element.style.setProperty('--color', bookColor(element.dataset.bookColor));
+    });
+    root.querySelectorAll('[data-progress]').forEach(element => {
+        const value = Number(element.dataset.progress);
+        element.style.setProperty('--progress', String(Number.isFinite(value) ? value : 0));
+    });
 }
 
 function bookColor(id) {
@@ -2477,7 +2501,7 @@ async function loadHealth() {
         if (!bar) return;
         const fmtAge = (sec) => sec == null ? '—' : sec < 60 ? `${Math.round(sec)}s ago` : `${Math.round(sec/60)}m ago`;
         const fmtPer = (obj) => obj && Object.keys(obj).length ? Object.entries(obj).map(([k,v]) => `${k}:${v}`).join(' ') : '—';
-        bar.style.display = '';
+        bar.hidden = false;
         const missRate = Number(data.pairing?.strict_miss_rate);
         const pairing = Number.isFinite(missRate)
             ? `Pairing ${(missRate * 100).toFixed(2)}% miss`

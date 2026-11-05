@@ -37,7 +37,7 @@
             <span class="status-dot"></span>
             <span id="status-text">Ready</span>
         </div>
-        <span class="autorescan" id="autorescan-countdown" style="display:none;"></span>
+        <span class="autorescan" id="autorescan-countdown" hidden></span>
         <button class="btn btn-icon btn-ghost" id="theme-btn" data-action="cycle-theme" aria-label="Theme" title="Theme: system">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 3v18" /><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg>
         </button>
@@ -48,7 +48,7 @@
     </div>
 </header>
 
-<div class="scan-progress" id="scan-progress" style="display:none;">
+<div class="scan-progress" id="scan-progress" hidden>
     <div class="scan-progress-row">
         <span class="spinner"></span>
         <span class="scan-progress-sub" id="scan-progress-sub">Opening browsers</span>
@@ -57,7 +57,7 @@
     <div class="scan-bar-wrap"><div class="scan-bar" id="scan-bar"></div></div>
 </div>
 
-<div class="error-banner" id="error-banner" style="display:none;" role="alert">
+<div class="error-banner" id="error-banner" hidden role="alert">
     <svg class="error-banner-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
     <span id="error-banner-text"></span>
     <button class="error-banner-close" data-action="hide-error" aria-label="Dismiss">✕</button>
@@ -161,7 +161,7 @@
                 </div>
 
                 <!-- Copy comes from frontend/js/no-surebet-reasons.json -->
-                <div class="no-results" id="no-results" style="display:none;">
+                <div class="no-results" id="no-results" hidden>
                     <div class="empty-state-icon" aria-hidden="true">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4-2v-4z"/></svg>
                     </div>
@@ -365,7 +365,7 @@
             <p class="hint" id="sweep-status" aria-live="polite">Calls verify-links until every event is decided.</p>
         </div>
         <p class="hint" id="bet-summary">No logged bets in the last 30 days.</p>
-        <div class="health-bar" id="health-bar" style="display:none;"></div>
+        <div class="health-bar" id="health-bar" hidden></div>
         <p class="drawer-links">
             <a href="/api/debug/report" target="_blank" rel="noopener">Match report</a>
             <a href="/api/health" target="_blank" rel="noopener">Health</a>
