@@ -62,6 +62,8 @@ def evaluate(
             if other != book
         ]
         peers_populated = any(value > 0 for value in peers)
+        peer_rows = sum(peers)
+        peer_books = sum(1 for value in peers if value > 0)
         if observed == 0 and peers_populated:
             flags.append(
                 {
@@ -72,6 +74,8 @@ def evaluate(
                     "observed": 0,
                     "baseline": round(baseline, 1),
                     "peers_populated": True,
+                    "peer_rows": peer_rows,
+                    "peer_books": peer_books,
                 }
             )
             continue
@@ -90,6 +94,8 @@ def evaluate(
                     "baseline": round(baseline, 1),
                     "drop_ratio": round(1 - observed / baseline, 4),
                     "peers_populated": True,
+                    "peer_rows": peer_rows,
+                    "peer_books": peer_books,
                 }
             )
     return {
@@ -100,6 +106,69 @@ def evaluate(
         "drop_ratio": drop_ratio,
         "drop_absolute": drop_absolute,
         "counts": current,
+    }
+
+
+def mapping_coverage(
+    matches: list[Match],
+    unmapped_before: dict[str, int],
+    unmapped_after: dict[str, int],
+    *,
+    floor: float = 0.95,
+    min_rows: int = 20,
+) -> dict[str, Any]:
+    """Measure how many observed market rows resolved to a known mapping.
+
+    ``unmapped_markets`` is a process-wide cumulative counter, so a scan's own
+    unmapped rows are the positive delta between the before/after snapshots.
+    The denominator is mapped rows plus those new unmapped rows; a small scan
+    stays unjudged until it clears ``min_rows``. A legitimate empty feed has no
+    rows and therefore no coverage ratio, not a zero.
+    """
+    mapped_by_book: dict[str, int] = defaultdict(int)
+    for match in matches:
+        mapped_by_book[match.bookmaker] += len(match.markets)
+
+    unmapped_by_book: dict[str, int] = defaultdict(int)
+    for key, count in unmapped_after.items():
+        delta = int(count) - int(unmapped_before.get(key, 0))
+        if delta <= 0:
+            continue
+        book = key.split(":", 1)[0] or "unknown"
+        unmapped_by_book[book] += delta
+
+    per_book: dict[str, dict[str, Any]] = {}
+    for book in sorted(set(mapped_by_book) | set(unmapped_by_book)):
+        mapped = int(mapped_by_book.get(book, 0))
+        unmapped = int(unmapped_by_book.get(book, 0))
+        total = mapped + unmapped
+        ratio = round(mapped / total, 4) if total else None
+        per_book[book] = {
+            "mapped": mapped,
+            "unmapped": unmapped,
+            "total": total,
+            "coverage": ratio,
+            "below_floor": bool(
+                total >= min_rows and ratio is not None and ratio < floor
+            ),
+        }
+
+    numerator = sum(mapped_by_book.values())
+    unmapped_total = sum(unmapped_by_book.values())
+    denominator = numerator + unmapped_total
+    ratio = round(numerator / denominator, 4) if denominator else None
+    return {
+        "numerator": numerator,
+        "denominator": denominator,
+        "unmapped_total": unmapped_total,
+        "coverage": ratio,
+        "floor": floor,
+        "min_rows": min_rows,
+        "below_floor": bool(
+            denominator >= min_rows and ratio is not None and ratio < floor
+        ),
+        "per_book": per_book,
+        "unmapped_by_book": dict(sorted(unmapped_by_book.items())),
     }
 
 

@@ -233,6 +233,13 @@ def _isolated_runtime_state(
     monkeypatch.setattr(api, "_stale_price_evidence", {"prematch": [], "live": []})
     monkeypatch.setattr(api, "_stale_price_checked_at", {"prematch": "", "live": ""})
     monkeypatch.setattr(api, "_closing_capture", {"prematch": {}, "live": {}})
+    # N1-2 coverage diagnostics are per-test too: a previous test's trend or
+    # consecutive zero counter must not decide whether this test alerts.
+    monkeypatch.setattr(api, "_coverage_budget", {"prematch": {}, "live": {}})
+    monkeypatch.setattr(api, "_coverage_history", {"prematch": [], "live": []})
+    monkeypatch.setattr(api, "_mapping_coverage", {"prematch": {}, "live": {}})
+    monkeypatch.setattr(api, "_coverage_trend", {"prematch": [], "live": []})
+    monkeypatch.setattr(api, "_zero_result_streaks", {"prematch": {}, "live": {}})
 
     # A module that copied CACHE_DIR at import time keeps its own reference.
     verify_module = sys.modules.get("scripts.verify_deeplinks")

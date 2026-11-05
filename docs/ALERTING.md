@@ -29,6 +29,10 @@ ALERT_TELEGRAM_CHAT_ID=...
 | `ALERT_DEDUPE_MINUTES` | `60` | At most one alert per signature in this window. |
 | `ALERT_RETRY_ATTEMPTS` | `3` | Attempts per transport, from the alert worker. |
 | `ALERT_RETRY_BASE_SECONDS` | `1.0` | Exponential backoff base. |
+| `COVERAGE_FLAG_ALERT_THRESHOLD` | `1` | Minimum coverage-budget flag count for `coverage_drop`; `0` disables it. |
+| `MAPPING_COVERAGE_FLOOR` | `0.95` | Mapped-row ratio below which `mapping_coverage_low` fires. |
+| `MAPPING_COVERAGE_MIN_ROWS` | `20` | Denominator below which mapping coverage is not judged. |
+| `COVERAGE_ALERT_CONSECUTIVE_SCANS` | `2` | Consecutive `stale_data` / `no_priced_boards` scans before `zero_result_reason`. |
 
 ## Behaviour
 
@@ -48,9 +52,16 @@ ALERT_TELEGRAM_CHAT_ID=...
   `bh_alerts_suppressed_total`, labelled by kind (and transport for sent/failed).
 - **Triggers.** Surebets at or above `ALERT_MIN_PROFIT_PERCENT`, stale feed per
   book, a quarantined or degraded book with its reasons, the scheduled-scan
-  backoff threshold, cache budget and RSS budget. Degraded books still price,
-  but they are named so a missing market family cannot stay silent for a whole
-  run.
+  backoff threshold, cache budget, RSS budget, a peer-populated coverage drop
+  (`coverage_drop`), mapping coverage below its floor
+  (`mapping_coverage_low`), and a repeated `stale_data` / `no_priced_boards`
+  zero (`zero_result_reason`). Coverage alerts carry the peer evidence,
+  baseline-scan count or numerator/denominator they were decided on. Degraded
+  books still price, but they are named so a missing market family cannot stay
+  silent for a whole run.
+- **Coverage is a warning.** A coverage alert never drops, merges or approves a
+  group; the certainty gate is unchanged. See `docs/COVERAGE_BUDGET.md` for the
+  SLO denominators and the trend series.
 - **Alert bodies use dashboard labels.** They carry the match, market, profit
   and one line per leg, not the full scan payload or any API key.
 

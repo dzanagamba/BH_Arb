@@ -186,6 +186,23 @@
         <div class="review-toolbar">
             <p class="review-intro">Pairings the scanner could not prove, with the evidence it used. This view is read-only: the evidence ledger learns team, league and market spellings automatically on every scan; nothing here changes a mapping.</p>
         </div>
+        <!-- N1-2: bounded per-scan trend, drawn from /api/health. -->
+        <div class="coverage-trend" id="coverage-trend" hidden>
+            <div class="coverage-trend-head">
+                <span class="coverage-trend-title">Coverage trend</span>
+                <span class="mono" id="coverage-trend-summary">—</span>
+            </div>
+            <svg class="coverage-spark" id="coverage-spark" viewBox="0 0 240 44"
+                 role="img" aria-label="Coverage flags and unmapped market rows over recent scans"
+                 preserveAspectRatio="none">
+                <polyline class="coverage-line coverage-line-flags" id="coverage-line-flags" points=""></polyline>
+                <polyline class="coverage-line coverage-line-unmapped" id="coverage-line-unmapped" points=""></polyline>
+            </svg>
+            <div class="coverage-trend-legend">
+                <span><i class="coverage-dot coverage-dot-flags"></i> Coverage flags</span>
+                <span><i class="coverage-dot coverage-dot-unmapped"></i> Unmapped rows</span>
+            </div>
+        </div>
         <div id="candidates-list" class="candidates-list">
             <div class="empty-state">
                 <h2 class="empty-state-title">No unresolved pairings.</h2>

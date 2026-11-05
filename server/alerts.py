@@ -344,6 +344,123 @@ def resource_alerts(
     return alerts
 
 
+def coverage_drop_alerts(mode: str, report: Mapping[str, Any]) -> list[Alert]:
+    """One deduped alert per peer-populated coverage-budget flag.
+
+    The signature deliberately excludes the observed count: the same silent
+    feed must not re-alert on every scan inside the dedupe window. The body
+    carries the peer evidence and baseline-scan count so an operator can tell a
+    real drop from a seasonal empty.
+    """
+    alerts: list[Alert] = []
+    baseline_scans = int(report.get("baseline_scans") or 0)
+    for flag in report.get("flags") or []:
+        if not isinstance(flag, Mapping):
+            continue
+        book = str(flag.get("bookmaker") or "?")
+        sport = str(flag.get("sport") or "?")
+        market = str(flag.get("market") or "?")
+        kind = str(flag.get("kind") or "coverage_drop")
+        baseline = float(flag.get("baseline") or 0.0)
+        observed = int(flag.get("observed") or 0)
+        peer_rows = int(flag.get("peer_rows") or 0)
+        peer_books = int(flag.get("peer_books") or 0)
+        peer_evidence = f"{peer_books} peer book(s), {peer_rows} row(s)"
+        if kind == "silent_zero":
+            title = f"{mode}: {book} silent zero in {sport}/{market}"
+            body = (
+                f"{book} returned 0 rows for {sport}/{market} while peers still "
+                f"published it ({peer_evidence}). Baseline median {baseline:.1f} "
+                f"rows from {baseline_scans} scan(s)."
+            )
+        else:
+            drop = float(flag.get("drop_ratio") or 0.0)
+            title = f"{mode}: {book} {market} dropped {drop:.0%}"
+            body = (
+                f"{book} returned {observed} rows vs a {baseline:.1f}-row baseline "
+                f"({drop:.0%} drop) for {sport}/{market}; peer evidence: "
+                f"{peer_evidence}. Baseline from {baseline_scans} scan(s)."
+            )
+        alerts.append(
+            Alert(
+                kind="coverage_drop",
+                signature=_sha(
+                    ["coverage_drop", mode, book, sport, market, kind]
+                ),
+                title=title,
+                body=body,
+                mode=mode,
+            )
+        )
+    return alerts
+
+
+def mapping_coverage_alert(
+    mode: str, report: Mapping[str, Any]
+) -> Alert | None:
+    """Alert when mapped market rows fall below the configured floor.
+
+    The body states the numerator and denominator the floor was applied to, so
+    a low number cannot be mistaken for a percentage of an unstated base.
+    """
+    if not report.get("below_floor"):
+        return None
+    numerator = int(report.get("numerator") or 0)
+    denominator = int(report.get("denominator") or 0)
+    coverage = report.get("coverage")
+    floor = float(report.get("floor") or 0.0)
+    if coverage is None or denominator <= 0:
+        return None
+    below = [
+        f"{book} {entry.get('mapped', 0)}/{entry.get('total', 0)}"
+        for book, entry in (report.get("per_book") or {}).items()
+        if isinstance(entry, Mapping) and entry.get("below_floor")
+    ]
+    body = (
+        f"{numerator}/{denominator} market rows mapped "
+        f"({float(coverage):.1%}); floor {floor:.1%}. "
+        f"Unmapped rows: {denominator - numerator}."
+    )
+    if below:
+        body += " Below floor: " + ", ".join(sorted(below)) + "."
+    return Alert(
+        kind="mapping_coverage_low",
+        signature=_sha(["mapping_coverage", mode, floor]),
+        title=f"{mode} mapping coverage {float(coverage):.1%} below floor",
+        body=body,
+        mode=mode,
+    )
+
+
+def zero_result_alert(
+    mode: str,
+    reason: str,
+    consecutive: int,
+    threshold: int,
+    summary: Mapping[str, Any] | None = None,
+) -> Alert | None:
+    """Alert after a watched zero-result reason repeats for N scans."""
+    if reason not in {"stale_data", "no_priced_boards"}:
+        return None
+    if consecutive < max(1, threshold):
+        return None
+    groups = (summary or {}).get("groups") or {}
+    boards = (summary or {}).get("boards")
+    body = (
+        f"{reason} for {consecutive} consecutive scan(s); alert threshold "
+        f"{threshold}. Groups {groups.get('total', 0)} total / "
+        f"{groups.get('verified', 0)} verified, boards "
+        f"{boards if boards is not None else 'unknown'}."
+    )
+    return Alert(
+        kind="zero_result_reason",
+        signature=_sha(["zero_result", mode, reason]),
+        title=f"{mode}: {reason.replace('_', ' ')} for {consecutive} scans",
+        body=body,
+        mode=mode,
+    )
+
+
 class AlertManager:
     """Dedupe alerts and deliver them from one background worker."""
 
@@ -543,10 +660,13 @@ __all__ = [
     "WebhookTransport",
     "book_failure_alert",
     "configured_alert_manager",
+    "coverage_drop_alerts",
     "current_rss_mb",
     "feed_alerts",
+    "mapping_coverage_alert",
     "quarantine_alerts",
     "resource_alerts",
     "surebet_alert",
     "surebet_signature",
+    "zero_result_alert",
 ]

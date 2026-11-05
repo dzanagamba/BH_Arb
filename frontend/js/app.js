@@ -2498,6 +2498,41 @@ async function refreshDiagnostics() {
     await Promise.all([loadHealth(), loadCandidates()]);
 }
 
+function coveragePolyline(points, key) {
+    if (!Array.isArray(points) || !points.length) return '';
+    const values = points.map(point => Math.max(0, Number(point?.[key]) || 0));
+    const max = Math.max(1, ...values);
+    const width = 240;
+    const height = 44;
+    return points.map((point, index) => {
+        const x = points.length === 1 ? width / 2 : (index / (points.length - 1)) * width;
+        const y = height - (values[index] / max) * (height - 4) - 2;
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+}
+
+function renderCoverageTrend(data) {
+    const box = document.getElementById('coverage-trend');
+    if (!box) return;
+    const points = Array.isArray(data?.coverage_trend?.[currentMode])
+        ? data.coverage_trend[currentMode]
+        : [];
+    if (!points.length) {
+        box.hidden = true;
+        return;
+    }
+    box.hidden = false;
+    const flags = document.getElementById('coverage-line-flags');
+    const unmapped = document.getElementById('coverage-line-unmapped');
+    if (flags) flags.setAttribute('points', coveragePolyline(points, 'flag_count'));
+    if (unmapped) unmapped.setAttribute('points', coveragePolyline(points, 'unmapped_rows'));
+    const last = points[points.length - 1] || {};
+    const mapping = data?.mapping_coverage?.[currentMode] || {};
+    const ratio = mapping.coverage == null ? '—' : `${(Number(mapping.coverage) * 100).toFixed(1)}%`;
+    const rows = `${Number(mapping.numerator) || 0}/${Number(mapping.denominator) || 0}`;
+    setText('coverage-trend-summary', `${currentMode}: ${Number(last.flag_count) || 0} flag(s) · ${Number(last.unmapped_rows) || 0} unmapped rows · mapped ${rows} (${ratio})`);
+}
+
 async function loadHealth() {
     try {
         const res = await fetch('/api/health');
@@ -2505,6 +2540,7 @@ async function loadHealth() {
         // The counts that say WHY there is no surebet live in this response, so
         // the payload is kept for the diagnostic.
         healthSnapshot = data;
+        renderCoverageTrend(data);
         const bar = document.getElementById('health-bar');
         if (!bar) return;
         const fmtAge = (sec) => sec == null ? '—' : sec < 60 ? `${Math.round(sec)}s ago` : `${Math.round(sec/60)}m ago`;

@@ -320,6 +320,24 @@ LOG_SIZE_BUDGET_BYTES = int(
     os.getenv("LOG_SIZE_BUDGET_BYTES", str(50 * 1024 * 1024))
 )
 
+# --- Coverage and mapping SLOs (N1-2) ---
+# A coverage alert is a warning, never a trust rule: no group is dropped or
+# merged because one fired. The peer/baseline evidence in the report is what
+# keeps a legitimate all-zero seasonal feed quiet.
+COVERAGE_FLAG_ALERT_THRESHOLD = int(
+    os.getenv("COVERAGE_FLAG_ALERT_THRESHOLD", "1")
+)
+# Mapping coverage is mapped market rows / (mapped + newly unmapped rows) for
+# one scan. A small scan is not judged: the denominator must clear this floor
+# before a low ratio can alert.
+MAPPING_COVERAGE_FLOOR = float(os.getenv("MAPPING_COVERAGE_FLOOR", "0.95"))
+MAPPING_COVERAGE_MIN_ROWS = int(os.getenv("MAPPING_COVERAGE_MIN_ROWS", "20"))
+# A repeated zero result must persist for this many consecutive scans before it
+# alerts. A one-off quiet scan is not a feed loss.
+COVERAGE_ALERT_CONSECUTIVE_SCANS = int(
+    os.getenv("COVERAGE_ALERT_CONSECUTIVE_SCANS", "2")
+)
+
 # --- Scraper Settings ---
 NAVIGATION_TIMEOUT_MS = 60000  # Max navigation time (ms)
 # Headless browsers by default; set HEADLESS=false in .env to watch them

@@ -44,6 +44,8 @@ from config.settings import (
     CACHE_DIR,
     CACHE_SIZE_BUDGET_BYTES,
     CLOSING_CAPTURE_CUTOFF_MINUTES,
+    COVERAGE_ALERT_CONSECUTIVE_SCANS,
+    COVERAGE_FLAG_ALERT_THRESHOLD,
     DEEP_LINK_VERIFY_RATE_LIMIT,
     DEEPLINK_DECLARATION_MAX_AGE_DAYS,
     DEFAULT_INVESTMENT,
@@ -52,6 +54,8 @@ from config.settings import (
     ENABLED_SPORTS,
     EXPERIMENTAL_MARKETS,
     LIVE_ODDS_TTL_SECONDS,
+    MAPPING_COVERAGE_FLOOR,
+    MAPPING_COVERAGE_MIN_ROWS,
     MIN_LEARN_MATCHES,
     MIN_PROFIT_PERCENT,
     ODDS_TTL_SECONDS,
@@ -68,6 +72,9 @@ from engine.arbitrage import ArbitrageEngine
 from engine.certainty import CertaintyGate
 from engine.coverage_budget import (
     evaluate as evaluate_coverage_budget,
+)
+from engine.coverage_budget import (
+    mapping_coverage as evaluate_mapping_coverage,
 )
 from engine.coverage_budget import (
     push_history as push_coverage_history,
@@ -137,11 +144,14 @@ from server.alerts import (
     AlertManager,
     book_failure_alert,
     configured_alert_manager,
+    coverage_drop_alerts,
     current_rss_mb,
     feed_alerts,
+    mapping_coverage_alert,
     quarantine_alerts,
     resource_alerts,
     surebet_alert,
+    zero_result_alert,
 )
 from server.auth import SCOPES, api_key_store
 from server.bets import BetStore
@@ -527,6 +537,13 @@ _coverage_history: dict[str, list[dict[str, int]]] = {
     "live": [],
 }
 _COVERAGE_HISTORY_MAX = 20
+# N1-2: per-scan mapping coverage, the bounded trend and the consecutive
+# zero-result counters. These are diagnostics, never trust inputs.
+_mapping_coverage: dict[str, dict[str, Any]] = {"prematch": {}, "live": {}}
+_coverage_trend: dict[str, list[dict[str, Any]]] = {"prematch": [], "live": []}
+_COVERAGE_TREND_MAX = 30
+_zero_result_streaks: dict[str, dict[str, int]] = {"prematch": {}, "live": {}}
+_ZERO_RESULT_ALERT_REASONS = frozenset({"stale_data", "no_priced_boards"})
 _feed_integrity: dict[str, dict[str, dict]] = {"prematch": {}, "live": {}}
 # P2-7: the measured price-agreement matrix and its config-mismatch warnings.
 _skin_detection: dict[str, dict[str, Any]] = {"prematch": {}, "live": {}}
@@ -1585,11 +1602,49 @@ def _init_metric_baseline() -> None:
             "bh_surebets_dropped_total", 0, mode=metric_mode, reason="price_outlier"
         )
         metrics.set_gauge("bh_candidate_queue_size", 0, mode=metric_mode)
+        metrics.set_gauge("bh_coverage_flags", 0, mode=metric_mode)
+        metrics.inc("bh_coverage_flags_total", 0, mode=metric_mode)
+        metrics.set_gauge("bh_mapping_coverage_ratio", 0, mode=metric_mode)
+        metrics.inc("bh_unmapped_market_rows_total", 0, mode=metric_mode)
     metrics.set_gauge("bh_browser_slots_in_use", 0)
     metrics.set_gauge("bh_cache_budget_bytes", CACHE_SIZE_BUDGET_BYTES)
 
 
 _init_metric_baseline()
+
+
+def _record_coverage_metrics(
+    mode: str,
+    coverage_report: dict[str, Any],
+    mapping_report: dict[str, Any],
+) -> None:
+    """Publish the coverage-budget and mapping-coverage series for one scan."""
+    flags = int(coverage_report.get("flag_count") or 0)
+    metrics.set_gauge("bh_coverage_flags", flags, mode=mode)
+    metrics.inc("bh_coverage_flags_total", flags, mode=mode)
+    ratio = mapping_report.get("coverage")
+    metrics.set_gauge(
+        "bh_mapping_coverage_ratio",
+        float(ratio) if ratio is not None else 0.0,
+        mode=mode,
+    )
+    metrics.inc(
+        "bh_unmapped_market_rows_total",
+        int(mapping_report.get("unmapped_total") or 0),
+        mode=mode,
+    )
+
+
+def _track_zero_result(mode: str, reason: str) -> int:
+    """Count consecutive scans with a watched zero-result reason."""
+    streaks = _zero_result_streaks.setdefault(mode, {})
+    for key in list(streaks):
+        if key != reason:
+            streaks[key] = 0
+    if reason in _ZERO_RESULT_ALERT_REASONS:
+        streaks[reason] = streaks.get(reason, 0) + 1
+        return streaks[reason]
+    return 0
 
 
 def learn_scan_mappings(
@@ -1634,6 +1689,9 @@ async def run_scan(
     scan_id = new_request_id()
     scan_token = set_scan_id(scan_id)
     metrics.inc("bh_scans_started_total", mode=mode)
+    # N1-2: the unmapped counter is cumulative, so this snapshot lets the scan
+    # measure its own unmapped market rows without a process restart.
+    unmapped_before = dict(unmapped_markets)
 
     status.is_scanning = True
     status.bookmakers_done = []
@@ -1776,12 +1834,44 @@ async def run_scan(
             _coverage_history[mode],
             coverage_counts,
         )
+        # N1-2: mapped rows / (mapped + newly unmapped rows) for this scan. The
+        # counter delta is why a cumulative registry counter still yields a
+        # per-scan numerator and denominator.
+        mapping_report = evaluate_mapping_coverage(
+            all_matches,
+            unmapped_before,
+            dict(unmapped_markets),
+            floor=MAPPING_COVERAGE_FLOOR,
+            min_rows=MAPPING_COVERAGE_MIN_ROWS,
+        )
+        _mapping_coverage[mode] = mapping_report
+        _coverage_trend[mode] = (
+            _coverage_trend[mode]
+            + [
+                {
+                    "scan_time": scan_started_at.isoformat(timespec="seconds"),
+                    "flag_count": coverage_report["flag_count"],
+                    "unmapped_rows": mapping_report["unmapped_total"],
+                    "mapping_coverage": mapping_report["coverage"],
+                    "denominator": mapping_report["denominator"],
+                }
+            ]
+        )[-_COVERAGE_TREND_MAX:]
+        _record_coverage_metrics(mode, coverage_report, mapping_report)
         _save_coverage_budget()
         if coverage_report["flag_count"]:
             logger.warning(
                 "Coverage budget: %s material drop(s) in %s",
                 coverage_report["flag_count"],
                 mode,
+            )
+        if mapping_report["below_floor"]:
+            logger.warning(
+                "Mapping coverage: %s/%s rows mapped in %s (floor %.2f)",
+                mapping_report["numerator"],
+                mapping_report["denominator"],
+                mode,
+                MAPPING_COVERAGE_FLOOR,
             )
 
         # --- Match and find surebets ---
@@ -2010,9 +2100,14 @@ async def run_scan(
         update_lifetimes(tracked, scan_metrics.boards, scan_finished_at)
         summary["lifetime"] = lifetime_distribution(tracked, scan_finished_at)
         summary["tracked_crossings"] = len(tracked)
+        summary["zero_result_streak"] = _track_zero_result(
+            mode, str(summary.get("zero_result_reason") or "")
+        )
         _opportunity_by_mode[mode] = summary
         _opportunity_history.insert(0, summary)
         del _opportunity_history[_OPPORTUNITY_HISTORY_MAX:]
+        # The streak is part of the persisted coverage state, so save after it.
+        _save_coverage_budget()
 
         # Serialize to dict for JSON responses. A non-advisory run deliberately
         # writes an empty live list, so the dashboard cannot present a recorded
@@ -2068,17 +2163,18 @@ async def run_scan(
                 "cache_bytes": cache_bytes,
             },
         )
-        # P1-5: decide what is worth saying, then queue it. Delivery is off the
-        # scan path; an alert failure must never fail the scan that found it.
-        # Record-only and paper scans must not alert as if a live bet existed.
-        if run_mode == "advisory":
-            _notify_scan_alerts(
-                mode,
-                surebets,
-                status,
-                matches_cache,
-                cache_bytes=cache_bytes,
-            )
+        # P1-5/N1-2: decide what is worth saying, then queue it. Delivery is
+        # off the scan path; an alert failure must never fail the scan that
+        # found it. Non-advisory runs skip the surebet alert (no live bet was
+        # published) but still report feed, coverage and resource problems.
+        _notify_scan_alerts(
+            mode,
+            surebets,
+            status,
+            matches_cache,
+            cache_bytes=cache_bytes,
+            run_mode=run_mode,
+        )
     except Exception as e:
         metrics.inc("bh_scans_failed_total", mode=mode)
         logger.error(
@@ -2105,6 +2201,7 @@ def _notify_scan_alerts(
     matches_cache: list[dict],
     *,
     cache_bytes: int,
+    run_mode: str = "advisory",
 ) -> None:
     """Queue operator alerts for one completed scan.
 
@@ -2115,25 +2212,50 @@ def _notify_scan_alerts(
     if not alert_manager.enabled:
         return
     try:
-        for surebet in surebets:
-            payload = (
-                surebet.model_dump(mode="json")
-                if hasattr(surebet, "model_dump")
-                else surebet
-            )
-            alert = surebet_alert(
-                payload,
-                mode=mode,
-                min_profit_percent=alert_manager.min_profit_percent,
-            )
-            if alert is not None:
-                alert_manager.notify(alert)
+        if run_mode == "advisory":
+            for surebet in surebets:
+                payload = (
+                    surebet.model_dump(mode="json")
+                    if hasattr(surebet, "model_dump")
+                    else surebet
+                )
+                alert = surebet_alert(
+                    payload,
+                    mode=mode,
+                    min_profit_percent=alert_manager.min_profit_percent,
+                )
+                if alert is not None:
+                    alert_manager.notify(alert)
 
         freshness = _freshness_block(mode, status, matches_cache)
         alert_manager.notify_many(feed_alerts(mode, freshness))
         alert_manager.notify_many(
             quarantine_alerts(mode, _feed_integrity.get(mode) or {})
         )
+
+        coverage_report = _coverage_budget.get(mode) or {}
+        flag_count = int(coverage_report.get("flag_count") or 0)
+        if (
+            COVERAGE_FLAG_ALERT_THRESHOLD > 0
+            and flag_count >= COVERAGE_FLAG_ALERT_THRESHOLD
+        ):
+            alert_manager.notify_many(coverage_drop_alerts(mode, coverage_report))
+        mapping_alert = mapping_coverage_alert(
+            mode, _mapping_coverage.get(mode) or {}
+        )
+        if mapping_alert is not None:
+            alert_manager.notify(mapping_alert)
+
+        summary = _opportunity_by_mode.get(mode) or {}
+        zero_alert = zero_result_alert(
+            mode,
+            str(summary.get("zero_result_reason") or ""),
+            int(summary.get("zero_result_streak") or 0),
+            COVERAGE_ALERT_CONSECUTIVE_SCANS,
+            summary,
+        )
+        if zero_alert is not None:
+            alert_manager.notify(zero_alert)
 
         with _BOOK_BACKOFF_LOCK:
             failures = {
@@ -2471,8 +2593,9 @@ def _stale_price_payload(mode: str, *, include_rows: bool = True) -> dict[str, A
 
 
 def _load_coverage_budget() -> None:
-    """Restore the rolling per-book/sport/market counts for P2-9."""
-    global _coverage_budget, _coverage_history
+    """Restore the rolling coverage, mapping and zero-result state."""
+    global _coverage_budget, _coverage_history, _mapping_coverage
+    global _coverage_trend, _zero_result_streaks
     try:
         with open(_COVERAGE_BUDGET_FILE, encoding="utf-8") as file:
             data = json.load(file)
@@ -2501,13 +2624,46 @@ def _load_coverage_budget() -> None:
             ][-_COVERAGE_HISTORY_MAX:]
             for mode in ("prematch", "live")
         }
+    mapping = data.get("mapping")
+    if isinstance(mapping, dict):
+        _mapping_coverage = {
+            mode: mapping[mode]
+            for mode in ("prematch", "live")
+            if isinstance(mapping.get(mode), dict)
+        }
+    trend = data.get("trend")
+    if isinstance(trend, dict):
+        _coverage_trend = {
+            mode: [
+                point
+                for point in trend.get(mode, [])
+                if isinstance(point, dict)
+            ][-_COVERAGE_TREND_MAX:]
+            for mode in ("prematch", "live")
+        }
+    streaks = data.get("streaks")
+    if isinstance(streaks, dict):
+        _zero_result_streaks = {
+            mode: {
+                str(reason): int(count)
+                for reason, count in (streaks.get(mode) or {}).items()
+                if isinstance(count, int)
+            }
+            for mode in ("prematch", "live")
+        }
 
 
 def _save_coverage_budget() -> None:
     try:
         _atomic_write_json(
             _COVERAGE_BUDGET_FILE,
-            {"last": _coverage_budget, "history": _coverage_history},
+            {
+                "last": _coverage_budget,
+                "history": _coverage_history,
+                "mapping": _mapping_coverage,
+                "trend": _coverage_trend,
+                "streaks": _zero_result_streaks,
+            },
             "coverage_budget",
             indent=None,
         )
@@ -2952,6 +3108,17 @@ async def health():
         # scan did not reproduce. Low-sample pairs say insufficient_data.
         "skin_detection": _skin_detection,
         "coverage_budget": _coverage_budget,
+        # N1-2: per-scan mapping coverage with its numerator/denominator, the
+        # bounded trend the dashboard draws, and the repeated-zero counters.
+        "mapping_coverage": _mapping_coverage,
+        "coverage_trend": _coverage_trend,
+        "zero_result_streaks": _zero_result_streaks,
+        "coverage_slo": {
+            "flag_alert_threshold": COVERAGE_FLAG_ALERT_THRESHOLD,
+            "mapping_coverage_floor": MAPPING_COVERAGE_FLOOR,
+            "mapping_min_rows": MAPPING_COVERAGE_MIN_ROWS,
+            "consecutive_scans": COVERAGE_ALERT_CONSECUTIVE_SCANS,
+        },
         "unmapped_markets": dict(unmapped_markets),
         "unmapped_markets_by_book": unmapped_by_book(),
         "verified_groups": sum(

@@ -885,6 +885,43 @@ body.feed-stale .row-profit b { color: var(--warn); }
 .review-intro { margin: 0; max-width: 620px; color: var(--muted); }
 .review-bulk { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 
+.coverage-trend {
+    margin-bottom: 14px;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    background: var(--panel-2);
+}
+.coverage-trend-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px 14px;
+}
+.coverage-trend-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+#coverage-trend-summary { font-size: 11px; color: var(--muted); }
+.coverage-spark {
+    display: block;
+    width: 100%;
+    height: 44px;
+    margin: 8px 0 6px;
+    overflow: visible;
+}
+.coverage-line { fill: none; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.coverage-line-flags { stroke: var(--warn); }
+.coverage-line-unmapped { stroke: var(--blue); }
+.coverage-trend-legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 11px; color: var(--muted); }
+.coverage-dot { display: inline-block; width: 8px; height: 8px; margin-right: 4px; border-radius: 50%; }
+.coverage-dot-flags { background: var(--warn); }
+.coverage-dot-unmapped { background: var(--blue); }
+
 .candidates-list { display: flex; flex-direction: column; gap: 10px; }
 .candidates-page-note { margin: 0 0 4px; color: var(--muted); font-size: 13px; }
 

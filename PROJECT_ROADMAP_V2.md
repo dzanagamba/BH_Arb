@@ -68,7 +68,7 @@ long-horizon.
 | N0-3 | CSP without inline styles | P0 | M | — | Done |
 | N0-4 | Automatic closing-line capture for logged bets | P0 | M | N0-2 | Done |
 | N1-1 | Retention and maintenance automation | P1 | M | — | Done |
-| N1-2 | Coverage/mapping alerts and SLOs | P1 | S | — | Not started |
+| N1-2 | Coverage/mapping alerts and SLOs | P1 | S | — | Done |
 | N1-3 | Per-book scan cost accounting | P1 | M | — | Not started |
 | N1-4 | Release hardening: Docker smoke, SBOM, dependency updates | P1 | S | — | Not started |
 | N2-1 | Paper ledger dashboard, CSV and retention view | P2 | M | N1-1 | Not started |
@@ -315,7 +315,7 @@ record. Archive, do not silently truncate.
 
 ### N1-2 — Coverage/mapping alerts and SLOs
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P1
 **Effort:** S
 **Depends on:** none
@@ -337,10 +337,10 @@ alert, not just a hidden health field.
 
 **Acceptance criteria:**
 
-- [ ] A peer-populated silent zero raises one deduped alert.
-- [ ] A legitimate empty feed does not alert.
-- [ ] Mapping coverage below the floor is visible with its numerator/denominator.
-- [ ] Alert failures stay off the scan path.
+- [x] A peer-populated silent zero raises one deduped alert.
+- [x] A legitimate empty feed does not alert.
+- [x] Mapping coverage below the floor is visible with its numerator/denominator.
+- [x] Alert failures stay off the scan path.
 
 **Tests:**
 
@@ -783,6 +783,50 @@ For every task:
 
 Newest first. Each entry: date, task, status, commands, measured result, files
 changed, follow-ups.
+
+### 2026-11-05 — N1-2 — Done
+
+**Commands**
+
+```bash
+python -m pytest
+BH_ARB_TEST_RUNTIME_LEDGER=populated python -m pytest
+python -m pytest tests/test_coverage_alerts.py
+python -m ruff check .
+python -m mypy .
+python scripts/generate_market_mapping_doc.py --check
+node --check frontend/js/app.js
+```
+
+**Measured result**
+
+- Operator checkout: **1,530 passed, 2 skipped, 1 warning** in 59.56 s;
+  populated-ledger mode: **1,530 passed, 2 skipped, 1 warning** in 58.93 s.
+- `tests/test_coverage_alerts.py`: **11 passed** — numerator/denominator,
+  per-scan delta, legitimate empty feed, peer/baseline evidence, deduped silent
+  zero, mapping floor, consecutive zero threshold, health exposure, metrics and
+  the dashboard trend.
+- Ruff clean, MyPy clean on **193 source files**, Node syntax check clean and
+  the generated market doc in sync.
+
+**Files changed**
+
+- `config/settings.py` — coverage flag threshold, mapping-coverage floor and
+  minimum denominator, consecutive-scan threshold.
+- `engine/coverage_budget.py` — peer row/book evidence and the per-scan mapping
+  coverage numerator/denominator.
+- `server/alerts.py` — `coverage_drop`, `mapping_coverage_low` and
+  `zero_result_reason` builders.
+- `server/api.py` — per-scan coverage state, trend, consecutive counters,
+  metrics, health fields and alert wiring.
+- `frontend/index.html`, `frontend/css/style.css`, `frontend/js/app.js` —
+  Diagnostics coverage trend line.
+- `tests/test_coverage_alerts.py`, `tests/conftest.py`.
+- `docs/COVERAGE_BUDGET.md`, `docs/ALERTING.md`.
+
+**Follow-ups:** N1-3 (per-book scan cost accounting) is the next eligible task.
+Coverage remains a warning: no certainty-gate, link-proof, settlement,
+price-source or one-leg-per-book rule changed.
 
 ### 2026-11-05 — N1-1 — Done
 
