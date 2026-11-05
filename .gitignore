@@ -43,6 +43,9 @@ test-results/
 coverage.xml
 htmlcov/
 
+# Hypothesis example database (N3-1)
+.hypothesis/
+
 # Release SBOM artifacts (generated in CI; never commit)
 sbom*.json
 sbom*.xml

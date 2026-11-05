@@ -435,6 +435,9 @@ python -m ruff check .
 python -m mypy .
 python scripts/generate_market_mapping_doc.py --check
 
+# Opt-in property load budgets (skipped in the normal fast suite)
+BH_ARB_TEST_SLOW=1 python -m pytest tests/test_perf_budgets.py
+
 # Same coverage and security gates as CI
 python -m pytest --cov --cov-report=term-missing
 python -m pip_audit -r requirements.txt -r requirements-dev.txt --progress-spinner off
@@ -452,6 +455,10 @@ documented in [`docs/CI.md`](docs/CI.md).
   tree; run both ledger modes with `python scripts/check_test_isolation.py`.
   Never delete the operator's ledger to make a test pass.
 - Frontend tests run the shipped JavaScript under Node 22 and skip without it.
+- Pricing and identity rules also have property-based coverage in
+  `tests/test_properties_pricing.py` and `tests/test_properties_identity.py`.
+  The load budgets are opt-in (`BH_ARB_TEST_SLOW=1`); see
+  [`docs/PROPERTY_TESTS.md`](docs/PROPERTY_TESTS.md).
 - `tests/test_readme_claims.py` checks the factual claims in this file against
   the code. `MARKET_MAPPING.md` is generated; regenerate it, never hand-edit it.
 - `tests/fixtures/e2e_certified/` is frozen. Do not edit or re-capture it.

@@ -158,6 +158,10 @@ def pytest_configure(config):
         "real_runtime_state: read the operator's runtime state; requires "
         f"{REAL_STATE_ENV}=1",
     )
+    config.addinivalue_line(
+        "markers",
+        "slow: opt-in load budget; requires BH_ARB_TEST_SLOW=1",
+    )
 
 
 @pytest.fixture(scope="session", autouse=True)

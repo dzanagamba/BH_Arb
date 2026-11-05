@@ -5,7 +5,7 @@ P1-4/N1-4 hardening. Every push and pull request runs four jobs:
 | Job | What it does |
 |---|---|
 | `quality` | Ruff, MyPy and the generated-market-doc check on Python 3.11. |
-| `tests` | Full pytest suite on Python 3.11 and 3.12. The 3.11 leg also measures coverage, writes a markdown summary to the workflow run page, and uploads `coverage.xml`. |
+| `tests` | Full pytest suite on Python 3.11 and 3.12. The 3.11 leg also measures coverage, writes a markdown summary to the workflow run page, and uploads `coverage.xml`. The 3.11 leg then runs the opt-in property load budgets separately. |
 | `security` | `pip-audit` against both requirement files and Bandit at medium severity and above. |
 | `sbom` | CycloneDX JSON from `requirements.txt` (the file the image installs), verified non-empty and uploaded as `sbom-cyclonedx`. |
 
@@ -51,6 +51,20 @@ keys, source-id set, labels, nested shape), when an enabled book has no
 contract, or when a capture is older than the 120-day policy. A capture failure
 is reported separately and never treated as a feed change. See
 `docs/PARSER_CONTRACTS.md` for the refresh cadence and the diff format.
+
+## Property tests and load budgets
+
+The fast suite includes the property-based pricing and identity tests
+(`tests/test_properties_pricing.py`, `tests/test_properties_identity.py`). A
+separate 3.11 step runs the opt-in load budgets:
+
+```bash
+BH_ARB_TEST_SLOW=1 python -m pytest tests/test_perf_budgets.py
+```
+
+Without `BH_ARB_TEST_SLOW=1` those two tests are skipped, so the normal suite
+keeps its runtime. See `docs/PROPERTY_TESTS.md` for the invariants, the budgets
+and the local commands.
 
 ## Coverage
 

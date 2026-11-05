@@ -77,7 +77,7 @@ long-horizon.
 | N2-4 | Seven-day local opportunity baseline and drift gates | P2 | M | — | Deferred |
 | N2-5 | Complete Bosnian localization and automated a11y checks | P2 | M | N0-3 | Done |
 | N2-6 | Parser fixture refresh and drift detection | P2 | M | — | Done |
-| N3-1 | Property-based pricing/identity tests and load budgets | P3 | M | N0-1 | Not started |
+| N3-1 | Property-based pricing/identity tests and load budgets | P3 | M | N0-1 | Done |
 | N3-2 | Scheduled market/sport admissibility re-audit | P3 | M | N2-6 | Not started |
 
 **Recommended first session:** N0-1, then N0-3 (both small and immediately
@@ -675,7 +675,7 @@ Do not guess a mapping from a changed payload.
 
 ### N3-1 — Property-based pricing/identity tests and load budgets
 
-**Status:** Not started
+**Status:** Done
 **Priority:** P3
 **Effort:** M
 **Depends on:** N0-1
@@ -696,10 +696,10 @@ cannot cover exhaustively.
 
 **Acceptance criteria:**
 
-- [ ] Property tests cover the pricing and identity invariants above.
-- [ ] A minimized failure becomes a normal regression test.
-- [ ] Load budgets are explicit and fail on a material regression.
-- [ ] The normal fast suite remains fast; slow tests are opt-in/CI-only.
+- [x] Property tests cover the pricing and identity invariants above.
+- [x] A minimized failure becomes a normal regression test.
+- [x] Load budgets are explicit and fail on a material regression.
+- [x] The normal fast suite remains fast; slow tests are opt-in/CI-only.
 
 **Tests:**
 
@@ -785,6 +785,59 @@ For every task:
 
 Newest first. Each entry: date, task, status, commands, measured result, files
 changed, follow-ups.
+
+### 2026-11-05 — N3-1 — Done
+
+**Commands**
+
+```bash
+python -m pytest
+BH_ARB_TEST_RUNTIME_LEDGER=populated python -m pytest
+python -m pytest tests/test_properties_pricing.py tests/test_properties_identity.py
+BH_ARB_TEST_SLOW=1 python -m pytest tests/test_perf_budgets.py
+python -m ruff check .
+python -m mypy .
+python scripts/generate_market_mapping_doc.py --check
+```
+
+**Measured result**
+
+- Operator checkout: **1,629 passed, 6 skipped, 1 warning** in 73.71 s;
+  populated-ledger mode: **1,629 passed, 6 skipped, 1 warning** in 73.78 s. The
+  six skips are the two opt-in runtime-state checks, the two Chromium tests and
+  the two opt-in load budgets.
+- `tests/test_properties_pricing.py` + `tests/test_properties_identity.py`:
+  **16 passed** in 4.34 s — implied-sum/profit identity, proportional stake
+  split, distinct book and price source, served worst case, rounding grid and
+  bound, funded-rounding non-negative loss, the minimized 2.28/2.52 gain,
+  cross-sport hard gate, mixed-sport matcher groups, settlement dominance,
+  kickoff boundary, marker/colour vetoes, similarity symmetry and the
+  no-verified-from-fuzzy rule.
+- `tests/test_perf_budgets.py`: **2 passed** in 0.90 s; matcher 600 listings in
+  **0.43 s** (10 s budget) and cache parse 2,000 matches + 500 surebets in
+  **0.16 s** (5 s budget). The normal suite skips both unless
+  `BH_ARB_TEST_SLOW=1`.
+- Ruff clean, MyPy clean on **211 source files**, generated market doc in sync.
+
+**Files changed**
+
+- `requirements-dev.txt` — `hypothesis==6.150.0`, dev-only.
+- `tests/test_properties_pricing.py` — generated odds/stakes/rounding
+  invariants and the minimized rounding regression.
+- `tests/test_properties_identity.py` — sport, settlement, kickoff, marker,
+  colour, symmetry, matcher and fuzzy-only properties.
+- `tests/test_perf_budgets.py` — opt-in matcher and cache-parse load budgets.
+- `tests/conftest.py` — registered the `slow` marker.
+- `.github/workflows/ci.yml` — separate 3.11 property-load-budget step.
+- `docs/PROPERTY_TESTS.md`, `docs/CI.md`, `README.md`.
+- `PROJECT_ROADMAP_V2.md`, `docs/SESSION_BRIEF.md`.
+
+**Follow-ups:** N3-2 (scheduled market/sport admissibility re-audit) is the next
+eligible task. The signed `rounding_loss` can be a small gain (round-half-even);
+the suite pins that gain as bounded and pins a non-negative conservative loss
+for a funded downward split instead of changing the reported number. No
+certainty-gate, link-proof, settlement, price-source or one-leg-per-book rule
+changed.
 
 ### 2026-11-05 — N2-6 — Done
 

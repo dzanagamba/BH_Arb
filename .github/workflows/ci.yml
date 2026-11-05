@@ -80,6 +80,14 @@ jobs:
         env:
           BH_ARB_TEST_RUNTIME_LEDGER: populated
 
+      # N3-1: the opt-in load budgets are a separate step so the normal suite
+      # stays fast. A material matcher/cache regression fails here.
+      - name: Property load budgets
+        if: matrix.python-version == '3.11'
+        run: python -m pytest tests/test_perf_budgets.py
+        env:
+          BH_ARB_TEST_SLOW: "1"
+
       - name: Tests
         if: matrix.python-version != '3.11'
         run: python -m pytest
