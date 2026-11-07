@@ -2,51 +2,70 @@
 
 ## Read first
 
-1. `PROJECT_ROADMAP_V2.md` — current roadmap, task table, acceptance criteria.
+1. `ROADMAP.md` — the single task list, acceptance criteria and execution log.
 2. `docs/SESSION_BRIEF.md` — current state and next action.
-3. `TODO.md` — deferred maintenance, not roadmap tasks.
+3. The `research/` brief a task cites (`research/00_README.md` is the index).
 4. `docs/HANDOFF.md` only when historical context is needed.
 
-The predecessor roadmap (`PROJECT_ROADMAP.md`) is finished. Do not reopen it.
-Every V2 task is Done except N2-4, which the operator deferred; do not un-defer
-it without an explicit instruction. P1-6 (24-hour soak) is waived and excluded.
+The predecessor roadmaps and the old maintenance backlog were folded into
+`ROADMAP.md` on 2026-11-07. `P*` and `N*` IDs are historical labels; their
+glossary is in the `ROADMAP.md` History section. N2-4 stays deferred and P1-6 is
+waived; do not start or un-waive either without an explicit operator instruction.
 
 ## Task loop
 
 1. Resume an `In progress` task. Otherwise pick the first `Not started` task
    whose dependencies are `Done`.
-2. Change its status to `In progress` **before** coding.
-3. Implement only that task, following its Objective, Steps and Acceptance.
-4. Add or update the tests named in the task.
-5. Verify:
+2. Skip tasks with `Gate: operator` until a written decision is recorded under
+   the task.
+3. Change its status to `In progress` **before** coding.
+4. Implement only that task, following its Objective or Why, Steps and
+   Acceptance.
+5. Add or update the tests named in the task.
+6. Verify:
    ```bash
    python -m pytest
    python -m ruff check .
    python -m mypy .
    python scripts/generate_market_mapping_doc.py --check
+   python scripts/check_test_isolation.py
+   python scripts/refresh_fixtures.py --check
+   python scripts/audit_admissibility.py --check
    ```
-   plus any task-specific measurement or replay command.
-6. Check the acceptance boxes, set the task `Done`, update the execution log,
-   and update `docs/SESSION_BRIEF.md`.
-7. Review the diff. Commit and push with a conventional message only when the
+   plus any task-specific measurement or replay command. Run the suite once
+   with a clean runtime state and once with the populated generated ledger.
+7. Check the acceptance boxes, set the task `Done`, update the execution log
+   with the commands and the measured output pasted in, and update
+   `docs/SESSION_BRIEF.md`.
+8. Review the diff. Commit and push with a conventional message only when the
    operator explicitly asks; otherwise leave the working tree for review.
-8. If blocked, record the blocker in the task and stop. Do not start a second
+9. If blocked, record the blocker in the task and stop. Do not start a second
    task.
 
 Use `.venv/bin/python` if `python` is not on `PATH`.
 
-CI additionally runs `python scripts/check_test_isolation.py`,
-`python scripts/refresh_fixtures.py --check` and
-`python scripts/audit_admissibility.py --check`. Run the relevant ones when a
-change touches tests, fixtures or sport/market admission.
+CI runs `python scripts/refresh_fixtures.py --check` and
+`python scripts/audit_admissibility.py --check`; it does **not** run
+`python scripts/check_test_isolation.py` yet. Run the isolation check locally
+until SR1-2 lands. See `docs/CI.md`.
 
-## Maintenance work (non-roadmap)
+## Maintenance work and ad-hoc requests
 
-When the operator asks for a cleanup, audit or review instead of a roadmap task,
-do not invent a roadmap task or reopen a Done one. Keep changes in small,
-file-disjoint bundles, update `docs/SESSION_BRIEF.md` and `TODO.md`, and do not
-commit unless asked. A deferred finding stays in `TODO.md`; do not silently
-start it in a later session without operator approval.
+- Work the operator asks for that has no roadmap row gets a row added first
+  (status `In progress`) and an execution-log entry.
+- Never un-gate a `Gate: operator` row without a written operator approval.
+- Keep changes in small, file-disjoint bundles; update `docs/SESSION_BRIEF.md`
+  and `ROADMAP.md`; do not commit unless asked.
+- A deferred finding stays in `ROADMAP.md`; do not silently start it in a later
+  session without operator approval.
+
+## Measurement discipline
+
+- The suite must pass in both clean and populated-ledger modes.
+- Run the command that proves a claim and paste the measured output into the
+  execution log; never report a number you did not measure.
+- `MARKET_MAPPING.md` is generated. Regenerate it with
+  `python scripts/generate_market_mapping_doc.py`; never hand-edit it.
 
 ## Shared building blocks
 
@@ -63,8 +82,9 @@ start it in a later session without operator approval.
   directly (`from engine.matcher import MatchMatcher`) instead of re-exporting
   eagerly.
 
-The suite contains one strict `xfail` for the deferred named-key auth gap. Do
-not delete it without fixing the gap; do not turn it into a skip.
+The suite contains one strict `xfail` at `tests/test_auth_keys.py:131` for the
+deferred named-key auth gap. Do not delete it without fixing the gap; do not turn
+it into a skip.
 
 ## Trust invariants — never weaken
 
@@ -78,6 +98,16 @@ not delete it without fixing the gap; do not turn it into a skip.
 8. One leg per bookmaker and one leg per price source.
 9. The scanner never logs in, places a bet, moves money, or evades account limits.
 10. Never lower the certainty gate to increase the number of surebets.
+
+## Scraper rules
+
+- A scraper failure must fail closed: a book that cannot be read is missing from
+  the scan, never filled with stale or guessed prices.
+- Reliability changes must never increase traffic. Retries, limiters and
+  breakers only ever reduce or space out traffic.
+- No stealth, fingerprint masking, TLS impersonation (`curl_cffi`), captcha
+  solving or proxy rotation. `scrapers/base.py` currently masks automation
+  markers; SR0-1 in `ROADMAP.md` owns that decision. Do not spread the pattern.
 
 ## Session handoff
 

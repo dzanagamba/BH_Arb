@@ -1,16 +1,18 @@
 # Session brief
 
 **Updated:** 2026-11-07
-**Goal:** keep `PROJECT_ROADMAP_V2.md` complete without weakening the trust model.
-**Current task:** none. **N3-2 is Done**; every roadmap task is Done except
-N2-4, which the operator deferred on 2026-11-05 and must stay deferred until
-they explicitly un-defer it.
+**Goal:** keep `ROADMAP.md` current without weakening the trust model.
+**Current task:** none. The roadmap is the single task list in `ROADMAP.md`;
+N2-4 stays deferred and P1-6 stays waived until the operator says otherwise.
 **Last task commit:** N3-2 — dated sport/market admissibility re-audit (see
 `git log -1`).
 
 ## Project state
 
-The predecessor roadmap is finished; P1-6 is waived and excluded. The suite runs
+On 2026-11-07 the old roadmaps and the maintenance backlog were folded into
+`ROADMAP.md` and deleted; the research briefs moved to `research/`. The
+`P*`/`N*` IDs are now historical labels with a glossary in the `ROADMAP.md`
+History section. P1-6 is waived and excluded. The suite runs
 **1,733 passed, 6 skipped, 1 xfailed, 1 warning** in both ledger modes, with
 **85.63%** coverage (floor 80%; 11,639 statements). The six skips are the two
 opt-in runtime-state checks, the two Chromium tests unless
@@ -36,7 +38,7 @@ Deferred: auth middleware/scope redesign (the xfail), event-loop offload of scan
 stages, `server/api.py` decomposition, constraints lock, Docker Chromium/CVE
 checks, dependency bumps, legacy URL-map removal, `link_sweeps` storage decision,
 approve/reject route decision, and branch-coverage gating. The full backlog is
-in `TODO.md`.
+in `ROADMAP.md` (the `M*` rows, each gated on operator approval).
 
 N3-2 adds `engine/admissibility.py` and `scripts/audit_admissibility.py`. The
 offline report has a stable schema and records, per book and sport, the measured
@@ -65,10 +67,10 @@ latter and is deferred.
 
 ## Next action
 
-Review the uncommitted maintenance pass, then commit it if the operator asks.
-No roadmap task is open. Resume a roadmap task only if the operator explicitly
-un-defers **N2-4** (seven-day local opportunity baseline and drift gates), or
-supplies a new roadmap. Do not invent a task or reopen a done one.
+Start **SR1-1** (remove the date bomb in the parser-contract test); it is the
+first ungated task and must land before 2027-02-17. The four operator gates
+waiting for a decision are SR0-1, SR0-2, SR4-9 and SR6-3. N2-4 stays deferred
+and P1-6 stays waived. Do not invent a task or reopen a done one.
 
 ## Rules
 

@@ -81,8 +81,9 @@ and the local commands.
 The measured baseline on 2026-11-06 was **85.63%** across
 `engine`, `server`, `scrapers`, `config` and `models` (11,639 statements).
 `pyproject.toml` sets `fail_under = 80`, a deliberately small cushion below that
-baseline; the note in the roadmap says not to invent a high threshold that
-forces low-value tests. Raise the number as real coverage improves.
+baseline. The old roadmap's rule was: do not set an arbitrary high coverage
+threshold that forces low-value tests; use the current measured baseline. Raise
+the number as real coverage improves.
 
 Tests, operator scripts and generated runtime state are outside the measured
 packages. The suite itself is not the product.

@@ -281,14 +281,14 @@ real-shaped group, checks the rounded summary, exercises `/api/recalculate`, and
 tampers with `total_margin` without changing the odds to prove the test fails
 when a derived value moves.
 
-## 24-hour soak (P1-6, in progress)
+## 24-hour soak (P1-6, waived by the operator on 2026-11-04; see `ROADMAP.md`)
 
 The harness and resource guard are complete: `--cycles 0` now means "until
 `--minutes`", samples carry cache bytes and per-book feed states, and any leaked
 browser or RSS/cache budget breach fails `--check`. The two-cycle smoke run
 (RSS 940.4 → 924.4 MB, 0 browsers, cache 31.2 MB) is in
 [`docs/SOAK.md`](SOAK.md); it is not a substitute for the 24-hour run. The
-acceptance boxes stay unchecked until that run is published.
+acceptance boxes stay unchecked because the run was waived, not passed.
 
 ## Operator alerts (P1-5, 2026-11-04)
 
@@ -473,10 +473,11 @@ A ten-cycle run on the final matching code produced this RSS curve:
 
 It **plateaued at about 767 MB after cycle 7**, with 29.45% growth from the first
 sample (limit 50%), 0 surviving browsers, 0 errors and 10–12 surebets per cycle.
-The plateau is the important result: growth is not linear. The 24-hour run
-remains open. `docs/SOAK.md` records the P1-6 harness changes and a two-cycle
+The plateau is the important result: growth is not linear. The 24-hour run was
+not performed. `docs/SOAK.md` records the P1-6 harness changes and a two-cycle
 smoke run (RSS 940.4 → 924.4 MB, cache 31.2 MB, 0 browsers, both below budget);
-P1-6 stays `In progress` until the 24-hour `--minutes 1440` run is published.
+P1-6 was waived by the operator on 2026-11-04 and is excluded, not passed (see
+`ROADMAP.md`).
 On the six-cycle soak's nine surebets, seven
 re-verified at a fresh price (Najran–Jubbah, Anaitasuna–Alaves,
 Zakynthos–Niki Volou, Manchester United–Roma, Roma–Sassuolo, Villarreal–PSG and

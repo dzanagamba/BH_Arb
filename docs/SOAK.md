@@ -2,8 +2,8 @@
 
 The acceptance run is 24 hours of scheduled scans. **That run has not been
 performed in this session.** Everything needed to perform and judge it is in
-place, and a two-cycle smoke run is recorded below as partial evidence. The
-roadmap keeps P1-6 `In progress` until the 24-hour run completes.
+place, and a two-cycle smoke run is recorded below as partial evidence. P1-6 was
+waived by the operator on 2026-11-04 and is excluded; see `ROADMAP.md`.
 
 ## What changed
 

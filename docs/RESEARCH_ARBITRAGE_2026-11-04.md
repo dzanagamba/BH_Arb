@@ -6,7 +6,7 @@
 
 This document collects what the wider market, open-source projects, vendor documentation,
 forums, and Reddit discussions say about building an arbitrage scanner. It is deliberately
-separate from `PROJECT_ROADMAP.md` so the roadmap can stay an execution plan.
+separate from `ROADMAP.md` so the roadmap can stay an execution plan.
 
 > **Evidence quality**
 >
