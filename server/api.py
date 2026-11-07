@@ -17,7 +17,7 @@ import signal
 import tempfile
 import threading
 import time
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any, Literal, NamedTuple
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query, Request
@@ -57,6 +57,7 @@ from config.settings import (
     RATE_LIMIT_WINDOW_SECONDS,
     RSS_BUDGET_MB,
     SCAN_RATE_LIMIT,
+    SCRAPER_SCAN_TIMEOUT_SECONDS,
     STALE_PRICE_UNCHANGED_SCANS,
     VERIFIED_KICKOFF_WINDOW_MINUTES,
     VERIFY_RATE_LIMIT,
@@ -132,6 +133,7 @@ from models.schemas import (
 )
 from scrapers.admiralbet import AdmiralbetScraper
 from scrapers.betole import BetoleScraper
+from scrapers.breaker import CLOSED, HALF_OPEN, OPEN, BookCircuitBreaker, breaker_for
 from scrapers.common import (
     declaration_audit,
     declares_no_event_id,
@@ -157,7 +159,7 @@ from scrapers.mdshop import MDShopScraper
 from scrapers.mozzartbet import MozzartbetScraper
 from scrapers.premier_kladionica import PremierKladionicaScraper
 from scrapers.sportplus import SportPlusScraper
-from scrapers.transport import transport_pool
+from scrapers.transport import policy_for, transport_pool
 from scrapers.wwin import WWINScraper
 from scripts.pairing_audit import audit as audit_pairing
 from server.alerts import (
@@ -255,6 +257,11 @@ _bookmaker_enabled: dict[str, bool] = {bid: bool(cfg.get("enabled", True)) for b
 _prematch_lock = asyncio.Lock()
 _live_lock = asyncio.Lock()
 _browser_sem = asyncio.Semaphore(BROWSER_CONCURRENCY)
+# SR2-5: after the scan deadline cancels the books still running, wait only this
+# long for their cleanup (a browser close). A wedged Playwright close must not
+# turn the deadline into a second hang; the transport pool closes the HTTP
+# clients regardless.
+_DEADLINE_CLEANUP_SECONDS = 30.0
 
 PLAYWRIGHT_BOOKIES = {"mozzartbet", "admiralbet", "wwin"}
 
@@ -370,10 +377,8 @@ def _find_pending_candidate(candidate_id: str) -> dict[str, CandidateReview] | N
     return None
 candidate_reviews: list[CandidateReview] = []
 last_learning_report: dict[str, Any] = {}
-# Scheduled-scan per-book backoff. Manual scans ignore it.
-_book_failures: dict[tuple[str, str], int] = {}
-_book_skip_until: dict[tuple[str, str], datetime] = {}
-_BOOK_BACKOFF_LOCK = threading.Lock()
+# Scheduled-scan per-book state lives in the SR2-6 breakers
+# (`scrapers.breaker.breaker_for`); manual scans ignore it.
 ALLOWLIST_FILE = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "config",
@@ -1744,30 +1749,69 @@ async def _collect_candidates(
 # ---------------------------------------------------------------------------
 
 def _book_backoff_interval(mode: str) -> int:
-    return AUTO_SCAN_LIVE_MINUTES if mode == "live" else AUTO_SCAN_PREMATCH_MINUTES or 5
+    """The mode's scan interval in minutes, never zero.
+
+    A disabled feed (``AUTO_SCAN_*_MINUTES=0``) still needs a positive base
+    cooldown: the breaker opens when a manual scan keeps failing too.
+    """
+    configured = AUTO_SCAN_LIVE_MINUTES if mode == "live" else AUTO_SCAN_PREMATCH_MINUTES
+    return configured or 5
 
 
-def _book_is_backed_off(mode: str, bookmaker: str) -> bool:
-    with _BOOK_BACKOFF_LOCK:
-        until = _book_skip_until.get((mode, bookmaker))
-    return until is not None and until > datetime.now(UTC).replace(tzinfo=None)
+def _breaker(mode: str, bookmaker: str) -> BookCircuitBreaker:
+    """The process-wide SR2-6 breaker for one feed of one book.
+
+    The base cooldown is the mode's scan interval, so an open breaker skips the
+    next scheduled scans rather than firing between them; it doubles on every
+    consecutive open and caps at `BOOK_BACKOFF_MAX_MINUTES`.
+    """
+    return breaker_for(
+        mode,
+        bookmaker,
+        failure_threshold=BOOK_BACKOFF_AFTER_FAILURES,
+        open_seconds=_book_backoff_interval(mode) * 60.0,
+        max_open_seconds=BOOK_BACKOFF_MAX_MINUTES * 60.0,
+    )
 
 
-def _record_book_result(mode: str, bookmaker: str, ok: bool) -> None:
-    """Update the scheduled-scan backoff state for one book."""
-    key = (mode, bookmaker)
-    with _BOOK_BACKOFF_LOCK:
-        if ok:
-            _book_failures.pop(key, None)
-            _book_skip_until.pop(key, None)
-            return
-        failures = _book_failures.get(key, 0) + 1
-        _book_failures[key] = failures
-        if failures < BOOK_BACKOFF_AFTER_FAILURES:
-            return
-        exponent = failures - BOOK_BACKOFF_AFTER_FAILURES
-        minutes = min(2**exponent * _book_backoff_interval(mode), BOOK_BACKOFF_MAX_MINUTES)
-        _book_skip_until[key] = datetime.now(UTC).replace(tzinfo=None) + timedelta(minutes=minutes)
+def _breaker_snapshots(mode: str) -> dict[str, dict[str, Any]]:
+    """Every book's breaker state for one feed, keyed by book id."""
+    return {book: _breaker(mode, book).snapshot() for book in BOOKMAKERS}
+
+
+def _record_book_result(mode: str, bookmaker: str, kind: ScrapeKind) -> None:
+    """Feed one completed attempt's kind to the book's breaker."""
+    _breaker(mode, bookmaker).record(kind)
+
+
+def _record_breaker_metrics(mode: str) -> None:
+    """Publish every book's breaker state as gauges after a scan.
+
+    One gauge per (book, state) with value 1 for the current state and 0 for
+    the others, so a dashboard can alert on `state="open"` without decoding
+    numbers. The failure and cooldown gauges are diagnostics.
+    """
+    for book, snapshot in _breaker_snapshots(mode).items():
+        for state in (CLOSED, OPEN, HALF_OPEN):
+            metrics.set_gauge(
+                "bh_book_breaker_state",
+                1.0 if snapshot["state"] == state else 0.0,
+                mode=mode,
+                book=book,
+                state=state,
+            )
+        metrics.set_gauge(
+            "bh_book_breaker_failures",
+            snapshot["consecutive_failures"],
+            mode=mode,
+            book=book,
+        )
+        metrics.set_gauge(
+            "bh_book_breaker_cooldown_seconds",
+            snapshot["cooldown_remaining_seconds"],
+            mode=mode,
+            book=book,
+        )
 
 
 def _metric_book(
@@ -1952,6 +1996,9 @@ async def run_scan(
     try:
         all_matches: list[Match] = []
         scan_costs: dict[str, dict[str, Any]] = {}
+        # Filled by each book as it finishes, so a scan-level deadline can price
+        # the books that returned instead of losing the whole gather.
+        book_matches: dict[str, list[Match]] = {}
 
         # --- Scrape each enabled bookmaker (P2: browser concurrency cap) ---
         async def scrape_one(bookie_id: str, config: dict) -> list[Match]:
@@ -1969,23 +2016,22 @@ async def run_scan(
                 status.bookmaker_progress[bookie_id] = "skipped"
                 _metric_book(mode, bookie_id, ScrapeKind.SKIPPED)
                 return []
-            if scheduled and _book_is_backed_off(mode, bookie_id):
+            breaker = _breaker(mode, bookie_id)
+            if scheduled and not breaker.allow():
                 begin_book(bookie_id, mode, uses_browser=uses_browser)
                 scan_costs[bookie_id] = (
                     finish_book(
                         ScrapeKind.SKIPPED.value,
                         kind=ScrapeKind.SKIPPED.value,
-                        note="scheduled-scan backoff",
+                        note="circuit breaker open",
                     )
                     or {}
                 )
                 status.bookmaker_progress[bookie_id] = "skipped"
                 _metric_book(mode, bookie_id, ScrapeKind.SKIPPED)
-                with _BOOK_BACKOFF_LOCK:
-                    until = _book_skip_until.get((mode, bookie_id))
                 status.errors.append(
-                    f"{config['name']}: backing off until "
-                    f"{until.isoformat(timespec='minutes') if until else '?'} UTC"
+                    f"{config['name']}: circuit breaker open, next probe in "
+                    f"{breaker.snapshot()['cooldown_remaining_seconds']:.0f}s"
                 )
                 return []
 
@@ -2011,23 +2057,39 @@ async def run_scan(
                     return []
 
                 scraper = scraper_class()
-                # Pass uniform scan_time for window consistency; fallback only
-                # when the scraper signature lacks scan_time (not on internal errors)
+                policy = policy_for(bookie_id, mode)
+                # SR2-5: one adapter may not run longer than its policy budget.
+                # The timeout cancels the scrape; a browser book closes its
+                # browser in its own finally, so nothing is left running.
                 try:
-                    matches = await scraper.scrape(
-                        live=is_live,
-                        scan_time=scan_started_at,
-                        sports_wanted=ENABLED_SPORTS,
-                    )
-                except TypeError as te:
-                    if "sports_wanted" in str(te):
-                        matches = await scraper.scrape(
-                            live=is_live, scan_time=scan_started_at
-                        )
-                    elif "scan_time" not in str(te):
-                        raise
-                    else:
-                        matches = await scraper.scrape(live=is_live)
+                    async with asyncio.timeout(policy.adapter_deadline):
+                        # Pass uniform scan_time for window consistency; fallback only
+                        # when the scraper signature lacks scan_time (not on internal errors)
+                        try:
+                            matches = await scraper.scrape(
+                                live=is_live,
+                                scan_time=scan_started_at,
+                                sports_wanted=ENABLED_SPORTS,
+                            )
+                        except TypeError as te:
+                            if "sports_wanted" in str(te):
+                                matches = await scraper.scrape(
+                                    live=is_live, scan_time=scan_started_at
+                                )
+                            elif "scan_time" not in str(te):
+                                raise
+                            else:
+                                matches = await scraper.scrape(live=is_live)
+                except TimeoutError:
+                    kind = ScrapeKind.TIMEOUT
+                    outcome = legacy_outcome(kind)
+                    note = f"adapter deadline {policy.adapter_deadline:g}s exceeded"
+                    status.bookmaker_progress[bookie_id] = "error"
+                    status.errors.append(f"{config['name']}: {note}")
+                    _record_book_result(mode, bookie_id, kind)
+                    _metric_book(mode, bookie_id, kind, legacy="error")
+                    logger.warning("⏱ Scrape deadline — %s: %s", config["name"], note)
+                    return []
                 # Stamp fetched_at if scraper missed it (defense in depth)
                 for m in matches:
                     if not m.fetched_at:
@@ -2039,11 +2101,27 @@ async def run_scan(
                 status.bookmakers_done.append(config["name"])
                 status.total_matches += len(matches)
                 per_bookie[bookie_id] = len(matches)
-                _record_book_result(mode, bookie_id, bool(matches))
+                book_matches[bookie_id] = matches
+                _record_book_result(mode, bookie_id, kind)
                 _metric_book(mode, bookie_id, kind)
                 logger.info(f"✅ {config['name']}: {len(matches)} {'live' if is_live else 'prematch'} matches scraped")
                 return matches
 
+            except asyncio.CancelledError:
+                # The scan-level deadline (or shutdown) cancelled this book.
+                # It is missing from the scan; the others still price. This is
+                # not charged to the book's breaker: our own deadline is not
+                # the book failing. A half-open probe this attempt reserved is
+                # released (a neutral kind does that), or a cancelled scan
+                # would keep the book benched forever.
+                kind = ScrapeKind.TIMEOUT
+                outcome = legacy_outcome(kind)
+                note = "cancelled at the scan deadline"
+                status.bookmaker_progress[bookie_id] = "error"
+                _record_book_result(mode, bookie_id, ScrapeKind.SKIPPED)
+                _metric_book(mode, bookie_id, kind, legacy="error")
+                logger.warning("⏱ Scrape cancelled — %s: %s", config["name"], note)
+                raise
             except Exception as e:
                 kind = classify_exception(e)
                 outcome = legacy_outcome(kind)
@@ -2051,7 +2129,7 @@ async def run_scan(
                 error_msg = f"{config['name']}: {str(e)[:200]}"
                 status.bookmaker_progress[bookie_id] = "error"
                 status.errors.append(error_msg)
-                _record_book_result(mode, bookie_id, False)
+                _record_book_result(mode, bookie_id, kind)
                 _metric_book(mode, bookie_id, kind, legacy="error")
                 logger.error(f"❌ Scrape error — {error_msg}", exc_info=True)
                 return []
@@ -2074,16 +2152,53 @@ async def run_scan(
         # client per book for this scan and closes them when the gather
         # returns, so pagination and retries reuse the same connection.
         status.current_bookmaker = "Scraping all bookmakers..."
+        results: list[Any] = []
         async with transport_pool():
-            tasks = [scrape_one(bid, cfg) for bid, cfg in BOOKMAKERS.items()]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
+            # Tasks are created inside the pool so each one inherits the pool's
+            # context: a context var copied at creation is how the shared
+            # per-book HTTP client reaches the adapter.
+            tasks = [
+                asyncio.create_task(scrape_one(bid, cfg), name=f"scan:{mode}:{bid}")
+                for bid, cfg in BOOKMAKERS.items()
+            ]
+            try:
+                async with asyncio.timeout(SCRAPER_SCAN_TIMEOUT_SECONDS):
+                    results = await asyncio.gather(*tasks, return_exceptions=True)
+            except TimeoutError:
+                # Cancel what is still running and wait for its cleanup (a
+                # browser book closes its browser) before the pool closes the
+                # HTTP clients. The books that already returned still price.
+                for task in tasks:
+                    task.cancel()
+                try:
+                    await asyncio.wait_for(
+                        asyncio.gather(*tasks, return_exceptions=True),
+                        timeout=_DEADLINE_CLEANUP_SECONDS,
+                    )
+                except TimeoutError:
+                    logger.warning(
+                        "⏱ scan deadline: %d book(s) did not finish cleanup in %gs",
+                        sum(1 for task in tasks if not task.done()),
+                        _DEADLINE_CLEANUP_SECONDS,
+                    )
+                note = (
+                    f"scan deadline {SCRAPER_SCAN_TIMEOUT_SECONDS:g}s reached; "
+                    "books still running were cancelled"
+                )
+                logger.warning("⏱ %s", note)
+                status.errors.append(note)
 
         for res in results:
-            if isinstance(res, list):
-                all_matches.extend(res)
-            elif isinstance(res, Exception):
+            if isinstance(res, Exception):
                 logger.error(f"Scraper gather exception: {res}")
                 status.errors.append(f"Scraper error: {str(res)[:200]}")
+        # Built from the books that finished, in config order. A cancelled
+        # gather must never lose what the other books already returned.
+        all_matches = [
+            match
+            for bookie_id in BOOKMAKERS
+            for match in book_matches.get(bookie_id, [])
+        ]
 
         # N1-3: one bounded per-book cost record for this scan. The history is
         # newest-first so the CLI and the failure-rate window can read it
@@ -2096,6 +2211,7 @@ async def run_scan(
         del _scan_cost_history[_SCAN_COST_HISTORY_MAX:]
         _save_scan_cost()
         _record_scan_cost_metrics(scan_cost_report)
+        _record_breaker_metrics(mode)
 
         # A book that "succeeds" with nothing is usually a blocked or changed
         # feed, not an empty market. Say so while other books did return data,
@@ -2558,15 +2674,12 @@ def _notify_scan_alerts(
         if zero_alert is not None:
             alert_manager.notify(zero_alert)
 
-        with _BOOK_BACKOFF_LOCK:
-            failures = {
-                book: count
-                for (failure_mode, book), count in _book_failures.items()
-                if failure_mode == mode
-            }
-        for book, count in failures.items():
+        for book, snapshot in _breaker_snapshots(mode).items():
             alert = book_failure_alert(
-                mode, book, count, BOOK_BACKOFF_AFTER_FAILURES
+                mode,
+                book,
+                snapshot["consecutive_failures"],
+                BOOK_BACKOFF_AFTER_FAILURES,
             )
             if alert is not None:
                 alert_manager.notify(alert)
@@ -3617,18 +3730,14 @@ async def health():
         "scheduler": {
             "prematch_minutes": AUTO_SCAN_PREMATCH_MINUTES,
             "live_minutes": AUTO_SCAN_LIVE_MINUTES,
-            "backoff": {
-                f"{mode}/{book}": {
-                    "failures": _book_failures.get((mode, book), 0),
-                    "skip_until": (
-                        _book_skip_until[(mode, book)].isoformat()
-                        if (mode, book) in _book_skip_until
-                        else None
-                    ),
-                }
+            # SR2-6: one circuit breaker per (mode, book). `state` is closed,
+            # open or half_open; an open breaker skips the book on scheduled
+            # scans until `cooldown_remaining_seconds` reaches zero, then one
+            # probe decides whether it closes. Manual scans always try.
+            "breakers": {
+                f"{mode}/{book}": _breaker(mode, book).snapshot()
                 for mode in ("prematch", "live")
                 for book in BOOKMAKERS
-                if (mode, book) in _book_failures or (mode, book) in _book_skip_until
             },
         },
         "mapping_learning": last_learning_report,

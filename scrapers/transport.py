@@ -11,8 +11,8 @@ module-level timeout and no explicit limits. This module owns that policy:
   pool's shared client; in a standalone script or test it yields a private
   client and closes it, so no call site needs to know which case it is in.
 
-``requests_per_second`` and ``retry_budget`` are carried here for SR2-4 and
-SR2-3; this task only moves the timeouts and connection limits into the policy.
+``requests_per_second`` and ``retry_budget`` are the knobs SR2-4 and SR2-3
+read; the timeouts and connection limits moved here in SR2-2.
 """
 
 from __future__ import annotations
@@ -25,7 +25,11 @@ from typing import Any
 
 import httpx
 
-from config.settings import VERIFY_SSL
+from config.settings import (
+    SCRAPER_BOOK_TIMEOUT_SECONDS,
+    SCRAPER_REQUESTS_PER_SECOND,
+    VERIFY_SSL,
+)
 
 # Existing timeout values, moved without change. SportPlus's prematch and live
 # feeds have always used different caps.
@@ -37,6 +41,12 @@ _BOOK_TIMEOUTS: dict[str, dict[str, float]] = {
     "mdshop": {"prematch": 30.0, "live": 30.0},
     "premier_kladionica": {"prematch": 60.0, "live": 60.0},
     "sportplus": {"prematch": 120.0, "live": 60.0},
+    # Browser books make their API calls through ``page.request`` and keep the
+    # httpx default caps they had before the policy existed; listing them here
+    # gives them the same rate limit as every other book.
+    "admiralbet": {"prematch": 30.0, "live": 30.0},
+    "mozzartbet": {"prematch": 30.0, "live": 30.0},
+    "wwin": {"prematch": 30.0, "live": 30.0},
 }
 
 
@@ -49,7 +59,8 @@ class TransportPolicy:
     total_timeout: float
     max_connections: int = 10
     max_keepalive_connections: int = 5
-    requests_per_second: float | None = None
+    # Outgoing requests per second; SR2-4 acquires one slot per attempt.
+    requests_per_second: float | None = SCRAPER_REQUESTS_PER_SECOND
     # Total attempts, including the first. SR2-3 reads this as the attempt cap.
     retry_budget: int = 3
     retry_total_seconds: float = 30.0
@@ -57,6 +68,12 @@ class TransportPolicy:
     retry_max_backoff: float = 8.0
     retry_after_cap: float = 60.0
     verify: bool = VERIFY_SSL
+    # The book this policy belongs to; ``retry_call`` uses it to find the
+    # book's shared rate limiter. Empty means "no book" (the default policy).
+    bookmaker: str = ""
+    # One whole adapter run (not one request) must finish inside this budget;
+    # the scan reports the book as ``timeout`` and prices the others (SR2-5).
+    adapter_deadline: float = SCRAPER_BOOK_TIMEOUT_SECONDS
 
     def timeout(self) -> httpx.Timeout:
         """The policy as an ``httpx.Timeout``; every phase keeps its old cap."""
@@ -76,10 +93,10 @@ class TransportPolicy:
         )
 
 
-DEFAULT_POLICY = TransportPolicy(30.0, 30.0, 30.0)
+DEFAULT_POLICY = TransportPolicy(30.0, 30.0, 30.0, requests_per_second=None)
 
 POLICIES: dict[tuple[str, str], TransportPolicy] = {
-    (book, mode): TransportPolicy(timeout, timeout, timeout)
+    (book, mode): TransportPolicy(timeout, timeout, timeout, bookmaker=book)
     for book, modes in _BOOK_TIMEOUTS.items()
     for mode, timeout in modes.items()
 }

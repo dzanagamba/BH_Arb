@@ -249,6 +249,11 @@ Copy `.env.example` to `.env` and set only what you need:
 | `LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING` or `ERROR`. |
 | `LOG_FORMAT` | `text` | `text` for the readable line, `json` for one JSON object per line. Both carry `request_id`/`scan_id`. |
 | `VERIFY_SSL` | `false` | Enforce TLS verification on direct HTTP calls. |
+| `SCRAPER_REQUESTS_PER_SECOND` | `5` | Outgoing ceiling per bookmaker, in requests per second (retries included); `0` disables it. |
+| `SCRAPER_BOOK_TIMEOUT_SECONDS` | `240` | One adapter's budget. A book that overruns is reported `timeout` and missing from the scan; the others still price. |
+| `SCRAPER_SCAN_TIMEOUT_SECONDS` | `600` | Budget for the whole scraping phase. Books still running are cancelled (browser closed) and the scan prices what returned. |
+| `BOOK_BACKOFF_AFTER_FAILURES` | `3` | Consecutive failures before a book's circuit breaker opens; `blocked`/`429` open it immediately. See `/api/health` → `scheduler.breakers`. |
+| `BOOK_BACKOFF_MAX_MINUTES` | `60` | Cap on the breaker's cooldown, which doubles on every consecutive open. |
 | `AUTO_SCAN_PREMATCH_MINUTES` | `0` | Scheduled prematch scans; `0` disables them. |
 | `AUTO_SCAN_LIVE_MINUTES` | `0` | Scheduled live scans; `0` disables them. |
 | `AUTO_LEARN_MAPPINGS` | `true` | Learn team, league and market claims from real scans. |

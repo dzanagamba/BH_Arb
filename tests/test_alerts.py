@@ -250,7 +250,7 @@ def test_a_completed_scan_queues_only_above_threshold_surebets(monkeypatch):
     manager = _manager(transport)
     monkeypatch.setattr(api, "alert_manager", manager)
     monkeypatch.setattr(api, "_feed_integrity", {"prematch": {}, "live": {}})
-    monkeypatch.setattr(api, "_book_failures", {})
+    monkeypatch.setattr(api, "_breaker_snapshots", lambda mode: {})
     status = api.ScanStatus(
         last_scan_time=datetime.now(UTC).replace(tzinfo=None)
     )

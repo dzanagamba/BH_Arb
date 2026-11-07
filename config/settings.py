@@ -367,6 +367,30 @@ USER_AGENT = (
     "AppleWebKit/537.36 (KHTML, like Gecko) "
     "Chrome/120.0.0.0 Safari/537.36"
 )
+# Outgoing politeness ceiling per bookmaker, in requests per second (0 disables
+# it). Every scan attempt waits its slot, retries included. No book publishes a
+# quota, so this is a ceiling derived from a recorded scan, not a measured
+# limit: on 2026-11-06 the whole prematch scan made 187 requests and the
+# busiest book (mozzartbet) made 101 in 57 s (1.8/s), so 5/s leaves every book
+# at least as fast as it was measured. Tune it down on 429s; raising it is an
+# operator decision.
+SCRAPER_REQUESTS_PER_SECOND = float(os.getenv("SCRAPER_REQUESTS_PER_SECOND", "5"))
+# One adapter must finish within this budget; a book that does not is reported
+# `timeout` and missing from the scan, while the others still price. The slowest
+# book in the recorded 2026-11-06 scans took 72.6 s prematch and 100.7 s live,
+# so 240 s leaves a 2.4x margin without letting a hung book block the scan
+# forever.
+SCRAPER_BOOK_TIMEOUT_SECONDS = float(
+    os.getenv("SCRAPER_BOOK_TIMEOUT_SECONDS", "240")
+)
+# The whole scraping phase must finish within this budget. Books still running
+# then are cancelled (their browser closed) and the scan continues with the
+# books that did return and price. This also bounds the wait for a browser slot,
+# which the per-book deadline does not cover. A scan is scheduled every few
+# minutes at most, so ten minutes is a backstop, not a normal duration.
+SCRAPER_SCAN_TIMEOUT_SECONDS = float(
+    os.getenv("SCRAPER_SCAN_TIMEOUT_SECONDS", "600")
+)
 
 
 # --- Matching Settings ---

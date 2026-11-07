@@ -6,6 +6,8 @@ import asyncio
 
 import pytest
 
+from scrapers.breaker import breaker_for, reset_breakers
+from scrapers.errors import ScrapeKind
 from server import api, scheduler
 
 
@@ -71,38 +73,55 @@ def test_the_loop_does_nothing_when_the_feed_is_busy(monkeypatch):
     assert calls == []
 
 
-def test_per_book_backoff_skips_after_the_threshold(monkeypatch):
+class _FakeClock:
+    def __init__(self) -> None:
+        self.value = 1000.0
+
+    def __call__(self) -> float:
+        return self.value
+
+    def advance(self, seconds: float) -> None:
+        self.value += seconds
+
+
+def test_the_breaker_skips_a_book_after_the_consecutive_failures(monkeypatch):
     monkeypatch.setattr(api, "BOOK_BACKOFF_AFTER_FAILURES", 3)
-    monkeypatch.setattr(api, "BOOK_BACKOFF_MAX_MINUTES", 60)
     monkeypatch.setattr(api, "AUTO_SCAN_PREMATCH_MINUTES", 10)
-    api._book_failures.clear()
-    api._book_skip_until.clear()
+    reset_breakers()
+    clock = _FakeClock()
     try:
+        breaker_for("prematch", "mbet", clock=clock, open_seconds=600.0)
         for _ in range(2):
-            api._record_book_result("prematch", "mbet", False)
-        assert not api._book_is_backed_off("prematch", "mbet")
-        api._record_book_result("prematch", "mbet", False)
-        assert api._book_is_backed_off("prematch", "mbet")
-        api._record_book_result("prematch", "mbet", True)
-        assert not api._book_is_backed_off("prematch", "mbet")
-        assert "mbet" not in {book for _mode, book in api._book_failures}
+            api._record_book_result("prematch", "mbet", ScrapeKind.TIMEOUT)
+        assert api._breaker("prematch", "mbet").allow() is True
+        api._record_book_result("prematch", "mbet", ScrapeKind.TIMEOUT)
+        assert api._breaker("prematch", "mbet").allow() is False
+        api._record_book_result("prematch", "mbet", ScrapeKind.OK)
+        assert api._breaker("prematch", "mbet").allow() is True
+        assert api._breaker("prematch", "mbet").snapshot()["consecutive_failures"] == 0
     finally:
-        api._book_failures.clear()
-        api._book_skip_until.clear()
+        reset_breakers()
 
 
-def test_per_book_backoff_caps_the_skip(monkeypatch):
+def test_the_breaker_cooldown_uses_the_configured_cap(monkeypatch):
     monkeypatch.setattr(api, "BOOK_BACKOFF_AFTER_FAILURES", 1)
     monkeypatch.setattr(api, "BOOK_BACKOFF_MAX_MINUTES", 30)
     monkeypatch.setattr(api, "AUTO_SCAN_PREMATCH_MINUTES", 10)
-    api._book_failures.clear()
-    api._book_skip_until.clear()
+    reset_breakers()
+    clock = _FakeClock()
     try:
+        breaker_for(
+            "prematch", "mbet", clock=clock, open_seconds=600.0,
+            max_open_seconds=30 * 60.0,
+        )
         for _ in range(8):
-            api._record_book_result("prematch", "mbet", False)
-        until = api._book_skip_until[("prematch", "mbet")]
-        remaining = (until - api.datetime.now(api.UTC).replace(tzinfo=None)).total_seconds() / 60
-        assert 0 < remaining <= 30.1
+            api._record_book_result("prematch", "mbet", ScrapeKind.TIMEOUT)
+            clock.advance(10_000)
+            api._breaker("prematch", "mbet").allow()
+        api._record_book_result("prematch", "mbet", ScrapeKind.TIMEOUT)
+        remaining = api._breaker("prematch", "mbet").snapshot()[
+            "cooldown_remaining_seconds"
+        ]
+        assert 0 < remaining <= 30 * 60.0
     finally:
-        api._book_failures.clear()
-        api._book_skip_until.clear()
+        reset_breakers()

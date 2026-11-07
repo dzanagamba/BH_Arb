@@ -20,7 +20,12 @@ def _client(handler) -> httpx.AsyncClient:
 
 
 def _policy(**overrides):
-    return replace(policy_for("mbet", "prematch"), **overrides)
+    # Rate limiting has its own tests; retry tests must not wait real slots.
+    return replace(
+        policy_for("mbet", "prematch"),
+        requests_per_second=None,
+        **overrides,
+    )
 
 
 def _sleep_recorder(delays: list[float]):

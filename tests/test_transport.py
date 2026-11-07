@@ -46,14 +46,15 @@ def test_every_http_book_has_both_policies(book):
     assert (book, "live") in POLICIES
 
 
-def test_the_policy_has_explicit_limits_and_reserved_fields():
+def test_the_policy_has_explicit_limits_and_a_rate():
     policy = policy_for("mbet", "prematch")
     limits = policy.limits()
 
     assert limits.max_connections == 10
     assert limits.max_keepalive_connections == 5
     assert policy.retry_budget == 3
-    assert policy.requests_per_second is None
+    assert policy.requests_per_second == 5.0
+    assert policy.bookmaker == "mbet"
     assert isinstance(policy.verify, bool)
 
 

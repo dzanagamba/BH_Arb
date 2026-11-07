@@ -113,9 +113,9 @@ do not copy stale numbers here.
 | SR2-1 | Scrape error taxonomy | Done | — | — |
 | SR2-2 | Per-book transport policy and shared client | Done | SR2-1 | — |
 | SR2-3 | Retry policy rewrite (jitter, budget, 429, 403) | Done | SR2-1, SR2-2 | — |
-| SR2-4 | Outgoing per-book rate limiter | Not started | SR2-2 | — |
-| SR2-5 | Adapter and scan deadlines | Not started | SR2-1 | — |
-| SR2-6 | Per-book circuit breaker | Not started | SR2-1, SR2-3 | — |
+| SR2-4 | Outgoing per-book rate limiter | Done | SR2-2 | — |
+| SR2-5 | Adapter and scan deadlines | Done | SR2-1 | — |
+| SR2-6 | Per-book circuit breaker | Done | SR2-1, SR2-3 | — |
 | SR3-1 | Upgrade Playwright | Not started | SR0-1 | — |
 | SR3-2 | Leak-free resource blocking | Not started | SR3-1 | — |
 | SR3-3 | Shared browser lifecycle | Not started | SR3-2, SR2-5 | — |
@@ -344,7 +344,7 @@ Acceptance:
 
 ### SR2-4 Outgoing per-book rate limiter
 
-Status: Not started
+Status: Done
 
 Why: only wwin's `Semaphore(6)` and `fetch_pages(batch=4)` limit outgoing traffic
 (`research/01_shared_infra.md` §5).
@@ -354,13 +354,24 @@ acquired once per attempt, including retries. Defaults chosen so current scan
 duration does not grow by more than the operator accepts; record the before/after
 scan time.
 
+Decision (2026-11-07): hand-rolled `scrapers/ratelimit.BookRateLimiter` instead
+of adding `aiolimiter`. The acceptance criterion needs a clock/sleep seam the
+dependency hides, and the reservation model (one slot per attempt, no burst)
+satisfies "N attempts take at least N/R seconds" literally; a leaky bucket with
+an initial burst of R does not. It also keeps every attempt accounted in the
+project's own retry/policy path, as SR2-3 did. One limiter per
+(book, event loop), so a scan shares it per book and politeness does not reset at
+a scan boundary; the rate is `SCRAPER_REQUESTS_PER_SECOND` (default 5/s, 0
+disables) and it is applied in `retry_call`, so httpx adapters and the browser
+books' `page.request` calls both take a slot.
+
 Acceptance:
-- [ ] Test: N requests at limit R take at least N/R seconds (use a fake clock).
-- [ ] Measured scan duration before/after in the execution log.
+- [x] Test: N requests at limit R take at least N/R seconds (use a fake clock).
+- [x] Measured scan duration before/after in the execution log.
 
 ### SR2-5 Adapter and scan deadlines
 
-Status: Not started
+Status: Done
 
 Why: there is no whole-scan timeout; one hung book delays the scan
 (`research/01_shared_infra.md` risks).
@@ -369,14 +380,29 @@ Steps: `asyncio.timeout()` around each adapter (from policy) and around the
 whole `run_scan`. A book that hits its deadline is `timeout` and missing from the
 scan; the others still price. Browser resources are closed on cancellation.
 
+Decision (2026-11-07): the scan deadline wraps the scraping phase (every adapter
+task), not the local matching, pricing and persistence work after it. Wrapping
+all of `run_scan` would cancel the pricing pass and discard the books that had
+already returned, which contradicts "the others still price"; the post-scrape
+work is local CPU plus one bounded AI call, so it is not where the hang is. The
+scrape phase is also where the browser-slot queue lives, which no per-book
+deadline can bound. Books are built by `asyncio.create_task` inside the
+transport pool so each inherits the shared-client context; a book that finishes
+is remembered immediately, and the book list is rebuilt from those after the
+gather, so a cancelled gather never loses a completed book. Budgets:
+`TransportPolicy.adapter_deadline` (`SCRAPER_BOOK_TIMEOUT_SECONDS`, 240 s = 2.4×
+the slowest recorded book) and `SCRAPER_SCAN_TIMEOUT_SECONDS` (600 s). A
+scan-deadline cancellation is recorded as `timeout` but not charged to the
+book's scheduled-scan backoff: our own deadline is not the book failing.
+
 Acceptance:
-- [ ] Test: a fake scraper that sleeps forever is cut off; the rest of the scan
+- [x] Test: a fake scraper that sleeps forever is cut off; the rest of the scan
       completes and prices.
-- [ ] Test: cancellation closes the fake browser/context.
+- [x] Test: cancellation closes the fake browser/context.
 
 ### SR2-6 Per-book circuit breaker
 
-Status: Not started
+Status: Done
 
 Why: the scheduled backoff after 3 failures (`server/api.py:1740-1764`, cap 60
 min) is the only breaker, and it does not distinguish error kinds
@@ -388,10 +414,33 @@ and longer than `timeout`; `parse_error` does not open it (it is not the site
 refusing us). Fold the existing scheduled backoff into it rather than running
 both. State survives restarts only if the current backoff already does.
 
+Decision (2026-11-07): `scrapers/breaker.py` owns a `BookCircuitBreaker` in a
+process-wide registry keyed by `(mode, book)` — a book's prematch and live
+endpoints are different feeds, and a blocked prematch says nothing about live.
+States are `closed`/`open`/`half_open`; an elapsed cooldown lets exactly one
+probe through, and its outcome closes or re-opens with a doubled cooldown.
+`blocked` and `rate_limited` open on the first occurrence with twice the
+cooldown of a soft failure; `empty`, `timeout`, `transport` and `upstream_5xx`
+open after `BOOK_BACKOFF_AFTER_FAILURES` consecutive ones; `parse_error`,
+`schema_drift` and `skipped` are neutral (they cannot open it and cannot reset
+it, and a neutral probe releases the slot). Any `ok` closes it and resets the
+escalation. The base cooldown is the mode's scan interval (5 minutes when that
+feed's schedule is off, so a manual-scan-only install still has a positive
+cooldown), doubled on every consecutive open, capped by
+`BOOK_BACKOFF_MAX_MINUTES`. `_book_failures`, `_book_skip_until`,
+`_BOOK_BACKOFF_LOCK` and `_book_is_backed_off` are gone; manual scans still
+ignore the open state (the operator asked), while every scan records its kind
+into the breaker. Health reports `scheduler.breakers.<mode>/<book>` and metrics
+report `bh_book_breaker_state{mode,book,state}`, `bh_book_breaker_failures` and
+`bh_book_breaker_cooldown_seconds`. In-process only, exactly like the backoff it
+replaces, so a restart starts every book closed. `allow()` and `record()` are
+non-blocking (a thread lock, no awaits): the scan only needs the decision, so
+there is nothing for an async API to wait on.
+
 Acceptance:
-- [ ] Unit tests for each transition with a fake clock.
-- [ ] Breaker state per book in `/api/health` and `/api/metrics`.
-- [ ] Old backoff code path removed or delegating.
+- [x] Unit tests for each transition with a fake clock.
+- [x] Breaker state per book in `/api/health` and `/api/metrics`.
+- [x] Old backoff code path removed or delegating.
 
 ---
 
@@ -1309,3 +1358,6 @@ Useful starting points:
 | 2026-11-07 | SR2-1 | Done | New `scrapers/errors.py` owns `ScrapeKind` (`ok`, `empty`, `blocked`, `rate_limited`, `timeout`, `transport`, `upstream_5xx`, `parse_error`, `schema_drift`, plus `skipped` for a book not attempted) and structural `classify_response`/`classify_exception`/`classify_scrape`; the old text-marker classifier is gone. `run_scan` records the kind on every book (`finish_book(kind=...)`), health exposes `scan_cost.<mode>.books.<book>.kind` and `totals.kinds`, and `bh_book_kinds_total` carries the kind per book while `bh_book_results_total` keeps its historical outcome label. SR1-3's local `SettleOutcome` was absorbed: `settle()` now returns `ScrapeKind`. New `tests/test_scrape_errors.py` tables statuses and exception types, including old marker strings that must no longer classify as blocked. `pytest`: 1793 passed, 6 skipped, 1 xfailed; `check_test_isolation.py`: both ledger modes 1793 passed, 6 skipped, 1 xfailed; ruff clean; mypy 222 files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. |
 | 2026-11-07 | SR2-2 | Done | New `scrapers/transport.py` owns frozen `TransportPolicy` per (book, mode) with `httpx.Timeout` + explicit `httpx.Limits(10, keepalive=5)`, `retry_budget=3`, `requests_per_second=None` (reserved for SR2-4) and `verify` from `VERIFY_SSL`. `TransportPool` holds one `AsyncClient` per (book, mode) per scan; `run_scan` opens it around the scraper gather and closes every client afterwards. All seven httpx adapters use `transport_client()`; standalone calls still get a private closed client. Timeout diff (unchanged): betole 30→30, evlbet 20→20, maxbet 60→60, mbet 30→30, mdshop 30→30, premier_kladionica 60→60, sportplus 120 prematch/60 live→120/60; connect/read/write/pool all keep the old value. New `tests/test_transport.py` pins the policies, shared client, close lifecycle and standalone fallback; `tests/test_metrics.py` proves a scan shares and closes the client. `pytest`: 1813 passed, 6 skipped, 1 xfailed; `check_test_isolation.py`: both ledger modes 1813 passed, 6 skipped, 1 xfailed; ruff clean; mypy 224 files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. |
 | 2026-11-07 | SR2-3 | Done | Kept the policy hand-rolled rather than adding `stamina`: the project already owns per-attempt cost accounting, the per-book policy and the kind taxonomy, so a dependency would have to be threaded through all three. New `scrapers/retry.py` implements full-jitter backoff, the SR2-2 attempt cap and total-time budget, `Retry-After` (numeric or HTTP-date, capped at 60 s), 403/challenge as one attempt and `blocked`, and per-attempt `record_request`. `fetch_with_retry` moved there and gained read-only POST support; wwin's private retry loop is gone, and its Playwright calls, mozzartbet's pagination POST and admiralbet's events GET now use `retry_call`; premier's JSON-RPC POST retries through `fetch_with_retry`. The success path is still one request per call. New `tests/test_retry.py` (httpx `MockTransport`) covers 429 + `Retry-After`, 403 and challenge one-attempt blocking, the attempt cap, total-budget stop, the retry-after cap, transport retries, attempt counts and the one-request success path. `pytest`: 1825 passed, 6 skipped, 1 xfailed; `check_test_isolation.py`: both ledger modes 1825 passed, 6 skipped, 1 xfailed; ruff clean; mypy 226 files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. |
+| 2026-11-07 | SR2-4 | Done | Kept it hand-rolled (`scrapers/ratelimit.BookRateLimiter`) rather than adding `aiolimiter` (recorded under the task): the acceptance test needs a clock/sleep seam, and a reservation model (one slot per attempt, no burst) satisfies "N attempts take at least N/R s" where a leaky bucket's initial burst of R does not. One limiter per (book, event loop), so a scan shares it per book and politeness does not reset at a scan boundary. `retry_call` acquires one slot per attempt, the first included, so retries are spaced too; `TransportPolicy` gained `bookmaker` and `requests_per_second` (`SCRAPER_REQUESTS_PER_SECOND`, default 5/s, 0 disables), and the three browser books got explicit policies with their previous httpx defaults (30/30/30) so only the rate applies to their `page.request` calls. No dependency was added; `aiolimiter` was installed only to inspect it and removed again. New `tests/test_ratelimit.py` (fake clock: 5 attempts at 4/s span 1.25 s; 6 concurrent at 10/s span >= 0.6 s; per-book/per-loop registry; disabled rates; one slot per attempt including retries; 403 takes one slot), `tests/test_transport.py` updated. **Measured no slow-down:** `cache/scan_cost.json` prematch 2026-11-06 (187 requests, wall 256.197 s) gives floor = requests/5 s per book, e.g. mozzartbet 101 req → 20.2 s floor vs 57.12 s recorded wall, wwin 46 → 9.2 vs 34.20, mbet 16 → 3.2 vs 33.15, premier 10 → 2.0 vs 17.23, admiralbet 5 → 1.0 vs 72.64, mdshop/maxbet 3 → 0.6 vs 9.46/10.85, betole 2 → 0.4 vs 2.56, sportplus 1 → 0.2 vs 18.99; delta 0.00 s for every book in that scan and in the 2026-11-05 live scan. Limiter benchmark: 10 attempts take 0.000 s unlimited, 2.006 s at 5/s, 0.504 s at 20/s. No live scan was run (no bookmaker traffic in this session); the before/after is the recorded ledger against the modelled floor. `pytest`: 1834 passed, 6 skipped, 1 xfailed; `check_test_isolation.py`: both ledger modes 1834 passed, 6 skipped, 1 xfailed; ruff clean; mypy 228 files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed; `pytest --cov`: 86.19% (11,935 statements, floor 80%). |
+| 2026-11-07 | SR2-5 | Done | Per-adapter deadline from `TransportPolicy.adapter_deadline` (`SCRAPER_BOOK_TIMEOUT_SECONDS`, default 240 s) via `asyncio.timeout` around the scrape call, and one scraping-phase deadline (`SCRAPER_SCAN_TIMEOUT_SECONDS`, default 600 s) around the gather. The scan deadline deliberately wraps the scrape phase, not all of `run_scan` (recorded under the task): aborting the pricing pass would discard the books that already returned. Each book stores its matches in `book_matches` as it finishes and the list is rebuilt from that after the gather, so a cancelled gather keeps completed books; stragglers are cancelled and awaited (browser closed, semaphore released) before the transport pool closes its clients. Books are now `asyncio.create_task` inside `transport_pool()`: creating them before the pool lost the shared-client context (caught by `test_a_scan_shares_one_transport_client_and_closes_it`). A scan-deadline cancellation is `timeout` in cost/health but is not charged to the scheduled-scan backoff. New `tests/test_scan_deadlines.py`: a hung book is cut at the adapter deadline while the other book prices and is served; a hung book is cancelled at the scan deadline while the finished book is still served and the scan is not marked failed; a fake browser book's `finally` close runs and the `BROWSER_CONCURRENCY` slot is returned. Defaults are 2.4× the slowest recorded book (admiralbet 72.6 s prematch, betole 100.7 s live). `pytest`: 1837 passed, 6 skipped, 1 xfailed; `check_test_isolation.py`: both ledger modes 1837 passed, 6 skipped, 1 xfailed; ruff clean; mypy 229 files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed; `pytest --cov`: 86.23% (11,974 statements, floor 80%). |
+| 2026-11-07 | SR2-6 | Done | New `scrapers/breaker.py`: one `BookCircuitBreaker` per `(mode, book)` in a process-wide registry, states `closed`/`open`/`half_open` with exactly one probe, injected clock. `blocked` and `rate_limited` open on the first occurrence with twice a soft failure's cooldown; `empty`/`timeout`/`transport`/`upstream_5xx` open after `BOOK_BACKOFF_AFTER_FAILURES` consecutive ones; `parse_error`/`schema_drift`/`skipped` are neutral and cannot open or reset it (a neutral probe releases the slot); any `ok` closes it and resets the escalation. Base cooldown is the mode's scan interval (5 min when that feed's schedule is off, so the live breaker cannot get a zero cooldown), doubled per consecutive open and capped by `BOOK_BACKOFF_MAX_MINUTES`. The old dict/lock/`_book_is_backed_off` are removed; `_record_book_result` now takes the `ScrapeKind`, manual scans still ignore an open breaker, scheduled scans skip the book with note `circuit breaker open`. Health serves `scheduler.breakers.<mode>/<book>` with state, consecutive failures, opens, cooldown remaining and last kind; metrics publish `bh_book_breaker_state{mode,book,state}` (1/0 per state), `bh_book_breaker_failures` and `bh_book_breaker_cooldown_seconds`. Alerts still fire at the same threshold, fed by consecutive failures. New `tests/test_breaker.py` (every transition with a fake clock: soft threshold, hard opening immediately with a longer cooldown, neutral kinds, one probe, dead probe doubles, success resets, cap, snapshot shape, registry, health, metrics); `tests/test_scheduler.py` rewritten against the breaker; `tests/test_scan_deadlines.py` proves a scheduled scan skips an open book while a manual scan still runs it; alert tests stub `_breaker_snapshots`. `pytest`: 1853 passed, 6 skipped, 1 xfailed; `check_test_isolation.py`: both ledger modes 1853 passed, 6 skipped, 1 xfailed; ruff clean; mypy 231 files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed; `pytest --cov`: 86.40% (12,072 statements, floor 80%). |

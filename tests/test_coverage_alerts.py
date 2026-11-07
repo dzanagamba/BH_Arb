@@ -171,7 +171,7 @@ def test_a_peer_populated_silent_zero_raises_one_deduped_alert(monkeypatch):
     monkeypatch.setattr(api, "_mapping_coverage", {"prematch": {}, "live": {}})
     monkeypatch.setattr(api, "_opportunity_by_mode", {"prematch": {}, "live": {}})
     monkeypatch.setattr(api, "_feed_integrity", {"prematch": {}, "live": {}})
-    monkeypatch.setattr(api, "_book_failures", {})
+    monkeypatch.setattr(api, "_breaker_snapshots", lambda mode: {})
     status = api.ScanStatus(last_scan_time=datetime.now(UTC).replace(tzinfo=None))
 
     api._notify_scan_alerts("prematch", [], status, [], cache_bytes=1)
@@ -207,7 +207,7 @@ def test_a_legitimate_empty_feed_queues_no_coverage_alert(monkeypatch):
         },
     )
     monkeypatch.setattr(api, "_feed_integrity", {"prematch": {}, "live": {}})
-    monkeypatch.setattr(api, "_book_failures", {})
+    monkeypatch.setattr(api, "_breaker_snapshots", lambda mode: {})
     status = api.ScanStatus(last_scan_time=datetime.now(UTC).replace(tzinfo=None))
 
     api._notify_scan_alerts("prematch", [], status, [], cache_bytes=1)

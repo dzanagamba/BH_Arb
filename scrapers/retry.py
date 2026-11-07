@@ -36,6 +36,7 @@ from scrapers.errors import (
     classify_response,
     header_value,
 )
+from scrapers.ratelimit import limiter_for
 from scrapers.transport import DEFAULT_POLICY, TransportPolicy, current_policy
 
 logger = logging.getLogger(__name__)
@@ -105,10 +106,12 @@ async def retry_call(
     Returns the first response classified ``ok``. Raises
     :class:`~scrapers.errors.ScrapeError` carrying the final kind when the
     attempt cap or the total-time budget is reached, or immediately for a
-    non-retryable kind such as ``blocked``.
+    non-retryable kind such as ``blocked``. Every attempt — the first one and
+    each retry — waits for its book's rate-limit slot first.
     """
     active = policy or current_policy() or DEFAULT_POLICY
     attempts = max(1, active.retry_budget)
+    limiter = limiter_for(active.bookmaker, active.requests_per_second)
     started = now()
     kind = ScrapeKind.TRANSPORT
     detail = "no attempt made"
@@ -121,7 +124,11 @@ async def retry_call(
 
         retry_after: float | None = None
         try:
-            response = await send()
+            if limiter is None:
+                response = await send()
+            else:
+                async with limiter:
+                    response = await send()
         except ScrapeError:
             raise
         except Exception as exc:  # noqa: BLE001 - classified, then retried or raised
