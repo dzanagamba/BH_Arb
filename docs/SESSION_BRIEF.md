@@ -2,14 +2,14 @@
 
 **Updated:** 2026-11-07
 **Goal:** keep `ROADMAP.md` current without weakening the trust model.
-**Current task:** none; SR1-1, SR1-2, SR1-3, SR2-1, SR2-2 and SR2-3 are done
-and uncommitted. The roadmap is the single task list in `ROADMAP.md`;
+**Current task:** none; SR1-1, SR1-2, SR1-3, SR2-1, SR2-2 and SR2-3 are done,
+committed and pushed. The roadmap is the single task list in `ROADMAP.md`;
 N2-4 stays deferred and P1-6 stays waived until the operator says otherwise.
-**Last task commit:** M7-1 — dashboard UI polish (`9cd37d0`).
+**Last task commit:** `30b6632` — outcome taxonomy, transport policy and retries.
 
 ## Project state
 
-SR1-1, SR1-2, SR1-3, SR2-1, SR2-2 and SR2-3 (2026-11-07, uncommitted): the
+SR1-1, SR1-2, SR1-3, SR2-1, SR2-2 and SR2-3 (2026-11-07, commit `30b6632`): the
 parser-contract equality check now uses a pinned reference date, so it no
 longer turns red when a capture crosses the 120-day policy (the real-date
 `refresh_fixtures.py --check` alarm is unchanged). The runtime-state guard
