@@ -1,9 +1,9 @@
 // P3-4: cache only the static app shell. Never cache /api or odds: stale odds
 // are dangerous, and a service worker must not become a second stale-feed layer.
-// The document asks for versioned assets (?v=7); cache those exact URLs and
+// The document asks for versioned assets (?v=8); cache those exact URLs and
 // match with ignoreSearch so a version bump still resolves.
-const CACHE = 'bh-arb-shell-v3';
-const SHELL = ['/', '/css/style.css?v=7', '/js/i18n.js', '/js/app.js?v=7', '/manifest.webmanifest'];
+const CACHE = 'bh-arb-shell-v4';
+const SHELL = ['/', '/css/style.css?v=8', '/js/i18n.js', '/js/app.js?v=8', '/manifest.webmanifest'];
 
 self.addEventListener('install', event => {
     event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)));

@@ -1004,6 +1004,7 @@ function renderFreshnessBanner() {
         fresh?.ttl_sec,
         fresh?.age_sec == null ? null : Math.floor(fresh.age_sec / 10),
         (fresh?.stale_books || []).join(','),
+        allSurebets.length === 0,
     ].join('|');
     if (signature === freshnessBannerSignature) return;
     freshnessBannerSignature = signature;
@@ -1016,6 +1017,15 @@ function renderFreshnessBanner() {
     const booksText = books.length
         ? tr(' Stale book(s): {books}.', { books: books.map(escapeHtml).join(', ') })
         : '';
+    // Before the first scan with nothing listed there is no price to warn about,
+    // and the empty state already offers the scan. A calm notice, not an alarm;
+    // as soon as any row is on screen the full stale warning returns.
+    const quiet = fresh.state === 'never_scanned' && allSurebets.length === 0;
+    banner.classList.toggle('freshness-banner-quiet', quiet);
+    if (quiet) {
+        banner.innerHTML = `<strong>${escapeHtml(tr('No completed {mode} scan.', { mode }))}</strong> ${escapeHtml(tr('Nothing on this screen is a current price.'))}`;
+        return;
+    }
     let message;
     if (fresh.state === 'never_scanned') {
         message = `<strong>${escapeHtml(tr('No completed {mode} scan.', { mode }))}</strong> ${escapeHtml(tr('Nothing on this screen is a current price.'))}`;
@@ -1669,6 +1679,18 @@ function applyStatusBadge(statusEl, reportedStatus) {
     }
 }
 
+// Translate, escape the copy, then splice in trusted markup for the named
+// placeholders. Escaping after `tr()` turned a live `<span data-ago>` into
+// visible text.
+function trWithMarkup(text, markup) {
+    const names = Object.keys(markup);
+    const tokens = {};
+    names.forEach((name, i) => { tokens[name] = `\u0000${i}\u0000`; });
+    let out = escapeHtml(tr(text, tokens));
+    names.forEach((name, i) => { out = out.split(`\u0000${i}\u0000`).join(markup[name]); });
+    return out;
+}
+
 function renderVerifyBanner(sb, check) {
     if (!check) return `<div class="verify-banner verify-idle">${escapeHtml(tr('Odds not re-checked yet.'))}</div>`;
     if (check.state === 'checking') {
@@ -1679,21 +1701,21 @@ function renderVerifyBanner(sb, check) {
         const fresh = verifyIsFresh(check);
         const floor = check.data.meets_min_profit === false ? tr(' — below your usual minimum') : '';
         return `<div class="verify-banner ${fresh ? 'verify-ok' : 'verify-stale'}">
-            ${escapeHtml(fresh ? tr('Still a surebet') : tr('Was a surebet'))}: <b class="mono">${Number(check.data.current.profit_percent).toFixed(2)}%</b>${escapeHtml(floor)}, ${escapeHtml(tr('re-checked {ago}.', { ago }))}
+            ${escapeHtml(fresh ? tr('Still a surebet') : tr('Was a surebet'))}: <b class="mono">${Number(check.data.current.profit_percent).toFixed(2)}%</b>${escapeHtml(floor)}, ${trWithMarkup('re-checked {ago}.', { ago })}
             ${fresh ? '' : escapeHtml(tr(' Re-check before placing.'))}</div>`;
     }
     if (check.state === 'gone') {
         const now = check.data?.current ? ` (now ${Number(check.data.current.profit_percent).toFixed(2)}%)` : '';
-        return `<div class="verify-banner verify-bad">${escapeHtml(tr('Gone{now}.', { now }))} ${escapeHtml(check.data?.message || tr('The prices moved.'))} ${escapeHtml(tr('Checked {ago}. Do not place.', { ago }))}</div>`;
+        return `<div class="verify-banner verify-bad">${escapeHtml(tr('Gone{now}.', { now }))} ${escapeHtml(check.data?.message || tr('The prices moved.'))} ${trWithMarkup('Checked {ago}. Do not place.', { ago })}</div>`;
     }
-    return `<div class="verify-banner verify-unknown">${escapeHtml(tr('Could not confirm: {reason}.', { reason: check.message || tr('unknown') }))} ${escapeHtml(tr('Checked {ago}. Check each price on the site before placing.', { ago }))}</div>`;
+    return `<div class="verify-banner verify-unknown">${escapeHtml(tr('Could not confirm: {reason}.', { reason: check.message || tr('unknown') }))} ${trWithMarkup('Checked {ago}. Check each price on the site before placing.', { ago })}</div>`;
 }
 
 function verifyShortLabel(check) {
     if (check.state === 'checking') return tr('checking');
     if (check.state === 'ok') return verifyIsFresh(check) ? tr('live ✓') : tr('stale');
     if (check.state === 'gone') return tr('gone');
-    return '?';
+    return tr('unconfirmed');
 }
 
 function verifyIsFresh(check) {
@@ -2812,20 +2834,20 @@ function formatKickoffLong(dt) {
     return formatKickoff(dt) + rel;
 }
 
+// Upper-case the first letter of each word. `\b\w` is ASCII-only, so it treated
+// "Željezničar" as the words "Ž", "eljezni", "ar" and printed "ŽEljezničAr".
+function capitalizeWords(text) {
+    return text.replace(/(^|[^\p{L}\p{M}\p{N}'’])(\p{L})/gu, (_, lead, letter) => lead + letter.toUpperCase());
+}
+
 function formatTeamName(name) {
     if (!name) return tr('Unknown');
-    return name
-        .replace(/_/g, ' ')
-        .replace(/\b\w/g, c => c.toUpperCase())
-        .trim();
+    return capitalizeWords(name.replace(/_/g, ' ')).trim();
 }
 
 function formatLeague(league) {
     if (!league) return '';
-    return league
-        .replace(/_/g, ' ')
-        .replace(/\b\w/g, c => c.toUpperCase())
-        .trim();
+    return capitalizeWords(league.replace(/_/g, ' ')).trim();
 }
 
 function capitalize(str) {

@@ -42,6 +42,7 @@ def _run_js(expression: str) -> dict:
     driver = "\n".join(
         [
             _js_function(JS, "escapeHtml"),
+            _js_function(JS, "capitalizeWords"),
             _js_function(JS, "formatTeamName"),
             _js_function(JS, "copyAttributes"),
             expression,
@@ -77,7 +78,7 @@ def test_shipped_html_and_js_have_no_inline_event_handlers():
 
 def test_index_scripts_are_nonce_stamped():
     assert '<script nonce="__CSP_NONCE__">' in HTML
-    assert 'src="/js/app.js?v=7" nonce="__CSP_NONCE__"' in HTML
+    assert 'src="/js/app.js?v=8" nonce="__CSP_NONCE__"' in HTML
 
 
 def test_copy_handler_reads_the_dataset_not_a_javascript_string():

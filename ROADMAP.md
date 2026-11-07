@@ -160,6 +160,7 @@ do not copy stale numbers here.
 | M5-6 | Zero-matches diagnostic and no-surebet state | Not started | — | operator |
 | M5-7 | Fix the feed-mode tab ARIA contract | Not started | — | operator |
 | M6-1 | Branch coverage floor in CI | Not started | — | operator |
+| M7-1 | Dashboard UI polish pass | Done | — | — |
 
 ---
 
@@ -1077,6 +1078,33 @@ Acceptance:
 
 ---
 
+### M7 — Operator requests
+
+### M7-1 Dashboard UI polish pass
+
+Status: Done
+
+Why / what: Operator asked (2026-11-07) to look at the dashboard and improve
+it. A browser pass with seeded demo surebets (no scraper traffic) found:
+team and league names with non-ASCII letters were mis-capitalised
+(`FK ŽEljezničAr`, `AtléTico`) because `\b\w` is ASCII-only; the re-check
+banner printed its `<span data-ago>` markup as text; the row re-check badge
+showed a bare `?`; before the first scan a red "odds are not current" alarm
+with a third Scan button sat above an empty list; some book tags were
+low-contrast; the slip totals cramped on phones. Presentation only: no trust
+rule, freshness state or gate changes.
+
+Acceptance:
+- [x] Names with diacritics keep their case (`Željezničar`, `Atlético`).
+- [x] The re-check banner renders its live age, not escaped markup.
+- [x] The row badge for an unconfirmed re-check reads as a word in EN and BS.
+- [x] Before any scan and with nothing listed, the freshness banner is a calm
+      notice without the "not current" sentence or a duplicate Scan button;
+      with rows on screen it is unchanged.
+- [x] Tests cover the first three; full verification suite passes.
+
+---
+
 ## Deferred and waived
 
 Neither task below may be started without an explicit operator instruction.
@@ -1274,3 +1302,4 @@ Useful starting points:
 | Date | Task | Result | Notes |
 |------|------|--------|-------|
 | 2026-11-07 | — | Roadmap created | Created from `SCRAPER_TODO.md` + `TODO.md`; `PROJECT_ROADMAP.md`, `PROJECT_ROADMAP_V2.md` and `TODO.md` deleted. Old files in git history at BASE `2e06756ecd56b013df6e99b58258e8d2cfaa0e25`. |
+| 2026-11-07 | M7-1 | Done | Browser pass on a seeded demo (scrapers cleared, no bookmaker traffic). Fixed Unicode name capitalisation (`capitalizeWords`), escaped `<span data-ago>` in the re-check banner (`trWithMarkup`), `?` row badge → `unconfirmed`/`nepotvrđeno`, quiet pre-scan freshness banner (only `never_scanned` with zero rows), book-tag contrast, 2-column slip totals on phones; asset version v=7→v=8, SW cache v4. New `tests/test_frontend_polish.py`. `pytest`: 1738 passed, 6 skipped, 1 xfailed (clean and `BH_ARB_TEST_RUNTIME_LEDGER=populated`); ruff clean; mypy 219 files clean; market doc in sync; isolation check OK; refresh_fixtures and audit_admissibility `--check` exit 0. |

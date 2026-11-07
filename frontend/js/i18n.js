@@ -474,6 +474,7 @@ window.I18N = {
         "live ✓": "uživo ✓",
         "stale": "zastarjelo",
         "gone": "nestalo",
+        "unconfirmed": "nepotvrđeno",
         "unknown": "nepoznato",
         "request failed ({status})": "zahtjev nije uspio ({status})",
         "kickoff unknown": "početak nepoznat",

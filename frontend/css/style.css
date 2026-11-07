@@ -347,6 +347,14 @@ kbd {
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--bad) 18%, transparent);
 }
 .freshness-banner strong { font-weight: 700; }
+.freshness-banner-quiet {
+    border-color: var(--line);
+    background: var(--panel);
+    color: var(--muted);
+    font-weight: 400;
+}
+.freshness-banner-quiet::before { background: var(--faint); box-shadow: none; }
+.freshness-banner-quiet strong { color: var(--text); font-weight: 600; }
 .freshness-banner .btn { margin-left: auto; }
 body.feed-stale .sb-row { border-style: dashed; }
 body.feed-stale .row-profit b { color: var(--warn); }
@@ -626,6 +634,7 @@ body.feed-stale .row-profit b { color: var(--warn); }
 .row-check-ok { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
 .row-check-gone { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 50%, transparent); }
 .row-check-checking { color: var(--warn); }
+.row-check-unknown { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
 
 .list-hint { margin: 12px 2px 0; color: var(--faint); font-size: 12px; }
 
@@ -658,7 +667,7 @@ body.feed-stale .row-profit b { color: var(--warn); }
     border-radius: 99px;
     border: 1px solid color-mix(in srgb, var(--color) 40%, transparent);
     background: color-mix(in srgb, var(--color) 8%, transparent);
-    color: color-mix(in srgb, var(--color) 75%, var(--text));
+    color: color-mix(in srgb, var(--color) 55%, var(--text));
     font-size: 12px;
     font-weight: 600;
 }
@@ -1244,6 +1253,7 @@ body.feed-stale .row-profit b { color: var(--warn); }
     .slip-hero { grid-template-columns: minmax(0, 1fr); }
     .slip-stake { align-items: flex-start; }
     .leg-bet { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .slip-totals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .candidate-card { grid-template-columns: auto minmax(0, 1fr); }
     .candidate-actions { grid-column: 2; flex-direction: row; }
     .history-table { font-size: 12px; }

@@ -2,12 +2,20 @@
 
 **Updated:** 2026-11-07
 **Goal:** keep `ROADMAP.md` current without weakening the trust model.
-**Current task:** none. The roadmap is the single task list in `ROADMAP.md`;
+**Current task:** none; M7-1 (dashboard UI polish) is done and uncommitted.
+The roadmap is the single task list in `ROADMAP.md`;
 N2-4 stays deferred and P1-6 stays waived until the operator says otherwise.
 **Last task commit:** N3-2 — dated sport/market admissibility re-audit (see
 `git log -1`).
 
 ## Project state
+
+M7-1 (2026-11-07, uncommitted): presentation-only dashboard fixes — Unicode
+name capitalisation, the re-check banner's escaped age markup, a worded
+`unconfirmed` row badge, a quiet pre-scan freshness notice (full warning as
+soon as a row is listed), book-tag contrast and phone slip totals. Assets are
+now `?v=8`. The suite is **1,738 passed, 6 skipped, 1 xfailed** in both
+ledger modes.
 
 On 2026-11-07 the old roadmaps and the maintenance backlog were folded into
 `ROADMAP.md` and deleted; the research briefs moved to `research/`. The
