@@ -3,14 +3,15 @@
 **Updated:** 2026-11-07
 **Goal:** keep `ROADMAP.md` current without weakening the trust model.
 **Current task:** none; SR1-1, SR1-2, SR1-3, SR2-1, SR2-2, SR2-3, SR2-4, SR2-5
-and SR2-6 are done. SR2-4, SR2-5 and SR2-6 are uncommitted in the working tree.
+and SR2-6 are done and pushed.
 The roadmap is the single task list in `ROADMAP.md`; N2-4 stays deferred and
 P1-6 stays waived until the operator says otherwise.
-**Last task commit:** `30b6632` — outcome taxonomy, transport policy and retries.
+**Last task commit:** `a13229a` — per-book rate limit, scan deadlines and
+circuit breaker (SR2-4, SR2-5, SR2-6).
 
 ## Project state
 
-SR2-6 (2026-11-07, **uncommitted**): the scheduled-scan backoff is now a real
+SR2-6 (2026-11-07, commit `a13229a`): the scheduled-scan backoff is now a real
 per-book circuit breaker in `scrapers/breaker.py`, keyed by `(mode, book)`,
 closed → open → half-open with one probe and an injected clock. `blocked`/`429`
 open it on the first occurrence with twice a soft failure's cooldown, `empty`/
@@ -21,7 +22,7 @@ parser error or schema drift never opens it. Cooldowns double per open up to
 `bh_book_breaker_state{failures,cooldown_seconds}`. Manual scans still ignore an
 open breaker.
 
-SR2-5 (2026-11-07, **uncommitted**): a scan can no longer hang on one book. Each
+SR2-5 (2026-11-07, commit `a13229a`): a scan can no longer hang on one book. Each
 adapter runs under `TransportPolicy.adapter_deadline`
 (`SCRAPER_BOOK_TIMEOUT_SECONDS`, default 240 s, 2.4× the slowest recorded book),
 and the whole scrape phase runs under `SCRAPER_SCAN_TIMEOUT_SECONDS` (600 s).
@@ -30,7 +31,7 @@ closed and its browser slot released, and the books that already returned still
 price. The scan deadline deliberately covers the scrape phase only, not the
 local matching/pricing work after it (recorded under the task).
 
-SR2-4 (2026-11-07, **uncommitted**): `scrapers/ratelimit.py` adds one outgoing
+SR2-4 (2026-11-07, commit `a13229a`): `scrapers/ratelimit.py` adds one outgoing
 limiter per bookmaker, acquired once per attempt inside `retry_call` (retries
 included and the first attempt included). It is hand-rolled rather than adding
 `aiolimiter`, because the timing test needs a clock/sleep seam and a
