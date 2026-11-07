@@ -23,6 +23,9 @@ from scrapers.common import (
     parse_nsoft_live_bets,
     qualify_league,
 )
+from scrapers.errors import ScrapeError
+from scrapers.retry import retry_call
+from scrapers.transport import policy_for
 
 logger = logging.getLogger(__name__)
 
@@ -141,21 +144,32 @@ class AdmiralbetScraper:
                     f"&dateFrom={date_from}&dateTo={date_to}"
                     f"&eventMappingTypes=1,2,3,4,5"
                 )
-                resp = await measured_api_get(
-                    page,
-                    url,
-                    headers={
-                        "Accept": "application/utf8+json, application/json;q=0.9, text/plain;q=0.8, */*;q=0.7",
-                        "language": "bs-Latn",
-                        "officeid": "2037",
-                        "Referer": f"{BASE_URL}/sport-prematch?sport=Fudbal",
-                    },
+                async def fetch_events(url=url):
+                    return await measured_api_get(
+                        page,
+                        url,
+                        headers={
+                            "Accept": "application/utf8+json, application/json;q=0.9, text/plain;q=0.8, */*;q=0.7",
+                            "language": "bs-Latn",
+                            "officeid": "2037",
+                            "Referer": f"{BASE_URL}/sport-prematch?sport=Fudbal",
+                        },
+                    )
+
+                resp = await retry_call(
+                    fetch_events,
+                    policy=policy_for(
+                        BOOKMAKER_ID, "live" if live else "prematch"
+                    ),
+                    label="admiralbet events",
+                    account=False,
                 )
-                if resp.status == 200:
-                    data = await resp.json()
-                    events = data.get("events", []) if isinstance(data, dict) else data
-                    if isinstance(events, list):
-                        all_raw_events.extend(events)
+                data = await resp.json()
+                events = data.get("events", []) if isinstance(data, dict) else data
+                if isinstance(events, list):
+                    all_raw_events.extend(events)
+        except ScrapeError:
+            raise
         except Exception as e:
             logger.error(f"[Admiralbet] Fetch error: {e}")
         finally:

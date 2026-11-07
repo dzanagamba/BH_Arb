@@ -15,14 +15,22 @@ the active book through a context variable:
 | `browser_seconds` | Playwright start + Chromium launch + context setup, or `null` with a "book does not use a browser" reason. |
 | `requests` | HTTP requests made through `fetch_with_retry`, `page.goto`, `page.request.get/post`, or the Premier JSON-RPC call. |
 | `bytes` | Sum of readable response bodies, or `null` when the size is unavailable. |
-| `outcome` | `success`, `empty`, `parse_error`, `blocked` or `skipped`. |
+| `outcome` | Historical label: `success`, `empty`, `parse_error`, `blocked` or `skipped`. |
+| `kind` | SR2-1 taxonomy: `ok`, `empty`, `blocked`, `rate_limited`, `timeout`, `transport`, `upstream_5xx`, `parse_error`, `schema_drift` or `skipped`. |
 | `matches`, `markets` | Rows the book returned, used for the cost/coverage ratio. |
 | `missing` | Explicit reasons for every `null` measurement. |
 
-`empty` is a book that answered with no matches; `blocked` is a bot wall,
-403/429, CAPTCHA/Cloudflare or network timeout; `parse_error` is a data/shape
-failure. A `skipped` book was disabled or backing off and says so. The split is
-diagnostic only: it never changes pricing or the certainty gate.
+`empty` is a book that answered with no matches. `kind` is structural — the
+exception type, HTTP status or challenge header — and never a text search of an
+error message. It distinguishes a timeout from a transport failure, a 429 from
+a 403, and a parse error from schema drift. `outcome` keeps the historical
+`blocked`/`parse_error` bucket so existing dashboards and failure rates do not
+change meaning. A `skipped` book was disabled or backing off and says so. The
+split is diagnostic only: it never changes pricing or the certainty gate.
+
+Every retry attempt is a separate `requests` count. A request that waits for
+`Retry-After` and then succeeds counts twice, because the cost report measures
+traffic, not logical calls. The success path is always one attempt.
 
 ## Storage and exposure
 
@@ -30,8 +38,8 @@ The last scan and a newest-first history of 500 scans are stored in
 `cache/scan_cost.json`. The history is runtime state and is not a trust record.
 
 `/api/health.scan_cost.<mode>` returns the last scan's per-book records and its
-`totals`: books, outcome counts, wall/browser seconds, requests, bytes, matches,
-markets, and the derived `seconds_per_match`, `requests_per_match` and
+`totals`: books, outcome and kind counts, wall/browser seconds, requests, bytes,
+matches, markets, and the derived `seconds_per_match`, `requests_per_match` and
 `bytes_per_match`. A `null` means "not measurable", never zero.
 
 The Diagnostics tab renders the same table. It shows book, outcome, wall,
@@ -47,6 +55,7 @@ the `missing` reasons. No URL, header or payload field is served.
 | `bh_book_requests` | `mode`, `book` | HTTP requests in the last scan. |
 | `bh_book_bytes` | `mode`, `book` | Readable response bytes in the last scan. |
 | `bh_book_failure_rate` | `mode`, `book` | `(parse_error + blocked) / attempts` over the newest 20 scans. |
+| `bh_book_kinds_total` | `mode`, `book`, `kind` | SR2-1 outcome kind for each book attempt; the historical `outcome` counter is unchanged. |
 
 A metric is absent when its value is not measurable. That keeps a scrape from
 reading an unmeasured `0` as "the book made no requests".

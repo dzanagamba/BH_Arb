@@ -240,6 +240,7 @@ dependency. The registry exposes:
 | `bh_scan_duration_seconds{mode}` | gauge | Last completed scan duration |
 | `bh_scan_seconds_total{mode}` | counter | Cumulative scan seconds |
 | `bh_book_results_total{mode,book,outcome}` | counter | `success`, `empty`, `error`, `skipped` |
+| `bh_book_kinds_total{mode,book,kind}` | counter | SR2-1 kind: `ok`, `empty`, `blocked`, `rate_limited`, `timeout`, `transport`, `upstream_5xx`, `parse_error`, `schema_drift`, `skipped` |
 | `bh_surebets_found{mode}` / `_total` | gauge / counter | Last and cumulative surebet count |
 | `bh_surebets_dropped_total{mode,reason}` | counter | Price-guard drops |
 | `bh_link_checks_total{mode,book,outcome}` | counter | Deep-link checks (`verified`, `failed`, `errored`) |

@@ -2,35 +2,51 @@
 
 **Updated:** 2026-11-07
 **Goal:** keep `ROADMAP.md` current without weakening the trust model.
-**Current task:** none; M7-1 (dashboard UI polish) is done and uncommitted.
-The roadmap is the single task list in `ROADMAP.md`;
+**Current task:** none; SR1-1, SR1-2, SR1-3, SR2-1, SR2-2 and SR2-3 are done
+and uncommitted. The roadmap is the single task list in `ROADMAP.md`;
 N2-4 stays deferred and P1-6 stays waived until the operator says otherwise.
-**Last task commit:** N3-2 — dated sport/market admissibility re-audit (see
-`git log -1`).
+**Last task commit:** M7-1 — dashboard UI polish (`9cd37d0`).
 
 ## Project state
 
-M7-1 (2026-11-07, uncommitted): presentation-only dashboard fixes — Unicode
+SR1-1, SR1-2, SR1-3, SR2-1, SR2-2 and SR2-3 (2026-11-07, uncommitted): the
+parser-contract equality check now uses a pinned reference date, so it no
+longer turns red when a capture crosses the 120-day policy (the real-date
+`refresh_fixtures.py --check` alarm is unchanged). The runtime-state guard
+ignores SQLite `-shm`/`-wal` sidecars while still comparing the database file
+and every other runtime file. CI already runs the suite in the two ledger modes
+`check_test_isolation.py` orchestrates, so `AGENTS.md` and `docs/CI.md` now say
+that rather than promising a separate step. `scrapers/errors.py` owns one
+structural `ScrapeKind`; `run_scan` records it per book, health exposes it, and
+`bh_book_kinds_total` reports it while the historical outcome metric is
+unchanged. `settle()` returns that shared kind instead of swallowing failures.
+`scrapers/transport.py` owns the per-book timeout/limit policy and one HTTP
+client per book per scan, closed when the scraper gather returns.
+`scrapers/retry.py` now applies full jitter, the attempt cap and total-time
+budget, `Retry-After` and one-attempt 403/challenge blocking, with every attempt
+counted; wwin's private retry loop is gone. The suite is **1,825 passed, 6
+skipped, 1 xfailed** in both ledger modes.
+
+M7-1 (2026-11-07, commit `9cd37d0`): presentation-only dashboard fixes — Unicode
 name capitalisation, the re-check banner's escaped age markup, a worded
 `unconfirmed` row badge, a quiet pre-scan freshness notice (full warning as
 soon as a row is listed), book-tag contrast and phone slip totals. Assets are
-now `?v=8`. The suite is **1,738 passed, 6 skipped, 1 xfailed** in both
-ledger modes.
+now `?v=8`.
 
 On 2026-11-07 the old roadmaps and the maintenance backlog were folded into
 `ROADMAP.md` and deleted; the research briefs moved to `research/`. The
 `P*`/`N*` IDs are now historical labels with a glossary in the `ROADMAP.md`
 History section. P1-6 is waived and excluded. The suite runs
-**1,733 passed, 6 skipped, 1 xfailed, 1 warning** in both ledger modes, with
+**1,825 passed, 6 skipped, 1 xfailed, 1 warning** in both ledger modes, with
 **85.63%** coverage (floor 80%; 11,639 statements). The six skips are the two
 opt-in runtime-state checks, the two Chromium tests unless
 `BH_ARB_TEST_BROWSER=1`, and the two load budgets unless `BH_ARB_TEST_SLOW=1`.
-Ruff, MyPy (218 source files), Node syntax checks and the generated market doc
+Ruff, MyPy (226 source files), Node syntax checks and the generated market doc
 are clean. The xfail documents the deferred named-key auth gap (see below).
 
-### 2026-11-06 maintenance pass (uncommitted)
+### 2026-11-06 maintenance pass (`2e06756`)
 
-A six-audit cleanup pass is applied to the working tree but **not committed**.
+A six-audit cleanup pass landed in `2e06756`.
 It removed dead symbols and duplicate price/registry helpers, unified the team
 key, fixed the stale-price cap, mapping coverage with cached dict rows,
 non-finite bet inputs, `days` bounds, CSV formula escaping, per-book cache
@@ -75,10 +91,10 @@ latter and is deferred.
 
 ## Next action
 
-Start **SR1-1** (remove the date bomb in the parser-contract test); it is the
-first ungated task and must land before 2027-02-17. The four operator gates
-waiting for a decision are SR0-1, SR0-2, SR4-9 and SR6-3. N2-4 stays deferred
-and P1-6 stays waived. Do not invent a task or reopen a done one.
+Start **SR2-4** (outgoing per-book rate limiter); it is the next ungated task,
+with SR2-2 now Done. The four operator gates waiting for a decision are SR0-1,
+SR0-2, SR4-9 and SR6-3. N2-4 stays deferred and P1-6 stays waived. Do not
+invent a task or reopen a done one.
 
 ## Rules
 

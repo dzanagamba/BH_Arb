@@ -18,20 +18,9 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
-OUTCOMES = ("success", "empty", "parse_error", "blocked", "skipped")
+from scrapers.errors import kind_for_outcome
 
-_BLOCKED_MARKERS = (
-    "403",
-    "429",
-    "access denied",
-    "blocked",
-    "captcha",
-    "challenge",
-    "cloudflare",
-    "forbidden",
-    "net::err",
-    "timeout",
-)
+OUTCOMES = ("success", "empty", "parse_error", "blocked", "skipped")
 
 
 @dataclass
@@ -49,6 +38,7 @@ class BookCost:
     bytes_seen: bool = False
     bytes_unavailable: bool = False
     outcome: str = "unknown"
+    kind: str = ""
     note: str = ""
     matches: int = 0
     markets: int = 0
@@ -102,32 +92,26 @@ def response_bytes(response: Any) -> int | None:
         return None
 
 
-def classify_exception(exc: BaseException) -> str:
-    """Map a scraper failure to ``blocked`` or ``parse_error``.
-
-    The split is deliberately text-based and conservative: a bot wall, a 403/429
-    or a timeout is ``blocked``; anything else is a parser/data failure. It never
-    changes whether a book is priced.
-    """
-    text = f"{type(exc).__name__}: {exc}".lower()
-    if any(marker in text for marker in _BLOCKED_MARKERS):
-        return "blocked"
-    return "parse_error"
-
-
 def finish_book(
     outcome: str,
     *,
+    kind: str | None = None,
     note: str = "",
     matches: int = 0,
     markets: int = 0,
 ) -> dict[str, Any] | None:
-    """Close the active book and return its JSON-safe cost record."""
+    """Close the active book and return its JSON-safe cost record.
+
+    ``outcome`` is the historical label the dashboard already reads. ``kind`` is
+    the shared taxonomy from :mod:`scrapers.errors`; when omitted it is derived
+    from the outcome so direct callers and pre-taxonomy records stay readable.
+    """
     cost = _current.get()
     if cost is None:
         return None
     _current.set(None)
     cost.outcome = outcome if outcome in OUTCOMES else "parse_error"
+    cost.kind = kind or kind_for_outcome(cost.outcome).value
     cost.note = note
     cost.matches = max(0, int(matches))
     cost.markets = max(0, int(markets))
@@ -144,6 +128,7 @@ def finish_book(
         "bookmaker": cost.bookmaker,
         "mode": cost.mode,
         "outcome": cost.outcome,
+        "kind": cost.kind,
         "wall_seconds": wall,
         "browser_seconds": browser,
         "requests": requests,
@@ -190,6 +175,7 @@ def build_scan_report(
         "parse_error": 0,
         "blocked": 0,
         "skipped": 0,
+        "kinds": {},
         "wall_seconds": 0.0,
         "browser_seconds": 0.0,
         "browser_seconds_measured": False,
@@ -204,6 +190,8 @@ def build_scan_report(
         outcome = str(record.get("outcome") or "")
         if outcome in totals:
             totals[outcome] += 1
+        kind = str(record.get("kind") or kind_for_outcome(outcome).value)
+        totals["kinds"][kind] = totals["kinds"].get(kind, 0) + 1
         totals["wall_seconds"] += float(record.get("wall_seconds") or 0.0)
         browser = record.get("browser_seconds")
         if browser is not None:
@@ -221,6 +209,7 @@ def build_scan_report(
         totals["markets"] += int(record.get("markets") or 0)
 
     totals["wall_seconds"] = round(totals["wall_seconds"], 3)
+    totals["kinds"] = dict(sorted(totals["kinds"].items()))
     totals["browser_seconds"] = (
         round(totals["browser_seconds"], 3)
         if totals["browser_seconds_measured"]

@@ -24,6 +24,9 @@ operator machine with a populated `config/generated/mapping_evidence.json`,
   temporary tree.
 * A session-scoped guard fingerprints `config/generated/` and `cache/` at the
   start and fails the run if any test added, removed or changed a file there.
+  SQLite's `-shm` and `-wal` sidecars are derived connection state
+  (a concurrent scanner can create or remove them), so the guard ignores them
+  and still compares the database file itself.
 * Shipped config inputs (`config/bookmaker_markets.json`, the deeplink
   declarations, the reviewed allowlist) are not redirected: they are source, not
   runtime state.
@@ -42,6 +45,10 @@ modes locally with:
 ```bash
 python scripts/check_test_isolation.py
 ```
+
+CI does not invoke the script itself: the two 3.11 test steps above run the
+same two ledger modes, so a third and fourth suite run would repeat them. The
+script stays the one-command local equivalent.
 
 ## Parser contracts
 

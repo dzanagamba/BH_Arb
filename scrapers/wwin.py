@@ -34,6 +34,8 @@ from engine.market_registry import MARKET_REGISTRY, record_unmapped, registered_
 from models.schemas import Market, MarketType, Match, OddsValue
 from scrapers.base import goto, launch_browser, measured_api_get, settle
 from scrapers.common import betradar_id, qualify_league
+from scrapers.retry import retry_call
+from scrapers.transport import policy_for
 
 logger = logging.getLogger(__name__)
 
@@ -273,41 +275,35 @@ class WWINScraper:
                 day_start = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=day_offset)
                 tfrom = int((day_start - timedelta(hours=1)).timestamp())
                 tto = int((day_start + timedelta(days=1, hours=2)).timestamp())
-                for attempt in range(3):
-                    try:
-                        async with sem:
-                            resp = await measured_api_get(
-                                page,
-                                f"{API_ROOT}/PrematchEvents/events",
-                                params={
-                                    "key": "bs",
-                                    "bets": bets,
-                                    "tfrom": str(tfrom),
-                                    "tto": str(tto),
-                                    "spid": str(FOOTBALL_SPORT_ID),
-                                },
-                                headers={"Accept": "application/json, text/plain, */*", "Referer": f"{BASE_URL}/kladjenje/"},
-                            )
-                        if resp.status != 200:
-                            if attempt < 2:
-                                await asyncio.sleep(0.5 * (2 ** attempt))
-                                continue
-                            logger.debug(f"[WWIN] HTTP {resp.status} for day {day_offset} bets={bets}")
-                            return day_offset, bets, []
-                        try:
-                            data = await resp.json()
-                            _remember_countries(data, countries)
-                            events = (data.get("events") or data.get("p") or []) if isinstance(data, dict) else []
-                            return day_offset, bets, events
-                        except Exception:
-                            return day_offset, bets, []
-                    except Exception as e:
-                        if attempt < 2:
-                            await asyncio.sleep(0.5 * (2 ** attempt))
-                            continue
-                        logger.debug(f"[WWIN] fetch error day {day_offset} bets={bets}: {e}")
-                        return day_offset, bets, []
-                return day_offset, bets, []
+
+                async def send():
+                    async with sem:
+                        return await measured_api_get(
+                            page,
+                            f"{API_ROOT}/PrematchEvents/events",
+                            params={
+                                "key": "bs",
+                                "bets": bets,
+                                "tfrom": str(tfrom),
+                                "tto": str(tto),
+                                "spid": str(FOOTBALL_SPORT_ID),
+                            },
+                            headers={"Accept": "application/json, text/plain, */*", "Referer": f"{BASE_URL}/kladjenje/"},
+                        )
+
+                resp = await retry_call(
+                    send,
+                    policy=policy_for(BOOKMAKER_ID, "prematch"),
+                    label=f"wwin prematch day {day_offset}",
+                    account=False,
+                )
+                try:
+                    data = await resp.json()
+                    _remember_countries(data, countries)
+                    events = (data.get("events") or data.get("p") or []) if isinstance(data, dict) else []
+                    return day_offset, bets, events
+                except Exception:
+                    return day_offset, bets, []
 
             tasks = [fetch_one(d, b) for d in range(15) for b in bet_groups]
             results = await asyncio.gather(*tasks)
@@ -374,15 +370,17 @@ class WWINScraper:
             await goto(page, f"{BASE_URL}/kladjenje-uzivo/", wait_until="domcontentloaded", timeout=60000)
             await settle(page, 5000)
 
-            resp = await measured_api_get(
-                page,
-                f"{API_ROOT}/LiveEvents/events",
-                params={"key": "bs", "bets": "", "bet": "", "pbet": ""},
-                headers={"Accept": "application/json, text/plain, */*", "Referer": f"{BASE_URL}/kladjenje-uzivo/"},
+            resp = await retry_call(
+                lambda: measured_api_get(
+                    page,
+                    f"{API_ROOT}/LiveEvents/events",
+                    params={"key": "bs", "bets": "", "bet": "", "pbet": ""},
+                    headers={"Accept": "application/json, text/plain, */*", "Referer": f"{BASE_URL}/kladjenje-uzivo/"},
+                ),
+                policy=policy_for(BOOKMAKER_ID, "live"),
+                label="wwin live events",
+                account=False,
             )
-            if resp.status != 200:
-                logger.error(f"[WWIN] Live HTTP {resp.status}")
-                return []
             try:
                 data = await resp.json()
             except Exception:
@@ -398,17 +396,23 @@ class WWINScraper:
             bet_map: dict[str, list] = {}
             for chunk_start in range(0, len(ids), 100):
                 chunk = ids[chunk_start:chunk_start + 100]
-                r2 = await measured_api_get(
-                    page,
-                    f"{API_ROOT}/LiveEvents/headerBets",
-                    params={
-                        "bets": ",".join(str(sid) for sid in _request_market_ids("live")),
-                        "ids": ",".join(chunk),
-                    },
-                    headers={"Accept": "application/json, text/plain, */*", "Referer": f"{BASE_URL}/kladjenje-uzivo/"},
+                async def fetch_header_bets(chunk=chunk):
+                    return await measured_api_get(
+                        page,
+                        f"{API_ROOT}/LiveEvents/headerBets",
+                        params={
+                            "bets": ",".join(str(sid) for sid in _request_market_ids("live")),
+                            "ids": ",".join(chunk),
+                        },
+                        headers={"Accept": "application/json, text/plain, */*", "Referer": f"{BASE_URL}/kladjenje-uzivo/"},
+                    )
+
+                r2 = await retry_call(
+                    fetch_header_bets,
+                    policy=policy_for(BOOKMAKER_ID, "live"),
+                    label="wwin live headerBets",
+                    account=False,
                 )
-                if r2.status != 200:
-                    continue
                 try:
                     d2 = await r2.json()
                 except Exception:

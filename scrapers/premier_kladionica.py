@@ -35,15 +35,17 @@ markets (handicaps, halves, HT/FT, correct score, corners, cards, "NAČIN
 PROLAZA", player markets, combos) are excluded.
 """
 
+import json
 import logging
 from datetime import UTC, datetime
 
 import httpx
 
-from config.settings import VERIFY_SSL
 from engine.market_registry import record_unmapped, registered_spec
 from models.schemas import Market, MarketType, Match, OddsValue
-from scrapers.cost import record_request, response_bytes
+from scrapers.errors import ScrapeError
+from scrapers.retry import fetch_with_retry
+from scrapers.transport import transport_client
 
 logger = logging.getLogger(__name__)
 
@@ -149,7 +151,8 @@ class PremierKladionicaScraper:
         self.headers = dict(API_HEADERS)
 
     async def fetch_and_parse(self, live: bool = False, scan_time: datetime | None = None) -> list[Match]:
-        async with httpx.AsyncClient(timeout=60.0, verify=VERIFY_SSL) as client:
+        mode = "live" if live else "prematch"
+        async with transport_client(BOOKMAKER_ID, mode) as client:
             sync = await self._full_sync(client)
             if not sync:
                 return []
@@ -435,19 +438,19 @@ class PremierKladionicaScraper:
         return await self._sync_call(client, {"dogadjajIDs": dog_ids, "clientVer": client_ver})
 
     async def _sync_call(self, client: httpx.AsyncClient, payload: dict) -> list | None:
+        # The JSON-RPC body is a read-only odds query, so POST retries are safe.
         try:
-            response = await client.post(
+            response = await fetch_with_retry(
+                client,
                 SYNC_URL,
-                content=__import__("json").dumps([[[4, 1, 0], 7, payload]]),
+                method="POST",
+                content=json.dumps([[[4, 1, 0], 7, payload]]),
                 headers=self.headers,
             )
+        except ScrapeError:
+            raise
         except Exception as e:
             logger.warning(f"[PremierKladionica] Sync request failed: {e}")
-            record_request(None)
-            return None
-        record_request(response_bytes(response))
-        if response.status_code != 200:
-            logger.warning(f"[PremierKladionica] Sync HTTP {response.status_code}")
             return None
         try:
             data = response.json()

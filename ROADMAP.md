@@ -107,12 +107,12 @@ do not copy stale numbers here.
 |----|-------|--------|---------|------|
 | SR0-1 | Decide on browser fingerprint masking | Not started | — | operator |
 | SR0-2 | Decide TLS verification default | Not started | — | operator |
-| SR1-1 | Remove the date bomb in the contract test | Not started | — | — |
-| SR1-2 | Run the isolation check in CI | Not started | — | — |
-| SR1-3 | Stop `settle()` swallowing navigation errors | Not started | — | — |
-| SR2-1 | Scrape error taxonomy | Not started | — | — |
-| SR2-2 | Per-book transport policy and shared client | Not started | SR2-1 | — |
-| SR2-3 | Retry policy rewrite (jitter, budget, 429, 403) | Not started | SR2-1, SR2-2 | — |
+| SR1-1 | Remove the date bomb in the contract test | Done | — | — |
+| SR1-2 | Run the isolation check in CI | Done | — | — |
+| SR1-3 | Stop `settle()` swallowing navigation errors | Done | — | — |
+| SR2-1 | Scrape error taxonomy | Done | — | — |
+| SR2-2 | Per-book transport policy and shared client | Done | SR2-1 | — |
+| SR2-3 | Retry policy rewrite (jitter, budget, 429, 403) | Done | SR2-1, SR2-2 | — |
 | SR2-4 | Outgoing per-book rate limiter | Not started | SR2-2 | — |
 | SR2-5 | Adapter and scan deadlines | Not started | SR2-1 | — |
 | SR2-6 | Per-book circuit breaker | Not started | SR2-1, SR2-3 | — |
@@ -222,7 +222,7 @@ Acceptance:
 
 ### SR1-1 Remove the date bomb in the contract test
 
-Status: Not started
+Status: Done
 
 Why: the parser-contract test reads `date.today()`, so the suite turns red on
 2027-02-17 with no code change (`research/03_fixtures_and_pain_points.md` §A,
@@ -234,13 +234,13 @@ parameter or a clock seam), have the unit test pass a fixed date, keep the
 production check on the real date.
 
 Acceptance:
-- [ ] Test passes with the system clock set to 2027-03-01 (use a frozen date in
+- [x] Test passes with the system clock set to 2027-03-01 (use a frozen date in
       a test, not a real clock change).
-- [ ] Production behaviour unchanged: an expired contract still reports stale.
+- [x] Production behaviour unchanged: an expired contract still reports stale.
 
 ### SR1-2 Run the isolation check in CI
 
-Status: Not started
+Status: Done
 
 Why: `AGENTS.md` says CI runs `scripts/check_test_isolation.py`; the workflow does
 not (`research/03_fixtures_and_pain_points.md` §A, `docs/CI.md:43`). Confirmed
@@ -255,12 +255,12 @@ suite run already covers it, make `AGENTS.md` and `docs/CI.md` say so. Fix the
 `-shm`/`-wal` false positive.
 
 Acceptance:
-- [ ] Workflow and docs agree.
-- [ ] Test covering the `-shm`/`-wal` case.
+- [x] Workflow and docs agree.
+- [x] Test covering the `-shm`/`-wal` case.
 
 ### SR1-3 Stop `settle()` swallowing navigation errors
 
-Status: Not started
+Status: Done
 
 Why: `scrapers/base.py:106-115` hides navigation failures, so a challenge page or
 timeout looks like an empty feed (`research/03_fixtures_and_pain_points.md` §B).
@@ -269,7 +269,7 @@ Steps: let `settle()` return or raise a classified outcome (until SR2-1 lands, a
 small local enum is fine; SR2-1 absorbs it).
 
 Acceptance:
-- [ ] Unit test with a fake page whose navigation raises: the outcome is a
+- [x] Unit test with a fake page whose navigation raises: the outcome is a
       failure, not an empty success.
 
 ---
@@ -278,7 +278,7 @@ Acceptance:
 
 ### SR2-1 Scrape error taxonomy
 
-Status: Not started
+Status: Done
 
 Why: `blocked` vs `parse_error` is decided by text heuristics
 (`research/03_fixtures_and_pain_points.md` §B); retry, breaker, health and alerts
@@ -291,13 +291,13 @@ Playwright exceptions/responses. Use it at the point where `run_scan` records a
 book's result. Keep the existing health fields working.
 
 Acceptance:
-- [ ] Table-driven test mapping status codes and exceptions to kinds.
-- [ ] Health and metrics report the kind per book.
-- [ ] No text-matching classification left in the scan path.
+- [x] Table-driven test mapping status codes and exceptions to kinds.
+- [x] Health and metrics report the kind per book.
+- [x] No text-matching classification left in the scan path.
 
 ### SR2-2 Per-book transport policy and shared client
 
-Status: Not started
+Status: Done
 
 Why: every scrape builds a fresh `AsyncClient` with per-module timeouts of 20–120 s
 and no explicit limits (`research/01_shared_infra.md` §2;
@@ -310,14 +310,14 @@ the scan ends. Move the module-level timeouts into the policies without changing
 their values.
 
 Acceptance:
-- [ ] Every HTTP adapter gets its client from the shared factory.
-- [ ] Test: two requests from one book in one scan share a client; clients are
+- [x] Every HTTP adapter gets its client from the shared factory.
+- [x] Test: two requests from one book in one scan share a client; clients are
       closed after the scan.
-- [ ] Timeout values unchanged (diff recorded in the execution log).
+- [x] Timeout values unchanged (diff recorded in the execution log).
 
 ### SR2-3 Retry policy rewrite
 
-Status: Not started
+Status: Done
 
 Why: `fetch_with_retry` (`scrapers/base.py:148-177`) has no jitter, retries
 nothing on 429, has no total time budget, and is skipped by mozzartbet,
@@ -336,11 +336,11 @@ in the browser books through it where safe (POST retry only if the call is
 read-only, which it is for odds feeds — confirm and note).
 
 Acceptance:
-- [ ] wwin's private retry removed.
-- [ ] Tests (respx or fake transport): 429 with `Retry-After` waits then succeeds;
+- [x] wwin's private retry removed.
+- [x] Tests (respx or fake transport): 429 with `Retry-After` waits then succeeds;
       403 is one attempt and `blocked`; budget exhaustion stops early; attempts
       counted.
-- [ ] No adapter makes more requests per scan than before in the success path.
+- [x] No adapter makes more requests per scan than before in the success path.
 
 ### SR2-4 Outgoing per-book rate limiter
 
@@ -1303,3 +1303,9 @@ Useful starting points:
 |------|------|--------|-------|
 | 2026-11-07 | — | Roadmap created | Created from `SCRAPER_TODO.md` + `TODO.md`; `PROJECT_ROADMAP.md`, `PROJECT_ROADMAP_V2.md` and `TODO.md` deleted. Old files in git history at BASE `2e06756ecd56b013df6e99b58258e8d2cfaa0e25`. |
 | 2026-11-07 | M7-1 | Done | Browser pass on a seeded demo (scrapers cleared, no bookmaker traffic). Fixed Unicode name capitalisation (`capitalizeWords`), escaped `<span data-ago>` in the re-check banner (`trWithMarkup`), `?` row badge → `unconfirmed`/`nepotvrđeno`, quiet pre-scan freshness banner (only `never_scanned` with zero rows), book-tag contrast, 2-column slip totals on phones; asset version v=7→v=8, SW cache v4. New `tests/test_frontend_polish.py`. `pytest`: 1738 passed, 6 skipped, 1 xfailed (clean and `BH_ARB_TEST_RUNTIME_LEDGER=populated`); ruff clean; mypy 219 files clean; market doc in sync; isolation check OK; refresh_fixtures and audit_admissibility `--check` exit 0. |
+| 2026-11-07 | SR1-1 | Done | The `today` seam already existed end-to-end (`stale_contracts`, `refresh_fixtures.build_report`, `contract_health`); `tests/test_parser_contracts.py` now passes `today=REFERENCE_DATE` (2026-11-07) so the fixture/contract equality check no longer reads the wall clock. New regression tests freeze `parser_contracts.date` at 2027-03-01: the equality check stays green, while the real-clock path reports a 132-day-old contract as stale. `pytest`: 1740 passed, 6 skipped, 1 xfailed (clean and `BH_ARB_TEST_RUNTIME_LEDGER=populated`); `pytest tests/test_parser_contracts.py -k "shipped or wall_clock or expired"`: 4 passed; ruff clean; mypy 219 files clean; market doc in sync; isolation check OK (both ledgers); `refresh_fixtures.py --check` exit 0 (17 contracts, no diff/stale/missing); `audit_admissibility.py --check` status ok. |
+| 2026-11-07 | SR1-2 | Done | CI already runs the suite in the two modes `check_test_isolation.py` orchestrates, so no redundant third/fourth run was added; `AGENTS.md` and `docs/CI.md` now say that explicitly. The runtime-state guard moved to `scripts/check_test_isolation.py:runtime_state_snapshot()` and ignores SQLite `-shm`/`-wal` sidecars (connection-scoped; a concurrent scanner can create or remove them) while still comparing the database file and every other runtime file. New `tests/test_runtime_isolation.py::test_sqlite_sidecars_do_not_count_as_runtime_state_writes`. `pytest`: 1741 passed, 6 skipped, 1 xfailed; `check_test_isolation.py`: both ledger modes 1741 passed, 6 skipped, 1 xfailed; ruff clean; mypy 219 files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. |
+| 2026-11-07 | SR1-3 | Done | `scrapers/base.py` now returns a local `SettleOutcome` (`SETTLED`/`TIMEOUT`/`FAILED`) from `settle()` and logs a warning for the two failure kinds; callers may proceed only knowing the page is unproven, and SR2-1 will absorb the enum into the shared scrape taxonomy. New `tests/test_scraper_base.py` covers a settled page, a Playwright timeout and any other navigation error. `pytest`: 1744 passed, 6 skipped, 1 xfailed; `check_test_isolation.py`: both ledger modes 1744 passed, 6 skipped, 1 xfailed; ruff clean; mypy 220 files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. |
+| 2026-11-07 | SR2-1 | Done | New `scrapers/errors.py` owns `ScrapeKind` (`ok`, `empty`, `blocked`, `rate_limited`, `timeout`, `transport`, `upstream_5xx`, `parse_error`, `schema_drift`, plus `skipped` for a book not attempted) and structural `classify_response`/`classify_exception`/`classify_scrape`; the old text-marker classifier is gone. `run_scan` records the kind on every book (`finish_book(kind=...)`), health exposes `scan_cost.<mode>.books.<book>.kind` and `totals.kinds`, and `bh_book_kinds_total` carries the kind per book while `bh_book_results_total` keeps its historical outcome label. SR1-3's local `SettleOutcome` was absorbed: `settle()` now returns `ScrapeKind`. New `tests/test_scrape_errors.py` tables statuses and exception types, including old marker strings that must no longer classify as blocked. `pytest`: 1793 passed, 6 skipped, 1 xfailed; `check_test_isolation.py`: both ledger modes 1793 passed, 6 skipped, 1 xfailed; ruff clean; mypy 222 files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. |
+| 2026-11-07 | SR2-2 | Done | New `scrapers/transport.py` owns frozen `TransportPolicy` per (book, mode) with `httpx.Timeout` + explicit `httpx.Limits(10, keepalive=5)`, `retry_budget=3`, `requests_per_second=None` (reserved for SR2-4) and `verify` from `VERIFY_SSL`. `TransportPool` holds one `AsyncClient` per (book, mode) per scan; `run_scan` opens it around the scraper gather and closes every client afterwards. All seven httpx adapters use `transport_client()`; standalone calls still get a private closed client. Timeout diff (unchanged): betole 30→30, evlbet 20→20, maxbet 60→60, mbet 30→30, mdshop 30→30, premier_kladionica 60→60, sportplus 120 prematch/60 live→120/60; connect/read/write/pool all keep the old value. New `tests/test_transport.py` pins the policies, shared client, close lifecycle and standalone fallback; `tests/test_metrics.py` proves a scan shares and closes the client. `pytest`: 1813 passed, 6 skipped, 1 xfailed; `check_test_isolation.py`: both ledger modes 1813 passed, 6 skipped, 1 xfailed; ruff clean; mypy 224 files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. |
+| 2026-11-07 | SR2-3 | Done | Kept the policy hand-rolled rather than adding `stamina`: the project already owns per-attempt cost accounting, the per-book policy and the kind taxonomy, so a dependency would have to be threaded through all three. New `scrapers/retry.py` implements full-jitter backoff, the SR2-2 attempt cap and total-time budget, `Retry-After` (numeric or HTTP-date, capped at 60 s), 403/challenge as one attempt and `blocked`, and per-attempt `record_request`. `fetch_with_retry` moved there and gained read-only POST support; wwin's private retry loop is gone, and its Playwright calls, mozzartbet's pagination POST and admiralbet's events GET now use `retry_call`; premier's JSON-RPC POST retries through `fetch_with_retry`. The success path is still one request per call. New `tests/test_retry.py` (httpx `MockTransport`) covers 429 + `Retry-After`, 403 and challenge one-attempt blocking, the attempt cap, total-budget stop, the retry-after cap, transport retries, attempt counts and the one-request success path. `pytest`: 1825 passed, 6 skipped, 1 xfailed; `check_test_isolation.py`: both ledger modes 1825 passed, 6 skipped, 1 xfailed; ruff clean; mypy 226 files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. |

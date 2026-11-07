@@ -9,13 +9,11 @@ httpx and map its numeric pick codes to markets.
 import logging
 from datetime import UTC, datetime
 
-import httpx
-
-from config.settings import VERIFY_SSL
 from engine.market_registry import record_unmapped, registered_spec
 from models.schemas import Market, MarketType, Match, OddsValue
-from scrapers.base import fetch_with_retry
 from scrapers.common import parse_dt
+from scrapers.retry import fetch_with_retry
+from scrapers.transport import transport_client
 
 logger = logging.getLogger(__name__)
 
@@ -172,7 +170,9 @@ class BetoleScraper:
         matches: list[Match] = []
         seen_ids: set[str] = set()
 
-        async with httpx.AsyncClient(timeout=30.0, verify=VERIFY_SSL) as client:
+        async with transport_client(
+            BOOKMAKER_ID, "live" if live else "prematch"
+        ) as client:
             for offset in range(0, 30000, PAGE_SIZE):
                 response = await fetch_with_retry(
                     client,
@@ -184,11 +184,6 @@ class BetoleScraper:
                         "from": str(offset),
                     },
                 )
-                if not response or response.status_code != 200:
-                    logger.debug(
-                        f"[Betole] HTTP {response.status_code if response else 'No response'} at offset {offset}"
-                    )
-                    break
 
                 try:
                     data = response.json()

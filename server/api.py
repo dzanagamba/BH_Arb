@@ -142,8 +142,13 @@ from scrapers.common import (
 from scrapers.cost import (
     begin_book,
     build_scan_report,
-    classify_exception,
     finish_book,
+)
+from scrapers.errors import (
+    ScrapeKind,
+    classify_exception,
+    classify_scrape,
+    legacy_outcome,
 )
 from scrapers.evlbet import EvlbetScraper
 from scrapers.maxbet import MaxBetScraper
@@ -152,6 +157,7 @@ from scrapers.mdshop import MDShopScraper
 from scrapers.mozzartbet import MozzartbetScraper
 from scrapers.premier_kladionica import PremierKladionicaScraper
 from scrapers.sportplus import SportPlusScraper
+from scrapers.transport import transport_pool
 from scrapers.wwin import WWINScraper
 from scripts.pairing_audit import audit as audit_pairing
 from server.alerts import (
@@ -1764,9 +1770,27 @@ def _record_book_result(mode: str, bookmaker: str, ok: bool) -> None:
         _book_skip_until[key] = datetime.now(UTC).replace(tzinfo=None) + timedelta(minutes=minutes)
 
 
-def _metric_book(mode: str, bookmaker: str, outcome: str) -> None:
-    """Count one book's result so a silent feed is visible in `/api/metrics`."""
-    metrics.inc("bh_book_results_total", mode=mode, book=bookmaker, outcome=outcome)
+def _metric_book(
+    mode: str,
+    bookmaker: str,
+    kind: ScrapeKind,
+    *,
+    legacy: str | None = None,
+) -> None:
+    """Count one book's result in both the old outcome and the new kind.
+
+    ``bh_book_results_total`` keeps its historical ``outcome`` label so
+    existing dashboards do not change meaning; ``bh_book_kinds_total`` is the
+    SR2-1 taxonomy. An exception is still counted as ``outcome="error"`` in the
+    old metric while its exact kind is ``timeout``, ``blocked`` and so on.
+    """
+    metrics.inc(
+        "bh_book_results_total",
+        mode=mode,
+        book=bookmaker,
+        outcome=legacy or legacy_outcome(kind),
+    )
+    metrics.inc("bh_book_kinds_total", mode=mode, book=bookmaker, kind=kind.value)
 
 
 def _metric_browser_opened(delta: int) -> None:
@@ -1935,18 +1959,28 @@ async def run_scan(
             if not _is_enabled(bookie_id):
                 begin_book(bookie_id, mode, uses_browser=uses_browser)
                 scan_costs[bookie_id] = (
-                    finish_book("skipped", note="disabled by runtime toggle") or {}
+                    finish_book(
+                        ScrapeKind.SKIPPED.value,
+                        kind=ScrapeKind.SKIPPED.value,
+                        note="disabled by runtime toggle",
+                    )
+                    or {}
                 )
                 status.bookmaker_progress[bookie_id] = "skipped"
-                _metric_book(mode, bookie_id, "skipped")
+                _metric_book(mode, bookie_id, ScrapeKind.SKIPPED)
                 return []
             if scheduled and _book_is_backed_off(mode, bookie_id):
                 begin_book(bookie_id, mode, uses_browser=uses_browser)
                 scan_costs[bookie_id] = (
-                    finish_book("skipped", note="scheduled-scan backoff") or {}
+                    finish_book(
+                        ScrapeKind.SKIPPED.value,
+                        kind=ScrapeKind.SKIPPED.value,
+                        note="scheduled-scan backoff",
+                    )
+                    or {}
                 )
                 status.bookmaker_progress[bookie_id] = "skipped"
-                _metric_book(mode, bookie_id, "skipped")
+                _metric_book(mode, bookie_id, ScrapeKind.SKIPPED)
                 with _BOOK_BACKOFF_LOCK:
                     until = _book_skip_until.get((mode, bookie_id))
                 status.errors.append(
@@ -1957,7 +1991,8 @@ async def run_scan(
 
             begin_book(bookie_id, mode, uses_browser=uses_browser)
             matches: list[Match] = []
-            outcome = "parse_error"
+            kind = ScrapeKind.PARSE_ERROR
+            outcome = legacy_outcome(kind)
             note = ""
             status.bookmaker_progress[bookie_id] = "scraping"
             status.current_bookmaker = f"Scraping {config['name']}..."
@@ -1970,8 +2005,9 @@ async def run_scan(
                 scraper_class = SCRAPERS.get(bookie_id)
                 if not scraper_class:
                     note = "no scraper registered"
+                    kind = ScrapeKind.PARSE_ERROR
                     status.bookmaker_progress[bookie_id] = "error"
-                    _metric_book(mode, bookie_id, "error")
+                    _metric_book(mode, bookie_id, kind, legacy="error")
                     return []
 
                 scraper = scraper_class()
@@ -1997,30 +2033,33 @@ async def run_scan(
                     if not m.fetched_at:
                         m.fetched_at = scan_started_at
 
-                outcome = "success" if matches else "empty"
+                kind = classify_scrape(matches)
+                outcome = legacy_outcome(kind)
                 status.bookmaker_progress[bookie_id] = "done"
                 status.bookmakers_done.append(config["name"])
                 status.total_matches += len(matches)
                 per_bookie[bookie_id] = len(matches)
                 _record_book_result(mode, bookie_id, bool(matches))
-                _metric_book(mode, bookie_id, "success" if matches else "empty")
+                _metric_book(mode, bookie_id, kind)
                 logger.info(f"✅ {config['name']}: {len(matches)} {'live' if is_live else 'prematch'} matches scraped")
                 return matches
 
             except Exception as e:
-                outcome = classify_exception(e)
+                kind = classify_exception(e)
+                outcome = legacy_outcome(kind)
                 note = f"{type(e).__name__}: {str(e)[:200]}"
                 error_msg = f"{config['name']}: {str(e)[:200]}"
                 status.bookmaker_progress[bookie_id] = "error"
                 status.errors.append(error_msg)
                 _record_book_result(mode, bookie_id, False)
-                _metric_book(mode, bookie_id, "error")
+                _metric_book(mode, bookie_id, kind, legacy="error")
                 logger.error(f"❌ Scrape error — {error_msg}", exc_info=True)
                 return []
             finally:
                 scan_costs[bookie_id] = (
                     finish_book(
                         outcome,
+                        kind=kind.value,
                         note=note,
                         matches=len(matches),
                         markets=sum(len(m.markets) for m in matches),
@@ -2031,10 +2070,13 @@ async def run_scan(
                     sem.release()
                     _metric_browser_opened(-1)
 
-        # Run all scrapers concurrently
+        # Run all scrapers concurrently. The transport pool owns one HTTP
+        # client per book for this scan and closes them when the gather
+        # returns, so pagination and retries reuse the same connection.
         status.current_bookmaker = "Scraping all bookmakers..."
-        tasks = [scrape_one(bid, cfg) for bid, cfg in BOOKMAKERS.items()]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        async with transport_pool():
+            tasks = [scrape_one(bid, cfg) for bid, cfg in BOOKMAKERS.items()]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
 
         for res in results:
             if isinstance(res, list):

@@ -11,12 +11,8 @@ Parameters: sportId, isLive, dateFrom, dateTo, eventMappingTypes
 import logging
 from datetime import UTC, datetime
 
-import httpx
-
-from config.settings import VERIFY_SSL
 from engine import sports
 from models.schemas import Market, Match
-from scrapers.base import fetch_with_retry
 from scrapers.common import (
     betradar_id,
     build_event_url,
@@ -27,6 +23,9 @@ from scrapers.common import (
     parse_nsoft_live_bets,
     parse_teams_from_name,
 )
+from scrapers.errors import ScrapeError
+from scrapers.retry import fetch_with_retry
+from scrapers.transport import transport_client
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +105,9 @@ class MDShopScraper:
         all_matches: list[Match] = []
         seen_codes: set[tuple] = set()  # (home, away, sport)
 
-        async with httpx.AsyncClient(timeout=30.0, verify=VERIFY_SSL) as client:
+        async with transport_client(
+            BOOKMAKER_ID, "live" if live else "prematch"
+        ) as client:
             for sport_id, sport_name in SPORT_MAP.items():
                 if sport_name not in wanted:
                     continue
@@ -118,12 +119,6 @@ class MDShopScraper:
                 )
                 try:
                     response = await fetch_with_retry(client, url, headers=self.headers)
-                    if not response or response.status_code != 200:
-                        logger.debug(
-                            f"[MDShop] Sport {sport_name} returned {response.status_code if response else 'No response'}"
-                        )
-                        continue
-
                     data = response.json()
                     events = data.get("events", [])
                     if not events:
@@ -142,6 +137,8 @@ class MDShopScraper:
                             logger.debug(f"[MDShop] Parse error: {e}")
                             continue
 
+                except ScrapeError:
+                    raise
                 except Exception as e:
                     logger.error(f"[MDShop] Error fetching {sport_name}: {e}")
                     continue

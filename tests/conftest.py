@@ -45,6 +45,7 @@ from pathlib import Path
 import pytest
 
 from scrapers import common
+from scripts.check_test_isolation import runtime_state_snapshot
 
 EXAMPLE_ROUTE_BOOKS = {
     "mdshop": {
@@ -58,8 +59,6 @@ EXAMPLE_ROUTE_BOOKS = {
         "template_live": "https://www.admiralbet.ba/sport-live?event={event_id}",
     },
 }
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # Opt-in for tests that must read the operator's real runtime state.
 REAL_STATE_ENV = "BH_ARB_TEST_RUNTIME_STATE"
@@ -89,22 +88,6 @@ _API_RUNTIME_FILES = {
     "DEEP_LINK_VERIFICATIONS_FILE": "deep_link_verifications.json",
     "DEEP_LINK_DECISIONS_FILE": "deep_link_decisions.json",
 }
-
-
-def _runtime_state_snapshot() -> dict[str, tuple[int, int]]:
-    """Fingerprint every file the suite must leave untouched."""
-    snapshot: dict[str, tuple[int, int]] = {}
-    for directory in (REPO_ROOT / "config" / "generated", REPO_ROOT / "cache"):
-        if not directory.exists():
-            continue
-        for path in directory.rglob("*"):
-            if path.is_file():
-                stat = path.stat()
-                snapshot[str(path.relative_to(REPO_ROOT))] = (
-                    stat.st_mtime_ns,
-                    stat.st_size,
-                )
-    return snapshot
 
 
 def _reset_deeplink_state() -> None:
@@ -172,9 +155,9 @@ def _repository_runtime_state_untouched():
     redirects the paths, and this guard proves nothing slipped past it. It
     compares names, sizes and mtimes; it never reads or rewrites the files.
     """
-    before = _runtime_state_snapshot()
+    before = runtime_state_snapshot()
     yield
-    after = _runtime_state_snapshot()
+    after = runtime_state_snapshot()
     added = sorted(set(after) - set(before))
     removed = sorted(set(before) - set(after))
     changed = sorted(

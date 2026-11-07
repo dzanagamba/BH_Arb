@@ -18,6 +18,7 @@ import pytest
 
 from config import settings
 from engine import mapping_evidence, matcher
+from scripts.check_test_isolation import runtime_state_snapshot
 from server import api
 from server.storage import Storage, default_storage_path
 
@@ -112,6 +113,38 @@ def test_writes_land_in_the_temporary_runtime_and_not_the_checkout(monkeypatch):
     assert _checkout_runtime_snapshot() == before, (
         "a write reached the checkout's config/generated or cache directory"
     )
+
+
+def test_sqlite_sidecars_do_not_count_as_runtime_state_writes(tmp_path):
+    """SR1-2: SQLite's connection-scoped files are not test writes.
+
+    A read-only inspection or a concurrently running scanner can create or
+    remove ``-shm`` and ``-wal`` while the suite runs. The guard ignores those
+    sidecars, but a real change to the database file or any other runtime file
+    is still detected.
+    """
+    root = tmp_path / "repo"
+    cache = root / "cache"
+    generated = root / "config" / "generated"
+    cache.mkdir(parents=True)
+    generated.mkdir(parents=True)
+    database = cache / "bh_arb.sqlite3"
+    database.write_bytes(b"database")
+    before = runtime_state_snapshot(root)
+
+    for suffix in ("-shm", "-wal"):
+        database.with_name(database.name + suffix).write_bytes(b"sidecar")
+
+    assert runtime_state_snapshot(root) == before
+
+    database.write_bytes(b"database changed")
+    (cache / "last_scan.json").write_text("{}", encoding="utf-8")
+    after = runtime_state_snapshot(root)
+
+    database_key = str(database.relative_to(root))
+    added_key = str((cache / "last_scan.json").relative_to(root))
+    assert after[database_key] != before[database_key]
+    assert set(after) - set(before) == {added_key}
 
 
 def test_the_redirected_ledger_matches_the_requested_runtime_mode():

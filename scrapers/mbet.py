@@ -11,14 +11,14 @@ Parameters: live, offer_plan, fields, lang, limit, offset, start, end, orderBy
 import logging
 from datetime import UTC, datetime, timedelta
 
-import httpx
-
-from config.settings import VERIFY_SSL
 from engine import sports
 from engine.market_registry import MARKET_REGISTRY, record_unmapped, registered_spec
 from models.schemas import Market, MarketType, Match, OddsValue
-from scrapers.base import fetch_pages, fetch_with_retry
+from scrapers.base import fetch_pages
 from scrapers.common import ah_label, parse_dt
+from scrapers.errors import ScrapeError
+from scrapers.retry import fetch_with_retry
+from scrapers.transport import transport_client
 
 logger = logging.getLogger(__name__)
 
@@ -575,7 +575,9 @@ class MBetScraper:
         all_matches: list[Match] = []
         seen_codes: set[tuple] = set()
 
-        async with httpx.AsyncClient(timeout=30.0, verify=VERIFY_SSL) as client:
+        async with transport_client(
+            BOOKMAKER_ID, "live" if live else "prematch"
+        ) as client:
 
             async def fetch_page(index: int) -> list | None:
                 offset = index * 100
@@ -587,10 +589,9 @@ class MBetScraper:
                 )
                 try:
                     resp = await fetch_with_retry(client, url, headers=self.headers)
-                    if not resp or resp.status_code != 200:
-                        logger.error(f"[MBet] HTTP {resp.status_code if resp else 'No response'} at offset {offset}")
-                        return None
                     return resp.json().get("events", [])
+                except ScrapeError:
+                    raise
                 except Exception as e:
                     logger.error(f"[MBet] Error at offset {offset}: {e}")
                     return None

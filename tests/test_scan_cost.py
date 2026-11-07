@@ -10,7 +10,6 @@ from pathlib import Path
 from scrapers.cost import (
     begin_book,
     build_scan_report,
-    classify_exception,
     finish_book,
     record_browser_seconds,
     record_request,
@@ -34,11 +33,12 @@ def test_a_book_records_wall_browser_request_and_byte_fields():
     record_request(100)
     record_request(50)
 
-    record = finish_book("success", matches=3, markets=6)
+    record = finish_book("success", kind="ok", matches=3, markets=6)
 
     assert record is not None
     assert record["bookmaker"] == "mbet"
     assert record["outcome"] == "success"
+    assert record["kind"] == "ok"
     assert record["wall_seconds"] >= 0
     assert record["browser_seconds"] == 1.25
     assert record["requests"] == 2
@@ -55,6 +55,8 @@ def test_a_non_browser_book_reports_browser_time_as_not_measurable():
     record = finish_book("empty")
 
     assert record is not None
+    assert record["outcome"] == "empty"
+    assert record["kind"] == "empty"
     assert record["browser_seconds"] is None
     assert any("does not use a browser" in reason for reason in record["missing"])
 
@@ -83,13 +85,6 @@ def test_a_skipped_book_has_explicit_missing_reasons():
     assert record["bytes"] is None
     assert record["note"] == "disabled by runtime toggle"
     assert any("not attempted" in reason for reason in record["missing"])
-
-
-def test_exception_classification_separates_blocked_from_parse_error():
-    assert classify_exception(RuntimeError("HTTP 403 Forbidden")) == "blocked"
-    assert classify_exception(RuntimeError("captcha challenge")) == "blocked"
-    assert classify_exception(RuntimeError("net::ERR_TIMED_OUT")) == "blocked"
-    assert classify_exception(ValueError("unexpected JSON shape")) == "parse_error"
 
 
 def test_the_scan_report_keeps_outcomes_and_denominators_distinct():
@@ -132,6 +127,7 @@ def test_the_scan_report_keeps_outcomes_and_denominators_distinct():
     assert report["totals"]["success"] == 1
     assert report["totals"]["empty"] == 1
     assert report["totals"]["blocked"] == 1
+    assert report["totals"]["kinds"] == {"blocked": 1, "empty": 1, "ok": 1}
     assert report["totals"]["wall_seconds"] == 6.0
     assert report["totals"]["requests"] == 7
     assert report["totals"]["bytes"] == 1500
@@ -287,6 +283,7 @@ def test_health_exposes_the_last_scan_cost_without_urls(monkeypatch):
         {
             "mbet": {
                 "outcome": "success",
+                "kind": "ok",
                 "wall_seconds": 2.0,
                 "browser_seconds": None,
                 "requests": 4,
@@ -302,7 +299,9 @@ def test_health_exposes_the_last_scan_cost_without_urls(monkeypatch):
     body = asyncio.run(api.health())
 
     assert body["scan_cost"]["prematch"]["totals"]["books"] == 1
+    assert body["scan_cost"]["prematch"]["totals"]["kinds"] == {"ok": 1}
     assert body["scan_cost"]["prematch"]["books"]["mbet"]["requests"] == 4
+    assert body["scan_cost"]["prematch"]["books"]["mbet"]["kind"] == "ok"
     serialized = json.dumps(body["scan_cost"])
     assert "http://" not in serialized and "https://" not in serialized
     assert "headers" not in serialized.lower()

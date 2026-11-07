@@ -12,6 +12,9 @@ from engine.market_registry import MARKET_REGISTRY, record_unmapped, registered_
 from models.schemas import Market, MarketType, Match, OddsValue
 from scrapers.base import fetch_pages, goto, launch_browser, measured_api_post, settle
 from scrapers.common import parse_dt
+from scrapers.errors import ScrapeError
+from scrapers.retry import retry_call
+from scrapers.transport import policy_for
 
 logger = logging.getLogger(__name__)
 
@@ -403,22 +406,27 @@ class MozzartbetScraper:
             max_pages = 100  # safety cap; real break is short page
 
             async def fetch_page(page_num: int) -> list | None:
+                # The POST body is a read-only page query, so retrying it is safe.
                 try:
-                    resp = await measured_api_post(
-                        page,
-                        f"{BASE_URL}/betting/matches",
-                        data={**api_body, "currentPage": page_num},
-                        headers={
-                            "Content-Type": "application/json",
-                            "Accept": "application/json, text/plain, */*",
-                            "medium": "WEB",
-                            "Referer": referer,
-                            "x-unique-id": f"mozz_{page_num}",
-                        },
+                    resp = await retry_call(
+                        lambda: measured_api_post(
+                            page,
+                            f"{BASE_URL}/betting/matches",
+                            data={**api_body, "currentPage": page_num},
+                            headers={
+                                "Content-Type": "application/json",
+                                "Accept": "application/json, text/plain, */*",
+                                "medium": "WEB",
+                                "Referer": referer,
+                                "x-unique-id": f"mozz_{page_num}",
+                            },
+                        ),
+                        policy=policy_for(
+                            BOOKMAKER_ID, "live" if live else "prematch"
+                        ),
+                        label=f"mozzartbet page {page_num}",
+                        account=False,
                     )
-                    if resp.status != 200:
-                        logger.debug(f"[Mozzartbet] Page {page_num} status {resp.status}")
-                        return None
                     data = await resp.json()
                     nonlocal max_pages
                     # Only totalPages is reliable for total; matchCount is per-page
@@ -426,6 +434,8 @@ class MozzartbetScraper:
                     if isinstance(total_pages, int) and total_pages > 0:
                         max_pages = min(total_pages, 100)
                     return data.get("items", [])
+                except ScrapeError:
+                    raise
                 except Exception as e:
                     logger.debug(f"[Mozzartbet] Pagination page {page_num} error: {e}")
                     return None

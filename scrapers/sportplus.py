@@ -12,14 +12,13 @@ import logging
 import re
 from datetime import UTC, datetime
 
-import httpx
-
-from config.settings import VERIFY_SSL
 from engine import sports
 from engine.market_registry import record_unmapped, registered_spec
 from models.schemas import Market, MarketType, Match, OddsValue
-from scrapers.base import fetch_with_retry
 from scrapers.common import betradar_id, normalize_outcome, parse_local_dt, qualify_league
+from scrapers.errors import ScrapeError
+from scrapers.retry import fetch_with_retry
+from scrapers.transport import transport_client
 
 logger = logging.getLogger(__name__)
 
@@ -234,12 +233,9 @@ class SportPlusScraper:
         all_matches: list[Match] = []
         seen_codes: set[tuple] = set()
 
-        async with httpx.AsyncClient(timeout=120.0, verify=VERIFY_SSL) as client:
+        async with transport_client(BOOKMAKER_ID, "prematch") as client:
             try:
                 resp = await fetch_with_retry(client, self.url, headers=self.headers)
-                if not resp or resp.status_code != 200:
-                    logger.error(f"[SportPlus] HTTP {resp.status_code if resp else 'No response'}")
-                    return []
 
                 # Response may be double-serialized
                 data = resp.json()
@@ -258,6 +254,8 @@ class SportPlusScraper:
                         logger.debug(f"[SportPlus] Parse error: {e}")
                         continue
 
+            except ScrapeError:
+                raise
             except Exception as e:
                 logger.error(f"[SportPlus] Fetch error: {e}")
 
@@ -274,12 +272,9 @@ class SportPlusScraper:
         all_matches: list[Match] = []
         seen_ids: set[str] = set()
 
-        async with httpx.AsyncClient(timeout=60.0, verify=VERIFY_SSL) as client:
+        async with transport_client(BOOKMAKER_ID, "live") as client:
             try:
                 resp = await fetch_with_retry(client, LIVE_API, headers=self.headers)
-                if not resp or resp.status_code != 200:
-                    logger.error(f"[SportPlus] Live HTTP {resp.status_code if resp else 'No response'}")
-                    return []
 
                 data = resp.json()
                 if isinstance(data, str):
@@ -301,6 +296,8 @@ class SportPlusScraper:
                         except Exception as e:
                             logger.debug(f"[SportPlus] Live parse error: {e}")
                             continue
+            except ScrapeError:
+                raise
             except Exception as e:
                 logger.error(f"[SportPlus] Live fetch error: {e}")
 

@@ -25,14 +25,12 @@ import logging
 from datetime import UTC, datetime
 from urllib.parse import urlencode
 
-import httpx
-
-from config.settings import VERIFY_SSL
 from engine import sports
 from engine.market_registry import MARKET_REGISTRY, MarketSpec, record_unmapped
 from models.schemas import Market, Match, OddsValue
-from scrapers.base import fetch_with_retry
 from scrapers.common import betradar_id, build_event_url, parse_dt, qualify_league
+from scrapers.retry import fetch_with_retry
+from scrapers.transport import transport_client
 
 logger = logging.getLogger(__name__)
 
@@ -359,7 +357,9 @@ class MaxBetScraper:
             return []
 
         all_matches: list[Match] = []
-        async with httpx.AsyncClient(timeout=60.0, verify=VERIFY_SSL) as client:
+        async with transport_client(
+            BOOKMAKER_ID, "live" if live else "prematch"
+        ) as client:
             for sport in wanted:
                 params: list[tuple[str, str | int]] = [("sportId", SPORT_IDS[sport])]
                 if sport == sports.FOOTBALL:
@@ -374,17 +374,6 @@ class MaxBetScraper:
                 response = await fetch_with_retry(
                     client, f"{MATCHES_API}?{urlencode(params)}", headers=self.headers
                 )
-                if response is None or response.status_code != 200:
-                    if sport == sports.FOOTBALL:
-                        raise RuntimeError(
-                            f"MaxBet matches feed returned "
-                            f"{response.status_code if response is not None else 'no response'}"
-                        )
-                    logger.warning(
-                        f"[MaxBet] {sport} feed returned "
-                        f"{response.status_code if response is not None else 'no response'}"
-                    )
-                    continue
                 events = response.json()
                 if not isinstance(events, list):
                     if sport == sports.FOOTBALL:

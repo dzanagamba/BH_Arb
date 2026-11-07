@@ -25,6 +25,32 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 LEDGER_ENV = "BH_ARB_TEST_RUNTIME_LEDGER"
 
+# SQLite's WAL sidecars are derived connection state: a read-only inspection or
+# a concurrently running scanner can create or remove them while the suite runs.
+# The runtime-state guard ignores them and compares the database file itself.
+_SQLITE_SIDECAR_SUFFIXES = ("-shm", "-wal")
+
+
+def runtime_state_snapshot(root: Path = REPO_ROOT) -> dict[str, tuple[int, int]]:
+    """Fingerprint every file the suite must leave untouched.
+
+    ``config/generated/`` and ``cache/`` hold operator runtime state. A test
+    that writes there is a bug even when it later cleans up, so the guard
+    compares names, sizes and mtimes around the run. SQLite ``-shm``/``-wal``
+    sidecars are excluded because they are connection-scoped; the database file
+    itself is still compared.
+    """
+    snapshot: dict[str, tuple[int, int]] = {}
+    for directory in (root / "config" / "generated", root / "cache"):
+        if not directory.exists():
+            continue
+        for path in directory.rglob("*"):
+            if not path.is_file() or path.name.endswith(_SQLITE_SIDECAR_SUFFIXES):
+                continue
+            stat = path.stat()
+            snapshot[str(path.relative_to(root))] = (stat.st_mtime_ns, stat.st_size)
+    return snapshot
+
 
 def _run(mode: str, pytest_args: list[str]) -> int:
     env = {**os.environ, LEDGER_ENV: mode}

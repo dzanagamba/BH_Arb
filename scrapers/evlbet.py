@@ -8,13 +8,13 @@ Endpoint: GET https://sportapis.evlbet.com/SportsOfferApi/api/sport/offer/v3/mat
 import logging
 from datetime import UTC, datetime
 
-import httpx
-
-from config.settings import VERIFY_SSL
 from engine.market_registry import MARKET_REGISTRY, record_unmapped, registered_spec
 from models.schemas import Market, MarketType, Match, OddsValue
-from scrapers.base import fetch_pages, fetch_with_retry
+from scrapers.base import fetch_pages
 from scrapers.common import parse_dt
+from scrapers.errors import ScrapeError
+from scrapers.retry import fetch_with_retry
+from scrapers.transport import transport_client
 
 logger = logging.getLogger(__name__)
 
@@ -66,15 +66,15 @@ class EvlbetScraper:
         all_matches: list[Match] = []
         seen: set[str] = set()
 
-        async with httpx.AsyncClient(headers=HEADERS, timeout=20.0, verify=VERIFY_SSL) as client:
+        async with transport_client(
+            BOOKMAKER_ID, "prematch", headers=HEADERS
+        ) as client:
 
             async def fetch_page(index: int) -> list | None:
                 offset = index * 100
                 url = f"{API_URL}?SportIds=388&Limit=100&Offset={offset}"
                 try:
                     r = await fetch_with_retry(client, url)
-                    if not r or r.status_code != 200:
-                        return None
                     data = r.json()
                     # API sometimes returns dict with Response key, sometimes bare list (2026-08-20)
                     if isinstance(data, list):
@@ -82,6 +82,8 @@ class EvlbetScraper:
                     if isinstance(data, dict):
                         return data.get("Response", [])
                     return []
+                except ScrapeError:
+                    raise
                 except Exception as e:
                     logger.error(f"[EVLBet] Error fetching offset {offset}: {e}")
                     return None

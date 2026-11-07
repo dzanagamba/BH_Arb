@@ -7,6 +7,7 @@ import json
 import logging
 from datetime import UTC, datetime, timedelta
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -184,6 +185,8 @@ def test_a_scan_increments_the_counters_and_gauges(isolated_scan):
     assert 'bh_scans_failed_total{mode="prematch"} 0' not in text
     assert 'bh_book_results_total{book="mbet",mode="prematch",outcome="success"} 1' in text
     assert 'bh_book_results_total{book="mdshop",mode="prematch",outcome="success"} 1' in text
+    assert 'bh_book_kinds_total{book="mbet",kind="ok",mode="prematch"} 1' in text
+    assert 'bh_book_kinds_total{book="mdshop",kind="ok",mode="prematch"} 1' in text
     assert 'bh_surebets_found{mode="prematch"} 0' in text
     assert 'bh_surebets_found_total{mode="prematch"} 0' in text
     assert 'bh_candidate_queue_size{mode="prematch"} 0' in text
@@ -210,6 +213,47 @@ def test_empty_and_failed_books_are_counted_separately(isolated_scan, monkeypatc
     text = metrics.render()
     assert 'bh_book_results_total{book="mbet",mode="prematch",outcome="empty"} 1' in text
     assert 'bh_book_results_total{book="mdshop",mode="prematch",outcome="error"} 1' in text
+    assert 'bh_book_kinds_total{book="mbet",kind="empty",mode="prematch"} 1' in text
+    assert 'bh_book_kinds_total{book="mdshop",kind="parse_error",mode="prematch"} 1' in text
+
+
+def test_a_timeout_book_is_recorded_with_the_timeout_kind(isolated_scan, monkeypatch):
+    class TimeoutScraper:
+        async def scrape(self, live=False, scan_time=None, sports_wanted=None):
+            raise httpx.ReadTimeout("feed did not answer")
+
+    monkeypatch.setitem(api.SCRAPERS, "mbet", lambda: TimeoutScraper())
+
+    asyncio.run(api.run_scan("prematch"))
+
+    record = api._scan_cost["prematch"]["books"]["mbet"]
+    assert record["kind"] == "timeout"
+    assert record["outcome"] == "blocked"
+    text = metrics.render()
+    assert 'bh_book_kinds_total{book="mbet",kind="timeout",mode="prematch"} 1' in text
+    # The historical metric label is unchanged for an exception.
+    assert 'bh_book_results_total{book="mbet",mode="prematch",outcome="error"} 1' in text
+
+
+def test_a_scan_shares_one_transport_client_and_closes_it(isolated_scan, monkeypatch):
+    from scrapers.transport import transport_client
+
+    clients = []
+
+    class ClientScraper:
+        async def scrape(self, live=False, scan_time=None, sports_wanted=None):
+            async with transport_client("mbet", "prematch") as first:
+                async with transport_client("mbet", "prematch") as second:
+                    assert first is second
+                    clients.append(first)
+            return [_fake_match("mbet", scan_time)]
+
+    monkeypatch.setitem(api.SCRAPERS, "mbet", lambda: ClientScraper())
+
+    asyncio.run(api.run_scan("prematch"))
+
+    assert clients
+    assert all(client.is_closed for client in clients)
 
 
 def test_a_failed_scan_is_counted_and_logged(isolated_scan, monkeypatch, caplog):

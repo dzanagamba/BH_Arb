@@ -45,9 +45,10 @@ waived; do not start or un-waive either without an explicit operator instruction
 Use `.venv/bin/python` if `python` is not on `PATH`.
 
 CI runs `python scripts/refresh_fixtures.py --check` and
-`python scripts/audit_admissibility.py --check`; it does **not** run
-`python scripts/check_test_isolation.py` yet. Run the isolation check locally
-until SR1-2 lands. See `docs/CI.md`.
+`python scripts/audit_admissibility.py --check`. It does not call
+`python scripts/check_test_isolation.py`: the 3.11 `tests` leg already runs the
+suite in both ledger modes (`BH_ARB_TEST_RUNTIME_LEDGER` empty and `populated`).
+The script remains the one-command local equivalent. See `docs/CI.md`.
 
 ## Maintenance work and ad-hoc requests
 

@@ -1,6 +1,6 @@
 """
-Shared scraper plumbing: the stealth Playwright launcher and an httpx GET with
-retries.
+Shared scraper plumbing: the stealth Playwright launcher and the pagination
+helper.
 """
 
 import asyncio
@@ -8,11 +8,12 @@ import logging
 import time
 from collections.abc import Awaitable, Callable
 
-import httpx
 from playwright.async_api import Browser, BrowserContext, Playwright, async_playwright
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
 from config.settings import HEADLESS, USER_AGENT
-from scrapers.cost import record_browser_seconds, record_request, response_bytes
+from scrapers.cost import record_browser_seconds, record_request
+from scrapers.errors import ScrapeKind
 
 logger = logging.getLogger(__name__)
 
@@ -103,16 +104,24 @@ async def measured_api_post(page, url: str, **kwargs):
     return response
 
 
-async def settle(page, max_ms: int) -> None:
+async def settle(page, max_ms: int) -> ScrapeKind:
     """
     Wait for the page's network to go idle, but never longer than `max_ms`.
     Replaces fixed `wait_for_timeout` sleeps: returns as soon as the session
     cookies / initial requests have finished, with the old sleep as the cap.
+
+    Returns the shared ``ScrapeKind``. A timeout or a navigation error is
+    reported as such (and logged), never silently treated as a settled page.
     """
     try:
         await page.wait_for_load_state("networkidle", timeout=max_ms)
-    except Exception:
-        pass
+    except PlaywrightTimeoutError:
+        logger.warning("Page did not reach networkidle within %d ms", max_ms)
+        return ScrapeKind.TIMEOUT
+    except Exception as exc:  # noqa: BLE001 - classified for the caller
+        logger.warning("Page failed while waiting for networkidle: %s", exc)
+        return ScrapeKind.TRANSPORT
+    return ScrapeKind.OK
 
 
 async def fetch_pages(
@@ -143,35 +152,3 @@ async def fetch_pages(
                 return items
         page = end
     return items
-
-
-async def fetch_with_retry(
-    client: httpx.AsyncClient,
-    url: str,
-    headers: dict | None = None,
-    params: dict | None = None,
-    max_retries: int = 3,
-    backoff_factor: float = 0.5,
-) -> httpx.Response | None:
-    """
-    Fetch a URL using httpx with exponential backoff retries for transient
-    HTTP 5xx server errors and connection/timeout failures.
-    """
-    for attempt in range(1, max_retries + 1):
-        try:
-            resp = await client.get(url, headers=headers, params=params)
-            record_request(response_bytes(resp))
-            if resp.status_code < 500:
-                return resp
-            logger.warning(
-                f"HTTP {resp.status_code} on {url} (attempt {attempt}/{max_retries})"
-            )
-        except (httpx.TimeoutException, httpx.NetworkError, httpx.RequestError) as e:
-            record_request(None)
-            logger.warning(
-                f"Request failed: {e} on {url} (attempt {attempt}/{max_retries})"
-            )
-
-        if attempt < max_retries:
-            await asyncio.sleep(backoff_factor * (2 ** (attempt - 1)))
-    return None

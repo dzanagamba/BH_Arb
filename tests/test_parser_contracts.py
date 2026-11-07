@@ -28,6 +28,23 @@ FIXTURE_DIR = ROOT / "tests" / "fixtures" / "markets"
 CONTRACTS = FIXTURE_DIR / "contracts.json"
 client = TestClient(app)
 
+# SR1-1: the shipped contract test checks payload equality, not fixture age.
+# Pinning the reference date keeps the suite green when a capture crosses the
+# 120-day policy; CI's ``refresh_fixtures.py --check`` still reports staleness
+# against the real clock.
+REFERENCE_DATE = date(2026, 11, 7)
+
+
+def _freeze_contract_clock(monkeypatch, frozen: date) -> None:
+    """Make ``parser_contracts.date.today()`` return ``frozen`` for one test."""
+
+    class FrozenDate(date):
+        @classmethod
+        def today(cls) -> FrozenDate:
+            return cls(frozen.year, frozen.month, frozen.day)
+
+    monkeypatch.setattr(parser_contracts, "date", FrozenDate)
+
 
 def _copy_case(tmp_path: Path, stem: str = "maxbet_prematch") -> Path:
     fixture_dir = tmp_path / "markets"
@@ -46,12 +63,46 @@ def _mutate(path: Path, mutate) -> None:
 
 
 def test_the_shipped_contracts_match_every_fixture():
-    report = refresh_fixtures.build_report()
+    """The fixtures and their reviewed contracts are in sync.
+
+    The reference date is pinned (SR1-1): this test verifies payload equality,
+    while CI's ``refresh_fixtures.py --check`` owns the real-date age policy.
+    """
+    report = refresh_fixtures.build_report(today=REFERENCE_DATE)
     assert report["diff"] == {"added": [], "removed": [], "changed": {}}
     assert report["stale"] == []
     assert report["missing_books"] == []
     assert report["ok"] is True
     assert report["contracts"] == len(list(FIXTURE_DIR.glob("*.json"))) - 1
+
+
+def test_the_contract_check_is_independent_of_the_wall_clock(monkeypatch):
+    """SR1-1: the equality check stays green on 2027-03-01 and later."""
+    _freeze_contract_clock(monkeypatch, date(2027, 3, 1))
+
+    report = refresh_fixtures.build_report(today=REFERENCE_DATE)
+
+    assert report["diff"] == {"added": [], "removed": [], "changed": {}}
+    assert report["stale"] == []
+    assert report["ok"] is True
+
+
+def test_an_expired_contract_still_reports_stale_in_production(monkeypatch):
+    """SR1-1: without an injected date the real-clock staleness check remains."""
+    _freeze_contract_clock(monkeypatch, date(2027, 3, 1))
+    contracts = {
+        "maxbet_prematch": {
+            "bookmaker": "maxbet",
+            "mode": "prematch",
+            "captured_at": "2026-10-20",
+        }
+    }
+
+    stale = parser_contracts.stale_contracts(contracts, max_age_days=120)
+
+    assert stale[0]["contract"] == "maxbet_prematch"
+    assert stale[0]["age_days"] == 132
+    assert stale[0]["age_days"] > stale[0]["max_age_days"]
 
 
 def test_every_enabled_book_has_a_dated_contract():
