@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 HTML = Path("frontend/index.html").read_text(encoding="utf-8")
@@ -29,9 +30,30 @@ def test_the_service_worker_never_caches_api_or_odds():
 
 
 def test_offline_shell_does_not_become_a_stale_odds_layer():
-    assert "caches.match('/index.html')" in SW
     assert "fetch(event.request)" in SW
+    assert "/api/" in SW
     assert "stale" in SW.lower()
+
+
+def test_index_html_is_not_cached_and_only_navigations_fall_back_to_the_shell():
+    """A 404 in the install list aborted the whole install.
+
+    The server serves the document at `/` only, so `/index.html` cannot be part
+    of the shell. The cached HTML may answer a navigation; a missing script,
+    stylesheet or font must fail as itself instead of becoming HTML.
+    """
+    shell = next(line for line in SW.splitlines() if line.startswith("const SHELL"))
+    assert "'/index.html'" not in shell and '"/index.html"' not in shell
+    assert "caches.match('/index.html')" not in SW
+    assert "caches.match('/')" in SW
+    assert "event.request.mode === 'navigate'" in SW
+    assert "Response.error()" in SW
+    assert "caches.match(event.request, { ignoreSearch: true })" in SW
+
+    # The shell must hold the exact URLs the document requests, including the
+    # `?v=` suffix; a bare URL would miss every versioned asset.
+    for match in re.finditer(r'(?:href|src)="(/(?:css|js)/[^"]+)"', HTML):
+        assert match.group(1) in shell, match.group(1)
 
 
 def test_main_regions_have_labels_and_live_regions():

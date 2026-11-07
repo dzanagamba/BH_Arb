@@ -30,7 +30,7 @@ import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
 
-from engine.market_registry import MARKET_REGISTRY, record_unmapped
+from engine.market_registry import MARKET_REGISTRY, record_unmapped, registered_spec
 from models.schemas import Market, MarketType, Match, OddsValue
 from scrapers.base import goto, launch_browser, measured_api_get, settle
 from scrapers.common import betradar_id, qualify_league
@@ -92,11 +92,7 @@ def _wwin_registered_spec(
     The single registry-resolution step of :func:`_build_markets_from_bets`, at
     module scope so the WWIN resolution path is directly testable.
     """
-    spec = MARKET_REGISTRY.lookup_type("wwin", mode, bet_id, market_type, line=line)
-    known = getattr(MARKET_REGISTRY, "has_source_id", None)
-    if spec is None and (known is None or not known("wwin", mode, bet_id)):
-        record_unmapped("wwin", bet_id)
-    return spec
+    return registered_spec("wwin", mode, bet_id, market_type, line=line)
 
 
 def _build_markets_from_bets(bets: list, mode: str = "prematch") -> list[Market]:

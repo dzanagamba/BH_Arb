@@ -15,7 +15,7 @@ import httpx
 
 from config.settings import VERIFY_SSL
 from engine import sports
-from engine.market_registry import MARKET_REGISTRY, record_unmapped
+from engine.market_registry import MARKET_REGISTRY, record_unmapped, registered_spec
 from models.schemas import Market, MarketType, Match, OddsValue
 from scrapers.base import fetch_pages, fetch_with_retry
 from scrapers.common import ah_label, parse_dt
@@ -79,13 +79,7 @@ def _registered_spec(
     market_type: MarketType,
     line: float | None = None,
 ):
-    spec = MARKET_REGISTRY.lookup_type(
-        "mbet", mode, source_id, market_type, line=line
-    )
-    known = getattr(MARKET_REGISTRY, "has_source_id", None)
-    if spec is None and (known is None or not known("mbet", mode, source_id)):
-        record_unmapped("mbet", source_id)
-    return spec
+    return registered_spec("mbet", mode, source_id, market_type, line=line)
 
 
 def _resolve_mbet_market(raw_sport_id: str, odds_dict: dict) -> dict[str, list[OddsValue]]:

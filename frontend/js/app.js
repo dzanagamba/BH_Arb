@@ -25,8 +25,15 @@ let candidateApiKeyDeclined = false; // a cancelled prompt stops background re-a
 let allSurebets = [];               // full list from the server
 let filteredSurebets = [];          // after client-side filtering
 let selectedSurebetId = null;       // the surebet open in the bet slip
+let resultsRequestSeq = 0;          // guards /api/results against a late payload
+let allowAutoSelect = true;         // false during a pure repaint (language change)
+let statusPollFailures = 0;         // consecutive failed /api/status reads
+// A scan can block the event loop for over a minute. Warn early, but keep
+// polling long enough to recover and load the finished scan.
+const STATUS_POLL_MAX_FAILURES = 90;
+let statusMessage = { text: '', render: null }; // live status line, language-aware
 let pollingInterval = null;
-let activeBookmakers = new Set(['mozzartbet', 'mdshop', 'admiralbet', 'betole', 'mbet', 'sportplus', 'evlbet', 'premier_kladionica', 'wwin']);
+let activeBookmakers = new Set(['mozzartbet', 'mdshop', 'admiralbet', 'betole', 'mbet', 'sportplus', 'evlbet', 'premier_kladionica', 'wwin', 'maxbet']);
 let bookmakersConfig = {};
 let globalInvestment = 100;
 // P3-7: advisory (default), record_only or paper. A non-advisory scan never
@@ -75,6 +82,7 @@ function applyLanguage() {
     document
         .querySelectorAll('[data-i18n], [data-i18n-aria-label], [data-i18n-title], [data-i18n-placeholder]')
         .forEach(translateElement);
+    applyStatusText();
     const select = document.getElementById('filter-language');
     if (select) select.value = language;
     refreshLocalizedViews();
@@ -86,11 +94,13 @@ function applyLanguage() {
 function refreshLocalizedViews() {
     if (typeof updateModeToggleUI === 'function') updateModeToggleUI();
     if (typeof updateThemeButton === 'function') updateThemeButton();
-    if (typeof renderKpis === 'function' && typeof resultsSnapshot !== 'undefined' && resultsSnapshot) {
-        renderKpis(footballSurebets());
-    }
-    if (typeof renderSurebets === 'function' && typeof resultsSnapshot !== 'undefined' && resultsSnapshot) {
-        renderSurebets(footballSurebets());
+    // Repaint through the same path a filter change uses, so the list, the KPI
+    // counts and filteredSurebets cannot disagree. A repaint must not count as
+    // a user selection: nothing may auto-open a slip or launch a re-check.
+    if (typeof applyFilters === 'function' && typeof resultsSnapshot !== 'undefined' && resultsSnapshot) {
+        const previousAutoSelect = allowAutoSelect;
+        allowAutoSelect = false;
+        try { applyFilters(); } finally { allowAutoSelect = previousAutoSelect; }
     }
     if (typeof renderOtherSports === 'function') renderOtherSports();
     if (typeof renderSlip === 'function') renderSlip();
@@ -130,9 +140,9 @@ let resultsSnapshot = null;         // last /api/results payload, same reason
 let freshnessSnapshot = null;       // P0-4: scan age, TTL and per-book freshness
 let freshnessBannerSignature = null; // avoids rebuilding the banner's button every tick
 let noSurebetReasons = null;        // the diagnostic copy table, fetched once at start-up
-let currentCandidates = [];         // the review page on screen
 let paperState = {                  // N2-1: paper ledger filters and page offsets
-    runMode: '', feedMode: '', status: '', oppOffset: 0, posOffset: 0, limit: 25,
+    runMode: '', feedMode: '', status: '', oppOffset: 0, posOffset: 0,
+    oppTotal: 0, posTotal: 0,
 };
 const PAPER_PAGE_SIZE = 25;
 let evidenceOffset = 0;             // group-evidence page offset
@@ -212,6 +222,7 @@ const BOOKMAKER_COLORS = {
     evlbet:     '#9C27B0',
     premier_kladionica: '#16A34A',
     wwin:       '#EF4444',
+    maxbet:     '#0F766E',
 };
 
 const MARKET_LABELS = {
@@ -328,6 +339,9 @@ function handleDataAction(event) {
         case 'sweep-links': sweepLinks(); break;
         case 'log-bet': logBet(element.dataset.slipId); break;
         case 'enable-notifications': enableNotifications(); break;
+        case 'paper-export': event.preventDefault(); exportPaperCsv(); break;
+        case 'bets-export': event.preventDefault(); exportBetsCsv(); break;
+        case 'open-report': event.preventDefault(); openProtectedReport(element.dataset.reportUrl || '/api/debug/report'); break;
         case 'set-market-filter': setMarketFilter(element.dataset.market); break;
         case 'copy-text': copyText(element.dataset.copy, element.dataset.copyMessage); break;
         case 'close-slip': closeSlip(); break;
@@ -413,11 +427,13 @@ function updateModeToggleUI() {
 }
 
 function restorePreferences() {
+    let savedRescan = 0;
     try {
         stakeRounding = localStorage.getItem('stakeRounding') || '1';
         soundMuted = localStorage.getItem('soundMuted') !== '0';
         const savedRunMode = localStorage.getItem('scanRunMode');
         if (['advisory', 'record_only', 'paper'].includes(savedRunMode)) scanRunMode = savedRunMode;
+        savedRescan = parseInt(localStorage.getItem('autoRescanMinutes') || '0', 10);
     } catch (e) { /* localStorage unavailable */ }
     const roundingEl = document.getElementById('filter-rounding');
     if (roundingEl) roundingEl.value = stakeRounding;
@@ -425,6 +441,10 @@ function restorePreferences() {
     if (sound) sound.checked = !soundMuted;
     const runModeEl = document.getElementById('filter-run-mode');
     if (runModeEl) runModeEl.value = scanRunMode;
+    const rescanEl = document.getElementById('filter-autorescan');
+    const rescanMinutes = [0, 2, 5, 10].includes(savedRescan) ? savedRescan : 0;
+    if (rescanEl) rescanEl.value = String(rescanMinutes);
+    if (rescanMinutes > 0) setAutoRescan(rescanMinutes);
 }
 
 function setScanRunMode(value) {
@@ -530,11 +550,51 @@ function switchMode(mode) {
     try { localStorage.setItem('currentMode', mode); } catch (e) { /* ignore */ }
     updateModeToggleUI();
     hideError();
+    // A slip belongs to the feed it was opened on. Leaving it open would hide
+    // the list behind a placeholder on a phone with no way back.
+    if (document.body.classList.contains('slip-open')) closeSlip();
     selectedSurebetId = null;
+    // The previous feed's rows are not this feed's rows: clear them and say the
+    // new one is loading instead of re-labelling stale matches.
+    allSurebets = [];
+    filteredSurebets = [];
+    resultsSnapshot = null;
+    freshnessSnapshot = null;
+    showResultsLoading();
     loadResults(true);
     loadHealth();
     if (activeTab === 'review') loadCandidates();
     if (activeTab === 'evidence') loadEvidence(true);
+}
+
+// While a switch is in flight the list must not fall through to a diagnostic
+// that describes a scan for the feed that is no longer on screen.
+function showResultsLoading() {
+    const grid = document.getElementById('results-grid');
+    if (grid) { grid.innerHTML = ''; grid.hidden = true; }
+    const loading = document.getElementById('list-loading');
+    if (loading) {
+        loading.textContent = tr('Loading the {mode} feed…', { mode: tr(currentMode === 'live' ? 'live' : 'prematch') });
+        loading.hidden = false;
+    }
+    const empty = document.getElementById('empty-state');
+    if (empty) empty.hidden = true;
+    const noResults = document.getElementById('no-results');
+    if (noResults) noResults.hidden = true;
+    setText('stat-matches', '—');
+    setText('stat-groups', '—');
+    setText('stat-time', tr('never'));
+    setText('surebets-count', '0');
+    renderKpis([]);
+    renderFreshnessBanner();
+    renderRunModeBanner();
+    renderFeedIntegrity();
+    renderSlip();
+}
+
+function hideResultsLoading() {
+    const loading = document.getElementById('list-loading');
+    if (loading) { loading.hidden = true; loading.textContent = ''; }
 }
 
 // System → light → dark. The choice is applied before first paint by an inline
@@ -563,10 +623,24 @@ function updateThemeButton() {
 function toggleSettings(open) {
     const drawer = document.getElementById('settings-drawer');
     const backdrop = document.getElementById('settings-backdrop');
+    const button = document.getElementById('settings-btn');
     if (!drawer || !backdrop) return;
+    const wasOpen = !drawer.hidden;
     drawer.hidden = !open;
     backdrop.hidden = !open;
-    if (open) loadHealth();
+    if (button) button.setAttribute('aria-expanded', String(open));
+    if (open) {
+        loadHealth();
+        // Move focus into the drawer so a keyboard user lands on a control
+        // instead of staying behind the backdrop.
+        if (!wasOpen) {
+            const first = drawer.querySelector('select, input, button, a, [tabindex]');
+            if (first) first.focus();
+        }
+    } else if (wasOpen && button) {
+        // Close/Escape/backdrop all return focus to the control that opened it.
+        button.focus();
+    }
 }
 
 // ─── Bookmakers & markets (settings) ─────────────────────────────────────────
@@ -664,31 +738,65 @@ async function scanNow() {
     if (btn.disabled) return;
     try {
         const res = await apiFetch(`/api/scan?mode=${currentMode}&run_mode=${encodeURIComponent(scanRunMode)}`, { method: 'POST', headers: candidateActionHeaders() });
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (res.status === 429) {
             showError(data.detail || tr('Too many scans — wait a moment.'));
             return;
         }
+        if (!res.ok) {
+            showError(data.detail || tr('Could not start the scan: {error}', { error: `HTTP ${res.status}` }));
+            return;
+        }
+        if (data.status === 'maintenance') {
+            // A 200 "maintenance" is not a started scan: never show progress or
+            // a completion message for work that did not begin.
+            showError(tr('The scanner is in maintenance. Try again when it is available.'));
+            return;
+        }
         if (data.status === 'already_scanning') {
-            setStatus('scanning', tr('Scan in progress…'));
+            activeScanMode = currentMode;
+            btn.disabled = true;
+            setScanButtonLabel('Scanning…');
+            showScanProgress();
+            setStatus('scanning', scanModeText(), scanModeText);
             startPolling();
             return;
         }
         btn.disabled = true;
-        btn.textContent = tr('Scanning…');
+        setScanButtonLabel('Scanning…');
         activeScanMode = currentMode;
         showScanProgress();
-        setStatus('scanning', tr('Scanning {mode} matches…', { mode: tr(currentMode === 'live' ? 'live' : 'upcoming') }));
+        setStatus('scanning', scanModeText(), scanModeText);
         startPolling();
     } catch (e) {
         showError(tr('Could not start the scan: {error}', { error: e.message }));
     }
 }
 
+// Replace only the label inside the scan button. Writing `btn.textContent`
+// destroyed the `data-i18n` span, so a later language switch could not find it.
+function setScanButtonLabel(key) {
+    const btn = document.getElementById('scan-btn');
+    if (!btn) return;
+    const span = btn.querySelector('span[data-i18n]') || btn.querySelector('span');
+    const text = tr(key);
+    if (span) {
+        span.dataset.i18n = key;
+        span.textContent = text;
+    } else {
+        btn.textContent = text;
+    }
+}
+
+function scanModeText() {
+    return tr('Scanning {mode} matches…', { mode: tr((activeScanMode || currentMode) === 'live' ? 'live' : 'upcoming') });
+}
+
 let diagnosticsTimer = null;
 
 function startPolling() {
     if (pollingInterval) return;
+    statusPollFailures = 0;
     pollingInterval = setInterval(pollStatus, 2000);
 }
 
@@ -700,16 +808,18 @@ function stopPolling() {
 }
 
 function setAutoRescan(minutes) {
+    const value = [0, 2, 5, 10].includes(Number(minutes)) ? Number(minutes) : 0;
+    try { localStorage.setItem('autoRescanMinutes', String(value)); } catch (e) { /* ignore */ }
     if (autoRescanTimer) {
         clearInterval(autoRescanTimer);
         autoRescanTimer = null;
     }
     const countdownEl = document.getElementById('autorescan-countdown');
-    if (!minutes || minutes <= 0) {
+    if (!value) {
         if (countdownEl) countdownEl.hidden = true;
         return;
     }
-    let remaining = minutes * 60;
+    let remaining = value * 60;
     autoRescanTimer = setInterval(() => {
         remaining -= 1;
         if (countdownEl) {
@@ -719,7 +829,7 @@ function setAutoRescan(minutes) {
             countdownEl.textContent = tr('next scan {minutes}:{seconds}', { minutes: m, seconds: s });
         }
         if (remaining <= 0) {
-            remaining = minutes * 60;
+            remaining = value * 60;
             scanNow();
         }
     }, 1000);
@@ -729,7 +839,11 @@ async function pollStatus() {
     const pollMode = activeScanMode || currentMode;
     try {
         const res = await apiFetch(`/api/status?mode=${pollMode}`);
+        if (!res.ok) throw new Error(tr('request failed ({status})', { status: res.status }));
         const status = await res.json();
+        const recovered = statusPollFailures > 0;
+        statusPollFailures = 0;
+        if (recovered) hideError();
         updateScanProgress(status);
         if (!status.is_scanning) {
             stopPolling();
@@ -737,7 +851,28 @@ async function pollStatus() {
             await onScanComplete(status);
         }
     } catch (e) {
+        statusPollFailures += 1;
         console.warn('Status poll failed:', e);
+        // Warn once, but keep polling: the scan may be running behind a long
+        // synchronous stage, and dropping the poll would hide its result.
+        if (statusPollFailures === 5) {
+            showError(tr('Could not read the server status.'));
+        }
+        // A genuinely dead endpoint must not leave a spinner up for ever, and
+        // must not look like a completed scan.
+        if (statusPollFailures >= STATUS_POLL_MAX_FAILURES) {
+            statusPollFailures = 0;
+            stopPolling();
+            activeScanMode = null;
+            hideScanProgress();
+            const btn = document.getElementById('scan-btn');
+            if (btn) {
+                btn.disabled = false;
+                setScanButtonLabel('Scan now');
+            }
+            showError(tr('Could not read the server status.'));
+            setStatus('done', tr('Could not read the server status.'), () => tr('Could not read the server status.'));
+        }
     }
 }
 
@@ -746,7 +881,8 @@ function updateScanProgress(status) {
     const doneEl = document.getElementById('scan-bookies-done');
     const barEl = document.getElementById('scan-bar');
     if (subEl) subEl.textContent = status.current_bookmaker || tr('Processing…');
-    setStatus('scanning', status.current_bookmaker || tr('Scanning…'));
+    const statusText = () => status.current_bookmaker || tr('Scanning…');
+    setStatus('scanning', statusText(), statusText);
     if (doneEl) {
         const progress = status.bookmaker_progress || {};
         doneEl.innerHTML = Object.entries(progress).map(([id, state]) => {
@@ -766,27 +902,37 @@ async function onScanComplete(status) {
     hideScanProgress();
     const btn = document.getElementById('scan-btn');
     btn.disabled = false;
-    btn.textContent = tr('Scan now');
+    setScanButtonLabel('Scan now');
     if (status.errors && status.errors.length > 0) {
         showError(tr('Some bookmakers failed: {books}', { books: status.errors.slice(0, 3).join('; ') }));
     }
-    setStatus('done', status.surebets_found > 0
+    const completeText = () => (status.surebets_found > 0
         ? tr(status.surebets_found === 1 ? '{count} surebet found' : '{count} surebets found', { count: status.surebets_found })
         : tr('Scan complete — no surebets'));
+    setStatus('done', completeText(), completeText);
     await loadResults();
     loadCandidates();
 }
 
 // ─── Results ──────────────────────────────────────────────────────────────────
 async function loadResults(silent = false) {
+    const requestedMode = currentMode;
+    const token = ++resultsRequestSeq;
     try {
-        const res = await apiFetch(`/api/results?mode=${currentMode}`);
+        const res = await apiFetch(`/api/results?mode=${requestedMode}`);
+        if (!res.ok) throw new Error(tr('request failed ({status})', { status: res.status }));
         const data = await res.json();
+        // A late response for the feed the user has already left must never
+        // commit: the payload carries its own mode, and the token catches an
+        // older request for the same mode.
+        if (requestedMode !== currentMode || token !== resultsRequestSeq) return;
+        if (data.mode && data.mode !== requestedMode) return;
         allSurebets = data.surebets || [];
         // `match_groups` is the mode-correct count of groups the certainty gate
         // accepted; the health payload's equivalent is prematch-only.
         resultsSnapshot = data;
         freshnessSnapshot = data.freshness || null;
+        hideResultsLoading();
         renderFreshnessBanner();
         renderRunModeBanner();
         renderFeedIntegrity();
@@ -809,7 +955,14 @@ async function loadResults(silent = false) {
         }
         knownSurebetSignatures = signatures;
     } catch (e) {
+        if (requestedMode !== currentMode || token !== resultsRequestSeq) return;
         console.error('Failed to load results:', e);
+        const message = tr('Failed to load results: {error}', { error: e.message });
+        // Keep whatever list was already on screen, but make the failure visible
+        // instead of letting a 401/500 look like a scan with no surebets.
+        const loading = document.getElementById('list-loading');
+        if (loading && !loading.hidden) loading.textContent = message;
+        showError(message);
     }
 }
 
@@ -1012,11 +1165,11 @@ function renderKpis(surebets) {
     setText('kpi-best', best ? `${best.profit_percent.toFixed(2)}%` : '—');
     setText('kpi-best-sub', best
         ? tr('+{profit} KM on {stake} KM · {team}', { profit: money(globalInvestment * best.profit_percent / 100), stake: globalInvestment, team: formatTeamName(best.home_team) })
-        : 'no surebet yet');
+        : tr('no surebet yet'));
     setText('kpi-count', surebets.length);
     setText('kpi-count-sub', pool.length > surebets.length
         ? tr('of {found} found · {filtered} filtered out', { found: pool.length, filtered: pool.length - surebets.length })
-        : 'above your minimum');
+        : tr('above your minimum'));
 
     const metrics = resultsSnapshot?.opportunity_metrics || {};
     const boards = Number(metrics.boards) || 0;
@@ -1099,6 +1252,7 @@ function renderOtherSports() {
 
 function renderSurebets(surebets) {
     const grid = document.getElementById('results-grid');
+    hideResultsLoading();
     setText('surebets-count', surebets.length);
     renderKpis(surebets);
     renderMarketChips();
@@ -1112,7 +1266,8 @@ function renderSurebets(surebets) {
     if (allSurebets.length === 0 || surebets.length === 0) {
         grid.hidden = true;
         renderNoSurebetState();
-        renderSlip();
+        if (selectedSurebetId || document.body.classList.contains('slip-open')) closeSlip();
+        else renderSlip();
         return;
     }
     grid.hidden = false;
@@ -1120,10 +1275,15 @@ function renderSurebets(surebets) {
     document.getElementById('no-results').hidden = true;
 
     surebets.forEach(sb => grid.appendChild(buildSurebetRow(sb)));
-    if (!selectedSurebetId || !surebets.some(sb => sb.id === selectedSurebetId)) {
+    const selectionVisible = selectedSurebetId && surebets.some(sb => sb.id === selectedSurebetId);
+    if (!selectionVisible) {
+        // The selected row was filtered out or replaced by a new scan. Close the
+        // slip: on a phone `slip-open` hides the list behind a dead placeholder.
+        if (selectedSurebetId || document.body.classList.contains('slip-open')) closeSlip();
         // Open the best one straight away on a wide screen; on a phone the list
-        // comes first and a tap opens the slip.
-        if (window.matchMedia('(min-width: 900px)').matches) selectSurebet(surebets[0].id);
+        // comes first and a tap opens the slip. A pure repaint (language change)
+        // never counts as opening a slip.
+        if (allowAutoSelect && window.matchMedia('(min-width: 900px)').matches) selectSurebet(surebets[0].id);
         else renderSlip();
     } else {
         markSelectedRow();
@@ -1137,6 +1297,7 @@ function buildSurebetRow(sb) {
     row.className = 'sb-row';
     row.dataset.id = sb.id;
     row.setAttribute('role', 'option');
+    row.setAttribute('aria-selected', 'false');
     row.dataset.tier = profitTier(sb.profit_percent);
     const kickoff = parseKickoff(sb.kickoff);
     const when = currentMode === 'live' ? tr('In play') : (kickoff ? formatKickoff(kickoff) : '');
@@ -1296,8 +1457,9 @@ function renderSlip() {
     if (!sb || !filteredSurebets.some(s => s.id === sb.id)) {
         pane.innerHTML = `
             <div class="slip-placeholder">
-                <h3>Bet slip</h3>
-                <p>Pick a surebet on the left. Its odds are re-checked first, then you get each leg in the order to place it, with the stake to type.</p>
+                <button type="button" class="link-btn slip-back" data-action="close-slip">← ${escapeHtml(tr('All surebets'))}</button>
+                <h3>${escapeHtml(tr('Bet slip'))}</h3>
+                <p>${escapeHtml(tr('Pick a surebet on the left. Its odds are re-checked first, then you get each leg in the order to place it, with the stake to type.'))}</p>
             </div>`;
         return;
     }
@@ -1385,8 +1547,8 @@ function renderSlip() {
                         <span class="risk-badge" data-risk-profile="${escapeHtml(risk.profile)}" title="${escapeHtml(riskTitle)}">${escapeHtml(riskProfileLabel(risk.profile))}</span>
                     </span>
                     ${url ? `<a class="btn btn-small dest-link" data-dest-kind="${escapeHtml(destKind)}" href="${escapeHtml(safeUrl(url))}" target="_blank" rel="noopener" title="${escapeHtml(dest.proof_summary || destKind || '')}">${escapeHtml(destLabel)} ↗</a>` : ''}
-                    ${destKind === 'search' && !url ? `<button type="button" class="btn btn-small btn-secondary" ${copyAttributes(searchText, 'Search text copied')}>${escapeHtml(tr('Copy search text'))}</button>` : ''}
-                    ${dest.ticket_script ? `<button type="button" class="btn btn-small btn-secondary" title="${escapeHtml(tr('Paste this in the SportPlus page console; it only fills the slip'))}" ${copyAttributes(dest.ticket_script, 'SportPlus prefill script copied — paste it into the SportPlus page console')}>${escapeHtml(dest.ticket_script_label || tr('Copy prefill script'))}</button>` : ''}
+                    ${destKind === 'search' && !url ? `<button type="button" class="btn btn-small btn-secondary" ${copyAttributes(searchText, tr('Search text copied'))}>${escapeHtml(tr('Copy search text'))}</button>` : ''}
+                    ${dest.ticket_script ? `<button type="button" class="btn btn-small btn-secondary" title="${escapeHtml(tr('Paste this in the SportPlus page console; it only fills the slip'))}" ${copyAttributes(dest.ticket_script, tr('SportPlus prefill script copied — paste it into the SportPlus page console'))}>${escapeHtml(dest.ticket_script_label || tr('Copy prefill script'))}</button>` : ''}
                 </div>
                 <div class="leg-listing">
                     <span title="${escapeHtml(tr('How {name} lists this match', { name }))}">${escapeHtml(listedAs)}</span>
@@ -1461,7 +1623,9 @@ function renderSlip() {
         ${warnings.join('')}
 
         <div class="slip-progress">
-            <span>${placedCount ? `${placedCount} of ${plan.legs.length} placed` : `Place ${plan.legs.length} bets, top to bottom`}</span>
+            <span>${placedCount
+                ? escapeHtml(tr('{placed} of {total} placed', { placed: placedCount, total: plan.legs.length }))
+                : escapeHtml(tr('Place {total} bets, top to bottom', { total: plan.legs.length }))}</span>
             <span class="slip-progress-bar"><i data-progress="${(placedCount / plan.legs.length) * 100}"></i></span>
         </div>
         <ol class="legs">${legsHtml}</ol>
@@ -1705,8 +1869,8 @@ async function logBet(id) {
             outcome_label: leg.outcome_label,
             odds: leg.odds,
             stake: leg.plannedStake,
-            accepted_odds: leg.placed ? leg.takenOdds : leg.takenOdds,
-            accepted_stake: leg.placed ? leg.plannedStake : leg.plannedStake,
+            accepted_odds: leg.placed ? leg.takenOdds : 0,
+            accepted_stake: leg.placed ? leg.plannedStake : 0,
             market_type: leg.market_type || sb.market_type,
             line: leg.line || '',
             settlement: leg.settlement || '',
@@ -1842,12 +2006,13 @@ function fillDiagnosticBody(template, values) {
 function renderCaseCopy(reason, values, live) {
     if (!reason) return { title: '', body: '' };
     const bosnian = language === 'bs';
-    const title = bosnian && reason.title_bs
-        ? reason.title_bs
-        : (live && reason.title_live ? reason.title_live : reason.title);
-    const body = bosnian && reason.body_bs
-        ? reason.body_bs
-        : (live && reason.body_live ? reason.body_live : reason.body);
+    // Pick the field first (live or prematch), then its Bosnian variant. Asking
+    // for title_bs before title_live_bs made every live Bosnian sentence fall
+    // through to the prematch one.
+    const titleField = live && reason.title_live ? 'title_live' : 'title';
+    const bodyField = live && reason.body_live ? 'body_live' : 'body';
+    const title = (bosnian && reason[`${titleField}_bs`]) || reason[titleField];
+    const body = (bosnian && reason[`${bodyField}_bs`]) || reason[bodyField];
     return {
         title: fillDiagnosticBody(title, values),
         body: fillDiagnosticBody(body, values),
@@ -1916,8 +2081,6 @@ function renderNoSurebetState() {
     const other = intoNoResults ? emptyState : noResults;
     panel.hidden = false;
     other.hidden = true;
-    panel.dataset.noSurebetReason = reason.id;
-    other.removeAttribute('data-no-surebet-reason');
     // The bookmaker row is an invitation to scan, so it only shows for the case
     // that asks for one. The stylesheet's `[hidden]` rule outranks the row's
     // `display: flex`, so the attribute is enough.
@@ -1937,11 +2100,9 @@ function renderDiagnosticUnavailable() {
     const noResults = document.getElementById('no-results');
     if (noResults) {
         noResults.hidden = true;
-        noResults.removeAttribute('data-no-surebet-reason');
     }
     if (!emptyState) return;
     emptyState.hidden = false;
-    emptyState.dataset.noSurebetReason = 'diagnostics_unavailable';
     const title = emptyState.querySelector('.empty-state-title');
     const body = emptyState.querySelector('.empty-state-desc');
     if (title) title.textContent = tr('No Surebets — Reason Unknown');
@@ -2015,6 +2176,7 @@ function fixtureSearchUrl(candidate) {
 // place a full evidence trail is downloaded.
 async function loadEvidence(reset = false) {
     if (reset) evidenceOffset = 0;
+    const requestedMode = currentMode;
     const list = document.getElementById('evidence-list');
     const detail = document.getElementById('evidence-detail');
     if (!list) return;
@@ -2024,7 +2186,7 @@ async function loadEvidence(reset = false) {
     const status = document.getElementById('evidence-status')?.value || '';
     const sport = document.getElementById('evidence-sport')?.value || '';
     const search = (document.getElementById('evidence-search')?.value || '').trim();
-    let query = `mode=${encodeURIComponent(currentMode)}&limit=${EVIDENCE_PAGE_SIZE}&offset=${evidenceOffset}`;
+    let query = `mode=${encodeURIComponent(requestedMode)}&limit=${EVIDENCE_PAGE_SIZE}&offset=${evidenceOffset}`;
     if (status) query += `&status=${encodeURIComponent(status)}`;
     if (sport) query += `&sport=${encodeURIComponent(sport)}`;
     if (search) query += `&search=${encodeURIComponent(search)}`;
@@ -2033,10 +2195,12 @@ async function loadEvidence(reset = false) {
         const response = await apiFetch(`/api/groups?${query}`);
         if (!response.ok) throw new Error(`groups responded ${response.status}`);
         const payload = await response.json();
+        if (requestedMode !== currentMode) return;
         evidenceTotal = Number(payload.total) || 0;
         evidenceOffset = Number(payload.offset) || 0;
         renderEvidenceList(payload);
     } catch (error) {
+        if (requestedMode !== currentMode) return;
         console.error('Group evidence load failed:', error);
         list.innerHTML = '<div class="empty-state"><h2 class="empty-state-title">Could not load group evidence.</h2><p class="empty-state-desc">The API did not return a group page.</p></div>';
         setText('evidence-page', '—');
@@ -2086,14 +2250,17 @@ async function loadEvidenceDetail(groupId) {
     const list = document.getElementById('evidence-list');
     const detail = document.getElementById('evidence-detail');
     if (!list || !detail || groupId == null) return;
+    const requestedMode = currentMode;
     try {
-        const response = await apiFetch(`/api/groups/${encodeURIComponent(groupId)}?mode=${encodeURIComponent(currentMode)}`);
+        const response = await apiFetch(`/api/groups/${encodeURIComponent(groupId)}?mode=${encodeURIComponent(requestedMode)}`);
         if (!response.ok) throw new Error(tr('group responded {status}', { status: response.status }));
         const payload = await response.json();
+        if (requestedMode !== currentMode) return;
         renderEvidenceDetail(payload.group);
         list.hidden = true;
         detail.hidden = false;
     } catch (error) {
+        if (requestedMode !== currentMode) return;
         console.error('Group detail load failed:', error);
         list.hidden = true;
         detail.hidden = false;
@@ -2182,6 +2349,8 @@ async function candidateListFetch(url) {
 }
 
 const SWEEP_MAX_CALLS = 100;
+// Mirrors scripts/sweep_links.py: ten waits, then give up and say why.
+const SWEEP_MAX_RATE_LIMIT_WAITS = 10;
 
 function sweepDelay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -2189,7 +2358,8 @@ function sweepDelay(ms) {
 
 // A sweep is just repeated verify-links calls. The server owns the cursor, so
 // this loop stops when it reports remaining=0; a 429 is waited out, never
-// bypassed. One completed report is posted to /api/link-sweeps.
+// bypassed. One completed report is posted to /api/link-sweeps, even when the
+// sweep failed — the measurement matters most when it did.
 async function sweepLinks() {
     if (sweepState.running) return;
     const bookEl = document.getElementById('sweep-book');
@@ -2210,6 +2380,8 @@ async function sweepLinks() {
     };
     let status = 'budget_exhausted';
     let httpError = '';
+    let rateLimitWaits = 0;
+    const callsDetail = [];
     try {
         while (totals.calls < SWEEP_MAX_CALLS) {
             const query = `bookmaker=${encodeURIComponent(bookmaker)}&mode=${encodeURIComponent(mode)}&limit=5`;
@@ -2219,6 +2391,12 @@ async function sweepLinks() {
                 'This SureBet deployment requires an API key to sweep links.'
             );
             if (response.status === 429) {
+                rateLimitWaits += 1;
+                if (rateLimitWaits > SWEEP_MAX_RATE_LIMIT_WAITS) {
+                    status = 'rate_limited';
+                    httpError = 'rate limit did not clear after 10 waits';
+                    break;
+                }
                 if (statusEl) statusEl.textContent = tr('Rate limited by the server — waiting before the next check…');
                 await sweepDelay(5000);
                 continue;
@@ -2232,6 +2410,15 @@ async function sweepLinks() {
             }
             totals.remaining = Number(body.remaining || 0);
             totals.last_next_offset = Number(body.next_offset || 0);
+            callsDetail.push({
+                status: body.status,
+                checked: Number(body.checked || 0),
+                verified: Number(body.verified || 0),
+                failed: Number(body.failed || 0),
+                errored: Number(body.errored || 0),
+                unchecked: Number(body.unchecked || 0),
+                remaining: totals.remaining,
+            });
             if (statusEl) {
                 statusEl.textContent = tr('Checked {checked} · verified {verified} · failed {failed} · errored {errored} · remaining {remaining}', totals);
             }
@@ -2241,12 +2428,18 @@ async function sweepLinks() {
             }
             await sweepDelay(1500);
         }
-        const report = {
-            ...totals, status, http_error: httpError,
-            started_at: startedAt, ended_at: new Date().toISOString(),
-            rate_limit_waits: 0, calls_detail: [],
-        };
-        await apiFetch(
+    } catch (error) {
+        status = 'request_failed';
+        httpError = error.message;
+        if (statusEl) statusEl.textContent = tr('Sweep failed: {error}', { error: error.message });
+    }
+    const report = {
+        ...totals, status, http_error: httpError,
+        started_at: startedAt, ended_at: new Date().toISOString(),
+        rate_limit_waits: rateLimitWaits, calls_detail: callsDetail,
+    };
+    try {
+        const reportResponse = await apiFetch(
             '/api/link-sweeps',
             {
                 method: 'POST',
@@ -2255,7 +2448,8 @@ async function sweepLinks() {
             },
             'This SureBet deployment requires an API key to save the sweep report.'
         );
-        if (statusEl) {
+        if (!reportResponse.ok) throw new Error(tr('HTTP {status}', { status: reportResponse.status }));
+        if (statusEl && status !== 'request_failed') {
             statusEl.textContent = tr('Sweep {status}: {checked} checked, {verified} verified, {failed} failed, {errored} errored.', { status, checked: totals.checked, verified: totals.verified, failed: totals.failed, errored: totals.errored });
         }
     } catch (error) {
@@ -2266,6 +2460,7 @@ async function sweepLinks() {
 }
 
 async function loadCandidates() {
+    const requestedMode = currentMode;
     try {
         // Only the pairs a mapping can clear. A full scan queues thousands, and
         // most are refused for a league gap, a kickoff no decision moves or a
@@ -2275,10 +2470,11 @@ async function loadCandidates() {
         // alias-only `actionable_total` and the closeable `closeable_total` so
         // the tab can say exactly what it is not showing.
         const response = await candidateListFetch(
-            `/api/candidates?closeable_only=true&limit=${CANDIDATE_PAGE_SIZE}&offset=0&mode=${currentMode}`
+            `/api/candidates?closeable_only=true&limit=${CANDIDATE_PAGE_SIZE}&offset=0&mode=${requestedMode}`
         );
         if (response.ok === false) throw new Error(tr('Candidate request failed ({status})', { status: response.status }));
         const data = await response.json();
+        if (requestedMode !== currentMode) return;
         renderCandidates(
             Array.isArray(data.candidates) ? data.candidates : [],
             Number(data.total) || 0,
@@ -2288,6 +2484,7 @@ async function loadCandidates() {
         );
     } catch (error) {
         console.error('Candidates load failed:', error);
+        if (requestedMode !== currentMode) return;
         renderCandidatesMessage(tr('Could not load candidates.'));
     }
 }
@@ -2298,7 +2495,6 @@ function renderCandidates(candidates, total, closeableTotal, blockerCounts = {},
     const queue = Array.isArray(candidates) ? candidates : [];
     if (!list) return;
     if (count) count.textContent = closeableTotal;
-    currentCandidates = queue;
     // Keep only selections that are still on the page.
 
     if (!queue.length) {
@@ -2438,6 +2634,7 @@ async function loadHistory() {
     if (!body) return;
     try {
         const res = await apiFetch('/api/history', { headers: candidateActionHeaders() });
+        if (!res.ok) throw new Error(tr('request failed ({status})', { status: res.status }));
         const data = await res.json();
         const entries = data.entries || [];
         if (entries.length === 0) {
@@ -2473,10 +2670,21 @@ function hideScanProgress() {
     document.getElementById('scan-progress').hidden = true;
 }
 
-function setStatus(state, text) {
+function setStatus(state, text, render) {
     const pill = document.getElementById('status-pill');
-    pill.className = 'status-pill ' + state;
-    document.getElementById('status-text').textContent = text;
+    if (pill) pill.className = 'status-pill ' + state;
+    statusMessage = { text: text || '', render: typeof render === 'function' ? render : null };
+    applyStatusText();
+}
+
+// The status line is live state, not a fixed label. It owns its text instead of
+// a data-i18n attribute, so a language switch cannot reset a running scan back
+// to "Ready".
+function applyStatusText() {
+    const el = document.getElementById('status-text');
+    if (!el) return;
+    delete el.dataset.i18n;
+    el.textContent = statusMessage.render ? statusMessage.render() : (statusMessage.text || tr('Ready'));
 }
 
 function showError(msg) {
@@ -2809,15 +3017,71 @@ function paperPageLabel(offset, total) {
     return tr('{first}–{last} of {total}', { first, last, total });
 }
 
-function updatePaperExportLink() {
-    const link = document.getElementById('paper-export');
-    if (!link) return;
-    link.href = '/api/paper/export.csv?' + paperQueryString({
+function paperExportUrl() {
+    return '/api/paper/export.csv?' + paperQueryString({
         days: '30',
         run_mode: paperState.runMode,
         feed_mode: paperState.feedMode,
         status: paperState.status,
     });
+}
+
+function updatePaperExportLink() {
+    const link = document.getElementById('paper-export');
+    if (!link) return;
+    link.href = paperExportUrl();
+}
+
+// Downloads carry the API key in a header, never in the URL: a link or a
+// navigation cannot attach sessionStorage, so the fetch is the only way an
+// API-key deployment can export anything.
+async function downloadProtected(url, filename, promptText) {
+    try {
+        const res = await apiFetch(
+            url,
+            {},
+            promptText || tr('This SureBet deployment requires an API key to download this file.')
+        );
+        if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            throw new Error(body.detail || tr('HTTP {status}', { status: res.status }));
+        }
+        const blob = await res.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = objectUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    } catch (error) {
+        showError(tr('Could not download the file: {error}', { error: error.message }));
+    }
+}
+
+function exportPaperCsv() {
+    return downloadProtected(paperExportUrl(), 'bh-arb-paper.csv');
+}
+
+function exportBetsCsv() {
+    return downloadProtected('/api/bets/export.csv?days=30', 'bh-arb-bets.csv');
+}
+
+async function openProtectedReport(url) {
+    const popup = window.open('', '_blank');
+    try {
+        const res = await apiFetch(url);
+        if (!res.ok) throw new Error(tr('HTTP {status}', { status: res.status }));
+        const text = await res.text();
+        const objectUrl = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+        if (popup) popup.location.href = objectUrl;
+        else downloadProtected(url, 'bh-arb-report.json');
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 30000);
+    } catch (error) {
+        if (popup) popup.close();
+        showError(tr('Could not open the report: {error}', { error: error.message }));
+    }
 }
 
 async function loadPaper() {
@@ -2908,6 +3172,7 @@ function renderPaperOpportunities(payload) {
     if (!body) return;
     const rows = Array.isArray(payload?.opportunities) ? payload.opportunities : [];
     const total = Number(payload?.total) || 0;
+    paperState.oppTotal = total;
     setText('paper-opp-total', tr('{count} row(s)', { count: total }));
     setText('paper-opp-page', paperPageLabel(paperState.oppOffset, total));
     if (!rows.length) {
@@ -2973,6 +3238,7 @@ function renderPaperPositions(payload) {
     if (!body) return;
     const rows = Array.isArray(payload?.positions) ? payload.positions : [];
     const total = Number(payload?.total) || 0;
+    paperState.posTotal = total;
     setText('paper-pos-total', tr('{count} row(s)', { count: total }));
     setText('paper-pos-page', paperPageLabel(paperState.posOffset, total));
     if (!rows.length) {
@@ -3028,7 +3294,12 @@ async function settlePaperPosition(positionId) {
 
 function paperPage(kind, direction) {
     const key = kind === 'opportunities' ? 'oppOffset' : 'posOffset';
-    paperState[key] = Math.max(0, paperState[key] + direction * PAPER_PAGE_SIZE);
+    const total = kind === 'opportunities' ? paperState.oppTotal : paperState.posTotal;
+    // Stay on a page that exists: the API total, not the offset, is the limit.
+    const lastPageStart = total > 0
+        ? Math.floor((total - 1) / PAPER_PAGE_SIZE) * PAPER_PAGE_SIZE
+        : 0;
+    paperState[key] = Math.max(0, Math.min(paperState[key] + direction * PAPER_PAGE_SIZE, lastPageStart));
     loadPaper();
 }
 
@@ -3070,7 +3341,7 @@ async function loadHealth() {
         }
         if (titles.length) bar.title = titles.join(' | ');
         try {
-            const betResponse = await fetch('/api/bets/summary?days=30');
+            const betResponse = await apiFetch('/api/bets/summary?days=30');
             if (betResponse.ok) {
                 const bet = await betResponse.json();
                 const roi = bet.roi == null ? '—' : `${(Number(bet.roi) * 100).toFixed(2)}%`;

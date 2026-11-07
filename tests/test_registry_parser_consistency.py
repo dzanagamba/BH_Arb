@@ -30,7 +30,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from engine.market_registry import MarketRegistry  # noqa: E402
+from engine.market_registry import MarketRegistry, _is_excluded  # noqa: E402
 from models.schemas import MarketType  # noqa: E402
 
 DOC_PATH = REPO_ROOT / "MARKET_MAPPING.md"
@@ -345,12 +345,11 @@ def test_mapped_and_excluded_ids_are_disjoint():
     rejection mechanism, so a registry that both maps and excludes an ID would
     silently make the mapping untestable and the exclusion meaningless.
     """
-    registry = MarketRegistry()
     data = _registry_json()
     overlaps: list[str] = []
     for book, mode, market_type, ids in _mapped_declarations():
         for source_id in ids:
-            if registry.is_excluded(book, mode, source_id):
+            if _is_excluded(book, source_id):
                 overlaps.append(f"{book}/{mode}/{market_type}/{source_id}")
     assert not overlaps, f"IDs are both mapped and excluded: {overlaps}"
     assert data.get("_excluded"), "registry lost its _excluded block"

@@ -285,9 +285,9 @@ def test_every_book_parser_routes_through_the_shared_registry(bookmaker: str):
         f"{module.__name__} instantiates its own MarketRegistry; every book must "
         "share the singleton so the parsers and the documentation cannot drift apart"
     )
-    assert re.search(r"\b(lookup|lookup_type|ids_for|has_source_id)\b", source), (
-        f"{module.__name__} imports the registry but never queries it"
-    )
+    assert re.search(
+        r"\b(lookup|lookup_type|ids_for|has_source_id|registered_spec)\b", source
+    ), f"{module.__name__} imports the registry but never queries it"
 
 
 def test_every_enabled_bookmaker_has_a_parser_module_and_a_documented_gap():

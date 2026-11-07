@@ -220,6 +220,8 @@ def test_the_paper_tab_is_read_only_and_has_settle_controls():
     assert "Paper simulation only" in HTML
     assert 'id="paper-export"' in HTML
     assert "/api/paper/export.csv" in HTML
+    assert 'data-action="paper-export"' in HTML
+    assert "downloadProtected" in JS
     assert "settlePaperPosition" in JS
     assert "data-action=\"paper-settle\"" in JS
     assert "paperMarkCell" in JS
@@ -368,3 +370,37 @@ def test_paper_frontend_renders_empty_open_settled_and_unavailable_states():
     assert "Execution-adjusted ROI" in result["fillSummary"]
     assert "optimistic" in result["fillSummary"]
     assert "retention 180 day(s)" in result["store"]
+
+
+@needs_node
+def test_paper_pager_never_moves_past_the_last_page():
+    script = "\n".join(
+        [
+            "const PAPER_PAGE_SIZE = 25;",
+            "const paperState = { oppOffset: 0, posOffset: 0, oppTotal: 0, posTotal: 0 };",
+            "function loadPaper() {}",
+            _js_function(JS, "paperPage"),
+            "const out = {};",
+            "paperState.oppTotal = 3; paperState.oppOffset = 0;",
+            "paperPage('opportunities', 1); out.tinyNext = paperState.oppOffset;",
+            "paperState.posTotal = 60; paperState.posOffset = 50;",
+            "paperPage('positions', 1); out.lastNext = paperState.posOffset;",
+            "paperPage('positions', 1); out.stillLast = paperState.posOffset;",
+            "paperState.posOffset = 0;",
+            "paperPage('positions', -1); out.firstPrev = paperState.posOffset;",
+            "console.log(JSON.stringify(out));",
+        ]
+    )
+    completed = subprocess.run(
+        [NODE, "-e", script],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    result = json.loads(completed.stdout)
+
+    assert result["tinyNext"] == 0
+    assert result["lastNext"] == 50
+    assert result["stillLast"] == 50
+    assert result["firstPrev"] == 0

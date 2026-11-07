@@ -62,7 +62,6 @@ _MARKER_TOKENS = {
 _COLOUR_TOKENS = {"blue", "white", "red", "black", "green", "yellow", "orange"}
 
 _PUNCT = re.compile(r"[./\\\-\&'’`,()]+")
-_DIGITS = re.compile(r"\d+")
 
 
 def _fold(text: str) -> str:

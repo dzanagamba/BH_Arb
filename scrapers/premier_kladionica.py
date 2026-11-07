@@ -41,7 +41,7 @@ from datetime import UTC, datetime
 import httpx
 
 from config.settings import VERIFY_SSL
-from engine.market_registry import MARKET_REGISTRY, record_unmapped
+from engine.market_registry import record_unmapped, registered_spec
 from models.schemas import Market, MarketType, Match, OddsValue
 from scrapers.cost import record_request, response_bytes
 
@@ -95,13 +95,7 @@ def _registered_spec(
     market_type: MarketType,
     line: float | None = None,
 ):
-    spec = MARKET_REGISTRY.lookup_type(
-        "premier_kladionica", mode, source_id, market_type, line=line
-    )
-    known = getattr(MARKET_REGISTRY, "has_source_id", None)
-    if spec is None and (known is None or not known("premier_kladionica", mode, source_id)):
-        record_unmapped("premier_kladionica", source_id)
-    return spec
+    return registered_spec("premier_kladionica", mode, source_id, market_type, line=line)
 
 
 def _norm_name(name: str) -> str:

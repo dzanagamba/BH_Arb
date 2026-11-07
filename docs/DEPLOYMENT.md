@@ -27,7 +27,7 @@ The first build installs Chromium and its system libraries. Expect roughly
 Dockerfile keeps the browser install in its own layer, and the CI workflows
 restore it with a GitHub Actions layer cache, so an app-only change does not
 download Chromium again. The release workflow (`docs/RELEASE.md`) also emits a
-CycloneDX SBOM from the same `requirements.txt` the image installs.
+CycloneDX SBOM from the runtime environment `requirements.txt` resolves to.
 
 The dashboard is at `http://127.0.0.1:8000/`. The published port is bound to
 loopback by default. Publishing it on `0.0.0.0` is only safe behind a firewall

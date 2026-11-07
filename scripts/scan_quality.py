@@ -28,24 +28,19 @@ if str(REPO_ROOT) not in sys.path:
 from config.settings import price_source  # noqa: E402
 from engine.arbitrage import ArbitrageEngine  # noqa: E402
 from engine.mapping_evidence import MappingLedger  # noqa: E402
+from engine.market_consensus import complete_market_spec, find_outliers  # noqa: E402
 from engine.matcher import MatchMatcher  # noqa: E402
-from models.schemas import Match  # noqa: E402
-from scripts.price_check import find_outliers  # noqa: E402
-
-_COMPLETE = {
-    "1x2": {"1", "X", "2"},
-    "double_chance": {"1X", "12", "X2"},
-    "btts": {"GG", "NG"},
-    "over_under_1_5": {"Over 1.5", "Under 1.5"},
-    "over_under_2_5": {"Over 2.5", "Under 2.5"},
-    "over_under_3_5": {"Over 3.5", "Under 3.5"},
-}
+from models.schemas import MarketType, Match  # noqa: E402
 
 
 def _best_margins(groups) -> list[tuple[float, str, str, str]]:
     best: list[tuple[float, str, str, str]] = []
     for group in groups:
-        for market_type, labels in _COMPLETE.items():
+        for market_type in MarketType:
+            spec = complete_market_spec(market_type)
+            if spec is None:
+                continue
+            labels = spec[0]
             legs: list[dict[str, float]] = []
             seen: set[str] = set()
             for match in group.matches:
@@ -53,7 +48,7 @@ def _best_margins(groups) -> list[tuple[float, str, str, str]]:
                 if source in seen:
                     continue
                 for market in match.markets:
-                    if market.market_type.value != market_type:
+                    if market.market_type != market_type:
                         continue
                     odds = {item.label: item.value for item in market.odds}
                     if set(odds) != labels:
@@ -65,7 +60,7 @@ def _best_margins(groups) -> list[tuple[float, str, str, str]]:
                 continue
             implied = sum(1 / max(leg[label] for leg in legs) for label in labels)
             best.append(
-                (implied, market_type, group.canonical_home, group.canonical_away)
+                (implied, market_type.value, group.canonical_home, group.canonical_away)
             )
     return sorted(best)
 

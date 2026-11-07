@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 import httpx
 
 from config.settings import VERIFY_SSL
-from engine.market_registry import MARKET_REGISTRY, record_unmapped
+from engine.market_registry import MARKET_REGISTRY, record_unmapped, registered_spec
 from models.schemas import Market, MarketType, Match, OddsValue
 from scrapers.base import fetch_pages, fetch_with_retry
 from scrapers.common import parse_dt
@@ -38,12 +38,7 @@ def _evlbet_registered_spec(
     The single registry-resolution step of ``EvlbetScraper._parse_event``, at
     module scope so the EVLBet resolution path is directly testable.
     """
-    spec = MARKET_REGISTRY.lookup_type(
-        BOOKMAKER_ID, mode, source_id, market_type, line=line
-    )
-    if spec is None:
-        record_unmapped(BOOKMAKER_ID, source_id)
-    return spec
+    return registered_spec(BOOKMAKER_ID, mode, source_id, market_type, line=line)
 
 HEADERS = {
     "User-Agent": (
@@ -55,10 +50,6 @@ HEADERS = {
     "Origin": BASE_URL,
     "Referer": f"{BASE_URL}/",
 }
-
-
-def _parse_dt(raw) -> datetime | None:
-    return parse_dt(raw)
 
 
 class EvlbetScraper:
@@ -124,7 +115,7 @@ class EvlbetScraper:
         if not home or not away:
             return None
 
-        kickoff = _parse_dt(ev.get("MatchStartTime"))
+        kickoff = parse_dt(ev.get("MatchStartTime"))
         mid = str(ev.get("Id", ""))
 
         category = str(ev.get("CategoryName") or ev.get("CategoryOriginalName") or "").strip()

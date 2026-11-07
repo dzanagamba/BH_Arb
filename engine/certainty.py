@@ -12,8 +12,6 @@ says it has no per-event route, so there is no URL to open. A book that has
 declared neither is not accepted — see :meth:`CertaintyGate._link_evidence`.
 """
 
-import functools
-import re
 import unicodedata
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -29,6 +27,7 @@ from engine.mapping_evidence import (
     league_equivalence_key,
     team_alias_key,
 )
+from engine.name_keys import raw_team_key
 from engine.normalizer import CLUB_DESIGNATORS, TeamNormalizer
 from models.schemas import Match, MatchEventStatus, MatchEvidence, MatchGroup
 from scrapers.common import (
@@ -36,12 +35,6 @@ from scrapers.common import (
     declares_route_pattern_verified,
     supports_event_id,
 )
-
-# Characters a bookmaker uses as separators in a team name ("Bodo/Glimt",
-# "St. Mirren", "Paris-SG"); they never distinguish two clubs.
-_TEAM_PUNCTUATION = re.compile(r"[./\\\-\&'’`,()]+")
-# Letters NFKD does not decompose.
-_LETTER_FOLDS = str.maketrans({"đ": "dj", "ø": "o", "æ": "ae", "ß": "ss", "ł": "l"})
 
 # Evidence note (not a reason) on a league accepted by `_league_settled_by_teams`.
 LEAGUE_UNMAPPED_TEAMS_EXACT = "league_unmapped_teams_exact"
@@ -242,22 +235,14 @@ class CertaintyGate:
         ) / 60.0
 
     @staticmethod
-    @functools.lru_cache(maxsize=65536)
     def _raw_team_key(name: str) -> str:
         """Make only lossless superficial raw-name comparisons.
 
-        This deliberately does not call the normalizer's fuzzy fallback. Team
-        identity decisions that see different raw forms must go through the
-        explicit alias allowlist.
-
-        The matcher asks for the same names thousands of times per scan (every
-        team similarity check re-normalizes both sides), so the pure result is
-        memoized. The cache is per process and never cleared by a caller: the
-        function's output depends only on ``name``.
+        The implementation is shared with the evidence ledger and the review
+        diagnostics in :mod:`engine.name_keys`; it deliberately does not call
+        the normalizer's fuzzy fallback.
         """
-        decomposed = unicodedata.normalize("NFKD", name.casefold().translate(_LETTER_FOLDS))
-        plain = "".join(char for char in decomposed if not unicodedata.combining(char))
-        return " ".join(_TEAM_PUNCTUATION.sub(" ", plain).split())
+        return raw_team_key(name)
 
     @classmethod
     def _canonical_team_key(cls, name: str) -> str:

@@ -31,8 +31,13 @@ from config.settings import (
     PAPER_FILL_PRICE_TOLERANCE,
 )
 from models.schemas import Surebet
+from server.csv_export import csv_cell
 
 PAPER_BANKROLL_START = 1000.0
+
+
+def _write_csv_row(writer: Any, values: list[Any]) -> None:
+    writer.writerow([csv_cell(cell) for cell in values])
 PAPER_STAKE = 100.0
 PAPER_DISCLAIMER = (
     "Paper simulation only. No bet was placed, no money moved, and no bookmaker "
@@ -656,7 +661,8 @@ class PaperStore:
         writer = csv.writer(buffer, lineterminator="\n")
         writer.writerow(columns)
         for row in opportunities:
-            writer.writerow(
+            _write_csv_row(
+                writer,
                 [
                     "opportunity",
                     row.get("id", ""),
@@ -696,11 +702,12 @@ class PaperStore:
                     "",
                     json.dumps(row.get("legs") or [], sort_keys=True),
                     row.get("disclaimer", ""),
-                ]
+                ],
             )
         for row in positions:
             mark = row.get("mark") or {}
-            writer.writerow(
+            _write_csv_row(
+                writer,
                 [
                     "position",
                     row.get("id", ""),
@@ -740,7 +747,7 @@ class PaperStore:
                     json.dumps(mark.get("fills") or [], sort_keys=True),
                     json.dumps(row.get("entry_legs") or [], sort_keys=True),
                     row.get("disclaimer", ""),
-                ]
+                ],
             )
         return buffer.getvalue()
 

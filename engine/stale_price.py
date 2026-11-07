@@ -110,6 +110,8 @@ def _prune(
     *,
     max_rows: int,
     retention_seconds: int,
+    observed_keys: set[str] | None = None,
+    new_keys: set[str] | None = None,
 ) -> dict[str, dict[str, Any]]:
     cutoff = now - timedelta(seconds=max(1, retention_seconds))
     kept: dict[str, dict[str, Any]] = {}
@@ -120,9 +122,21 @@ def _prune(
         kept[key] = row
     if len(kept) <= max_rows:
         return kept
+    # A row observed by the current scan must keep its baseline: it is either
+    # new (and the frozen rule needs it) or the row whose history is being
+    # updated. A brand-new board outranks a known one because every row seen in
+    # this scan shares one second-resolution timestamp; without the extra rank
+    # stable sort would keep the restored insertion order and drop the new key.
+    # Rows this scan did not see are evicted oldest first.
+    observed = observed_keys or set()
+    new = new_keys or set()
     newest = sorted(
         kept.items(),
-        key=lambda item: str(item[1].get("last_seen_at") or ""),
+        key=lambda item: (
+            item[0] in observed,
+            item[0] in new,
+            str(item[1].get("last_seen_at") or ""),
+        ),
         reverse=True,
     )[:max_rows]
     return dict(newest)
@@ -236,12 +250,14 @@ def evaluate_stale_prices(
     rows: dict[str, dict[str, Any]] = {
         key: dict(row) for key, row in previous.items() if isinstance(row, dict)
     }
+    observed_keys: set[str] = set()
     evidence: list[dict[str, Any]] = []
     by_book: dict[str, int] = defaultdict(int)
 
     for item in observations:
         board = item["board"]
         key = _row_key(item["bookmaker"], board)
+        observed_keys.add(key)
         price = item["price"]
         old = previous.get(key)
         if (
@@ -328,6 +344,8 @@ def evaluate_stale_prices(
             reference,
             max_rows=row_cap,
             retention_seconds=retention,
+            observed_keys=observed_keys,
+            new_keys=observed_keys - set(previous),
         ),
         evidence=evidence,
         by_book=dict(by_book),

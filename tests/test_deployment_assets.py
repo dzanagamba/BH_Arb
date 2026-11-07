@@ -126,20 +126,28 @@ def test_ci_generates_the_sbom_from_the_runtime_requirements():
     workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(
         encoding="utf-8"
     )
-    assert "cyclonedx-py requirements requirements.txt" in workflow
+    assert "pip install --disable-pip-version-check -q -r requirements.txt" in workflow
+    assert "pip freeze --all" in workflow
+    assert "cyclonedx-py requirements sbom-requirements.txt" in workflow
     assert "sbom.cdx.json" in workflow
     assert "upload-artifact" in workflow
     assert "sbom-cyclonedx" in workflow
+    # A regression to the 8-component manifest-only SBOM must fail the check.
+    assert "starlette" in workflow
+    assert "pydantic-core" in workflow
+    assert ">= 27" in workflow
 
 
-def test_dependabot_groups_runtime_dev_and_github_actions():
+def test_dependabot_groups_runtime_dev_github_actions_and_docker():
     config = (REPO_ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8")
     assert 'package-ecosystem: "pip"' in config
     assert 'package-ecosystem: "github-actions"' in config
+    assert 'package-ecosystem: "docker"' in config
     assert "runtime-dependencies:" in config
     assert "dev-dependencies:" in config
     assert '"fastapi"' in config
     assert '"pytest*"' in config
+    assert '"hypothesis"' in config
     assert "groups:" in config
 
 
@@ -148,7 +156,8 @@ def test_release_workflow_proves_the_image_and_fails_on_smoke():
         encoding="utf-8"
     )
     assert '"v*"' in workflow
-    assert "cyclonedx-py requirements requirements.txt" in workflow
+    assert "pip freeze --all" in workflow
+    assert "cyclonedx-py requirements sbom-requirements.txt" in workflow
     assert "docker/build-push-action" in workflow
     assert "scripts/docker_smoke.py" in workflow
     assert "cache-from: type=gha" in workflow
@@ -158,6 +167,7 @@ def test_release_doc_has_the_checklist_and_local_equivalents():
     release = (REPO_ROOT / "docs" / "RELEASE.md").read_text(encoding="utf-8")
     assert "Release checklist" in release
     assert "python scripts/docker_smoke.py" in release
-    assert "cyclonedx-py requirements requirements.txt" in release
+    assert "cyclonedx-py requirements sbom-requirements.txt" in release
+    assert "pip freeze --all" in release
     assert "5–10 minutes" in release
     assert "Dependabot" in release

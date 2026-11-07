@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from engine.closing_line import capture_closing as capture_closing_lines
+from server.csv_export import csv_cell as _csv_cell
 
 BANKROLL_START = 1000.0
 
@@ -145,8 +146,25 @@ class BetStore:
             staked = 0.0
             for leg in legs:
                 result = by_label[leg["outcome_label"]]
-                stake = float(leg.get("accepted_stake") or leg.get("stake") or 0)
-                odds = float(leg.get("accepted_odds") or leg.get("odds") or 0)
+                accepted_stake = leg.get("accepted_stake")
+                accepted_odds = leg.get("accepted_odds")
+                # Zero accepted stake or odds is the explicit "not placed"
+                # sentinel; it must not fall back to the planned values and
+                # book a full loss at odds 0.
+                if accepted_stake == 0 or accepted_odds == 0:
+                    stake = 0.0
+                    odds = 0.0
+                else:
+                    stake = float(
+                        accepted_stake
+                        if accepted_stake is not None
+                        else (leg.get("stake") or 0)
+                    )
+                    odds = float(
+                        accepted_odds
+                        if accepted_odds is not None
+                        else (leg.get("odds") or 0)
+                    )
                 staked += stake
                 if result.get("result") == "won":
                     payout += stake * odds
@@ -248,7 +266,11 @@ class BetStore:
                 if accepted and closing and float(closing) > 1.0:
                     clv_values.append(
                         (
-                            float(leg.get("accepted_stake") or leg.get("stake") or 1),
+                            float(
+                                leg["accepted_stake"]
+                                if leg.get("accepted_stake") is not None
+                                else (leg.get("stake") or 1)
+                            ),
                             float(accepted) / float(closing) - 1.0,
                         )
                     )
@@ -321,24 +343,26 @@ class BetStore:
         )
         for bet in self.list_bets(days=days, limit=1000):
             for leg in bet.get("legs") or []:
-                writer.writerow(
-                    [
-                        bet.get("id", ""),
-                        bet.get("created_at", ""),
-                        bet.get("status", ""),
-                        bet.get("home_team", ""),
-                        bet.get("away_team", ""),
-                        bet.get("market_type", ""),
-                        leg.get("bookmaker", ""),
-                        leg.get("outcome_label", ""),
-                        leg.get("odds", ""),
-                        leg.get("accepted_odds") or "",
-                        leg.get("stake", ""),
-                        leg.get("accepted_stake") or "",
-                        leg.get("closing_odds") or "",
-                        leg.get("closing_source") or "",
-                        leg.get("closing_reason") or "",
-                        leg.get("result") or "",
-                    ]
-                )
+                accepted_odds = leg.get("accepted_odds")
+                accepted_stake = leg.get("accepted_stake")
+                closing_odds = leg.get("closing_odds")
+                row = [
+                    bet.get("id", ""),
+                    bet.get("created_at", ""),
+                    bet.get("status", ""),
+                    bet.get("home_team", ""),
+                    bet.get("away_team", ""),
+                    bet.get("market_type", ""),
+                    leg.get("bookmaker", ""),
+                    leg.get("outcome_label", ""),
+                    leg.get("odds", ""),
+                    accepted_odds if accepted_odds is not None else "",
+                    leg.get("stake", ""),
+                    accepted_stake if accepted_stake is not None else "",
+                    closing_odds if closing_odds is not None else "",
+                    leg.get("closing_source") or "",
+                    leg.get("closing_reason") or "",
+                    leg.get("result") or "",
+                ]
+                writer.writerow([_csv_cell(cell) for cell in row])
         return buffer.getvalue()

@@ -41,6 +41,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from engine.name_keys import raw_team_key
+
 logger = logging.getLogger(__name__)
 
 SCHEMA_VERSION = 1
@@ -216,11 +218,7 @@ def claim_id(kind: str, key: str) -> str:
 
 
 def _raw_key(name: str) -> str:
-    # Imported lazily: the ledger is also used by scripts that do not need the
-    # matcher, and the gate imports this module's callers.
-    from engine.certainty import CertaintyGate
-
-    return CertaintyGate._raw_team_key(name)
+    return raw_team_key(name)
 
 
 def team_alias_key(left: str, right: str) -> str:

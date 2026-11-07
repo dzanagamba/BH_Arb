@@ -67,10 +67,6 @@ def _parse_teams_from_name(event_name: str) -> tuple[str, str]:
     return parse_teams_from_name(event_name)
 
 
-def _parse_dt(raw) -> datetime | None:
-    return parse_dt(raw)
-
-
 class MDShopScraper:
     """
     MDShop scraper using direct HTTP API calls.
@@ -179,7 +175,7 @@ class MDShopScraper:
             return None
         seen_codes.add(code)
 
-        kickoff = _parse_dt(ev.get("dateTime"))
+        kickoff = parse_dt(ev.get("dateTime"))
 
         source_context = {
             "sport_id": str(ev.get("sportId") or ""),

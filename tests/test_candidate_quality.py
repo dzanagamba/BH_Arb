@@ -7,6 +7,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from engine.candidate_remediation import blocker_counts, candidate_class
 from models.schemas import CandidateReview
 from server import api
 from server.app import app
@@ -43,13 +44,13 @@ def test_candidates_are_classified_by_what_can_close_them():
         _candidate("other", reasons=["kickoff_delta"]),
     ]
 
-    assert [api._candidate_blocker(row) for row in queue] == [
+    assert [candidate_class(row) for row in queue] == [
         "alias",
         "league",
         "link",
         "other",
     ]
-    assert api._candidate_breakdown(queue) == {
+    assert blocker_counts(queue) == {
         "alias": 1,
         "league": 1,
         "link": 1,

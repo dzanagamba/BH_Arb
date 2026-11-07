@@ -12,10 +12,10 @@ from datetime import UTC, datetime
 import httpx
 
 from config.settings import VERIFY_SSL
-from engine.market_registry import MARKET_REGISTRY, record_unmapped
+from engine.market_registry import record_unmapped, registered_spec
 from models.schemas import Market, MarketType, Match, OddsValue
 from scrapers.base import fetch_with_retry
-from scrapers.mozzartbet import _extract_kickoff
+from scrapers.common import parse_dt
 
 logger = logging.getLogger(__name__)
 
@@ -44,11 +44,7 @@ def _betole_registered_spec(
     The single registry-resolution step of :func:`_parse_betole_markets`, at
     module scope so the Betole resolution path is directly testable.
     """
-    spec = MARKET_REGISTRY.lookup_type("betole", mode, code, market_type, line=line)
-    known = getattr(MARKET_REGISTRY, "has_source_id", None)
-    if spec is None and (known is None or not known("betole", mode, code)):
-        record_unmapped("betole", code)
-    return spec
+    return registered_spec("betole", mode, code, market_type, line=line)
 
 
 def _parse_betole_markets(raw_odds: dict, mode: str = "prematch") -> list[Market]:
@@ -151,7 +147,7 @@ def _event_to_match(event: dict, live: bool) -> Match | None:
         home_team=home,
         away_team=away,
         league=str(event.get("leagueName") or "Fudbal"),
-        kickoff=_extract_kickoff({"kickOffTime": event.get("kickOffTime")}),
+        kickoff=parse_dt(event.get("kickOffTime")),
         markets=markets,
         url=OFFER_URL,
         match_code=str(event.get("matchCode") or event_id),

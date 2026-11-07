@@ -408,7 +408,11 @@ body.feed-stale .row-profit b { color: var(--warn); }
     gap: 4px;
     margin: 16px 0 16px;
     border-bottom: 1px solid var(--line);
+    /* Six tabs do not fit a phone; scroll the bar instead of the whole page. */
+    overflow-x: auto;
+    scrollbar-width: none;
 }
+.results-tabs::-webkit-scrollbar { display: none; }
 .tab-btn {
     display: inline-flex;
     align-items: center;
@@ -1235,6 +1239,8 @@ body.feed-stale .row-profit b { color: var(--warn); }
     body.slip-open .list-pane, body.slip-open .kpis { display: none; }
     .slip-back { display: inline-block; }
     .list-hint { display: none; }
+    /* The loading line is the only feedback while the list is cleared. */
+    .list-hint#list-loading { display: block; }
     .slip-hero { grid-template-columns: minmax(0, 1fr); }
     .slip-stake { align-items: flex-start; }
     .leg-bet { grid-template-columns: repeat(2, minmax(0, 1fr)); }

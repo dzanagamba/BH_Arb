@@ -21,6 +21,9 @@ on:
       - deploy/**
       - scripts/docker_smoke.py
 
+permissions:
+  contents: read
+
 jobs:
   smoke:
     runs-on: ubuntu-latest

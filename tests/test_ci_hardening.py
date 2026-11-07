@@ -11,6 +11,7 @@ CI = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8"
 DOC = (REPO_ROOT / "docs" / "CI.md").read_text(encoding="utf-8")
 GITIGNORE = (REPO_ROOT / ".gitignore").read_text(encoding="utf-8")
 API = (REPO_ROOT / "server" / "api.py").read_text(encoding="utf-8")
+WORKFLOWS = sorted((REPO_ROOT / ".github" / "workflows").glob("*.yml"))
 
 
 def test_dev_requirements_pin_the_coverage_and_scan_tools():
@@ -48,6 +49,21 @@ def test_ci_runs_dependency_and_static_security_scans_on_every_push_and_pr():
 def test_ci_keeps_python_311_required_and_checks_312():
     assert 'python-version: ["3.11", "3.12"]' in CI
     assert "matrix.python-version == '3.11'" in CI
+
+
+def test_every_workflow_is_least_privilege():
+    assert WORKFLOWS, "no workflows found"
+    for workflow in WORKFLOWS:
+        text = workflow.read_text(encoding="utf-8")
+        assert "permissions:\n  contents: read" in text, workflow.name
+        assert "contents: write" not in text, workflow.name
+
+
+def test_development_install_matches_ci():
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    install = "pip install -r requirements.txt -r requirements-dev.txt"
+    assert install in CI
+    assert install in readme
 
 
 def test_allowlisted_findings_are_documented_at_the_call_site_and_in_the_doc():

@@ -418,6 +418,10 @@ BOOK_BACKOFF_MAX_MINUTES = int(os.getenv("BOOK_BACKOFF_MAX_MINUTES", "60"))
 # and API_KEY is empty by default, so the endpoint throttles itself: a lock only
 # serialises runs, it does not refuse them.
 DEEP_LINK_VERIFY_RATE_LIMIT = int(os.getenv("DEEP_LINK_VERIFY_RATE_LIMIT", "2"))
+# Max on-demand surebet re-verifications per minute per client (0 disables the
+# limit). A verify scrapes every book in the bet while holding the mode lock, so
+# repeated calls can block the scheduler and hit the bookmakers.
+VERIFY_RATE_LIMIT = int(os.getenv("VERIFY_RATE_LIMIT", "10"))
 # Sliding window shared by every per-client-IP rate limit, so tuning one endpoint
 # cannot silently move another's. It is NOT a per-endpoint knob.
 RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))

@@ -28,11 +28,6 @@ BASKETBALL = Sport.BASKETBALL.value
 TENNIS = Sport.TENNIS.value
 ICE_HOCKEY = Sport.ICE_HOCKEY.value
 
-# Sports the pipeline can scan. Football is always first: the football path is
-# byte-for-byte the old one, and this list only decides which extra feeds are
-# parsed.
-ENABLED_SPORTS: tuple[str, ...] = (FOOTBALL, BASKETBALL, TENNIS)
-
 # Book feed names -> canonical sport. A name absent here is not implemented; it
 # is counted as a coverage gap by the discovery probe, never guessed.
 SPORT_ALIASES: dict[str, str] = {
@@ -136,27 +131,6 @@ def spec_for(sport: str) -> SportSpec | None:
 
 def display_name(sport: str) -> str:
     return _DISPLAY.get(sport, sport.replace("_", " ").title())
-
-
-def family(market_type: MarketType) -> str:
-    """The semantic family a market type belongs to, for diagnostics/UI."""
-    if market_type in (MarketType.MONEYLINE, MarketType.MONEYLINE_3WAY):
-        return "moneyline"
-    if market_type == MarketType.HANDICAP:
-        return "handicap"
-    if market_type == MarketType.TOTAL:
-        return "total"
-    if market_type in (
-        MarketType.OVER_UNDER_0_5,
-        MarketType.OVER_UNDER_1_5,
-        MarketType.OVER_UNDER_2_5,
-        MarketType.OVER_UNDER_3_5,
-        MarketType.OVER_UNDER_4_5,
-        MarketType.OVER_UNDER_5_5,
-        MarketType.FIRST_HALF_OU,
-    ):
-        return "total"
-    return ""
 
 
 def settlement_for(sport: str, market_type: MarketType) -> str:

@@ -8,7 +8,7 @@ import logging
 import time
 from datetime import UTC, datetime
 
-from engine.market_registry import MARKET_REGISTRY, record_unmapped
+from engine.market_registry import MARKET_REGISTRY, record_unmapped, registered_spec
 from models.schemas import Market, MarketType, Match, OddsValue
 from scrapers.base import fetch_pages, goto, launch_browser, measured_api_post, settle
 from scrapers.common import parse_dt
@@ -140,13 +140,7 @@ def _registered_spec(
     market_type: MarketType,
     line: float | None = None,
 ):
-    spec = MARKET_REGISTRY.lookup_type(
-        bookmaker, mode, source_id, market_type, line=line
-    )
-    known = getattr(MARKET_REGISTRY, "has_source_id", None)
-    if spec is None and (known is None or not known(bookmaker, mode, source_id)):
-        record_unmapped(bookmaker, source_id)
-    return spec
+    return registered_spec(bookmaker, mode, source_id, market_type, line=line)
 
 
 def _parse_markets(

@@ -1,9 +1,9 @@
 name: Release
 
 # Release-specific proof: the image builds, the container serves /api/health,
-# and the SBOM is generated from the same requirements.txt the image installs.
-# The normal CI still runs on the tag push; this workflow fails the release if
-# the Docker smoke fails.
+# and the SBOM is generated from the runtime environment that requirements.txt
+# resolves to. The normal CI still runs on the tag push; this workflow fails the
+# release if the Docker smoke fails.
 on:
   push:
     tags:
@@ -30,12 +30,20 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt -r requirements-dev.txt
 
+      # requirements.txt pins the direct packages only; resolve it in a clean
+      # venv so the release artifact lists the whole runtime set the image has.
+      - name: Resolve the runtime environment
+        run: |
+          python -m venv .sbom-venv
+          .sbom-venv/bin/pip install --disable-pip-version-check -q -r requirements.txt
+          .sbom-venv/bin/pip freeze --all > sbom-requirements.txt
+
       - name: Generate CycloneDX SBOM
         run: |
-          cyclonedx-py requirements requirements.txt \
+          cyclonedx-py requirements sbom-requirements.txt \
             --of JSON --output-reproducible -o sbom.cdx.json
 
-      - name: Verify the SBOM is a non-empty CycloneDX document
+      - name: Verify the SBOM covers the resolved runtime
         run: |
           python - <<'PY'
           import json
@@ -44,8 +52,12 @@ jobs:
           payload = json.loads(Path("sbom.cdx.json").read_text(encoding="utf-8"))
           assert payload.get("bomFormat") == "CycloneDX"
           assert payload.get("specVersion")
-          assert payload.get("components"), "SBOM has no components"
-          print(f"SBOM: {len(payload['components'])} components, spec {payload['specVersion']}")
+          components = payload.get("components") or []
+          names = {c.get("name", "").lower().replace("_", "-") for c in components}
+          assert len(components) >= 27, f"SBOM has only {len(components)} components"
+          for required in ("starlette", "pydantic-core"):
+              assert required in names, f"SBOM is missing {required}"
+          print(f"SBOM: {len(components)} components, spec {payload['specVersion']}")
           PY
 
       - name: Upload SBOM

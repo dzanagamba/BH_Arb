@@ -3,7 +3,7 @@
 A release is a tag push (`v*`) or a manual `Release` workflow run. The normal CI
 still runs on the tag push; the release workflow adds the two artifacts that
 must be proven at release time: a built image that serves `/api/health`, and an
-SBOM generated from the same `requirements.txt` the image installs.
+SBOM generated from the runtime environment that `requirements.txt` resolves to.
 
 ## What runs where
 
@@ -40,13 +40,16 @@ python -m pip_audit -r requirements.txt --progress-spinner off
 python -m pip_audit -r requirements-dev.txt --progress-spinner off
 python -m bandit -r engine server scrapers config models main.py scripts -ll -q
 
-# SBOM (same file the image installs)
-cyclonedx-py requirements requirements.txt \
+# SBOM (the runtime environment requirements.txt resolves to, not the manifest)
+python -m venv .sbom-venv
+.sbom-venv/bin/pip install -r requirements.txt
+.sbom-venv/bin/pip freeze --all > sbom-requirements.txt
+cyclonedx-py requirements sbom-requirements.txt \
   --of JSON --output-reproducible -o sbom.cdx.json
 python - <<'PY'
 import json
 p = json.load(open("sbom.cdx.json", encoding="utf-8"))
-assert p["bomFormat"] == "CycloneDX" and p["components"]
+assert p["bomFormat"] == "CycloneDX" and len(p["components"]) >= 27
 print(len(p["components"]), "components")
 PY
 
@@ -77,9 +80,10 @@ invalidates the browser layer because it sits above the pip layer.
 
 - **runtime-dependencies** — FastAPI, Uvicorn, Playwright, Pydantic, RapidFuzz,
   HTTPX, python-dotenv and tzdata;
-- **dev-dependencies** — pytest/coverage, Ruff, MyPy, pip-audit, Bandit and
-  CycloneDX;
-- **github-actions** — all action bumps in one PR.
+- **dev-dependencies** — pytest/coverage, Ruff, MyPy, Hypothesis, pip-audit,
+  Bandit and CycloneDX;
+- **github-actions** — all action bumps in one PR;
+- **docker** — the `python:3.11-slim` base image.
 
 Dependabot PRs run the full `CI` workflow. The Docker smoke is path-triggered,
 so a dependency-only PR that does not touch a deployment input will not pay the
@@ -88,8 +92,9 @@ the runtime requirements.
 
 ## Notes and limits
 
-- The SBOM is an inventory from `requirements.txt`; it is not a vulnerability
-  report. `pip-audit` remains the vulnerability gate.
+- The SBOM is an inventory of the runtime environment `requirements.txt`
+  resolves to; it is not a vulnerability report. `pip-audit` remains the
+  vulnerability gate.
 - The image job is optional by design for repositories with a build-minute
   budget; the SBOM and dependency-update jobs still run.
 - A release is not accepted on a green unit suite alone: the Docker smoke must

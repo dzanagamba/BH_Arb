@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import math
 import os
 import secrets
 import sys
@@ -9,6 +10,8 @@ from contextlib import asynccontextmanager, suppress
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -79,6 +82,34 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+
+def _json_safe_validation(value: object) -> object:
+    """Replace non-finite floats so a 422 can be serialized.
+
+    Pydantic echoes the rejected input in ``RequestValidationError``. Python's
+    JSON parser accepts ``1e400``/``NaN``/``Infinity`` as non-finite floats, and
+    the default handler then fails while serializing the error itself, turning a
+    validation error into a 500. The detail shape is otherwise unchanged.
+    """
+    if isinstance(value, float) and not math.isfinite(value):
+        return str(value)
+    if isinstance(value, dict):
+        return {key: _json_safe_validation(item) for key, item in value.items()}
+    if isinstance(value, list | tuple):
+        return [_json_safe_validation(item) for item in value]
+    return value
+
+
+async def _validation_error_handler(_request: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, RequestValidationError)
+    return JSONResponse(
+        status_code=422,
+        content={"detail": _json_safe_validation(jsonable_encoder(exc.errors()))},
+    )
+
+
+app.add_exception_handler(RequestValidationError, _validation_error_handler)
 
 # Same-origin by default: the dashboard is served by this process. A separate
 # frontend must be listed explicitly in CORS_ORIGINS; a wildcard is never used.

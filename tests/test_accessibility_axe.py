@@ -9,6 +9,7 @@ where Chromium is installed.
 from __future__ import annotations
 
 import os
+import re
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -76,6 +77,20 @@ def _audit() -> _Audit:
     audit = _Audit()
     audit.feed(HTML)
     return audit
+
+
+def _js_function(source: str, name: str) -> str:
+    start = source.index(f"function {name}(")
+    opening = source.index("{", start)
+    depth = 0
+    for index in range(opening, len(source)):
+        if source[index] == "{":
+            depth += 1
+        elif source[index] == "}":
+            depth -= 1
+            if depth == 0:
+                return source[start : index + 1]
+    raise AssertionError(f"unbalanced function {name}")
 
 
 def test_main_landmarks_and_live_regions_exist():
@@ -148,6 +163,24 @@ def test_keyboard_path_handlers_exist():
     assert "data-placed-stake" in JS
     assert "data-action=\"mark-placed\"" in JS
     assert "data-action=\"copy-surebet\"" in JS
+
+
+def test_settings_drawer_discloses_itself_and_manages_focus():
+    gear = re.search(r'<button[^>]*id="settings-btn"[^>]*>', HTML)
+    assert gear, "the Settings gear is missing"
+    tag = gear.group(0)
+    assert 'aria-expanded="false"' in tag
+    assert 'aria-controls="settings-drawer"' in tag
+
+    body = _js_function(JS, "toggleSettings")
+    assert "aria-expanded" in body
+    assert "querySelector('select, input, button, a, [tabindex]')" in body
+    assert "button.focus()" in body
+
+
+def test_slip_options_expose_selection_and_the_placeholder_has_a_back_control():
+    assert "setAttribute('aria-selected', 'false')" in _js_function(JS, "buildSurebetRow")
+    assert 'data-action="close-slip"' in _js_function(JS, "renderSlip")
 
 
 def test_accessibility_runner_covers_tabs_and_slip_and_has_an_allowlist():

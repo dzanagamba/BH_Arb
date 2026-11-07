@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
+import subprocess
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -20,9 +22,24 @@ ROOT = Path(__file__).resolve().parents[1]
 HTML = (ROOT / "frontend/index.html").read_text(encoding="utf-8")
 JS = (ROOT / "frontend/js/app.js").read_text(encoding="utf-8")
 CATALOG = (ROOT / "frontend/js/i18n.js").read_text(encoding="utf-8")
-REASONS = json.loads(
-    (ROOT / "frontend/js/no-surebet-reasons.json").read_text(encoding="utf-8")
-)
+REASONS_PATH = ROOT / "frontend/js/no-surebet-reasons.json"
+REASONS = json.loads(REASONS_PATH.read_text(encoding="utf-8"))
+NODE = shutil.which("node")
+needs_node = pytest.mark.skipif(NODE is None, reason="node is not on this machine")
+
+
+def _js_function(source: str, name: str) -> str:
+    start = source.index(f"function {name}(")
+    opening = source.index("{", start)
+    depth = 0
+    for index in range(opening, len(source)):
+        if source[index] == "{":
+            depth += 1
+        elif source[index] == "}":
+            depth -= 1
+            if depth == 0:
+                return source[start : index + 1]
+    raise AssertionError(f"unbalanced function {name}")
 
 
 def _catalog() -> dict[str, str]:
@@ -191,3 +208,46 @@ def test_the_catalog_is_loaded_before_the_app_script():
 def test_core_labels_have_a_real_bosnian_word(key):
     catalog = _catalog()
     assert catalog[key] != key, f"{key} was copied through untranslated"
+
+
+@needs_node
+def test_bosnian_live_copy_reaches_the_live_variant():
+    """`title_bs` used to win before `title_live_bs`, so the live sentence never appeared.
+
+    The static check above only proves the `*_bs` fields exist. This runs the
+    shipped selector for both languages and both feed modes.
+    """
+    functions = "\n".join(
+        _js_function(JS, name) for name in ("fillDiagnosticBody", "renderCaseCopy")
+    )
+    script = f"""
+const fs = require('fs');
+const reasons = JSON.parse(fs.readFileSync({json.dumps(str(REASONS_PATH))}, 'utf8'));
+const never = reasons.cases.find(reason => reason.id === 'never_scanned');
+function escapeHtml(value) {{ return String(value == null ? '' : value); }}
+let language = 'bs';
+{functions}
+const live = renderCaseCopy(never, {{}}, true);
+const prematch = renderCaseCopy(never, {{}}, false);
+language = 'en';
+const liveEn = renderCaseCopy(never, {{}}, true);
+console.log(JSON.stringify({{live, prematch, liveEn}}));
+"""
+    completed = subprocess.run(
+        [NODE, "-e", script],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=60,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    result = json.loads(completed.stdout)
+    never = next(case for case in REASONS["cases"] if case["id"] == "never_scanned")
+
+    assert result["live"]["title"] == never["title_live_bs"]
+    assert result["live"]["body"] == never["body_live_bs"]
+    assert result["prematch"]["title"] == never["title_bs"]
+    assert result["live"]["title"] != result["prematch"]["title"]
+    assert "in-play" in result["live"]["body"]
+    assert result["liveEn"]["title"] == never["title_live"]

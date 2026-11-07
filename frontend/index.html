@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="bs">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <link rel="manifest" href="/manifest.webmanifest">
     <meta name="theme-color" content="#0b1220">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Surebet BiH</title>
-    <meta name="description" content="Find and place surebets across Bosnian bookmakers.">
+    <meta name="description" content="Find and research surebets across Bosnian bookmakers.">
     <script nonce="__CSP_NONCE__">
         // Apply the saved theme before first paint, so the page never flashes.
         try { const t = localStorage.getItem('theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}
@@ -41,7 +41,7 @@
         <button class="btn btn-icon btn-ghost" id="theme-btn" data-action="cycle-theme" aria-label="Theme" data-i18n-aria-label="Theme" title="Theme: system">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 3v18" /><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg>
         </button>
-        <button class="btn btn-icon btn-ghost" id="settings-btn" data-action="toggle-settings" data-open="true" aria-label="Settings" data-i18n-aria-label="Settings" title="Settings" data-i18n-title="Settings">
+        <button class="btn btn-icon btn-ghost" id="settings-btn" data-action="toggle-settings" data-open="true" aria-expanded="false" aria-controls="settings-drawer" aria-label="Settings" data-i18n-aria-label="Settings" title="Settings" data-i18n-title="Settings">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
         </button>
         <button class="btn btn-primary btn-scan" id="scan-btn" data-action="scan-now"><span data-i18n="Scan now">Scan now</span></button>
@@ -148,6 +148,7 @@
                 <div class="market-chips" id="market-chips" role="group" aria-label="Market" data-i18n-aria-label="Market" hidden></div>
 
                 <div class="results-grid" id="results-grid" role="listbox" aria-label="Surebets" data-i18n-aria-label="Surebets"></div>
+                <p class="list-hint" id="list-loading" role="status" hidden></p>
                 <p class="list-hint" id="list-hint" hidden data-i18n-html="true" data-i18n="&lt;kbd&gt;J&lt;/kbd&gt; &lt;kbd&gt;K&lt;/kbd&gt; move through the list · click a surebet to open its bet slip"><kbd>J</kbd> <kbd>K</kbd> move through the list · click a surebet to open its bet slip</p>
 
                 <div class="empty-state" id="empty-state">
@@ -311,7 +312,7 @@
                     <option value="settled" data-i18n="Settled">Settled</option>
                 </select></label>
             <button type="button" class="btn btn-secondary btn-small" data-action="paper-refresh" data-i18n="Refresh">Refresh</button>
-            <a class="btn btn-secondary btn-small" id="paper-export" href="/api/paper/export.csv?days=30" download data-i18n="Export CSV">Export CSV</a>
+            <a class="btn btn-secondary btn-small" id="paper-export" href="/api/paper/export.csv?days=30" download data-action="paper-export" data-i18n="Export CSV">Export CSV</a>
         </div>
         <div class="paper-grid">
             <div class="paper-pane">
@@ -519,7 +520,8 @@
         <p class="hint" id="bet-summary" data-i18n="No logged bets in the last 30 days.">No logged bets in the last 30 days.</p>
         <div class="health-bar" id="health-bar" hidden></div>
         <p class="drawer-links">
-            <a href="/api/debug/report" target="_blank" rel="noopener" data-i18n="Match report">Match report</a>
+            <a href="/api/debug/report" target="_blank" rel="noopener" data-action="open-report" data-report-url="/api/debug/report" data-i18n="Match report">Match report</a>
+            <a href="/api/bets/export.csv?days=30" data-action="bets-export" data-i18n="Export bets CSV">Export bets CSV</a>
             <a href="/api/health" target="_blank" rel="noopener" data-i18n="Health">Health</a>
             <a href="/docs" target="_blank" rel="noopener" data-i18n="API docs">API docs</a>
         </p>

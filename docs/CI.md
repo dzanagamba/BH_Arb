@@ -7,7 +7,7 @@ P1-4/N1-4 hardening. Every push and pull request runs four jobs:
 | `quality` | Ruff, MyPy, the generated-market-doc check and the dated sport/market admissibility audit on Python 3.11. |
 | `tests` | Full pytest suite on Python 3.11 and 3.12. The 3.11 leg also measures coverage, writes a markdown summary to the workflow run page, and uploads `coverage.xml`. The 3.11 leg then runs the opt-in property load budgets separately. |
 | `security` | `pip-audit` against both requirement files and Bandit at medium severity and above. |
-| `sbom` | CycloneDX JSON from `requirements.txt` (the file the image installs), verified non-empty and uploaded as `sbom-cyclonedx`. |
+| `sbom` | CycloneDX JSON from the resolved runtime environment (a clean venv with `requirements.txt` installed), verified to cover the whole resolved set and uploaded as `sbom-cyclonedx`. |
 
 Python 3.11 stays the required runtime (it is what the container and the systemd
 unit use). 3.12 is a forward-compatibility check, not a second support promise.
@@ -78,8 +78,8 @@ and the local commands.
 
 ## Coverage
 
-The measured baseline on 2026-11-04 was **81.55%** (reported as 82%) across
-`engine`, `server`, `scrapers`, `config` and `models` (8,096 statements).
+The measured baseline on 2026-11-06 was **85.63%** across
+`engine`, `server`, `scrapers`, `config` and `models` (11,639 statements).
 `pyproject.toml` sets `fail_under = 80`, a deliberately small cushion below that
 baseline; the note in the roadmap says not to invent a high threshold that
 forces low-value tests. Raise the number as real coverage improves.
@@ -117,17 +117,25 @@ the id, the reason and the review date here. Never silently skip an advisory.
 
 ## SBOM
 
-The `sbom` job generates CycloneDX JSON from the exact `requirements.txt` the
-image installs:
+The image installs `requirements.txt`, which pins the eight direct dependencies
+and resolves to 27 runtime packages (29 including pip and setuptools). The `sbom` job installs that file into a clean venv
+and generates CycloneDX JSON from the resolved set, so the artifact describes
+what the image actually contains rather than the 8-line manifest:
 
 ```bash
-cyclonedx-py requirements requirements.txt \
+python -m venv .sbom-venv
+.sbom-venv/bin/pip install -r requirements.txt
+.sbom-venv/bin/pip freeze --all > sbom-requirements.txt
+cyclonedx-py requirements sbom-requirements.txt \
   --of JSON --output-reproducible -o sbom.cdx.json
 ```
 
-The job asserts `bomFormat == "CycloneDX"`, a spec version and at least one
-component, then uploads `sbom-cyclonedx` for 90 days. The release workflow runs
-the same step, so a release artifact and a PR artifact come from the same file.
+The job asserts `bomFormat == "CycloneDX"`, a spec version, at least 27
+components, and that `starlette` and `pydantic-core` (resolved transitives) are
+present, so a regression back to the 8-component manifest-only output fails. It
+then uploads `sbom-cyclonedx` for 90 days. `--output-reproducible` keeps the
+document stable for the same resolved set. The release workflow runs the same
+steps, so a release artifact and a PR artifact come from the same resolution.
 `cyclonedx-bom==8.0.1` is in `requirements-dev.txt`; it is not part of the
 runtime image.
 
@@ -138,9 +146,9 @@ vulnerability gate.
 
 `.github/workflows/release.yml` runs on a `v*` tag or manually: it regenerates
 the SBOM and runs the Docker smoke. A failed smoke fails the release workflow.
-`.github/dependabot.yml` groups runtime dependencies, dev dependencies and
-GitHub Actions into separate weekly PRs; every PR runs this full CI. See
-`docs/RELEASE.md` for the checklist and local equivalents.
+`.github/dependabot.yml` groups runtime dependencies, dev dependencies, GitHub
+Actions and the Docker base image into separate weekly PRs; every PR runs this
+full CI. See `docs/RELEASE.md` for the checklist and local equivalents.
 
 ## Static security scan
 

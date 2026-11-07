@@ -16,7 +16,7 @@ import httpx
 
 from config.settings import VERIFY_SSL
 from engine import sports
-from engine.market_registry import MARKET_REGISTRY, record_unmapped
+from engine.market_registry import record_unmapped, registered_spec
 from models.schemas import Market, MarketType, Match, OddsValue
 from scrapers.base import fetch_with_retry
 from scrapers.common import betradar_id, normalize_outcome, parse_local_dt, qualify_league
@@ -212,13 +212,7 @@ def _registered_spec(
     market_type: MarketType,
     line: float | None = None,
 ):
-    spec = MARKET_REGISTRY.lookup_type(
-        "sportplus", mode, source_id, market_type, line=line
-    )
-    known = getattr(MARKET_REGISTRY, "has_source_id", None)
-    if spec is None and (known is None or not known("sportplus", mode, source_id)):
-        record_unmapped("sportplus", source_id)
-    return spec
+    return registered_spec("sportplus", mode, source_id, market_type, line=line)
 
 
 class SportPlusScraper:

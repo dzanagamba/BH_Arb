@@ -146,14 +146,21 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt -r requirements-dev.txt
 
-      # The image installs requirements.txt; the SBOM is generated from that
-      # exact file, not from the runner's resolved environment.
+      # The image installs requirements.txt, which pins the 8 direct packages and
+      # resolves to 27. Resolve it in a clean venv so the SBOM describes the
+      # runtime set the image actually contains, not just the manifest.
+      - name: Resolve the runtime environment
+        run: |
+          python -m venv .sbom-venv
+          .sbom-venv/bin/pip install --disable-pip-version-check -q -r requirements.txt
+          .sbom-venv/bin/pip freeze --all > sbom-requirements.txt
+
       - name: Generate CycloneDX SBOM
         run: |
-          cyclonedx-py requirements requirements.txt \
+          cyclonedx-py requirements sbom-requirements.txt \
             --of JSON --output-reproducible -o sbom.cdx.json
 
-      - name: Verify the SBOM is a non-empty CycloneDX document
+      - name: Verify the SBOM covers the resolved runtime
         run: |
           python - <<'PY'
           import json
@@ -162,8 +169,12 @@ jobs:
           payload = json.loads(Path("sbom.cdx.json").read_text(encoding="utf-8"))
           assert payload.get("bomFormat") == "CycloneDX"
           assert payload.get("specVersion")
-          assert payload.get("components"), "SBOM has no components"
-          print(f"SBOM: {len(payload['components'])} components, spec {payload['specVersion']}")
+          components = payload.get("components") or []
+          names = {c.get("name", "").lower().replace("_", "-") for c in components}
+          assert len(components) >= 27, f"SBOM has only {len(components)} components"
+          for required in ("starlette", "pydantic-core"):
+              assert required in names, f"SBOM is missing {required}"
+          print(f"SBOM: {len(components)} components, spec {payload['specVersion']}")
           PY
 
       - name: Upload SBOM

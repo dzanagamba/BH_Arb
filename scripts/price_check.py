@@ -22,80 +22,16 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import statistics
 import sys
 from collections import defaultdict
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from config.settings import price_source  # noqa: E402
+from engine.market_consensus import find_outliers  # noqa: E402
 from engine.matcher import MatchMatcher  # noqa: E402
-from models.schemas import MarketType, Match  # noqa: E402
+from models.schemas import Match  # noqa: E402
 
 CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "cache")
-
-# Label sets that make a complete market, and how many of them win a bet.
-# Double chance pays on two of three outcomes, so its implied sum is 2.
-_COMPLETE: dict[MarketType, tuple[frozenset[str], int]] = {
-    MarketType.MATCH_RESULT: (frozenset({"1", "X", "2"}), 1),
-    MarketType.DOUBLE_CHANCE: (frozenset({"1X", "12", "X2"}), 2),
-    MarketType.BTTS: (frozenset({"GG", "NG"}), 1),
-    MarketType.OVER_UNDER_1_5: (frozenset({"Over 1.5", "Under 1.5"}), 1),
-    MarketType.OVER_UNDER_2_5: (frozenset({"Over 2.5", "Under 2.5"}), 1),
-    MarketType.OVER_UNDER_3_5: (frozenset({"Over 3.5", "Under 3.5"}), 1),
-}
-
-
-def devigged(market_type: MarketType, odds: dict[str, float]) -> dict[str, float] | None:
-    """True probability per outcome, or None when the set is not complete."""
-    spec = _COMPLETE.get(market_type)
-    if spec is None:
-        return None
-    labels, winners = spec
-    if set(odds) != labels or any(v < 1.01 for v in odds.values()):
-        return None
-    total = sum(1 / v for v in odds.values())
-    return {label: (1 / v) / total * winners for label, v in odds.items()}
-
-
-def find_outliers(groups, threshold: float) -> tuple[list[dict], int]:
-    """Return (outliers, number of group/market comparisons made)."""
-    outliers: list[dict] = []
-    compared = 0
-    for group in groups:
-        by_market: dict[MarketType, dict[str, dict[str, float]]] = defaultdict(dict)
-        names: dict[str, list[str]] = defaultdict(list)
-        for match in group.matches:
-            if match.bookmaker not in names[price_source(match.bookmaker)]:
-                names[price_source(match.bookmaker)].append(match.bookmaker)
-        for match in group.matches:
-            for market in match.markets:
-                probs = devigged(market.market_type, {o.label: o.value for o in market.odds})
-                if probs is not None:
-                    # Books on one feed quote one price: count that source once.
-                    by_market[market.market_type].setdefault(price_source(match.bookmaker), probs)
-        for market_type, per_book in by_market.items():
-            if len(per_book) < 3:  # a median of one other book is no reference
-                continue
-            compared += 1
-            for book, probs in per_book.items():
-                for label, p in probs.items():
-                    others = [q[label] for b, q in per_book.items() if b != book]
-                    gap = p - statistics.median(others)
-                    if abs(gap) > threshold:
-                        outliers.append(
-                            {
-                                "match": f"{group.canonical_home} - {group.canonical_away}",
-                                "league": group.league,
-                                "market": market_type.value,
-                                "bookmaker": "+".join(names[book]),
-                                "label": label,
-                                "prob": round(p, 3),
-                                "median_others": round(statistics.median(others), 3),
-                                "gap": round(gap, 3),
-                            }
-                        )
-    return outliers, compared
 
 
 def main() -> int:

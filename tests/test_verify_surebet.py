@@ -17,6 +17,16 @@ from models.schemas import Market, MarketType, Match, OddsValue
 from server.app import app
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _clear_verify_window():
+    """Keep the process-global verify bucket from leaking between tests."""
+    api._verify_request_times.clear()
+    yield
+    api._verify_request_times.clear()
+
+
 KICKOFF = (datetime.now(UTC) + timedelta(hours=3)).replace(tzinfo=None, second=0, microsecond=0)
 LEAGUE = "Premijer Liga BiH"
 
@@ -219,3 +229,19 @@ def test_a_dust_surebet_is_still_profitable_below_the_headline_threshold(harness
 
     assert body["still_profitable"] is True
     assert body["meets_min_profit"] is False
+
+
+def test_repeated_verifies_are_rate_limited_per_client(harness, monkeypatch):
+    books = _arb_books()
+    cached = _cache_surebet(books, MarketType.MATCH_RESULT)
+    for match in books:
+        harness[match.bookmaker] = [match]
+    monkeypatch.setattr(api, "VERIFY_RATE_LIMIT", 1)
+    monkeypatch.setattr(api, "_verify_request_times", {})
+
+    first = client.post("/api/verify", json={"surebet_id": cached["id"], "mode": "prematch"})
+    second = client.post("/api/verify", json={"surebet_id": cached["id"], "mode": "prematch"})
+
+    assert first.status_code == 200, first.text
+    assert second.status_code == 429, second.text
+    assert "Rate limit exceeded" in second.json()["detail"]

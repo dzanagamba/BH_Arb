@@ -55,6 +55,11 @@ sbom*.xml
 
 # Local agent notes
 .superpowers/
+.openchamber/
+
+# SBOM build artifacts
+.sbom-venv/
+sbom-requirements.txt
 
 # Runtime-generated mapping evidence (learned from scans; never commit)
 config/generated/mapping_evidence.json

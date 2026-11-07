@@ -276,3 +276,109 @@ def test_recurring_blocker_panel_and_proposals_are_read_only():
     assert "candidate.remediation" in JS
     assert "proposal only" in JS
     assert "coverage-progress claim" in HTML
+
+
+def test_a_late_feed_response_cannot_commit_under_another_mode():
+    """Switching the feed must not leave the old feed's rows on screen.
+
+    The response is discarded when its own `mode` or the request token no
+    longer matches, and the list is cleared with a loading state on the switch.
+    """
+    switch = _js_function_body("switchMode")
+    assert "allSurebets = []" in switch
+    assert "filteredSurebets = []" in switch
+    assert "showResultsLoading()" in switch
+
+    results = _js_function_body("loadResults")
+    assert "const requestedMode = currentMode" in results
+    assert "requestedMode !== currentMode || token !== resultsRequestSeq" in results
+    assert "data.mode && data.mode !== requestedMode" in results
+
+    for name in ("loadCandidates", "loadEvidence"):
+        body = _js_function_body(name)
+        assert "const requestedMode = currentMode" in body, name
+        assert "requestedMode !== currentMode" in body, name
+
+
+def test_language_refresh_repaints_the_filtered_list_without_verifying():
+    """A language switch is a repaint, not a selection or a live re-scrape."""
+    body = _js_function_body("refreshLocalizedViews")
+    assert "applyFilters()" in body
+    assert "renderKpis(footballSurebets())" not in body
+    assert "renderSurebets(footballSurebets())" not in body
+    assert "verifySurebet" not in body
+    assert "selectSurebet" not in body
+    assert "allowAutoSelect" in _js_function_body("renderSurebets")
+
+
+def test_scan_and_feed_failures_are_surfaced_instead_of_faking_a_scan():
+    scan = _js_function_body("scanNow")
+    assert "if (!res.ok)" in scan
+    assert "data.status === 'maintenance'" in scan
+    already = scan[scan.index("data.status === 'already_scanning'"):]
+    assert "activeScanMode = currentMode" in already
+
+    poll = _js_function_body("pollStatus")
+    assert "if (!res.ok)" in poll
+    assert "statusPollFailures" in poll
+    assert "Could not read the server status." in poll
+    # A scan can block the loop; warn early but keep polling so the finished
+    # scan still refreshes the page, and give up only after a long window.
+    assert "STATUS_POLL_MAX_FAILURES" in poll
+    assert "statusPollFailures === 5" in poll
+    assert "hideError()" in poll
+
+    results = _js_function_body("loadResults")
+    assert "if (!res.ok)" in results
+    assert "Failed to load results: {error}" in results
+
+    history = _js_function_body("loadHistory")
+    assert "if (!res.ok)" in history
+    assert "Failed to load history" in history
+
+
+def test_the_dashboard_sweep_caps_rate_limit_waits_and_posts_a_failure_report():
+    """The browser loop had the CLI's measurement fields hardcoded to zero."""
+    assert "SWEEP_MAX_RATE_LIMIT_WAITS" in JS
+    body = _js_function_body("sweepLinks")
+    assert "rateLimitWaits += 1" in body
+    assert "rate_limit_waits: rateLimitWaits" in body
+    assert "calls_detail: callsDetail" in body
+    assert "callsDetail.push" in body
+    assert "status = 'request_failed'" in body
+    # The report is posted after the loop, so a failed sweep still records why.
+    assert body.index("const report =") < body.index("'/api/link-sweeps'")
+
+
+def test_an_unplaced_leg_is_logged_with_zero_accepted_values():
+    log = _js_function_body("logBet")
+    assert "leg.placed ? leg.takenOdds : 0" in log
+    assert "leg.placed ? leg.plannedStake : 0" in log
+
+
+def test_downloads_and_the_bet_summary_use_the_api_key_header_never_a_url_token():
+    assert "async function downloadProtected" in JS
+    assert "URL.createObjectURL" in JS
+    assert "apiKey=" not in JS
+    assert "apiFetch('/api/bets/summary?days=30')" in JS
+    assert "fetch('/api/bets/summary" not in JS
+    for action in ("paper-export", "bets-export", "open-report"):
+        assert f'data-action="{action}"' in HTML
+
+
+def test_the_fallback_bookmaker_table_covers_every_configured_book():
+    from config.settings import BOOKMAKERS
+
+    colors = re.search(r"const BOOKMAKER_COLORS = (\{.*?\n\});", JS, re.DOTALL)
+    assert colors, "BOOKMAKER_COLORS is missing"
+    for book in BOOKMAKERS:
+        assert re.search(rf"\b{re.escape(book)}:", colors.group(1)), book
+
+
+def test_a_filtered_out_selection_closes_the_mobile_slip():
+    render = _js_function_body("renderSurebets")
+    assert "closeSlip()" in render
+    assert "setAttribute('aria-selected', 'false')" in _js_function_body("buildSurebetRow")
+    assert 'data-action="close-slip"' in _js_function_body("renderSlip")
+    switch = _js_function_body("switchMode")
+    assert "closeSlip()" in switch

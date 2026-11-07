@@ -1,23 +1,17 @@
-"""
-FastAPI Route Handlers
+"""FastAPI route handlers for the scanner, mounted under ``/api``.
 
-Endpoints:
-  POST /api/scan       — Trigger a full scan (runs in background)
-  GET  /api/status     — Poll scan status
-  GET  /api/results    — Get cached results (surebets + matches)
-  GET  /api/config     — Get bookmaker config for the frontend
-  GET  /api/debug/report — Get match grouping debug report
-  POST /api/recalculate — Recalculate stakes for a given investment
-  POST /api/verify     — Re-verify a surebet's odds against fresh bookmaker data
-  POST /api/verify-links — On-demand deep-link proof for one bookmaker
-  GET  /api/history    — Recent scan history
-  GET  /api/metrics    — Prometheus counters and gauges (P1-2)
+This module is not an exhaustive route index: the running server documents every
+route, its parameters and its response at ``/docs`` (OpenAPI). Read-only
+diagnostics include ``/api/health``, ``/api/results``, ``/api/groups``,
+``/api/candidates``, ``/api/history``, ``/api/mapping/coverage``,
+``/api/debug/report`` and the ``/api/paper/*`` and ``/api/bets/*`` report views.
 """
 
 import asyncio
 import hashlib
 import json
 import logging
+import math
 import os
 import signal
 import tempfile
@@ -26,9 +20,9 @@ import time
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal, NamedTuple
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import PlainTextResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from rapidfuzz import fuzz
 
 from config.settings import (
@@ -65,6 +59,7 @@ from config.settings import (
     SCAN_RATE_LIMIT,
     STALE_PRICE_UNCHANGED_SCANS,
     VERIFIED_KICKOFF_WINDOW_MINUTES,
+    VERIFY_RATE_LIMIT,
     book_risk_profile,
 )
 from engine.admissibility import health_summary as admissibility_health
@@ -73,7 +68,7 @@ from engine.arbitrage import ArbitrageEngine
 from engine.candidate_remediation import (
     PROPOSAL_NOTE,
     alias_proposals,
-    candidate_class,
+    blocker_counts,
     group_candidates,
     league_proposal,
     remediation_counts,
@@ -101,6 +96,7 @@ from engine.mapping_evidence import MappingLedger
 from engine.mapping_learner import learn
 from engine.market_registry import unmapped_by_book, unmapped_markets
 from engine.matcher import MatchMatcher, swap_match_teams_and_odds
+from engine.name_keys import raw_team_key
 from engine.opportunity_metrics import (
     ScanMetrics,
     lifetime_distribution,
@@ -174,7 +170,7 @@ from server.alerts import (
 from server.auth import SCOPES, api_key_store
 from server.bets import BetStore
 from server.maintenance import maintenance_running, retention_health
-from server.mapping_coverage import build_coverage
+from server.mapping_coverage import build_coverage, load_ledger
 from server.observability import (
     metrics,
     new_request_id,
@@ -1264,10 +1260,10 @@ def _verified_group_index(groups: list[MatchGroup]) -> dict[str, int]:
 def _alias_name_key(name: str) -> str:
     """The form a name is compared in inside the reviewed allowlist.
 
-    Mirrors ``CertaintyGate._raw_team_key`` (case, spacing and a trailing dot),
-    which is what the gate normalises both sides of an entry through.
+    It is the gate's own key, so an entry the reviewer writes is compared
+    exactly as the gate will compare it.
     """
-    return " ".join(name.strip().casefold().split()).rstrip(".")
+    return raw_team_key(name)
 
 
 def _slot_agreement(left_home: str, left_away: str, right_home: str, right_away: str) -> float:
@@ -3085,6 +3081,9 @@ def _save_cache(mode: str = "prematch"):
             "mode": mode,
             "run_mode": _last_run_mode.get(mode, "advisory"),
             "recorded_opportunities": _recorded_counts.get(mode, 0),
+            "per_bookie": dict(
+                cached_live_per_bookie if mode == "live" else cached_per_bookie
+            ),
             "scan_time": scan_time,
             "fetched_at": scan_time,
         }
@@ -3241,6 +3240,29 @@ def _load_cache():
                 except ValueError:
                     cached_scan_time = None
             _refresh_pairing_summary(mode, matches_cache, report_cache, cached_scan_time)
+            # Restore the per-book counts the scan wrote. Deriving them from the
+            # cached rows alone would drop a book that was scraped successfully
+            # but returned zero matches.
+            per_bookie_cache = (
+                cached_live_per_bookie if mode == "live" else cached_per_bookie
+            )
+            stored_per_bookie = data.get("per_bookie")
+            if isinstance(stored_per_bookie, dict):
+                per_bookie = {
+                    str(book): int(count)
+                    for book, count in stored_per_bookie.items()
+                    if isinstance(count, int)
+                }
+            else:
+                per_bookie = {}
+                for row in matches_cache:
+                    if not isinstance(row, dict):
+                        continue
+                    bookmaker = row.get("bookmaker")
+                    if isinstance(bookmaker, str) and bookmaker:
+                        per_bookie[bookmaker] = per_bookie.get(bookmaker, 0) + 1
+            per_bookie_cache.clear()
+            per_bookie_cache.update(per_bookie)
             status.total_matches = len(matches_cache)
             status.surebets_found = len(surebets_cache)
             logger.info(
@@ -3261,6 +3283,9 @@ def _load_cache():
 # they share ONE window length, which is a setting in its own right rather than
 # something derived from an endpoint-specific knob.
 _scan_request_times: dict[str, list[float]] = {}
+# A verify has its own window; spending it must not spend the scan or deep-link
+# budget, and a flood of verifies must not hold the mode lock all afternoon.
+_verify_request_times: dict[str, list[float]] = {}
 
 
 def _enforce_sliding_window(
@@ -3517,8 +3542,8 @@ async def health():
         "pending_candidates": len(pending_candidates),
         "live_pending_candidates": len(pending_live_candidates),
         "candidate_blockers": {
-            "prematch": _candidate_breakdown(list(pending_candidates.values())),
-            "live": _candidate_breakdown(list(pending_live_candidates.values())),
+            "prematch": blocker_counts(pending_candidates.values()),
+            "live": blocker_counts(pending_live_candidates.values()),
         },
         # N2-3: ranked, proposal-only remediation. The queue total is the
         # denominator; groups are review-work ranking, never coverage progress.
@@ -3791,7 +3816,7 @@ async def get_results(mode: str = "prematch"):
 async def get_mapping_coverage(mode: str = "prematch"):
     """Read-only mapping coverage and quarantined claims for Diagnostics."""
     _, _, matches_cache, report_cache, _ = _state_for(mode)
-    ledger = MappingLedger().load()
+    ledger = load_ledger()
     return build_coverage(
         ledger,
         matches_cache,
@@ -3950,11 +3975,31 @@ async def get_match_report(
     }
 
 
+def _finite_number(value: float) -> float:
+    if not math.isfinite(value):
+        raise ValueError("must be a finite number")
+    return value
+
+
+def _positive_investment(value: float) -> float:
+    value = _finite_number(value)
+    if value <= 0:
+        raise ValueError("investment must be positive")
+    if value > 1_000_000:
+        raise ValueError("investment must be at most 1000000")
+    return value
+
+
 class RecalculateRequest(BaseModel):
     surebet_id: str
     investment: float
     mode: str = "prematch"
     rounding: Literal["exact", "1", "5"] = "exact"
+
+    @field_validator("investment")
+    @classmethod
+    def _validate_investment(cls, value: float) -> float:
+        return _positive_investment(value)
 
 
 class VerifyRequest(BaseModel):
@@ -3977,6 +4022,46 @@ class BetLegPayload(BaseModel):
     settlement: str = ""
     period: str = ""
 
+    @field_validator("odds", "closing_odds")
+    @classmethod
+    def _validate_odds(cls, value: float | None) -> float | None:
+        if value is None:
+            return value
+        value = _finite_number(value)
+        if value <= 1:
+            raise ValueError("odds must be greater than 1")
+        if value > 1_000:
+            raise ValueError("odds must be at most 1000")
+        return value
+
+    @field_validator("accepted_odds")
+    @classmethod
+    def _validate_accepted_odds(cls, value: float | None) -> float | None:
+        if value is None:
+            return value
+        value = _finite_number(value)
+        # Zero is the explicit "this leg was not placed" sentinel, matching a
+        # zero accepted stake; every other value must be a real price.
+        if value == 0:
+            return value
+        if value <= 1:
+            raise ValueError("accepted odds must be 0 or greater than 1")
+        if value > 1_000:
+            raise ValueError("accepted odds must be at most 1000")
+        return value
+
+    @field_validator("stake", "accepted_stake")
+    @classmethod
+    def _validate_stake(cls, value: float | None) -> float | None:
+        if value is None:
+            return value
+        value = _finite_number(value)
+        if value < 0:
+            raise ValueError("stake must not be negative")
+        if value > 1_000_000_000:
+            raise ValueError("stake must be at most 1000000000")
+        return value
+
 
 class BetCreateRequest(BaseModel):
     surebet_id: str = ""
@@ -3994,6 +4079,11 @@ class BetCreateRequest(BaseModel):
     league: str = ""
     sport: str = "football"
 
+    @field_validator("investment")
+    @classmethod
+    def _validate_investment(cls, value: float) -> float:
+        return _positive_investment(value)
+
 
 class BetSettlementLeg(BaseModel):
     outcome_label: str
@@ -4007,6 +4097,16 @@ class BetSettlementRequest(BaseModel):
 class BetClosingLeg(BaseModel):
     outcome_label: str
     closing_odds: float
+
+    @field_validator("closing_odds")
+    @classmethod
+    def _validate_closing_odds(cls, value: float) -> float:
+        value = _finite_number(value)
+        if value <= 1:
+            raise ValueError("closing odds must be greater than 1")
+        if value > 1_000:
+            raise ValueError("closing odds must be at most 1000")
+        return value
 
 
 class BetClosingRequest(BaseModel):
@@ -4061,7 +4161,7 @@ async def get_candidates(
     queue = list(_candidates_for(mode).values())
     total = len(queue)
     actionable_total = sum(1 for candidate in queue if candidate.alias_actionable)
-    blocker_counts = _candidate_breakdown(queue)
+    blockers = blocker_counts(queue)
     counts = remediation_counts(queue)
     closeable_total = counts["alias"] + counts["league"] + counts["alias+league"]
     if closeable_only:
@@ -4074,7 +4174,7 @@ async def get_candidates(
         "total": total,
         "actionable_total": actionable_total,
         "closeable_total": closeable_total,
-        "blocker_counts": blocker_counts,
+        "blocker_counts": blockers,
         "remediation_counts": counts,
         "actionable_only": actionable_only,
         "closeable_only": closeable_only,
@@ -4098,24 +4198,6 @@ def _candidate_closeable(candidate: CandidateReview) -> bool:
     if candidate.remediation is not None:
         return candidate.remediation.closeable
     return candidate.alias_actionable
-
-
-def _candidate_blocker(candidate: CandidateReview) -> str:
-    """The one class a reviewer needs to understand why this is queued.
-
-    Mutually exclusive by design: alias-actionable work first, then a league
-    mapping a human can still supply, then a machine link check, then anything
-    no human action closes. A candidate can have several reasons; this answers
-    "what would move it", not "list every reason".
-    """
-    return candidate_class(candidate)
-
-
-def _candidate_breakdown(queue: list[CandidateReview]) -> dict[str, int]:
-    counts = {"alias": 0, "league": 0, "link": 0, "other": 0}
-    for candidate in queue:
-        counts[_candidate_blocker(candidate)] += 1
-    return counts
 
 
 def _name_score(candidate: CandidateReview) -> int:
@@ -4271,7 +4353,7 @@ async def reject_candidate(
 
 @router.get("/history")
 async def get_history(
-    days: int = 30,
+    days: int = Query(30, ge=0, le=3650),
     mode: str = "",
     limit: int = _HISTORY_MAX,
     _auth: None = Depends(_require_api_key),
@@ -4346,7 +4428,11 @@ def _find_surebet_group(
 
 
 @router.post("/verify")
-async def verify_surebet(req: VerifyRequest, _auth: None = Depends(_require_api_key)):
+async def verify_surebet(
+    req: VerifyRequest,
+    request: Request,
+    _auth: None = Depends(_require_api_key),
+):
     """
     Live odds verification: re-scrape ONLY the bookmakers involved in a surebet,
     re-group the match, and re-price the exact outcome set the surebet was built
@@ -4364,6 +4450,12 @@ async def verify_surebet(req: VerifyRequest, _auth: None = Depends(_require_api_
     target = next((s for s in surebets_cache if s.get("id") == req.surebet_id), None)
     if not target:
         raise HTTPException(status_code=404, detail="Surebet not found")
+
+    # Charged before the lock and the scrape: a repeated caller must be refused
+    # instead of queueing more full browser runs behind the mode lock.
+    _enforce_sliding_window(
+        request, _verify_request_times, VERIFY_RATE_LIMIT, "verifications"
+    )
 
     mode_lock = _lock_for(req.mode)
     status_for_mode, _, _, _, _ = _state_for(req.mode)
@@ -4964,13 +5056,13 @@ async def create_bet(
 
 
 @router.get("/bets")
-async def get_bets(days: int = 30, limit: int = 200):
+async def get_bets(days: int = Query(30, ge=0, le=3650), limit: int = 200):
     """Read the bet log window; settled and open bets are both returned."""
     return {"bets": _require_bet_store().list_bets(days=max(1, days), limit=limit)}
 
 
 @router.get("/bets/summary")
-async def get_bet_summary(days: int = 30):
+async def get_bet_summary(days: int = Query(30, ge=0, le=3650)):
     """Bankroll, ROI, CLV and closing-capture denominators."""
     summary = _require_bet_store().summary(days=max(1, days))
     summary["last_capture"] = {
@@ -4981,7 +5073,7 @@ async def get_bet_summary(days: int = 30):
 
 
 @router.get("/bets/export.csv")
-async def export_bets_csv(days: int = 30):
+async def export_bets_csv(days: int = Query(30, ge=0, le=3650)):
     """CSV round-trip export of the bet log."""
     csv_text = _require_bet_store().export_csv(days=max(1, days))
     return PlainTextResponse(
@@ -4993,7 +5085,7 @@ async def export_bets_csv(days: int = 30):
 
 @router.get("/paper/opportunities")
 async def get_paper_opportunities(
-    days: int = 30,
+    days: int = Query(30, ge=0, le=3650),
     limit: int = 200,
     offset: int = 0,
     run_mode: str = "",
@@ -5027,7 +5119,7 @@ async def get_paper_opportunities(
 
 @router.get("/paper/positions")
 async def get_paper_positions(
-    days: int = 30,
+    days: int = Query(30, ge=0, le=3650),
     limit: int = 200,
     offset: int = 0,
     status: Literal["", "open", "settled"] = "",
@@ -5058,7 +5150,7 @@ async def get_paper_positions(
 
 
 @router.get("/paper/summary")
-async def get_paper_summary(days: int = 30):
+async def get_paper_summary(days: int = Query(30, ge=0, le=3650)):
     """Simulated ROI, hit rate and CLV with explicit denominators."""
     store = _paper_store_or_init()
     summary = store.summary(days=max(1, days))
@@ -5086,7 +5178,7 @@ async def get_paper_summary(days: int = 30):
 
 @router.get("/paper/export.csv")
 async def export_paper_csv(
-    days: int = 30,
+    days: int = Query(30, ge=0, le=3650),
     run_mode: str = "",
     feed_mode: str = "",
     status: Literal["", "open", "settled"] = "",

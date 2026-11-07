@@ -547,6 +547,12 @@ window.I18N = {
         "If a later leg is gone or the profit turns red, stop. Either hedge the placed leg at the best price available or accept the single bet — do not chase.": "Ako kasnija noga nestane ili profit postane crven, zaustavite se. Ili hedžujte uplaćenu nogu po najboljoj dostupnoj cijeni ili prihvatite jednu opkladu — ne jurite.",
         "Execution-adjusted ROI — · optimistic (if all filled) —": "ROI prilagođen izvršenju — · optimistični (ako se sve ispuni) —",
         "Paper store: —": "Papirno skladište: —",
-        "Paper ledger": "Papirni ledger"
+        "Paper ledger": "Papirni ledger",
+        "Loading the {mode} feed…": "Učitavam {mode} feed…",
+        "The scanner is in maintenance. Try again when it is available.": "Skener je u održavanju. Pokušajte ponovno kada bude dostupan.",
+        "Export bets CSV": "Izvezi CSV opklada",
+        "This SureBet deployment requires an API key to download this file.": "Ova SureBet instalacija zahtijeva API ključ za preuzimanje ove datoteke.",
+        "Could not download the file: {error}": "Nije moguće preuzeti datoteku: {error}",
+        "Could not open the report: {error}": "Nije moguće otvoriti izvještaj: {error}"
     }
 };

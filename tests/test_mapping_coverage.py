@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from engine.mapping_evidence import Evidence, MappingLedger, team_alias_key
 from models.schemas import Market, MarketType, Match, OddsValue
+from server import api
 from server.app import app
 from server.mapping_coverage import build_coverage
 
@@ -67,3 +68,26 @@ def test_the_route_is_read_only_and_served():
     assert body["mode"] == "prematch"
     assert "claims" in body and "quarantined" in body
     assert client.post("/api/mapping/coverage").status_code == 405
+
+
+def test_cached_dict_rows_are_counted(monkeypatch):
+    """The live cache holds JSON dicts, not Match models."""
+    monkeypatch.setattr(
+        api,
+        "cached_matches",
+        [
+            {"bookmaker": "mbet", "markets": [{"market_type": "1x2"}, {"market_type": "btts"}]},
+            {"bookmaker": "wwin", "markets": []},
+        ],
+    )
+    monkeypatch.setattr(api, "cached_match_groups_report", [{"status": "verified"}])
+
+    response = TestClient(app).get("/api/mapping/coverage")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["books"] == {
+        "mbet": {"matches": 1, "markets": 2},
+        "wwin": {"matches": 1, "markets": 0},
+    }
+    assert body["groups"] == {"total": 1, "verified": 1}

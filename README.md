@@ -56,7 +56,7 @@ python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 
 pip install -r requirements.txt
-playwright install chromium
+playwright install --with-deps chromium   # Linux; drop --with-deps on Windows/macOS
 cp .env.example .env
 
 python main.py
@@ -133,9 +133,10 @@ POST /api/scan
   Prometheus text: scan started/completed/failed, per-book success/empty/error,
   surebets found/dropped, link checks, candidate-queue size, cache size, scan
   duration, last-scan age per feed, browser slots in use, and process RSS. The
-  endpoint is protected like every other `/api` route. A completed scan emits
-  one `scan complete` record with duration, book counts, groups, surebets,
-  drops and cache size — never odds or credentials.
+  endpoint is protected like every other `/api` route when `API_KEY` is set;
+  the default loopback-only mode leaves it open. A completed scan emits one
+  `scan complete` record with duration, book counts, groups, surebets, drops and
+  cache size — never odds or credentials.
 
 ## Dashboard
 
@@ -154,6 +155,9 @@ POST /api/scan
   paper), auto-rescan, alert sound, enabled bookmakers, experimental markets and
   the health line. Unhealthy books also appear in a feed-integrity strip above
   the tabs, with the reason they are degraded or quarantined from pricing.
+- **Installable shell** — the dashboard registers a service worker for the
+  static app shell only. It never caches `/api` responses or odds; an offline
+  reload shows the shell, and a stale scan is still labelled historical.
 
 `python scripts/opportunity_baseline.py --days 7` prints the aggregate
 opportunity-rate baseline for the recorded scan history. The first local
@@ -239,6 +243,8 @@ Copy `.env.example` to `.env` and set only what you need:
 | `API_KEY` | *(empty)* | When set, every `/api` route except `/api/health` requires an `X-API-Key` header. |
 | `CORS_ORIGINS` | *(empty)* | Allowed origins for a separate frontend; empty means same-origin only. |
 | `SCAN_RATE_LIMIT` | `3` | Maximum scans a client may trigger per minute. |
+| `VERIFY_RATE_LIMIT` | `10` | On-demand surebet re-verifications per client per minute; `0` disables the limit. |
+| `DEEP_LINK_VERIFY_RATE_LIMIT` | `2` | Deep-link checks per client per minute; `0` disables the limit. |
 | `HEADLESS` | `true` | Set `false` to watch Playwright browsers. |
 | `LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING` or `ERROR`. |
 | `LOG_FORMAT` | `text` | `text` for the readable line, `json` for one JSON object per line. Both carry `request_id`/`scan_id`. |
@@ -348,9 +354,9 @@ tabs. Scraped names and league labels are data and are never translated.
 `tests/test_i18n_coverage.py` fails on a missing key or a lost placeholder.
 
 Accessibility is machine-checked: `tests/test_accessibility_axe.py` covers
-landmarks, names, tab semantics, live regions and the keyboard path, and
-`scripts/a11y_audit.py` runs a live Chromium audit with optional axe-core. The
-reviewed exception list and the keyboard-only run are in
+landmarks, names, the results-tab semantics, live regions and the keyboard path,
+and `scripts/a11y_audit.py` runs a live Chromium audit with optional axe-core.
+The reviewed exception list and the keyboard-only run are in
 `docs/ACCESSIBILITY.md`.
 
 ### Parser fixtures and drift
@@ -410,12 +416,12 @@ and `tests/test_live_mode.py`.
 | Path | Responsibility |
 |---|---|
 | `main.py` | Starts uvicorn on `HOST`/`PORT`. |
-| `server/` | FastAPI app, `/api/*` routes, scan orchestration, scheduling and mapping coverage. |
+| `server/` | FastAPI app, `/api/*` routes, auth, scan orchestration, scheduling, storage, paper/bet ledgers, alerts and mapping coverage. |
 | `scrapers/` | One module per bookmaker; `base.py` has the Playwright launcher and HTTP retry, `common.py` shared parsing and deep-link helpers. |
 | `engine/` | Normalization, name and league resolution, mapping learning, matching, the certainty gate, market registry, price guard and pricing. |
 | `models/schemas.py` | Pydantic models shared by every layer. |
 | `config/` | Runtime settings, bookmaker and market registries, deep-link declarations, mappings and the generated evidence ledger. |
-| `frontend/` | Static dashboard served at `/`; no bundler. |
+| `frontend/` | Static dashboard served at `/`; no bundler. Includes the installable static-shell service worker. |
 | `scripts/` | Operator tools for deep-link checks, fixture capture, mapping derivation and `MARKET_MAPPING.md` generation. |
 | `tests/` | Offline pytest suite; `tests/fixtures/markets/` holds captured payloads. |
 | `cache/` | Gitignored runtime state: last scan per feed, history, link proofs and decisions. |
@@ -428,13 +434,15 @@ and `tests/test_live_mode.py`.
 Install the dev tools once, then run the same checks as CI:
 
 ```bash
-pip install -r requirements-dev.txt
+pip install -r requirements.txt -r requirements-dev.txt
 
 python -m pytest
 python -m ruff check .
 python -m mypy .
 python scripts/generate_market_mapping_doc.py --check
 python scripts/audit_admissibility.py --check
+python scripts/refresh_fixtures.py --check
+python scripts/check_test_isolation.py
 
 # Opt-in property load budgets (skipped in the normal fast suite)
 BH_ARB_TEST_SLOW=1 python -m pytest tests/test_perf_budgets.py
@@ -445,7 +453,7 @@ python -m pip_audit -r requirements.txt -r requirements-dev.txt --progress-spinn
 python -m bandit -r engine server scrapers config models main.py scripts -ll -q
 ```
 
-The coverage floor is 80% (measured baseline 81.55%) and Bandit fails at medium
+The coverage floor is 80% (measured baseline 85.63%) and Bandit fails at medium
 severity or above. Accepted `# nosec` entries and the coverage baseline are
 documented in [`docs/CI.md`](docs/CI.md).
 

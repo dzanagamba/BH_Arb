@@ -105,3 +105,98 @@ def test_a_revoked_key_cannot_use_a_scan_scope(tmp_path, monkeypatch):
     assert store.revoke(record["id"])
     response = client.post("/api/scan", headers={"X-API-Key": token})
     assert response.status_code == 401
+
+
+def test_revoking_the_last_key_keeps_a_dependency_guard_closed(tmp_path, monkeypatch):
+    """C-09: revocation must not reopen the API through `has_any_keys()`.
+
+    The store still has a record (revoked), so `_require_api_key` cannot take
+    the "no keys configured" local-only path even with `API_KEY=""`.
+    """
+    store = _store(tmp_path)
+    token, record = store.create("laptop", ["read"])
+    monkeypatch.setattr(api, "api_key_store", store)
+    monkeypatch.setattr(api, "API_KEY", "")
+    client = TestClient(app)
+
+    assert store.revoke(record["id"])
+    assert store.has_any_keys() is True
+    assert store.active_keys() == []
+
+    assert client.get("/api/history").status_code == 401
+    assert client.get("/api/metrics").status_code == 401
+    assert client.get("/api/history", headers={"X-API-Key": token}).status_code == 401
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "auth path redesign (C-01/C-02/C-07) is deferred: /api/results has no "
+        "_require_api_key dependency, so a named-key store cannot close it"
+    ),
+)
+def test_the_results_route_should_close_when_only_revoked_named_keys_exist(
+    tmp_path, monkeypatch
+):
+    store = _store(tmp_path)
+    token, record = store.create("laptop", ["read"])
+    monkeypatch.setattr(api, "api_key_store", store)
+    monkeypatch.setattr(api, "API_KEY", "")
+    client = TestClient(app)
+
+    assert store.revoke(record["id"])
+    assert client.get("/api/results").status_code == 401
+
+
+def test_a_corrupt_key_store_with_the_env_key_still_fails_closed(tmp_path, monkeypatch):
+    """C-09: a broken store must not silently become "no keys configured".
+
+    With ``API_KEY`` empty the corrupt store reports no keys at all, so the
+    historical local-only fallback still applies — the documented current
+    behaviour, safe only because the default bind is loopback. This test pins
+    the direction that matters: when a bootstrap key IS configured, a broken
+    store denies the request rather than opening the API.
+    """
+    (tmp_path / "api_keys.json").write_text("{not json", encoding="utf-8")
+    store = _store(tmp_path)
+    monkeypatch.setattr(api, "api_key_store", store)
+    monkeypatch.setattr(api, "API_KEY", "secret")
+    client = TestClient(app)
+
+    assert store.has_any_keys() is False
+    assert store.active_keys() == []
+    assert client.get("/api/history").status_code == 401
+    assert (
+        client.get("/api/history", headers={"X-API-Key": "wrong"}).status_code
+        == 401
+    )
+    # The env bootstrap key still works, so the store is not a single point of
+    # failure for the operator.
+    assert (
+        client.get("/api/history", headers={"X-API-Key": "secret"}).status_code
+        == 200
+    )
+
+
+def test_a_read_scope_key_cannot_reach_an_admin_or_mutation_route(tmp_path, monkeypatch):
+    """C-09: the current scope policy, asserted rather than redesigned."""
+    store = _store(tmp_path)
+    token, _ = store.create("reader", ["read"])
+    monkeypatch.setattr(api, "api_key_store", store)
+    monkeypatch.setattr(api, "API_KEY", "")
+    monkeypatch.setattr(api, "_bookmaker_enabled", dict(api._bookmaker_enabled))
+    before = dict(api._bookmaker_enabled)
+    client = TestClient(app)
+    headers = {"X-API-Key": token}
+
+    # The read scope reaches read routes...
+    assert client.get("/api/history", headers=headers).status_code == 200
+    # ...but not key administration, a config toggle, shutdown or a scan.
+    assert client.get("/api/keys", headers=headers).status_code == 403
+    assert (
+        client.post("/api/config/toggle/mozzartbet", headers=headers).status_code
+        == 403
+    )
+    assert client.post("/api/shutdown", headers=headers).status_code == 403
+    assert client.post("/api/scan", headers=headers).status_code == 403
+    assert api._bookmaker_enabled == before

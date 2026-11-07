@@ -20,7 +20,10 @@ labels, market ids and every other scraped value stay as data and are never
 translated.
 
 Views that are generated per scan are repainted on a language change by
-`refreshLocalizedViews()`. The network-backed tabs reload; the list and slip
+`refreshLocalizedViews()`. It repaints through the same filtered path as a
+filter change, so the list, the KPI counts and the selected slip cannot
+disagree, and it never counts as a user selection: no slip is opened and no
+price re-check is launched. The network-backed tabs reload; the list and slip
 re-render from the snapshots already held.
 
 ### Adding a string
@@ -85,7 +88,7 @@ deployed build.
 `BH_ARB_TEST_BROWSER=1 python -m pytest tests/test_accessibility_axe.py` also
 runs the path end to end without mouse events, in English and Bosnian:
 
-1. open Settings with Enter and choose the language;
+1. open Settings with Enter (focus moves into the drawer) and choose the language;
 2. type a filter;
 3. activate **Scan now** with Enter;
 4. focus a surebet and open its slip with Enter;

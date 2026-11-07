@@ -11,11 +11,14 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
 
 from config import settings
 from engine import matcher
 from engine.mapping_evidence import Evidence, MappingLedger, team_alias_key
+from models.schemas import Match
 from server import api, scheduler
+from server.app import app
 from server.bets import BetStore
 from server.maintenance import maintenance_running, retention_health, run_maintenance
 from server.paper import PaperStore
@@ -451,6 +454,68 @@ def test_the_daily_loop_runs_one_bounded_job_off_the_scan_path(monkeypatch):
     assert len(calls) == 1
     assert calls[0]["vacuum"] is True
     assert callable(calls[0]["scan_active"])
+
+
+def test_a_cache_reload_restores_the_per_bookie_counts(monkeypatch, tmp_path):
+    now = _now()
+    matches = [
+        Match(bookmaker="mbet", home_team="A", away_team="B"),
+        Match(bookmaker="mbet", home_team="C", away_team="D"),
+        Match(bookmaker="wwin", home_team="A", away_team="B"),
+    ]
+    cache_file = tmp_path / "last_scan.json"
+    cache_file.write_text(
+        json.dumps(
+            {
+                "scan_time": now.isoformat(timespec="seconds"),
+                "surebets": [],
+                "matches": [match.model_dump(mode="json") for match in matches],
+                "match_groups": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(api, "_PREMATCH_CACHE_FILE", str(cache_file))
+    monkeypatch.setattr(api, "_LIVE_CACHE_FILE", str(tmp_path / "last_live_scan.json"))
+    monkeypatch.setattr(api, "cached_matches", [])
+    monkeypatch.setattr(api, "cached_per_bookie", {})
+    monkeypatch.setattr(api, "cached_live_per_bookie", {})
+
+    api._load_cache()
+
+    assert api.cached_per_bookie == {"mbet": 2, "wwin": 1}
+    body = TestClient(app).get("/api/health").json()
+    assert body["prematch"]["per_bookie"] == {"mbet": 2, "wwin": 1}
+
+
+def test_a_cache_reload_keeps_a_book_that_returned_zero_matches(monkeypatch, tmp_path):
+    now = _now()
+    cache_file = tmp_path / "last_scan.json"
+    cache_file.write_text(
+        json.dumps(
+            {
+                "scan_time": now.isoformat(timespec="seconds"),
+                "surebets": [],
+                "matches": [
+                    Match(bookmaker="mbet", home_team="A", away_team="B").model_dump(
+                        mode="json"
+                    )
+                ],
+                "match_groups": [],
+                "per_bookie": {"mbet": 1, "emptybook": 0},
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(api, "_PREMATCH_CACHE_FILE", str(cache_file))
+    monkeypatch.setattr(api, "_LIVE_CACHE_FILE", str(tmp_path / "last_live_scan.json"))
+    monkeypatch.setattr(api, "cached_matches", [])
+    monkeypatch.setattr(api, "cached_per_bookie", {})
+    monkeypatch.setattr(api, "cached_live_per_bookie", {})
+
+    api._load_cache()
+
+    assert api.cached_per_bookie == {"mbet": 1, "emptybook": 0}
 
 
 def test_the_daily_loop_skips_a_busy_scan(monkeypatch):

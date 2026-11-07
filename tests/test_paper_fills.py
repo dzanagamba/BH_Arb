@@ -217,3 +217,21 @@ def test_csv_export_carries_the_fill_record(tmp_path):
     assert float(position_row["filled_stake"]) < float(position_row["planned_stake"])
     fills = json.loads(position_row["fills_json"])
     assert {fill["status"] for fill in fills} == {"partial", "filled"}
+
+
+def test_csv_export_escapes_formula_leading_feed_text(tmp_path):
+    store = _store(tmp_path, book_caps={"mbet": 10, "wwin": 1000, "sportplus": 1000})
+    surebet = _surebet().model_copy(
+        update={"home_team": "=1+1", "away_team": "@SUM(A1)", "league": "-BiH"}
+    )
+    records = store.record_opportunities(
+        [surebet], feed_mode="prematch", run_mode="paper", scan_time=FIRST_SCAN
+    )
+    store.open_positions_from_scan(records, scan_time=FIRST_SCAN)
+
+    rows = list(csv.DictReader(io.StringIO(store.export_csv(days=30))))
+    position_row = next(row for row in rows if row["kind"] == "position")
+
+    assert position_row["home_team"] == "'=1+1"
+    assert position_row["away_team"] == "'@SUM(A1)"
+    assert position_row["league"] == "'-BiH"

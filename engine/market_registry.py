@@ -266,25 +266,6 @@ class MarketRegistry:
         """Return whether an ID is registered for this bookmaker/mode."""
         return (bookmaker, mode, str(source_id)) in self._index
 
-    def is_excluded(
-        self,
-        bookmaker: str,
-        mode: str,
-        source_id: int | str,
-        context: int | str | None = None,
-    ) -> bool:
-        """Return whether a source ID/name is explicitly excluded.
-
-        ``mode`` is accepted for symmetry with the lookup API and for future
-        mode-specific exclusions; the current JSON namespace is book-scoped.
-        """
-        del mode
-        patterns = self.excluded.get(bookmaker, set())
-        return (
-            _matches_exclusion(source_id, patterns)
-            or (context is not None and _matches_exclusion(context, patterns))
-        )
-
     def specs_for(
         self, bookmaker: str, mode: str, source_id: int | str
     ) -> list[MarketSpec]:
@@ -341,6 +322,27 @@ class MarketRegistry:
     ) -> set[int | str]:
         """Return the source IDs registered for one market type."""
         return set(self._by_type.get((bookmaker, mode, market_type.value), set()))
+
+
+def registered_spec(
+    bookmaker: str,
+    mode: str,
+    source_id: int | str,
+    market_type: MarketType,
+    line: float | None = None,
+) -> MarketSpec | None:
+    """Resolve a source ID for one market type, recording a genuinely unknown ID.
+
+    An ID that is registered for another market type is known: the book simply
+    does not offer this market, which is not a coverage failure. Only an ID the
+    registry has never seen is counted as unmapped.
+    """
+    spec = MARKET_REGISTRY.lookup_type(bookmaker, mode, source_id, market_type, line=line)
+    if spec is None:
+        known = getattr(MARKET_REGISTRY, "has_source_id", None)
+        if known is None or not known(bookmaker, mode, source_id):
+            record_unmapped(bookmaker, source_id)
+    return spec
 
 
 MARKET_REGISTRY = MarketRegistry()

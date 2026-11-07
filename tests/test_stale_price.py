@@ -19,6 +19,7 @@ from engine.stale_price import (
     REASON_FROZEN,
     REASON_LABEL,
     REASON_SOURCE_TIMESTAMP,
+    _prune,
     evaluate_stale_prices,
 )
 from models.schemas import Market, MarketType, Match, MatchGroup, OddsValue
@@ -264,6 +265,100 @@ def test_the_observation_store_is_bounded():
     )
 
     assert len(result.store) == 2
+
+
+def test_a_new_board_survives_the_cap_and_evicts_an_unobserved_old_row():
+    def previous_row(book: str, board: str, seen: datetime) -> dict:
+        return {
+            "bookmaker": book,
+            "price_source": book,
+            "event": "ev",
+            "match": "Sarajevo - Zeljeznicar",
+            "market": "1x2",
+            "settlement": "full_time",
+            "period": "full_time",
+            "label": "1",
+            "board": board,
+            "last_price": 2.0,
+            "last_seen_at": seen.isoformat(),
+        }
+
+    previous = {
+        f"old{index}|board{index}": previous_row(
+            f"old{index}", f"board{index}", NOW - timedelta(minutes=30 - index * 10)
+        )
+        for index in range(3)
+    }
+    result = evaluate_stale_prices(
+        [_group([_match("newbook", {"1": 2.0})])],
+        previous,
+        mode="prematch",
+        now=NOW,
+        ttl_sec=ODDS_TTL_SECONDS,
+        max_rows=2,
+    )
+
+    assert len(result.store) == 2
+    assert any(key.startswith("newbook|") for key in result.store), (
+        "a board observed by this scan must keep its baseline at the cap"
+    )
+    assert "old0|board0" not in result.store, (
+        "the oldest row this scan did not observe must be the one evicted"
+    )
+
+
+def test_prune_keeps_a_new_key_when_every_row_shares_one_timestamp():
+    rows = {
+        f"old{index}": {"last_seen_at": NOW.isoformat()} for index in range(3)
+    }
+    rows["new"] = {"last_seen_at": NOW.isoformat()}
+
+    kept = _prune(
+        rows,
+        NOW,
+        max_rows=3,
+        retention_seconds=3600,
+        observed_keys=set(rows),
+        new_keys={"new"},
+    )
+
+    assert "new" in kept, "stable sort must not drop the newly observed board"
+
+
+def test_a_new_board_survives_when_old_rows_share_the_scan_timestamp():
+    def previous_row(book: str, board: str) -> dict:
+        return {
+            "bookmaker": book,
+            "price_source": book,
+            "event": "ev",
+            "match": "Sarajevo - Zeljeznicar",
+            "market": "1x2",
+            "settlement": "full_time",
+            "period": "full_time",
+            "label": "1",
+            "board": board,
+            "last_price": 2.0,
+            # Every row observed in one scan shares this second-resolution stamp.
+            "last_seen_at": NOW.isoformat(),
+        }
+
+    previous = {
+        f"old{index}|board{index}": previous_row(f"old{index}", f"board{index}")
+        for index in range(3)
+    }
+    result = evaluate_stale_prices(
+        [_group([_match("newbook", {"1": 2.0})])],
+        previous,
+        mode="prematch",
+        now=NOW,
+        ttl_sec=ODDS_TTL_SECONDS,
+        max_rows=2,
+    )
+
+    assert len(result.store) == 2
+    assert any(key.startswith("newbook|") for key in result.store), (
+        "a new board must outrank restored rows that share the scan timestamp"
+    )
 
 
 def test_source_updated_at_is_served_distinct_from_fetched_at():

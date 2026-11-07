@@ -2,7 +2,7 @@
 
 import asyncio
 
-from engine.market_registry import MarketRegistry, unmapped_markets
+from engine.market_registry import MarketRegistry, _is_excluded, unmapped_markets
 from models.schemas import MarketType
 
 
@@ -127,31 +127,21 @@ def test_declared_exclusions_are_not_counted_as_unmapped():
 
 
 def test_supported_experimental_ids_are_not_declared_excluded():
-    r = MarketRegistry()
-    assert not r.is_excluded("mbet", "prematch", "ofb:ht")
-    assert not r.is_excluded("mbet", "prematch", "ofb:hc")
-    assert not r.is_excluded("wwin", "prematch", 2)
-    assert not r.is_excluded("sportplus", "prematch", 4)
-    assert not r.is_excluded("sportplus", "prematch", 25)
-    assert not r.is_excluded("betole", "prematch", 4)
-    assert not r.is_excluded("betole", "prematch", 5)
-    assert not r.is_excluded("betole", "prematch", 6)
+    assert not _is_excluded("mbet", "ofb:ht")
+    assert not _is_excluded("mbet", "ofb:hc")
+    assert not _is_excluded("wwin", 2)
+    assert not _is_excluded("sportplus", 4)
+    assert not _is_excluded("sportplus", 25)
+    assert not _is_excluded("betole", 4)
+    assert not _is_excluded("betole", 5)
+    assert not _is_excluded("betole", 6)
 
 
 def test_name_exclusions_cover_advance_and_premier_templates():
-    r = MarketRegistry()
-    assert r.is_excluded(
-        "mozzartbet", "prematch", 999, context="Ko ide dalje"
-    )
-    assert r.is_excluded(
-        "premier_kladionica", "prematch", 999, context="HENDIKEP"
-    )
-    assert r.is_excluded(
-        "sportplus", "prematch", 999, context="NAČIN PROLAZA"
-    )
-    assert not r.is_excluded(
-        "premier_kladionica", "prematch", 999, context="UTAKMICA"
-    )
+    assert _is_excluded("mozzartbet", 999, context="Ko ide dalje")
+    assert _is_excluded("premier_kladionica", 999, context="HENDIKEP")
+    assert _is_excluded("sportplus", 999, context="NAČIN PROLAZA")
+    assert not _is_excluded("premier_kladionica", 999, context="UTAKMICA")
 
 
 def test_unknown_id_is_recorded_not_silently_dropped():
@@ -159,6 +149,32 @@ def test_unknown_id_is_recorded_not_silently_dropped():
 
     record_unmapped("mdshop", 424242)
     assert "mdshop:424242" in unmapped_markets
+
+
+def test_an_id_known_for_another_market_type_is_not_unmapped():
+    """Every book, evlbet included, treats a known wrong-type ID as mapped."""
+    from scrapers.evlbet import _evlbet_registered_spec
+
+    unmapped_markets.pop("evlbet:12005", None)
+    assert _evlbet_registered_spec("prematch", "12005", MarketType.BTTS) is None
+    assert "evlbet:12005" not in unmapped_markets
+
+    assert _evlbet_registered_spec("prematch", "no-such-id", MarketType.BTTS) is None
+    assert "evlbet:no-such-id" in unmapped_markets
+
+
+def test_shared_resolver_keeps_working_for_registries_without_has_source_id(monkeypatch):
+    import engine.market_registry as registry_module
+    from engine.market_registry import registered_spec
+
+    class LookupOnly:
+        def lookup_type(self, bookmaker, mode, source_id, market_type, line=None):
+            return None
+
+    monkeypatch.setattr(registry_module, "MARKET_REGISTRY", LookupOnly())
+    unmapped_markets.pop("mbet:424243", None)
+    assert registered_spec("mbet", "prematch", "424243", MarketType.MATCH_RESULT) is None
+    assert "mbet:424243" in unmapped_markets
 
 
 def test_health_surfaces_unmapped_market_counter():
@@ -170,6 +186,7 @@ def test_health_surfaces_unmapped_market_counter():
 
 def test_registry_can_reject_a_bookmakers_core_market_id(monkeypatch):
     """A parser must not fall back to a hard-coded ID when the registry rejects it."""
+    import engine.market_registry as registry_module
     import scrapers.betole as betole_module
     import scrapers.evlbet as evlbet_module
     import scrapers.mbet as mbet_module
@@ -192,16 +209,8 @@ def test_registry_can_reject_a_bookmakers_core_market_id(monkeypatch):
             return set()
 
     rejecting = RejectingRegistry()
-    for module in (
-        betole_module,
-        evlbet_module,
-        mbet_module,
-        mozzart_module,
-        premier_module,
-        sportplus_module,
-        wwin_module,
-    ):
-        monkeypatch.setattr(module, "MARKET_REGISTRY", rejecting, raising=False)
+    # Every scraper resolves through the shared helper in engine.market_registry.
+    monkeypatch.setattr(registry_module, "MARKET_REGISTRY", rejecting)
 
     wwin_bets = [{"idBt": 95, "odds": [
         {"t": label, "va": 2.0, "isv": 1} for label in ("1", "X", "2")
@@ -321,6 +330,7 @@ def test_betole_shared_parser_files_unknown_ids_under_betole():
 
 
 def test_label_checks_reject_incomplete_registered_label_sets(monkeypatch):
+    import engine.market_registry as registry_module
     import scrapers.wwin as wwin_module
     from engine.market_registry import MarketSpec
 
@@ -343,7 +353,7 @@ def test_label_checks_reject_incomplete_registered_label_sets(monkeypatch):
                 min_legs=2,
             )
 
-    monkeypatch.setattr(wwin_module, "MARKET_REGISTRY", IncompleteLabelsRegistry())
+    monkeypatch.setattr(registry_module, "MARKET_REGISTRY", IncompleteLabelsRegistry())
     markets = wwin_module._build_markets_from_bets([
         {"idBt": 3, "odds": [
             {"t": "Yes", "va": 2.0, "isv": 1},

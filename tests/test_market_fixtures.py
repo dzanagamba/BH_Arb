@@ -56,7 +56,7 @@ from typing import Any
 
 import pytest
 
-from engine.market_registry import MarketRegistry
+from engine.market_registry import MarketRegistry, _is_excluded
 from models.schemas import Market, MarketType
 
 # This module's own entry in sys.modules, so the self-referential test below
@@ -384,14 +384,13 @@ def test_fixture_records_its_provenance(path: Path):
 def test_ids_the_capture_excludes_are_excluded_on_purpose(path: Path):
     """Excluded IDs in a capture must be excluded, and must emit nothing."""
     data = _load(path)
-    registry = MarketRegistry()
     present = _source_ids_in(data)
     for control in data.get("excluded_ids_present", []):
         source_id, context = control["id"], control.get("context")
         assert str(source_id) in present, (
             f"{path.name} claims {source_id!r} is present but the payload does not carry it"
         )
-        assert registry.is_excluded(data["bookmaker"], data["mode"], source_id, context=context), (
+        assert _is_excluded(data["bookmaker"], source_id, context=context), (
             f"{path.name} keeps {source_id!r} ({context!r}) as a control, but the registry "
             "does not exclude it -- a parser is expected to count it as unmapped, not "
             "to drop it silently"
@@ -622,7 +621,7 @@ def test_an_unregistered_id_is_counted_not_dropped():
     data = copy.deepcopy(_load(_fixture_for("admiralbet", "live")))
     registry = MarketRegistry()
     assert not registry.has_source_id("admiralbet", "live", fake_id)
-    assert not registry.is_excluded("admiralbet", "live", fake_id)
+    assert not _is_excluded("admiralbet", fake_id)
     data["bets"].append(
         {
             "betTypeId": int(fake_id),

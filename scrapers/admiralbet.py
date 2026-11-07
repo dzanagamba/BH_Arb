@@ -26,9 +26,6 @@ from scrapers.common import (
 
 logger = logging.getLogger(__name__)
 
-def _parse_dt(raw) -> datetime | None:
-    return parse_dt(raw)
-
 BOOKMAKER_ID = "admiralbet"
 BASE_URL = "https://www.admiralbet.ba"
 API_DOMAIN = "https://bihoffer.admiralbet.ba"
@@ -187,7 +184,7 @@ class AdmiralbetScraper:
                 continue
             seen.add(code)
             league = _league_name(ev)
-            kickoff = _parse_dt(ev.get("dateTime") or ev.get("dateFrom") or ev.get("kickoff"))
+            kickoff = parse_dt(ev.get("dateTime") or ev.get("dateFrom") or ev.get("kickoff"))
             sport_name = SPORT_MAP.get(int(ev.get("sportId") or 0), "football")
             source_context = {
                 "sport_id": str(ev.get("sportId") or ""),

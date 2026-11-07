@@ -10,15 +10,46 @@ from __future__ import annotations
 
 from collections import Counter
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
+from engine import mapping_evidence
 from engine.mapping_evidence import MappingLedger
 from models.schemas import Match
+
+# Parsing the 60 MB evidence ledger for every diagnostics request is wasted
+# work when the file has not changed. Key the parsed ledger by path, mtime and
+# size; a write or a different test path reloads it.
+_LEDGER_CACHE: dict[str, tuple[tuple[str, int, int, int, int], MappingLedger]] = {}
+
+
+def load_ledger(path: str | Path | None = None) -> MappingLedger:
+    """Load the evidence ledger, reusing the last parse while the file is unchanged."""
+    target = Path(path) if path is not None else mapping_evidence.DEFAULT_PATH
+    try:
+        stat = target.stat()
+        stamp = (str(target), stat.st_ino, stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size)
+    except OSError:
+        _LEDGER_CACHE.pop(str(target), None)
+        return MappingLedger(target).load()
+    cached = _LEDGER_CACHE.get(str(target))
+    if cached is not None and cached[0] == stamp:
+        return cached[1]
+    ledger = MappingLedger(target).load()
+    _LEDGER_CACHE[str(target)] = (stamp, ledger)
+    return ledger
+
+
+def _field(row: Match | dict[str, Any], name: str) -> Any:
+    """Read one field from a restored cache row or a live match model."""
+    if isinstance(row, dict):
+        return row.get(name)
+    return getattr(row, name, None)
 
 
 def build_coverage(
     ledger: MappingLedger,
-    matches: list[Match],
+    matches: list[Match | dict[str, Any]],
     groups: list[dict[str, Any]],
     *,
     mode: str,
@@ -26,9 +57,11 @@ def build_coverage(
 ) -> dict[str, Any]:
     per_book: dict[str, dict[str, int]] = {}
     for match in matches:
-        book = per_book.setdefault(match.bookmaker, {"matches": 0, "markets": 0})
+        bookmaker = _field(match, "bookmaker")
+        markets = _field(match, "markets") or []
+        book = per_book.setdefault(bookmaker, {"matches": 0, "markets": 0})
         book["matches"] += 1
-        book["markets"] += len(match.markets)
+        book["markets"] += len(markets)
 
     status_counts: Counter[str] = Counter()
     kind_counts: Counter[str] = Counter()
