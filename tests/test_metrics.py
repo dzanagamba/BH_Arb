@@ -186,6 +186,7 @@ def test_a_scan_increments_the_counters_and_gauges(isolated_scan):
     assert 'bh_book_results_total{book="mbet",mode="prematch",outcome="success"} 1' in text
     assert 'bh_book_results_total{book="mdshop",mode="prematch",outcome="success"} 1' in text
     assert 'bh_book_kinds_total{book="mbet",kind="ok",mode="prematch"} 1' in text
+    assert 'bh_book_last_success_timestamp_seconds{book="mbet",mode="prematch"}' in text
     assert 'bh_book_kinds_total{book="mdshop",kind="ok",mode="prematch"} 1' in text
     assert 'bh_surebets_found{mode="prematch"} 0' in text
     assert 'bh_surebets_found_total{mode="prematch"} 0' in text

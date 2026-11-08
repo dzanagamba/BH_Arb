@@ -4,86 +4,15 @@ from typing import TypedDict
 
 from dotenv import load_dotenv
 
+from config.bookmakers import BOOKMAKER_CONFIG as bookmaker_config
+
 load_dotenv()
 
 # --- Bookmaker Configuration ---
-BOOKMAKERS = {
-    "mozzartbet": {
-        "name": "Mozzartbet",
-        "base_url": "https://www.mozzartbet.ba",
-        "soccer_url": "https://www.mozzartbet.ba/sr/kladjenje",
-        "enabled": True,
-        "color": "#FF6B00",
-    },
-    "mdshop": {
-        "name": "MDShop",
-        "base_url": "https://www.mdshop.ba",
-        "soccer_url": "https://www.mdshop.ba/sport-prematch?sport=Fudbal",
-        "enabled": True,
-        "color": "#1B5E20",
-    },
-    "admiralbet": {
-        "name": "Admiralbet",
-        "base_url": "https://www.admiralbet.ba",
-        "soccer_url": "https://www.admiralbet.ba/sport-prematch?sport=Fudbal",
-        "enabled": True,
-        "color": "#0D47A1",
-    },
-    "betole": {
-        "name": "Betole",
-        "base_url": "https://www.betole.ba",
-        "soccer_url": "https://www.betole.ba",
-        "enabled": True,
-        "color": "#B71C1C",
-    },
-    "mbet": {
-        "name": "MBet",
-        "base_url": "https://www.mbet.ba",
-        "soccer_url": "https://www.mbet.ba",
-        "enabled": True,
-        "color": "#E91E63",
-    },
-    "sportplus": {
-        "name": "SportPlus",
-        "base_url": "https://www.sportplus.ba",
-        "soccer_url": "https://www.sportplus.ba/prematch/betting",
-        "enabled": True,
-        "color": "#FF5722",
-    },
-    "evlbet": {
-        "name": "EVLBet",
-        "base_url": "https://evlbet.com",
-        "soccer_url": "https://evlbet.com",
-        # Off since 2026-10-20: its offer API returns no football events for any
-        # request variant tried, and no payload has ever been captured, so its
-        # market mapping is untested. Re-enable only with a captured fixture.
-        "enabled": False,
-        "color": "#9C27B0",
-    },
-    "premier_kladionica": {
-        "name": "Premier Kladionica",
-        "base_url": "https://www.premier-kladionica.com",
-        "soccer_url": "https://www.premier-kladionica.com/ponuda/",
-        "enabled": True,
-        "color": "#16A34A",
-    },
-    "wwin": {
-        "name": "WWIN",
-        "base_url": "https://wwin.ba",
-        "soccer_url": "https://wwin.ba/kladjenje/",
-        "enabled": True,
-        "color": "#EF4444",
-    },
-    "maxbet": {
-        "name": "MaxBet",
-        "base_url": "https://www.maxbet.ba",
-        "soccer_url": "https://sportsbook.maxbet.ba/sport/1",
-        # Added 2026-10-27. It declares a per-event route, so its groups stay
-        # unverified until scripts/verify_deeplinks.py proves its links.
-        "enabled": True,
-        "color": "#0F766E",
-    },
-}
+# Declared once in config/bookmakers.py; this is the historical dict shape that
+# routes, scripts and the dashboard already read. SR6-1 keeps one declaration
+# for the adapter list, the browser set, the timeouts and this projection.
+BOOKMAKERS = bookmaker_config
 
 # --- Advisory book risk profiles (P3-6) ---
 # Operator guidance only. These fields are read by /api/config and the dashboard;
@@ -424,6 +353,11 @@ VERIFIED_KICKOFF_WINDOW_MINUTES = 15  # Max kickoff delta for a `verified` group
 FUZZY_MATCH_THRESHOLD = 80     # Min similarity score (0-100) for a team pairing to group (overall confidence)
 TEAM_MATCH_MIN_PERCENT = 70    # Min similarity (0-100) required for EACH team in a pairing
 BROWSER_CONCURRENCY = 3        # Max concurrent Playwright browsers (one per browser bookmaker)
+# SR3-3: one Chromium per scan, a fresh context per book. Recycle the browser
+# after this many contexts or this many seconds; the next book gets a new one.
+# A hung browser that still reports connected is replaced at the next recycle.
+BROWSER_MAX_PAGES = int(os.getenv("BROWSER_MAX_PAGES", "200"))
+BROWSER_MAX_AGE_SECONDS = float(os.getenv("BROWSER_MAX_AGE_SECONDS", "600"))
 
 # --- Server Settings ---
 HOST = os.getenv("HOST", "127.0.0.1")
@@ -540,6 +474,15 @@ CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "cache")
 # regressed, not that the feed grew, so `/api/health` and the cache writer both
 # report it.
 CACHE_SIZE_BUDGET_BYTES = int(os.getenv("CACHE_SIZE_BUDGET_BYTES", str(40 * 1024 * 1024)))
+
+# SR3-4: a failed browser scrape keeps a trace and a screenshot under
+# cache/forensics/<book>/<scan_id>/; cookies and storage state are never
+# written. The directory is pruned by age and total size after every capture.
+FORENSICS_ENABLED = os.getenv("FORENSICS_ENABLED", "true").lower() in ("1", "true", "yes")
+FORENSICS_DIR = os.path.join(CACHE_DIR, "forensics")
+FORENSICS_MAX_MB = int(os.getenv("FORENSICS_MAX_MB", "200"))
+FORENSICS_MAX_BYTES = FORENSICS_MAX_MB * 1024 * 1024
+FORENSICS_MAX_AGE_DAYS = int(os.getenv("FORENSICS_MAX_AGE_DAYS", "7"))
 
 # --- Match page URL templates (best-effort; scrapers may override with real per-match URLs) ---
 MATCH_URL_TEMPLATES: dict[str, str] = {

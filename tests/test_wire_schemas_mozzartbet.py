@@ -35,6 +35,7 @@ from typing import Any
 
 import pytest
 
+from models.schemas import MarketType
 from scrapers import mozzartbet as mozzart_module
 from scrapers.errors import ScrapeError, ScrapeKind
 from scrapers.wire_schemas import (
@@ -150,16 +151,69 @@ def test_an_integer_price_is_accepted_without_becoming_a_string():
     assert validated[0].value == 25.0
 
 
-def test_a_renamed_price_field_is_schema_drift():
+def test_a_renamed_price_field_on_the_list_page_is_schema_drift():
     capture = _capture()
-    row = capture["bets"][0]
-    row["price"] = row.pop("value")
+    for row in capture["bets"]:
+        if "value" in row:
+            row["price"] = row.pop("value")
+    page = {"items": [{"id": 10095288, "odds": capture["bets"]}]}
 
     with pytest.raises(ScrapeError) as caught:
-        validate_mozzart_odds(capture["bets"])
+        validate_mozzart_page(page)
 
     assert caught.value.kind is ScrapeKind.SCHEMA_DRIFT
     assert "value" in str(caught.value)
+
+
+def test_a_row_without_a_value_is_accepted_as_unpriced():
+    """SR4-10: the live feed omits ``value`` on a suspended pick."""
+    row = _row(3, "0-5", None)
+    del row["value"]
+
+    validated = validate_mozzart_odds([row])
+
+    assert validated[0].value is None
+
+
+def test_a_list_page_may_mix_unpriced_and_priced_rows():
+    unpriced = _row(3, "0-5", None)
+    del unpriced["value"]
+    page = {"items": [{"id": 1, "odds": [unpriced, _row(1, "1", 2.2)]}]}
+
+    assert validate_mozzart_page(page).items
+
+
+def test_a_page_where_no_row_carries_a_price_is_schema_drift():
+    unpriced = _row(3, "0-5", None)
+    del unpriced["value"]
+    page = {
+        "items": [
+            {"id": 1, "odds": [unpriced]},
+            {"id": 2, "odds": [dict(unpriced)]},
+        ]
+    }
+
+    with pytest.raises(ScrapeError) as caught:
+        validate_mozzart_page(page)
+
+    assert caught.value.kind is ScrapeKind.SCHEMA_DRIFT
+    assert "no odds row carries a value" in str(caught.value)
+
+
+def test_an_unpriced_offer_row_yields_no_leg_and_does_not_drop_the_event(monkeypatch):
+    capture = _capture()
+    for row in capture["bets"]:
+        if (row.get("game") or {}).get("id") == 1:
+            row.pop("value", None)
+
+    offer = _with_offer(monkeypatch, _offer(capture["bets"]))
+    matches = _with_build(monkeypatch, _offer(capture["bets"]))
+
+    assert offer is not None
+    assert matches
+    types = {market.market_type for match in matches for market in match.markets}
+    assert MarketType.MATCH_RESULT not in types
+    assert types
 
 
 def test_a_string_price_is_never_coerced():
@@ -256,16 +310,9 @@ def test_a_non_json_offer_body_is_schema_drift(monkeypatch):
 
 
 @pytest.mark.parametrize("mode", MODES)
-@pytest.mark.parametrize("rename", [True, False])
-def test_schema_drift_drops_the_book_and_contributes_zero_legs(
-    monkeypatch, mode, rename
-):
+def test_a_string_price_drops_the_book_and_contributes_zero_legs(monkeypatch, mode):
     capture = _capture(mode)
-    row = capture["bets"][0]
-    if rename:
-        row["price"] = row.pop("value")
-    else:
-        row["value"] = "2.2"
+    capture["bets"][0]["value"] = "2.2"
 
     with pytest.raises(ScrapeError) as caught:
         _with_build(monkeypatch, _offer(capture["bets"]))

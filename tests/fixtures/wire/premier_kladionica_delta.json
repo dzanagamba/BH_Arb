@@ -1,0 +1,114 @@
+{
+  "bookmaker": "premier_kladionica",
+  "mode": "live",
+  "captured_at": "2026-11-08",
+  "endpoint": "POST https://svc-web.premier-kladionica.com/PrSync/PrSync.ashx body=[[[4,1,0],7,{\"dogadjajIDs\":\"<10 football ids>\",\"clientVer\":1308505015}]]",
+  "source": "live_api_response",
+  "payload_kind": "premier_delta_sections",
+  "provenance": "The five sections the live delta response returned on 2026-11-08, in order: execRes (1 row, 5 columns), dogVar (a 14-column row), dogTipK odds (9-column rows), dogLiveScore (a 43-column row) and the scalar section. Empty sections are omitted, so the odds table cannot be found by index; the first two dogTipK rows are stored verbatim. Section 0's 5-column row was the one that made the strict schema drop the book (SR4-13).",
+  "sections": [
+    [
+      [
+        0,
+        "",
+        1794139866830,
+        4,
+        1308505019
+      ]
+    ],
+    [
+      [
+        3841952,
+        2,
+        2338,
+        1,
+        0,
+        0,
+        "",
+        "",
+        "",
+        "",
+        "X",
+        null,
+        null,
+        49
+      ]
+    ],
+    [
+      [
+        3841952,
+        2,
+        2338,
+        1,
+        1,
+        1.0,
+        0,
+        -1,
+        0
+      ],
+      [
+        3841952,
+        2,
+        2338,
+        1,
+        2,
+        1.0,
+        0,
+        1,
+        0
+      ]
+    ],
+    [
+      [
+        3841952,
+        1740870592110,
+        5,
+        "ZAVRŠILO",
+        null,
+        null,
+        "1:0",
+        "1:2",
+        "7:6",
+        "",
+        "1:2",
+        "1:0",
+        "6:6",
+        "0:0",
+        "5:4",
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        0
+      ]
+    ],
+    [
+      "0",
+      "11",
+      "12"
+    ]
+  ]
+}

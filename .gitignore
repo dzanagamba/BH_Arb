@@ -64,5 +64,8 @@ sbom-requirements.txt
 # Runtime-generated mapping evidence (learned from scans; never commit)
 config/generated/mapping_evidence.json
 
+# Runtime-generated structural fingerprints (learned from live feeds; never commit)
+config/generated/wire_fingerprints.json
+
 # Named API keys (hashed) and audit trail; never commit
 config/generated/api_keys.json

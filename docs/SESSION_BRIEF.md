@@ -2,16 +2,173 @@
 
 **Updated:** 2026-11-08
 **Goal:** keep `ROADMAP.md` current without weakening the trust model.
-**Current task:** none; SR1-1, SR1-2, SR1-3, SR2-1 … SR2-6, SR4-1, SR4-2,
-SR4-3, SR4-3b … SR4-3f, SR4-3h, SR4-3i, SR4-3j, SR4-4, SR4-5, SR4-6, SR4-7,
-SR4-7a, SR7-1 and SR7-2 are done. **SR4-3g is blocked on SR6-3** (operator
-decision). The roadmap is the single task list in `ROADMAP.md`; N2-4 stays
-deferred and P1-6 stays waived until the operator says otherwise.
+**Current task:** none; SR0-1, SR0-2, SR1-1, SR1-2, SR1-3, SR1-4, SR2-1 …
+SR2-6, SR3-1, SR3-2, SR3-3, SR3-4, SR4-1, SR4-2, SR4-3, SR4-3b … SR4-3f,
+SR4-3h, SR4-3i, SR4-3j, SR4-4, SR4-5, SR4-6, SR4-7, SR4-7a, SR4-9, SR4-10,
+SR4-11, SR4-12, SR4-13, SR5-1, SR5-2, SR6-1, SR6-3, SR7-1 and SR7-2 are done.
+**SR4-3g is blocked on a live EVLBet payload** (the SR6-3 capture was an empty
+feed) and **SR4-8 is blocked on SR4-8a** (operator choice). The roadmap is the
+single task list in `ROADMAP.md`; N2-4 stays deferred and P1-6 stays waived
+until the operator says otherwise.
 **Last task commit:** `db88974` — docs for SR4-3i … SR4-7a; the code is
 `129c334`, and SR4-1, SR4-2, SR4-3 … SR4-3f and SR4-3h are in `2614206` …
-`b45fc39`. Pushed to `origin/main` on 2026-11-08. SR4-3g is blocked on SR6-3.
+`b45fc39`. Pushed to `origin/main` on 2026-11-08. `3df4fd7` is the pushed
+session-brief head; SR1-4, the gate decisions, SR4-9, SR3-1 … SR3-4, SR4-10,
+SR4-11, SR4-12, SR4-13, SR5-1, SR5-2 and SR6-1 are uncommitted in the working
+tree.
 
 ## Project state
+
+SR6-1 (2026-11-08, working tree): one `AdapterDeclaration` per book in
+`config/bookmakers.py` (name, adapter module/class strings, transport, enabled,
+UI fields, per-feed timeouts). `settings.BOOKMAKERS`, the lazy
+`scrapers.registry.SCRAPERS`, `PLAYWRIGHT_BOOKIES` (3 browser books) and the 20
+transport policies derive from it. `server/api.py` imports no adapter module;
+`import server.api` loads 0 book modules; `scrapers.__all__` is derived too.
+`tests/test_adapter_declarations.py` (9) fails on an undeclared adapter module
+or a declaration without a module, checks the derived lists/exports/policies and
+the market-registry book set, and proves laziness.
+
+SR4-13 (2026-11-08, working tree): Premier's delta response is five positional
+tables (execRes 5 cols, dogVar 14, dogTipK odds 9, dogLiveScore 43, scalars),
+and the strict schema was treating every section as odds — so the 5-column
+execRes row dropped the book in both modes. A section is now odds only when a
+row has the dogTipK shape, and every row of a recognised section is still
+validated strictly. Trimmed live capture in `tests/fixtures/wire/`, evidence in
+`docs/evidence/2026-11-08-premier-delta-sections.md`; 5 new tests. Live probes:
+prematch 700 matches/5,761 market rows, live 151/868, both error-free.
+
+SR4-12 (2026-11-08, working tree): the structural fingerprint now keeps only
+the paths common to every item of a list, so an optional per-item key
+(`items[].matchComment`, `events[].aPrevSc`) no longer alerts. Common-path
+types are unioned and `null` is ignored when a real type exists; per-item-only
+paths are stored as `optional`; a previously optional path promoted to common
+is adopted silently, while a common path removed/renamed or a common type change
+still drifts. `FINGERPRINT_VERSION = 2` migrates older baselines once without
+an alert. New `optional_paths()`; `tests/test_structural_drift.py` is 19 tests
+(12 SR4-4 + 7 SR4-12).
+
+SR5-2 (2026-11-08, working tree): `/api/health.book_health.{prematch,live}` now
+has one state per configured book — `healthy`, `degraded`, `open`, `blocked`,
+`drifted` or `disabled` — with a one-line reason, reduced in
+`server/book_health.py` from the SR2-1 last kind, the SR2-6 breaker and the
+runtime toggle. It is diagnostic; pricing still reads feed integrity and the
+certainty gate. `tests/test_book_health.py` has one test per state plus the
+priorities and the endpoint. The measured scan-cost baseline is
+`docs/evidence/2026-11-08-scan-cost-baseline.md`: prematch 144.8 s elapsed, 682
+requests, 392.77 MiB, 201.06 book-seconds, 1.32 browser-seconds, 6,610
+matches/45,192 markets; live 33.7 s, 70 requests, 74.74 MiB, 66.52 book-seconds,
+1.45 browser-seconds, 653 matches/3,548 markets. That scan exposed **SR4-13**
+(Premier delta sync rows with 5 columns drift the strict schema, both modes),
+which is now fixed and probed (see above).
+
+SR5-1 (2026-11-08, working tree): `/api/metrics` now carries every per-book
+reliability family. Added a cumulative histogram type (0.05–120 s) and
+`bh_scraper_attempts_total`, `bh_scraper_retries_total`,
+`bh_scraper_attempt_seconds`, `bh_http_status_total` from `retry_call`;
+`bh_book_last_success_timestamp_seconds` on `ok`; `bh_schema_drift_total` in
+the wire schemas; `bh_browser_recycles_total{reason}` in the SR3-3 pool. Every
+family is documented in `docs/METRICS.md` (linked from the README), and
+`tests/test_reliability_metrics.py` scrapes the text output.
+
+SR4-8 (2026-11-08, blocked): HAR replay does not work for the browser adapters
+as written. Playwright routing/HAR sees only **page-initiated** requests; the
+adapters fetch JSON through `page.request`, which bypasses both (measured: a
+route never fired for `page.request`, a real capture held only analytics
+traffic). No HAR was committed and the temporary tooling was reverted. **SR4-8a
+asks the operator to choose**: A, move the API calls to in-page fetch (full HAR
+replay, live transport change, needs a measured scan), or B, a
+boundary-recorded HAR shim (no live change, weaker claim). SR4-8 stays blocked
+until that is recorded.
+
+SR3-4 (2026-11-08, working tree): a failed browser scrape now leaves a
+**Playwright trace and a screenshot** under `cache/forensics/<book>/<scan_id>/`
+(no cookies or storage state), pruned by age (7 days) then size (200 MB),
+newest kept. `FORENSICS_ENABLED` (default true) controls the overhead; tracing
+starts with the context and is discarded on success. `run_scan` appends the
+paths to the book's failure note and the capture logs them with the book.
+`page.expect_response` was checked and not needed (the only response listener is
+supplementary). Tests: 5 unit + 1 opt-in real-browser forced failure.
+
+SR3-3 (2026-11-08, working tree): a scan now shares **one Chromium**.
+`scrapers/browser_pool.py` launches it lazily, gives every book a fresh context,
+and recycles it after 200 contexts or 600 s (`BROWSER_MAX_PAGES` /
+`BROWSER_MAX_AGE_SECONDS`); a disconnected browser is replaced at the next
+book, a hung one at the age cap. `run_scan` and `probe_feeds` own the pool;
+adapters use `browser_session()`; standalone scrapes still get a private
+one-shot browser, and the deep-link verifier keeps its own isolated context.
+Measured on the 3-book probe: **3 launches → 1**, wall 74.2 s → 66.8 s; peak
+Chromium RSS 838 → 945 MB in these samples, so the win is launch count, not
+memory. New `tests/test_browser_pool.py` (8 tests, fake launcher).
+
+SR3-2 (2026-11-08, working tree): the cited route leak is **not applicable**.
+playwright-python#3121 was closed as completed on 2026-07-02; the retained
+completed tasks were a CPython 3.14 asyncio bug fixed by python/cpython#152585,
+and this project runs 3.11/3.12. `context.route("**/*")` stays (no CDP
+workaround). New opt-in `tests/test_browser_route_leak.py` loads six image-heavy
+pages through the real launcher and pins the completed-task count; measured
+growth 0 (baseline 1, after 1). Run with `BH_ARB_TEST_BROWSER=1`.
+
+SR4-11 (2026-11-08, working tree): **wwin is reading again.** The failing body
+was not HTML: days 8–9 of the 15-day prematch walk answer HTTP 200 with a
+**0-byte body** for every bet group, and the adapter classified that as schema
+drift. `_json_body()` now treats an empty/whitespace body as "no rows for that
+slice", an HTML page as `blocked`, and any other non-JSON body as drift. New
+tests cover all three. Measured with `probe_feeds`: 0 matches before, **1,014
+matches / 5,445 markets** after.
+
+SR4-10 (2026-11-08, working tree): **mozzartbet is reading again.** The live
+offer omits `value` on a suspended pick (105 of 518 rows in the captured one),
+which the strict model treated as drift. `MozzartOdd.value` is now optional;
+`game`/`subgame` stay required and a string price is still drift, and a list
+page with odds rows but no numeric `value` anywhere is drift (a renamed price
+field). The parser still emits no leg without a price. Measured with
+`probe_feeds`: 0 matches before, **603 matches / 4,698 markets** after. Evidence:
+`docs/evidence/2026-11-08-mozzartbet-missing-value.md`.
+
+SR3-1 (2026-11-08, working tree): Playwright is pinned at **1.64.1** (PyPI
+latest) with Chrome Headless Shell 156.0.8078.4 (v1248); the two opt-in browser
+tests pass with `BH_ARB_TEST_BROWSER=1` (10 passed). README notes that a pin
+change needs the matching `playwright install chromium`. The live run of the
+three browser books found admiralbet healthy (780 matches) while mozzartbet and
+wwin dropped: both were feed-shape problems, not the upgrade (they failed
+identically on Playwright 1.61.0), and both are fixed — SR4-10 (missing `value`)
+and SR4-11 (0-byte day windows). The repeated list-page fingerprint alerts were
+fixed by SR4-12 (common paths only). The 00:48 scan that day had all three
+healthy.
+
+SR4-9 (2026-11-08, working tree): new `scripts/live_canary.py` runs every book
+once a day from the operator host, sequentially, through the real adapter and
+shared transport policy, and writes `cache/live_canary/YYYY-MM-DD.json`. It
+compares with the newest other report: an adapter/missing-scraper error, a book
+with at least 10 matches losing more than half, and a market family with at
+least 5 markets losing more than half are reasons; a new family is news. Exit is
+0 with alarms (a timer must not page), `--strict` returns 1. It never touches a
+fixture and is not in CI. New `docs/LIVE_CANARY.md` documents the schema,
+thresholds and the 06:17 cron line; the operator installs the timer. New
+`tests/test_live_canary.py` (12 tests). No live probe was run.
+
+SR0-1 / SR0-2 / SR6-3 (2026-11-08, working tree): the operator gate decisions
+are recorded. **SR0-1 = B**: the browser masking stays as a scoped, written
+exception in `AGENTS.md` ("Scraper rules"), limited to `launch_browser()`; TLS
+impersonation, proxy rotation, captcha solving, extra stealth and account-limit
+evasion stay forbidden. **SR0-2 = keep the default**: `VERIFY_SSL` stays
+`false`; `tests/test_transport.py` now asserts `policy.verify is VERIFY_SSL` so a
+silent flip fails. **SR6-3 = capture and keep**: the capture attempt answered
+HTTP 200 with `[]` for `SportIds=388` and `1`, so there is no EVLBet fixture;
+the adapter stays disabled and kept, and `SR4-3g` is blocked on a live payload,
+not on a decision. No live scan.
+
+SR1-4 (2026-11-08, working tree): the per-task verification loop now runs the
+full suite **once**, in the clean runtime state, plus targeted test files while
+coding. `pytest --cov` and `scripts/check_test_isolation.py` are out of the
+routine loop: CI's 3.11 leg runs the empty and populated ledger modes and the
+coverage floor. The one local exception is a change to the ledger,
+`config/generated/` or the isolation guard, which also runs
+`BH_ARB_TEST_RUNTIME_LEDGER=populated python -m pytest`. No test, marker or
+trust rule was removed. Measured 2026-11-08: plain suite 90 s, `--cov` 240 s,
+isolation 180 s, so the loop drops from ~8.5 min to ~100 s. `AGENTS.md`,
+`ROADMAP.md` and `docs/CI.md` say the same. No live scan.
 
 SR4-7a (2026-11-08, working tree): `parse_nsoft_bets` now keeps the first
 offered price per normalized outcome label and ignores a later duplicate row
@@ -381,17 +538,19 @@ no inline styles, automatic CLV capture, retention/maintenance, coverage alerts,
 per-book scan cost, release hardening, paper ledger/fills, candidate remediation,
 the complete BS/EN UI with machine-checked accessibility, dated parser contracts
 and the property-based pricing/identity suites and load budgets. The first live
-scan-cost and seven-day opportunity baselines remain unmeasured; N2-4 owns the
-latter and is deferred.
+scan-cost baseline is now measured (`docs/evidence/2026-11-08-scan-cost-baseline.md`);
+the seven-day opportunity baseline remains unmeasured and N2-4 owns it.
 
 ## Next action
 
-Start **SR5-1** (per-book reliability metrics), the next ungated row whose
-dependency (SR2-6) is done; SR4-8 still waits on SR3-4/SR3-3 (blocked by the
-SR0-1 gate). SR4-3g stays **Blocked on SR6-3** (operator decision) — do not
-start it. The SR3 rows are still blocked on SR3-1 (gate SR0-1). The operator
-gates waiting for a decision are SR0-1, SR0-2, SR4-9 and SR6-3. N2-4 stays
-deferred and P1-6 stays waived. Do not invent a task or reopen a done one. The working tree is clean.
+Start **SR6-2** (adapter `Protocol` and mypy enforcement): SR6-1 is done, so the
+declaration now has a class to type. **SR4-8 is blocked on SR4-8a**, an operator
+choice between in-page fetch and a boundary-recorded HAR shim; record that
+decision before touching SR4-8. SR4-3g remains **Blocked on a live EVLBet
+payload** — do not start it. N2-4 stays deferred and P1-6 stays waived. Do not
+invent a task or reopen a done one. The working tree holds SR1-4, the gate
+decisions, SR4-9, SR3-1 … SR3-4, SR4-10, SR4-11, SR4-12, SR4-13, SR5-1, SR5-2
+and SR6-1 (uncommitted).
 
 ## Rules
 

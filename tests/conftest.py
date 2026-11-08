@@ -44,7 +44,7 @@ from pathlib import Path
 
 import pytest
 
-from scrapers import common
+from scrapers import common, forensics
 from scripts.check_test_isolation import runtime_state_snapshot
 
 EXAMPLE_ROUTE_BOOKS = {
@@ -268,6 +268,9 @@ def _isolated_runtime_state(
         structural_drift, "DEFAULT_PATH", generated / "wire_fingerprints.json"
     )
     monkeypatch.setattr(settings, "CACHE_DIR", str(cache))
+    # SR3-4: no forensics artefacts during the suite unless a test enables them.
+    monkeypatch.setattr(forensics, "FORENSICS_DIR", cache / "forensics")
+    monkeypatch.setattr(forensics, "FORENSICS_ENABLED", False)
     monkeypatch.setattr(api, "CACHE_DIR", str(cache))
     monkeypatch.setenv("STORAGE_PATH", str(cache / "bh_arb.sqlite3"))
     for attribute, filename in _API_RUNTIME_FILES.items():

@@ -52,7 +52,14 @@ python scripts/check_test_isolation.py
 
 CI does not invoke the script itself: the two 3.11 test steps above run the
 same two ledger modes, so a third and fourth suite run would repeat them. The
-script stays the one-command local equivalent.
+script is not part of the routine task loop either (SR1-4): a task runs the full
+suite once in the clean mode and leaves the populated mode and the coverage
+floor to CI. Run the script locally only when the change touches the ledger,
+`config/generated/` or the isolation guard itself.
+
+The routine local loop is therefore one full suite run plus the linters and
+checks listed in `AGENTS.md` — roughly 100 s, not the ~8.5 min the old
+four-run loop measured (plain 90 s, `--cov` 240 s, isolation 180 s).
 
 ## Parser contracts
 
@@ -104,8 +111,14 @@ Every adapter also feeds its raw JSON boundary to `engine/structural_drift.py`
 (SR4-4). The first informative response per `(book, endpoint)` is stored as a
 fingerprint baseline; a later payload whose key paths or JSON types change
 increments `bh_wire_structure_drift_total{book,endpoint}` and logs the
-added/removed paths. It is alert-only — it never rejects a payload — and the
-last good baseline is kept until an operator reviews the change.
+added/removed paths. List pages are heterogeneous (SR4-12): only the paths
+common to every item are required, a type that varies across items is unioned,
+`null` is ignored when a real type is also present, and per-item-only paths are
+recorded as optional. An optional key on some rows therefore does not alert; a
+common key removed or renamed still does. It is alert-only — it never rejects a
+payload — and the last good baseline is kept until an operator reviews the
+change. Changing the signature semantics bumps `FINGERPRINT_VERSION`, which
+re-records each existing baseline once without an alert.
 
 ## Cardinality floor
 
@@ -147,6 +160,19 @@ BH_ARB_TEST_SLOW=1 python -m pytest tests/test_perf_budgets.py
 Without `BH_ARB_TEST_SLOW=1` those two tests are skipped, so the normal suite
 keeps its runtime. See `docs/PROPERTY_TESTS.md` for the invariants, the budgets
 and the local commands.
+
+The opt-in Chromium checks use the same switch:
+
+```bash
+BH_ARB_TEST_BROWSER=1 python -m pytest \
+    tests/test_accessibility_axe.py tests/test_browser_route_leak.py
+```
+
+`tests/test_browser_route_leak.py` (SR3-2) loads six image-heavy pages through
+the real `launch_browser()` route and fails if completed asyncio tasks accumulate
+per intercepted request. On 2026-11-08 the measured growth was 0 (baseline 1,
+after 1); playwright-python#3121 was a CPython 3.14 asyncio bug fixed upstream,
+and this project supports 3.11/3.12.
 
 ## Coverage
 

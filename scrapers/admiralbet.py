@@ -8,12 +8,13 @@ API: getEventsStartingSoonFilterSelections?topN=25&skipN={skip}
 """
 
 import logging
+from contextlib import AsyncExitStack
 from datetime import UTC, datetime
 
 from engine import sports
 from engine.structural_drift import observe
 from models.schemas import Market, Match
-from scrapers.base import goto, launch_browser, measured_api_get, settle
+from scrapers.base import browser_session, goto, measured_api_get, settle
 from scrapers.common import (
     betradar_id,
     build_event_url,
@@ -112,7 +113,8 @@ class AdmiralbetScraper:
             if sports_wanted is None
             else {sports.normalize_sport(value) or value for value in sports_wanted}
         )
-        p, browser, context = await launch_browser()
+        stack = AsyncExitStack()
+        context = await stack.enter_async_context(browser_session(BOOKMAKER_ID))
         all_raw_events: list[dict] = []
         try:
             page = await context.new_page()
@@ -197,8 +199,7 @@ class AdmiralbetScraper:
         except Exception as e:
             logger.error(f"[Admiralbet] Fetch error: {e}")
         finally:
-            await browser.close()
-            await p.stop()
+            await stack.aclose()
 
         # Parse events into Match objects
         seen = set()

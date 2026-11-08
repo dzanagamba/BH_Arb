@@ -7,15 +7,16 @@ Playwright browser for Cloudflare session, then API interception + pagination.
 import asyncio
 import logging
 import time
+from contextlib import AsyncExitStack
 from datetime import UTC, datetime
 
 from engine.market_registry import MARKET_REGISTRY, record_unmapped, registered_spec
 from engine.structural_drift import observe
 from models.schemas import Market, MarketType, Match, OddsValue
 from scrapers.base import (
+    browser_session,
     fetch_pages,
     goto,
-    launch_browser,
     measured_api_post,
     settle,
 )
@@ -405,8 +406,9 @@ class MozzartbetScraper:
         ``{"error": "Not found. Sorry."}``. A failed offer keeps the list odds
         for that event (the events that were read still price); the failure is
         logged so it is not silent. SR4-3b: the raw payload is validated before
-        the parser sees it. A drifted price row drops the whole book, because
-        the same wire shape serves every event.
+        the parser sees it. A drifted offer row drops the whole book, because
+        the same wire shape serves every event. SR4-10: a missing ``value`` is
+        a suspended pick, not drift.
         """
         try:
             response = await retry_call(
@@ -489,7 +491,8 @@ class MozzartbetScraper:
         return matches
 
     async def fetch_and_parse(self, live: bool = False, scan_time: datetime | None = None) -> list[Match]:
-        p, browser, context = await launch_browser()
+        stack = AsyncExitStack()
+        context = await stack.enter_async_context(browser_session(BOOKMAKER_ID))
         all_raw_items: list[dict] = []
         try:
             page = await context.new_page()
@@ -602,8 +605,7 @@ class MozzartbetScraper:
                 "live" if live else "prematch",
             )
         finally:
-            await browser.close()
-            await p.stop()
+            await stack.aclose()
 
         logger.info(f"[Mozzartbet] {len(matches)} {'live' if live else 'prematch'} matches from {len(all_raw_items)} raw items")
         return matches

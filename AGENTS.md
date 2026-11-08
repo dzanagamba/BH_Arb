@@ -28,12 +28,17 @@ waived; do not start or un-waive either without an explicit operator instruction
    python -m ruff check .
    python -m mypy .
    python scripts/generate_market_mapping_doc.py --check
-   python scripts/check_test_isolation.py
    python scripts/refresh_fixtures.py --check
    python scripts/audit_admissibility.py --check
    ```
-   plus any task-specific measurement or replay command. Run the suite once
-   with a clean runtime state and once with the populated generated ledger.
+   plus any task-specific measurement or replay command. While coding, run only
+   the test files the change touches; the full suite runs **once**, at task
+   completion, in the clean runtime state. Do not run `pytest --cov` or
+   `scripts/check_test_isolation.py` in the routine loop: CI's 3.11 leg runs the
+   suite in both ledger modes and enforces the coverage floor. The one local
+   exception is a change to the ledger, `config/generated/` or the isolation
+   guard, which also runs
+   `BH_ARB_TEST_RUNTIME_LEDGER=populated python -m pytest`.
 7. Check the acceptance boxes, set the task `Done`, update the execution log
    with the commands and the measured output pasted in, and update
    `docs/SESSION_BRIEF.md`.
@@ -47,8 +52,17 @@ Use `.venv/bin/python` if `python` is not on `PATH`.
 CI runs `python scripts/refresh_fixtures.py --check` and
 `python scripts/audit_admissibility.py --check`. It does not call
 `python scripts/check_test_isolation.py`: the 3.11 `tests` leg already runs the
-suite in both ledger modes (`BH_ARB_TEST_RUNTIME_LEDGER` empty and `populated`).
-The script remains the one-command local equivalent. See `docs/CI.md`.
+suite in both ledger modes (`BH_ARB_TEST_RUNTIME_LEDGER` empty and `populated`)
+and owns the coverage floor. The script remains the one-command local equivalent
+for the tasks that need it (see the step above). See `docs/CI.md`.
+
+## Test cadence
+
+The suite is 2,237 tests in ~90 s (2026-11-08), so running it is cheap but not
+free. Run targeted files while iterating; run the whole suite once when the
+task's code is finished. Do not repeat the full suite after every edit, and do
+not add the coverage or isolation runs to the routine loop — CI already runs
+them on every push.
 
 ## Maintenance work and ad-hoc requests
 
@@ -62,7 +76,9 @@ The script remains the one-command local equivalent. See `docs/CI.md`.
 
 ## Measurement discipline
 
-- The suite must pass in both clean and populated-ledger modes.
+- The suite must pass in both clean and populated-ledger modes before a push;
+  CI verifies both. Locally the task run is the clean mode, plus the populated
+  mode when the task touches the ledger or `config/generated/`.
 - Run the command that proves a claim and paste the measured output into the
   execution log; never report a number you did not measure.
 - `MARKET_MAPPING.md` is generated. Regenerate it with
@@ -107,8 +123,17 @@ it into a skip.
 - Reliability changes must never increase traffic. Retries, limiters and
   breakers only ever reduce or space out traffic.
 - No stealth, fingerprint masking, TLS impersonation (`curl_cffi`), captcha
-  solving or proxy rotation. `scrapers/base.py` currently masks automation
-  markers; SR0-1 in `ROADMAP.md` owns that decision. Do not spread the pattern.
+  solving or proxy rotation, except the scoped browser exception below. Do not
+  spread the pattern.
+- **Browser fingerprint masking is a scoped exception** (SR0-1, operator decision
+  2026-11-08). `launch_browser()` keeps
+  `--disable-blink-features=AutomationControlled` and the init script that hides
+  `navigator.webdriver` and supplies `navigator.plugins`, `navigator.languages`
+  and `window.chrome`, because the browser books need it to pass
+  Cloudflare/Turnstile. It stays limited to those markers inside
+  `launch_browser()`: no TLS impersonation, proxy rotation, captcha solving,
+  extra stealth or account-limit evasion. A book that is still challenged is
+  reported `blocked` and drops out; revisit SR0-1 if the browser books drop out.
 
 ## Session handoff
 

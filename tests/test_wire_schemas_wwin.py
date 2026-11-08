@@ -105,12 +105,24 @@ def _prematch_tfrom0() -> str:
 
 
 class _FakeResponse:
-    def __init__(self, payload: Any) -> None:
+    def __init__(
+        self, payload: Any, content_type: str = "text/plain; charset=utf-8"
+    ) -> None:
         self._payload = payload
+        self.headers = {"content-type": content_type}
+
+    async def body(self) -> bytes:
+        if isinstance(self._payload, BaseException):
+            raise self._payload
+        if isinstance(self._payload, bytes):
+            return self._payload
+        return json.dumps(self._payload).encode()
 
     async def json(self) -> Any:
         if isinstance(self._payload, BaseException):
             raise self._payload
+        if isinstance(self._payload, bytes):
+            return json.loads(self._payload)
         return self._payload
 
 
@@ -129,10 +141,17 @@ class _FakeContext:
         return object()
 
 
-def _scrape(monkeypatch, *, live: bool, payload: Any, header: Any = None):
+def _scrape(
+    monkeypatch,
+    *,
+    live: bool,
+    payload: Any,
+    header: Any = None,
+    content_type: str = "text/plain; charset=utf-8",
+):
     """Run the real ``scrape()`` against a fake browser and the given payloads."""
-    response = _FakeResponse(payload)
-    header_response = _FakeResponse(header)
+    response = _FakeResponse(payload, content_type)
+    header_response = _FakeResponse(header, content_type)
 
     async def fake_launch_browser():
         return _FakePlaywright(), _FakeBrowser(), _FakeContext()
@@ -153,7 +172,7 @@ def _scrape(monkeypatch, *, live: bool, payload: Any, header: Any = None):
             return _FakeResponse({"p": []})
         return response
 
-    monkeypatch.setattr(wwin_module, "launch_browser", fake_launch_browser)
+    monkeypatch.setattr("scrapers.base.launch_browser", fake_launch_browser)
     monkeypatch.setattr(wwin_module, "goto", fake_goto)
     monkeypatch.setattr(wwin_module, "settle", fake_settle)
     monkeypatch.setattr(wwin_module, "retry_call", fake_retry_call)
@@ -361,22 +380,35 @@ def test_a_string_price_in_the_real_scrape_drops_the_book(mode, monkeypatch):
 
 
 @pytest.mark.parametrize("mode", MODES)
-def test_a_non_json_response_is_drift(mode, monkeypatch):
+def test_a_non_json_body_is_schema_drift(mode, monkeypatch):
     with pytest.raises(ScrapeError) as caught:
-        if mode == "prematch":
-            _scrape(
-                monkeypatch,
-                live=False,
-                payload=json.JSONDecodeError("bad", "", 0),
-            )
-        else:
-            _scrape(
-                monkeypatch,
-                live=True,
-                payload=json.JSONDecodeError("bad", "", 0),
-            )
+        _scrape(monkeypatch, live=(mode == "live"), payload=b"not json at all")
 
     assert caught.value.kind is ScrapeKind.SCHEMA_DRIFT
+
+
+@pytest.mark.parametrize("mode", MODES)
+def test_an_empty_body_is_no_rows_not_drift(mode, monkeypatch):
+    """SR4-11: days past the published horizon answer 200 with a 0-byte body."""
+    assert _scrape(monkeypatch, live=(mode == "live"), payload=b"") == []
+
+
+@pytest.mark.parametrize("mode", MODES)
+def test_a_whitespace_body_is_no_rows_not_drift(mode, monkeypatch):
+    assert _scrape(monkeypatch, live=(mode == "live"), payload=b"  \n") == []
+
+
+@pytest.mark.parametrize("mode", MODES)
+def test_an_html_challenge_page_is_blocked(mode, monkeypatch):
+    with pytest.raises(ScrapeError) as caught:
+        _scrape(
+            monkeypatch,
+            live=(mode == "live"),
+            payload=b"<html><body>Just a moment...</body></html>",
+            content_type="text/html; charset=utf-8",
+        )
+
+    assert caught.value.kind is ScrapeKind.BLOCKED
 
 
 def test_an_unknown_root_key_is_counted():

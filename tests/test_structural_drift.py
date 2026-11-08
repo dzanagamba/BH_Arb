@@ -38,10 +38,12 @@ import respx
 from fastapi.testclient import TestClient
 
 from engine.structural_drift import (
+    FINGERPRINT_VERSION,
     METRIC_STRUCTURE_DRIFT,
     baseline,
     fingerprint,
     observe,
+    optional_paths,
     structural_paths,
 )
 from server.app import app
@@ -228,3 +230,117 @@ def test_the_api_metrics_endpoint_renders_the_drift_counter(tmp_path):
 
     assert response.status_code == 200
     assert "bh_wire_structure_drift_total" in response.text
+
+
+# ─── SR4-12: heterogeneous list pages ───────────────────────────────────────
+
+
+def test_a_key_on_only_some_items_does_not_alert(tmp_path):
+    """An optional per-item key is not part of the required shape."""
+    path = tmp_path / "wire_fingerprints.json"
+    first = {"events": [{"id": 1}, {"id": 2, "matchComment": "derby"}]}
+    assert observe("book", "endpoint", first, path=path) == "new"
+    assert "events[].matchComment" not in structural_paths(first)
+    assert "events[].matchComment" in optional_paths(first)
+
+    # The optional key moves to the other item; the required shape is unchanged.
+    second = {"events": [{"id": 1, "matchComment": "cup"}, {"id": 2}]}
+    assert observe("book", "endpoint", second, path=path) == "match"
+    assert METRIC_STRUCTURE_DRIFT not in metrics.render()
+
+
+def test_a_price_key_removed_from_every_item_still_alerts(tmp_path):
+    path = tmp_path / "wire_fingerprints.json"
+    first = {"events": [{"id": 1, "price": 1.5}, {"id": 2, "price": 2.5}]}
+    observe("book", "endpoint", first, path=path)
+
+    second = {"events": [{"id": 1}, {"id": 2}]}
+    assert observe("book", "endpoint", second, path=path) == "drift"
+    assert 'bh_wire_structure_drift_total{book="book",endpoint="endpoint"} 1' in (
+        metrics.render()
+    )
+
+
+def test_a_renamed_price_key_still_alerts(tmp_path, caplog):
+    path = tmp_path / "wire_fingerprints.json"
+    first = {"events": [{"id": 1, "price": 1.5}, {"id": 2, "price": 2.5}]}
+    observe("book", "endpoint", first, path=path)
+
+    second = {"events": [{"id": 1, "odds": 1.5}, {"id": 2, "odds": 2.5}]}
+    with caplog.at_level(logging.WARNING, logger="engine.structural_drift"):
+        assert observe("book", "endpoint", second, path=path) == "drift"
+
+    assert "removed=events[].price:number" in caplog.text
+    assert "added=events[].odds:number" in caplog.text
+
+
+def test_a_type_change_on_a_common_path_alerts(tmp_path, caplog):
+    path = tmp_path / "wire_fingerprints.json"
+    observe(
+        "book",
+        "endpoint",
+        {"events": [{"id": 1, "price": 1.5}, {"id": 2, "price": 2.5}]},
+        path=path,
+    )
+
+    changed = {"events": [{"id": 1, "price": "1.50"}, {"id": 2, "price": "2.50"}]}
+    with caplog.at_level(logging.WARNING, logger="engine.structural_drift"):
+        assert observe("book", "endpoint", changed, path=path) == "drift"
+
+    assert "changed=events[].price:number->string" in caplog.text
+
+
+def test_a_nullable_field_does_not_alert(tmp_path):
+    path = tmp_path / "wire_fingerprints.json"
+    first = {"bets": [{"sBV": None}, {"sBV": "yes"}]}
+    assert observe("book", "endpoint", first, path=path) == "new"
+    assert "bets[].sBV:string" in structural_paths(first)
+
+    # No row is null on this page; the shape has not changed.
+    second = {"bets": [{"sBV": "yes"}, {"sBV": "no"}]}
+    assert observe("book", "endpoint", second, path=path) == "match"
+
+
+def test_an_optional_path_becoming_common_does_not_alert_then_removal_does(tmp_path):
+    path = tmp_path / "wire_fingerprints.json"
+    observe(
+        "book",
+        "endpoint",
+        {"events": [{"id": 1}, {"id": 2, "matchComment": "x"}]},
+        path=path,
+    )
+
+    promoted = {"events": [{"id": 1, "matchComment": "a"}, {"id": 2, "matchComment": "b"}]}
+    assert observe("book", "endpoint", promoted, path=path) == "match"
+    assert METRIC_STRUCTURE_DRIFT not in metrics.render()
+    # The promoted shape is adopted, so losing it later is a real change.
+    assert "events[].matchComment:string" in baseline(path)["book|endpoint"]["paths"]
+
+    removed = {"events": [{"id": 1}, {"id": 2}]}
+    assert observe("book", "endpoint", removed, path=path) == "drift"
+
+
+def test_an_older_baseline_is_upgraded_without_an_alert(tmp_path):
+    path = tmp_path / "wire_fingerprints.json"
+    path.write_text(
+        json.dumps(
+            {
+                "schema": 1,
+                "baselines": {
+                    "book|endpoint": {
+                        "fingerprint": "olduniondigest",
+                        "paths": ["events[].home:string"],
+                        "updated_at": "2026-11-01T00:00:00",
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert observe("book", "endpoint", {"events": [{"id": 1}]}, path=path) == "new"
+
+    entry = baseline(path)["book|endpoint"]
+    assert entry["version"] == FINGERPRINT_VERSION
+    assert entry["fingerprint"] != "olduniondigest"
+    assert METRIC_STRUCTURE_DRIFT not in metrics.render()

@@ -24,6 +24,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from config.settings import BOOKMAKERS  # noqa: E402
+from scrapers.browser_pool import browser_pool  # noqa: E402
 from server.api import SCRAPERS  # noqa: E402
 
 
@@ -59,20 +60,22 @@ def _selected(books: str) -> list[str]:
 
 async def run(books: list[str], live: bool, timeout: float) -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
-    for bookmaker in books:
-        scraper_class = SCRAPERS.get(bookmaker)
-        if scraper_class is None:
-            results.append(
-                {
-                    "bookmaker": bookmaker,
-                    "matches": 0,
-                    "markets": {},
-                    "error": "no scraper registered",
-                    "duration_seconds": 0.0,
-                }
-            )
-            continue
-        results.append(await probe_one(bookmaker, scraper_class, live, timeout))
+    # SR3-3: a probe of several browser books shares one Chromium, like a scan.
+    async with browser_pool():
+        for bookmaker in books:
+            scraper_class = SCRAPERS.get(bookmaker)
+            if scraper_class is None:
+                results.append(
+                    {
+                        "bookmaker": bookmaker,
+                        "matches": 0,
+                        "markets": {},
+                        "error": "no scraper registered",
+                        "duration_seconds": 0.0,
+                    }
+                )
+                continue
+            results.append(await probe_one(bookmaker, scraper_class, live, timeout))
     return results
 
 

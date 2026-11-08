@@ -1,5 +1,9 @@
 # Scan-cost baseline — pending live scan
 
+**Superseded:** the measured baseline is
+`docs/evidence/2026-11-08-scan-cost-baseline.md` (SR5-2). This file stays as the
+record of the 2026-11-05 session, which ran no scan and claimed no numbers.
+
 **Date:** 2026-11-05
 **Status:** harness ready; **no live scan was run in this session**, so no cost
 numbers are claimed.

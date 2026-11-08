@@ -124,7 +124,7 @@ def _scrape_with(monkeypatch, payload: Any, *, live: bool = False):
     async def fake_measured_api_get(page, url, **kwargs):
         return response
 
-    monkeypatch.setattr(admiralbet_module, "launch_browser", fake_launch_browser)
+    monkeypatch.setattr("scrapers.base.launch_browser", fake_launch_browser)
     monkeypatch.setattr(admiralbet_module, "goto", fake_goto)
     monkeypatch.setattr(admiralbet_module, "settle", fake_settle)
     monkeypatch.setattr(admiralbet_module, "retry_call", fake_retry_call)

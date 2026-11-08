@@ -45,6 +45,7 @@ from scrapers.wire_schemas import (
 from server.observability import metrics
 
 FIXTURE_DIR = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "markets"
+WIRE_FIXTURE_DIR = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "wire"
 SYNC_URL = "https://svc-web.premier-kladionica.com/PrSync/PrSync.ashx"
 MODES = ("prematch", "live")
 FUTURE_MS = 1_900_000_000_000
@@ -60,6 +61,11 @@ def _fresh_metrics():
 
 def _capture(mode: str = "prematch") -> dict[str, Any]:
     path = FIXTURE_DIR / f"premier_kladionica_{mode}.json"
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _delta_capture() -> dict[str, Any]:
+    path = WIRE_FIXTURE_DIR / "premier_kladionica_delta.json"
     return json.loads(path.read_text(encoding="utf-8"))
 
 
@@ -97,8 +103,11 @@ def _full_sync(capture: dict[str, Any], *, live: bool = False) -> list:
 
 
 def _delta_sync(capture: dict[str, Any], rows: Any = None) -> list:
-    sections: list = [None] * 15
-    sections[12] = capture["bets"] if rows is None else rows
+    # The live delta response is five sections and omits the empty ones; the
+    # odds (dogTipK) table is third. SR4-13: its index is not identification.
+    sections: list = [None] * 5
+    sections[0] = [[0, "", 1_794_139_866_830, 4, 1_308_505_019]]
+    sections[2] = capture["bets"] if rows is None else rows
     return sections
 
 
@@ -154,7 +163,7 @@ def test_the_envelopes_accept_the_captured_tables(mode):
     delta = validate_premier_sync([_delta_sync(capture)], kind="delta")
 
     assert len(full) == 15
-    assert delta[12] == capture["bets"]
+    assert delta[2] == capture["bets"]
     assert "bh_wire_unknown_keys_total" not in metrics.render()
 
 
@@ -289,3 +298,58 @@ def test_the_metric_name_is_the_documented_one():
 
     counters, _gauges = metrics.snapshot()
     assert METRIC_UNKNOWN_KEYS in counters
+
+
+# ─── SR4-13: the delta envelope's control and auxiliary sections ────────────
+
+
+def test_the_real_delta_envelope_validates_with_its_control_sections():
+    sections = _delta_capture()["sections"]
+
+    validated = validate_premier_sync([sections], kind="delta")
+
+    assert len(validated) == 5
+    # execRes (5 columns), dogVar (14), odds (9), dogLiveScore (43), scalars.
+    assert validated[0] == [[0, "", 1_794_139_866_830, 4, 1_308_505_019]]
+    assert validated[2][0][5] == 1.0
+    assert "bh_wire_unknown_keys_total" not in metrics.render()
+
+
+def test_the_five_column_execres_row_is_not_validated_as_odds():
+    """The exact row that dropped the book in the 2026-11-08 baseline."""
+    row = [0, "", 1_794_138_522_410, 4, 1_308_500_813]
+
+    sections = validate_premier_sync([[[row]]], kind="delta")
+
+    assert sections == [[row]]
+
+
+def test_a_truncated_row_in_a_recognised_odds_section_still_drifts():
+    rows = [row[:] for row in _capture()["bets"]]
+    valid = next(row for row in rows if len(row) == 9)
+    truncated = valid[:5]  # price and result columns gone
+
+    with pytest.raises(ScrapeError) as caught:
+        validate_premier_sync([[[valid, truncated]]], kind="delta")
+
+    assert caught.value.kind is ScrapeKind.SCHEMA_DRIFT
+    assert "5 columns" in str(caught.value)
+
+
+def test_a_mistyped_price_in_a_recognised_odds_section_still_drifts():
+    row = [4_490_799, 2, 1546, 1, 1, 2.05, 1, 0, 0]
+    bad = row[:]
+    bad[5] = "2.05"
+
+    with pytest.raises(ScrapeError) as caught:
+        validate_premier_sync([[[row, bad]]], kind="delta")
+
+    assert caught.value.kind is ScrapeKind.SCHEMA_DRIFT
+
+
+def test_an_auxiliary_section_alone_is_left_unmodelled():
+    dog_var = [3_841_952, 2, 2338, 1, 0, 0, "", "", "", "", "X", None, None, 49]
+
+    sections = validate_premier_sync([[[dog_var]]], kind="delta")
+
+    assert sections == [[dog_var]]

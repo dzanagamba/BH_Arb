@@ -25,6 +25,7 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, field_validator
 from rapidfuzz import fuzz
 
+from config.bookmakers import BROWSER_BOOKMAKERS
 from config.settings import (
     API_KEY,
     AUTO_LEARN_MAPPINGS,
@@ -139,9 +140,8 @@ from models.schemas import (
     ScanStatus,
     TeamPositionPair,
 )
-from scrapers.admiralbet import AdmiralbetScraper
-from scrapers.betole import BetoleScraper
 from scrapers.breaker import CLOSED, HALF_OPEN, OPEN, BookCircuitBreaker, breaker_for
+from scrapers.browser_pool import browser_pool
 from scrapers.common import (
     declaration_audit,
     declares_no_event_id,
@@ -160,15 +160,9 @@ from scrapers.errors import (
     classify_scrape,
     legacy_outcome,
 )
-from scrapers.evlbet import EvlbetScraper
-from scrapers.maxbet import MaxBetScraper
-from scrapers.mbet import MBetScraper
-from scrapers.mdshop import MDShopScraper
-from scrapers.mozzartbet import MozzartbetScraper
-from scrapers.premier_kladionica import PremierKladionicaScraper
-from scrapers.sportplus import SportPlusScraper
+from scrapers.forensics import artefact_summary, take_artefacts
+from scrapers.registry import SCRAPERS
 from scrapers.transport import policy_for, transport_pool
-from scrapers.wwin import WWINScraper
 from scripts.pairing_audit import audit as audit_pairing
 from server.alerts import (
     AlertManager,
@@ -185,6 +179,7 @@ from server.alerts import (
 )
 from server.auth import SCOPES, api_key_store
 from server.bets import BetStore
+from server.book_health import build_book_health
 from server.maintenance import maintenance_running, retention_health
 from server.mapping_coverage import build_coverage, load_ledger
 from server.observability import (
@@ -271,7 +266,8 @@ _browser_sem = asyncio.Semaphore(BROWSER_CONCURRENCY)
 # clients regardless.
 _DEADLINE_CLEANUP_SECONDS = 30.0
 
-PLAYWRIGHT_BOOKIES = {"mozzartbet", "admiralbet", "wwin"}
+# SR6-1: derived from config/bookmakers.py, never a second list.
+PLAYWRIGHT_BOOKIES = BROWSER_BOOKMAKERS
 
 def _lock_for(mode: str) -> asyncio.Lock:
     return _live_lock if mode == "live" else _prematch_lock
@@ -1043,19 +1039,6 @@ def _append_history(num_groups: int, mode: str) -> None:
         except Exception as exc:  # the JSON export still carries the row
             logger.warning("Scan history SQLite append failed: %s", exc)
     _save_history()
-
-SCRAPERS: dict[str, Any] = {
-    "mozzartbet": MozzartbetScraper,
-    "mdshop": MDShopScraper,
-    "admiralbet": AdmiralbetScraper,
-    "betole": BetoleScraper,
-    "mbet": MBetScraper,
-    "sportplus": SportPlusScraper,
-    "evlbet": EvlbetScraper,
-    "premier_kladionica": PremierKladionicaScraper,
-    "wwin": WWINScraper,
-    "maxbet": MaxBetScraper,
-}
 
 
 # ---------------------------------------------------------------------------
@@ -1883,6 +1866,14 @@ def _init_metric_baseline() -> None:
         metrics.inc("bh_cardinality_flags_total", 0, mode=metric_mode)
         metrics.set_gauge("bh_mapping_coverage_ratio", 0, mode=metric_mode)
         metrics.inc("bh_unmapped_market_rows_total", 0, mode=metric_mode)
+    for book in BOOKMAKERS:
+        for metric_mode in ("prematch", "live"):
+            metrics.set_gauge(
+                "bh_book_last_success_timestamp_seconds",
+                0,
+                mode=metric_mode,
+                book=book,
+            )
     metrics.set_gauge("bh_browser_slots_in_use", 0)
     metrics.set_gauge("bh_cache_budget_bytes", CACHE_SIZE_BUDGET_BYTES)
 
@@ -2082,7 +2073,7 @@ async def run_scan(
                 policy = policy_for(bookie_id, mode)
                 # SR2-5: one adapter may not run longer than its policy budget.
                 # The timeout cancels the scrape; a browser book closes its
-                # browser in its own finally, so nothing is left running.
+                # context in its own finally, so nothing is left running.
                 try:
                     async with asyncio.timeout(policy.adapter_deadline):
                         # Pass uniform scan_time for window consistency; fallback only
@@ -2126,6 +2117,13 @@ async def run_scan(
                 book_matches[bookie_id] = matches
                 _record_book_result(mode, bookie_id, kind)
                 _metric_book(mode, bookie_id, kind)
+                if kind is ScrapeKind.OK:
+                    metrics.set_gauge(
+                        "bh_book_last_success_timestamp_seconds",
+                        datetime.now(UTC).timestamp(),
+                        mode=mode,
+                        book=bookie_id,
+                    )
                 logger.info(f"✅ {config['name']}: {len(matches)} {'live' if is_live else 'prematch'} matches scraped")
                 return matches
 
@@ -2147,8 +2145,9 @@ async def run_scan(
             except Exception as e:
                 kind = classify_exception(e)
                 outcome = legacy_outcome(kind)
-                note = f"{type(e).__name__}: {str(e)[:200]}"
-                error_msg = f"{config['name']}: {str(e)[:200]}"
+                artefacts = artefact_summary(take_artefacts())
+                note = f"{type(e).__name__}: {str(e)[:200]}{artefacts}"
+                error_msg = f"{config['name']}: {str(e)[:200]}{artefacts}"
                 status.bookmaker_progress[bookie_id] = "error"
                 status.errors.append(error_msg)
                 _record_book_result(mode, bookie_id, kind)
@@ -2175,7 +2174,9 @@ async def run_scan(
         # returns, so pagination and retries reuse the same connection.
         status.current_bookmaker = "Scraping all bookmakers..."
         results: list[Any] = []
-        async with transport_pool():
+        # SR3-3: one Chromium for the whole scan; every book gets a fresh
+        # context. The pool recycles the browser on its page/age budget.
+        async with transport_pool(), browser_pool():
             # Tasks are created inside the pool so each one inherits the pool's
             # context: a context var copied at creation is how the shared
             # per-book HTTP client reaches the adapter.
@@ -2188,8 +2189,8 @@ async def run_scan(
                     results = await asyncio.gather(*tasks, return_exceptions=True)
             except TimeoutError:
                 # Cancel what is still running and wait for its cleanup (a
-                # browser book closes its browser) before the pool closes the
-                # HTTP clients. The books that already returned still price.
+                # browser book releases its context) before the pools close the
+                # shared browser and HTTP clients. Books that returned still price.
                 for task in tasks:
                     task.cancel()
                 try:
@@ -3701,6 +3702,17 @@ async def health():
             return None
 
     rss_mb = current_rss_mb()
+    book_health = {
+        mode: build_book_health(
+            mode,
+            bookmakers=BOOKMAKERS,
+            enabled=_bookmaker_enabled,
+            breakers=_breaker_snapshots(mode),
+            scan_cost=_scan_cost.get(mode),
+            failure_rates=book_failure_rates(_scan_cost_history, mode),
+        )
+        for mode in ("prematch", "live")
+    }
     return {
         "status": "ok",
         "scanning": scan_status.is_scanning or live_status.is_scanning,
@@ -3719,6 +3731,10 @@ async def health():
             "prematch": _feed_integrity_payload("prematch"),
             "live": _feed_integrity_payload("live"),
         },
+        # SR5-2: one state per book and feed, reduced from the SR2-1 kind, the
+        # SR2-6 breaker and the runtime toggle. It is a diagnostic: pricing
+        # still reads feed integrity and the certainty gate, never this field.
+        "book_health": book_health,
         # N0-2: rows refused because the book's feed shows a frozen price.
         # The full row list stays in /api/results; health keeps the counts.
         "stale_prices": {

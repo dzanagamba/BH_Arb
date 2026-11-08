@@ -6,6 +6,7 @@ import asyncio
 
 import pytest
 
+from config.settings import VERIFY_SSL
 from scrapers.transport import (
     POLICIES,
     TransportPool,
@@ -55,7 +56,7 @@ def test_the_policy_has_explicit_limits_and_a_rate():
     assert policy.retry_budget == 3
     assert policy.requests_per_second == 5.0
     assert policy.bookmaker == "mbet"
-    assert isinstance(policy.verify, bool)
+    assert policy.verify is VERIFY_SSL
 
 
 def test_the_pool_shares_one_client_per_book_and_mode():

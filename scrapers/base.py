@@ -6,7 +6,8 @@ helper.
 import asyncio
 import logging
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 
 from playwright.async_api import Browser, BrowserContext, Playwright, async_playwright
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
@@ -18,25 +19,13 @@ from scrapers.errors import ScrapeKind
 logger = logging.getLogger(__name__)
 
 
-async def launch_browser() -> tuple[Playwright, Browser, BrowserContext]:
+async def new_context(browser: Browser) -> BrowserContext:
+    """A fresh stealth context on an existing browser (one per book).
+
+    Every context gets its own cookies and cache; a book cannot see another
+    book's session. The route and init script are the same ones the one-shot
+    launcher uses.
     """
-    Launch a stealth-configured Chromium browser + context (anti-bot flags,
-    Bosnian locale/timezone, custom UA). Used by all Playwright-based scrapers.
-    Caller is responsible for closing the browser and stopping Playwright.
-    """
-    started = time.perf_counter()
-    playwright = await async_playwright().start()
-    browser = await playwright.chromium.launch(
-        headless=HEADLESS,
-        args=[
-            "--no-sandbox",
-            "--disable-blink-features=AutomationControlled",
-            "--disable-dev-shm-usage",
-            "--disable-infobars",
-            "--window-size=1920,1080",
-            "--start-maximized",
-        ],
-    )
     context = await browser.new_context(
         user_agent=USER_AGENT,
         viewport={"width": 1920, "height": 1080},
@@ -62,8 +51,71 @@ async def launch_browser() -> tuple[Playwright, Browser, BrowserContext]:
         if route.request.resource_type in _BLOCKED_RESOURCES
         else route.continue_(),
     )
+    return context
+
+
+async def launch_browser() -> tuple[Playwright, Browser, BrowserContext]:
+    """
+    Launch a stealth-configured Chromium browser + context (anti-bot flags,
+    Bosnian locale/timezone, custom UA). Used by standalone scripts; a scan
+    shares one browser through ``browser_session()`` instead.
+    Caller is responsible for closing the browser and stopping Playwright.
+    """
+    started = time.perf_counter()
+    playwright = await async_playwright().start()
+    browser = await playwright.chromium.launch(
+        headless=HEADLESS,
+        args=[
+            "--no-sandbox",
+            "--disable-blink-features=AutomationControlled",
+            "--disable-dev-shm-usage",
+            "--disable-infobars",
+            "--window-size=1920,1080",
+            "--start-maximized",
+        ],
+    )
+    context = await new_context(browser)
     record_browser_seconds(time.perf_counter() - started)
     return playwright, browser, context
+
+
+@asynccontextmanager
+async def browser_session(bookmaker: str = "") -> AsyncIterator[BrowserContext]:
+    """A fresh context from the scan's shared browser, or a private one-shot.
+
+    Inside ``browser_pool()`` every book gets its own context but the whole
+    scan shares one Chromium (SR3-3). Standalone callers (a probe, a capture
+    script, a test that calls ``scrape()`` directly) get a private pool that
+    lives for that one call, so the old one-browser-per-scrape behaviour is
+    preserved where no scan owns the lifecycle.
+
+    SR3-4: tracing starts with the context. A session that raises writes a
+    trace and a screenshot under ``cache/forensics/``; a successful one discards
+    the trace. The capture never carries cookies or storage state.
+    """
+    from scrapers import forensics
+    from scrapers.browser_pool import BrowserPool, current_browser_pool
+
+    pool = current_browser_pool()
+    private = BrowserPool() if pool is None else None
+    active = pool if pool is not None else private
+    assert active is not None
+    try:
+        async with active.context() as context:
+            await forensics.begin(context)
+            try:
+                yield context
+            except BaseException:
+                pages = getattr(context, "pages", None) or []
+                await forensics.capture_failure(
+                    context, pages[-1] if pages else None, bookmaker
+                )
+                raise
+            else:
+                await forensics.discard(context)
+    finally:
+        if private is not None:
+            await private.aclose()
 
 
 _BLOCKED_RESOURCES = frozenset({"image", "media", "font"})

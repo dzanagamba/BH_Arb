@@ -32,7 +32,10 @@ decision).
    `betTypeId` and `betOutcomes` are examples; a new consumed field means one
    model edit plus its allow-list entry. A field the dated capture always
    carries is **required but nullable** (`float | None`), so a rename is drift
-   rather than a row that quietly disappears.
+   rather than a row that quietly disappears. A field the live feed legitimately
+   omits on some rows (a suspended pick, SR4-10) is optional with a documented
+   default; keep the rename signal with a page-level guard over the whole
+   response.
 4. Validate immediately after `response.json()` and raise
    `ScrapeError(ScrapeKind.SCHEMA_DRIFT)`. The adapter re-raises `ScrapeError`,
    so the book drops out of the scan (fail closed) instead of returning zero
@@ -84,9 +87,15 @@ them:
   immediately after `response.json()`. A per-event error payload
   (`{"error": "Not found. Sorry."}`) validates with `match = None`, so that
   event keeps its list odds; a drifted odds row falls out as `schema_drift`.
+  An unpriced pick omits the `value` key entirely (measured 2026-11-08:
+  105 of 518 rows in one offer; SR4-10), so `value` is optional and the parser
+  skips a row without a price.
 - `validate_mozzart_page()` validates `POST /betting/matches`
   (`items` + `totalPages`) in the pagination loop, including every item's
-  `odds` array (the list odds are the per-event fallback now).
+  `odds` array (the list odds are the per-event fallback now). It also raises
+  `schema_drift` when a page carries odds rows but none has a numeric `value`,
+  which is what a renamed price field looks like across a whole page; a single
+  suspended row does not trip it.
 
 `_build_matches` re-raises a `ScrapeError` returned by a per-event task, so a
 drifted row drops the whole book (the same wire shape serves every event)
@@ -218,16 +227,21 @@ definition rows (`lookup`). Each model maps its positional list through a
 `validate_premier_odds` and `validate_premier_lookup` are the fixture entry
 points. `_sync_call` runs `validate_premier_sync`: a **full** sync must be a
 `[sections]` list with at least ten slots (each slot a list) and its sections
-7/8/9 are typed; a **delta** sync has every non-empty section typed as odds
-rows. A non-JSON body, a wrong envelope or a drifted column raises
-`SCRAPE_DRIFT` and the book drops out.
+7/8/9 are typed; a **delta** sync carries five positional tables (execRes 5
+columns, dogVar 14, dogTipK odds 9, dogLiveScore 43, scalars) and omits the
+empty ones, so a section is typed as odds only when at least one row has the
+dogTipK shape. Every row of a recognised odds section is then validated, so a
+truncated row or a string price still drifts (SR4-13). A non-JSON body, a wrong
+envelope or a drifted column raises `SCRAPE_DRIFT` and the book drops out.
 
 Positional data has no field names to call unknown, so the counter reports
 **unknown section slots** — slots past the fifteen the parser documents — at
-`level="section"`, `field="<index>"`. The event, sports, competition-group and
-execRes sections have no dated capture and stay unmodelled.
+`level="section"`, `field="<index>"`. The event, sports, competition-group,
+dogVar, dogLiveScore and execRes sections have no dated capture and stay
+unmodelled.
 
-Tests: `tests/test_wire_schemas_premier.py`.
+Tests: `tests/test_wire_schemas_premier.py`; the real delta envelope is
+`tests/fixtures/wire/premier_kladionica_delta.json`.
 
 ### WWin (SR4-3i)
 
@@ -246,9 +260,13 @@ shell around it. The same row arrives in three envelopes:
 `validate_wwin_bets` is the fixture entry point. `validate_wwin_events` runs on
 each events page (it requires the mode's page key and validates every event's
 `bets`) and `validate_wwin_header_bets` on each live `headerBets` page, all
-immediately after `response.json()`. A non-JSON body, a missing page key, a
-non-object event/header item or a drifted bet row raises `SCRAPE_DRIFT` and the
-book drops out. Unknown keys are counted at `level="root"` for the envelopes and
+immediately after the body is decoded. Response bodies are classified by shape
+(SR4-11): a **0-byte body is "no rows for that slice"** and does not drop the
+book (measured 2026-11-08: days 8–9 of the 15-day prematch walk answer HTTP 200
+with an empty body for every bet group); an HTML page is `blocked` (a
+challenge); any other non-JSON body, a missing page key, a non-object
+event/header item or a drifted bet row raises `SCHEMA_DRIFT` and the book drops
+out. Unknown keys are counted at `level="root"` for the envelopes and
 `level="bet"`/`"odd"` for the rows. The event shell (teams, kickoff,
 competition) has no dated capture and stays unmodelled.
 

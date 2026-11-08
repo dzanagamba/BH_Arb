@@ -38,6 +38,7 @@ from scrapers.errors import (
 )
 from scrapers.ratelimit import limiter_for
 from scrapers.transport import DEFAULT_POLICY, TransportPolicy, current_policy
+from server.observability import metrics
 
 logger = logging.getLogger(__name__)
 
@@ -123,6 +124,31 @@ async def retry_call(
             )
 
         retry_after: float | None = None
+        attempt_started = now()
+
+        def _record_attempt(
+            status: str | None = None,
+            *,
+            attempt: int = attempt,
+            started: float = attempt_started,
+        ) -> None:
+            """One attempt, its latency, and the retry when it is not the first."""
+            metrics.inc("bh_scraper_attempts_total", 1, book=active.bookmaker)
+            metrics.observe(
+                "bh_scraper_attempt_seconds",
+                now() - started,
+                book=active.bookmaker,
+            )
+            if attempt > 1:
+                metrics.inc("bh_scraper_retries_total", 1, book=active.bookmaker)
+            if status is not None:
+                metrics.inc(
+                    "bh_http_status_total",
+                    1,
+                    book=active.bookmaker,
+                    status=status,
+                )
+
         try:
             if limiter is None:
                 response = await send()
@@ -130,8 +156,10 @@ async def retry_call(
                 async with limiter:
                     response = await send()
         except ScrapeError:
+            _record_attempt()
             raise
         except Exception as exc:  # noqa: BLE001 - classified, then retried or raised
+            _record_attempt()
             if account:
                 record_request(None)
             kind = classify_exception(exc)
@@ -139,6 +167,7 @@ async def retry_call(
                 raise
             detail = f"{type(exc).__name__}: {exc}"
         else:
+            _record_attempt(str(_status(response)))
             if account:
                 record_request(response_bytes(response))
             kind = classify_response(response)

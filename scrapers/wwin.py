@@ -27,13 +27,16 @@ Live:
 """
 
 import asyncio
+import json
 import logging
+from contextlib import AsyncExitStack
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from engine.market_registry import MARKET_REGISTRY, record_unmapped, registered_spec
 from engine.structural_drift import observe
 from models.schemas import Market, MarketType, Match, OddsValue
-from scrapers.base import goto, launch_browser, measured_api_get, settle
+from scrapers.base import browser_session, goto, measured_api_get, settle
 from scrapers.common import betradar_id, qualify_league
 from scrapers.errors import ScrapeError, ScrapeKind
 from scrapers.retry import retry_call
@@ -49,6 +52,33 @@ BOOKMAKER_ID = "wwin"
 BASE_URL = "https://wwin.ba"
 API_ROOT = f"{BASE_URL}/content/sport-livecontent/api"
 FOOTBALL_SPORT_ID = 2
+
+
+async def _json_body(resp: Any, label: str) -> Any | None:
+    """Decode one WWIN response; ``None`` means "no rows for this slice".
+
+    The feed answers a day window past its published horizon with **HTTP 200
+    and a 0-byte body** (measured 2026-11-08: days 8-9 of the 15-day prematch
+    walk, for every bet group), so an empty body is "no rows", not drift. An
+    HTML page is a challenge and gives the breaker ``blocked``; any other
+    non-JSON body stays ``schema_drift``.
+    """
+    body = await resp.body()
+    if not body or not body.strip():
+        logger.info("[%s] %s answered an empty body (no rows)", BOOKMAKER_ID, label)
+        return None
+    try:
+        return json.loads(body)
+    except ValueError as exc:
+        content_type = str(resp.headers.get("content-type") or "").lower()
+        if "text/html" in content_type or body.lstrip().startswith(b"<"):
+            raise ScrapeError(
+                ScrapeKind.BLOCKED,
+                f"{BOOKMAKER_ID} {label} answered an HTML page (challenge)",
+            ) from exc
+        raise ScrapeError(
+            ScrapeKind.SCHEMA_DRIFT, f"{BOOKMAKER_ID} {label} is not JSON: {exc}"
+        ) from exc
 
 
 def _request_market_ids(mode: str) -> list[int | str]:
@@ -262,7 +292,8 @@ class WWINScraper:
         now = (scan_time.replace(tzinfo=UTC) if scan_time and scan_time.tzinfo is None else scan_time) if scan_time else datetime.now(UTC)
 
         countries: dict[object, str] = {}
-        p, browser, context = await launch_browser()
+        stack = AsyncExitStack()
+        context = await stack.enter_async_context(browser_session(BOOKMAKER_ID))
         try:
             page = await context.new_page()
             await goto(page, f"{BASE_URL}/kladjenje/", wait_until="domcontentloaded", timeout=60000)
@@ -303,13 +334,9 @@ class WWINScraper:
                     label=f"wwin prematch day {day_offset}",
                     account=False,
                 )
-                try:
-                    data = await resp.json()
-                except Exception as exc:
-                    raise ScrapeError(
-                        ScrapeKind.SCHEMA_DRIFT,
-                        f"{BOOKMAKER_ID} prematch response is not JSON: {exc}",
-                    ) from exc
+                data = await _json_body(resp, f"prematch day {day_offset}")
+                if data is None:
+                    return day_offset, bets, []
                 # SR4-3i: the page key and every event's bets[] are validated
                 # before the parser reads them; a drifted feed drops the book.
                 observe(BOOKMAKER_ID, "prematch-events", data)
@@ -367,15 +394,15 @@ class WWINScraper:
                         fetched_at=datetime.now(UTC).replace(tzinfo=None),
                     ))
         finally:
-            await browser.close()
-            await p.stop()
+            await stack.aclose()
 
         logger.info(f"[WWIN] Prematch total: {len(all_matches)} matches")
         return all_matches
 
     async def _fetch_live(self, scan_time: datetime | None = None) -> list[Match]:
         all_matches: list[Match] = []
-        p, browser, context = await launch_browser()
+        stack = AsyncExitStack()
+        context = await stack.enter_async_context(browser_session(BOOKMAKER_ID))
         try:
             page = await context.new_page()
             await goto(page, f"{BASE_URL}/kladjenje-uzivo/", wait_until="domcontentloaded", timeout=60000)
@@ -392,13 +419,9 @@ class WWINScraper:
                 label="wwin live events",
                 account=False,
             )
-            try:
-                data = await resp.json()
-            except Exception as exc:
-                raise ScrapeError(
-                    ScrapeKind.SCHEMA_DRIFT,
-                    f"{BOOKMAKER_ID} live response is not JSON: {exc}",
-                ) from exc
+            data = await _json_body(resp, "live")
+            if data is None:
+                return []
             countries: dict[object, str] = {}
             _remember_countries(data, countries)
             observe(BOOKMAKER_ID, "live-events", data)
@@ -430,13 +453,9 @@ class WWINScraper:
                     label="wwin live headerBets",
                     account=False,
                 )
-                try:
-                    d2 = await r2.json()
-                except Exception as exc:
-                    raise ScrapeError(
-                        ScrapeKind.SCHEMA_DRIFT,
-                        f"{BOOKMAKER_ID} headerBets response is not JSON: {exc}",
-                    ) from exc
+                d2 = await _json_body(r2, "headerBets")
+                if d2 is None:
+                    continue
                 # headerBets returns one entry per (event, market) pair.
                 observe(BOOKMAKER_ID, "live-header-bets", d2)
                 for item in validate_wwin_header_bets(d2, book=BOOKMAKER_ID):
@@ -478,8 +497,7 @@ class WWINScraper:
                     fetched_at=datetime.now(UTC).replace(tzinfo=None),
                 ))
         finally:
-            await browser.close()
-            await p.stop()
+            await stack.aclose()
 
         logger.info(f"[WWIN] Live total: {len(all_matches)} matches")
         return all_matches

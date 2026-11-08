@@ -75,11 +75,13 @@ the window has no measurement.
 
 ## Baseline
 
-The first live baseline belongs under `docs/evidence/`. This session did not
-run a live scan, so `docs/evidence/2026-11-05-scan-cost-baseline.md` records the
-harness as ready and the baseline as pending rather than inventing a number.
-After the next real scan, run the CLI and replace that file with the measured
-table, its date, scan count and book count.
+The measured baseline is
+`docs/evidence/2026-11-08-scan-cost-baseline.md` (one scan per feed: prematch
+144.8 s elapsed, 682 requests, 392.77 MiB, 201.06 book-seconds; live 33.7 s,
+70 requests, 74.74 MiB, 66.52 book-seconds; 6,610 + 653 matches).
+`docs/evidence/2026-11-05-scan-cost-baseline.md` is the earlier pending slot; it
+records that no scan ran in that session. Re-run the CLI after a real deployment
+scan and add a new dated file rather than editing the measured one.
 
 ## Limitations
 

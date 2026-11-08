@@ -1,45 +1,21 @@
 """Scraper package.
 
 Each scraper is loaded on first use (PEP 562) so importing ``scrapers.common``
-does not import every book's scraper or Playwright.
+does not import every book's scraper or Playwright. The exported names are
+derived from the single bookmaker declaration (SR6-1), not kept here by hand.
 """
 
 from __future__ import annotations
 
 from importlib import import_module
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-if TYPE_CHECKING:
-    from scrapers.admiralbet import AdmiralbetScraper
-    from scrapers.betole import BetoleScraper
-    from scrapers.evlbet import EvlbetScraper
-    from scrapers.maxbet import MaxBetScraper
-    from scrapers.mbet import MBetScraper
-    from scrapers.mdshop import MDShopScraper
-    from scrapers.mozzartbet import MozzartbetScraper
-    from scrapers.sportplus import SportPlusScraper
-
-__all__ = [
-    "MozzartbetScraper",
-    "MDShopScraper",
-    "AdmiralbetScraper",
-    "BetoleScraper",
-    "MBetScraper",
-    "SportPlusScraper",
-    "EvlbetScraper",
-    "MaxBetScraper",
-]
+from config.bookmakers import DECLARATIONS
 
 _EXPORTS = {
-    "MozzartbetScraper": "scrapers.mozzartbet",
-    "MDShopScraper": "scrapers.mdshop",
-    "AdmiralbetScraper": "scrapers.admiralbet",
-    "BetoleScraper": "scrapers.betole",
-    "MBetScraper": "scrapers.mbet",
-    "SportPlusScraper": "scrapers.sportplus",
-    "EvlbetScraper": "scrapers.evlbet",
-    "MaxBetScraper": "scrapers.maxbet",
+    spec.class_name: spec.module for spec in DECLARATIONS.values()
 }
+__all__ = list(_EXPORTS)
 
 
 def __getattr__(name: str) -> Any:

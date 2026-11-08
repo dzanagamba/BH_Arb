@@ -24,11 +24,14 @@ for the many docs and test docstrings that still cite them. New work uses the
    python -m ruff check .
    python -m mypy .
    python scripts/generate_market_mapping_doc.py --check
-   python scripts/check_test_isolation.py
    python scripts/refresh_fixtures.py --check
    python scripts/audit_admissibility.py --check
    ```
-   (`.venv/bin/python` if `python` is missing.)
+   (`.venv/bin/python` if `python` is missing.) While coding, run only the test
+   files the change touches; the full suite runs **once**, at task completion.
+   Do not run `pytest --cov` or `scripts/check_test_isolation.py` in the routine
+   loop: CI's 3.11 leg runs the suite in both ledger modes and enforces the
+   coverage floor (SR1-4).
 6. Tick the acceptance boxes, set `Done`, add a line to the execution log at the
    bottom, update `docs/SESSION_BRIEF.md`.
 7. Do not commit unless the operator asks. If blocked, write the blocker under
@@ -47,7 +50,10 @@ For every task:
 - New/updated tests pass; the full offline suite, Ruff, MyPy and the generated
   market-doc check pass.
 - The suite is verified both with a clean runtime state and with a populated
-  generated ledger.
+  generated ledger. The clean mode runs locally once per task; CI's 3.11 leg
+  runs the populated mode and the coverage floor. Run the populated mode locally
+  only when the change touches the ledger, `config/generated/` or the isolation
+  guard (SR1-4).
 - User-facing or operator-facing docs are updated, including
   `docs/ACCEPTANCE.md` for any number that changes the project's readiness story.
 - The execution log below has a dated entry with commands, measured results and
@@ -105,21 +111,22 @@ do not copy stale numbers here.
 
 | ID | Title | Status | Depends | Gate |
 |----|-------|--------|---------|------|
-| SR0-1 | Decide on browser fingerprint masking | Not started | — | operator |
-| SR0-2 | Decide TLS verification default | Not started | — | operator |
+| SR0-1 | Decide on browser fingerprint masking | Done | — | operator |
+| SR0-2 | Decide TLS verification default | Done | — | operator |
 | SR1-1 | Remove the date bomb in the contract test | Done | — | — |
 | SR1-2 | Run the isolation check in CI | Done | — | — |
 | SR1-3 | Stop `settle()` swallowing navigation errors | Done | — | — |
+| SR1-4 | Run the test suite once per task | Done | SR1-2 | — |
 | SR2-1 | Scrape error taxonomy | Done | — | — |
 | SR2-2 | Per-book transport policy and shared client | Done | SR2-1 | — |
 | SR2-3 | Retry policy rewrite (jitter, budget, 429, 403) | Done | SR2-1, SR2-2 | — |
 | SR2-4 | Outgoing per-book rate limiter | Done | SR2-2 | — |
 | SR2-5 | Adapter and scan deadlines | Done | SR2-1 | — |
 | SR2-6 | Per-book circuit breaker | Done | SR2-1, SR2-3 | — |
-| SR3-1 | Upgrade Playwright | Not started | SR0-1 | — |
-| SR3-2 | Leak-free resource blocking | Not started | SR3-1 | — |
-| SR3-3 | Shared browser lifecycle | Not started | SR3-2, SR2-5 | — |
-| SR3-4 | Response capture and failure forensics | Not started | SR3-3 | — |
+| SR3-1 | Upgrade Playwright | Done | SR0-1 | — |
+| SR3-2 | Leak-free resource blocking | Done | SR3-1 | — |
+| SR3-3 | Shared browser lifecycle | Done | SR3-2, SR2-5 | — |
+| SR3-4 | Response capture and failure forensics | Done | SR3-3 | — |
 | SR4-1 | Transport-level tests with respx | Done | SR2-3 | — |
 | SR4-2 | Fixture metadata and age policy | Done | — | — |
 | SR4-3 | Strict wire schemas, one book first | Done | SR2-1 | — |
@@ -128,7 +135,7 @@ do not copy stale numbers here.
 | SR4-3d | Strict wire schema: Betole | Done | SR4-3 | — |
 | SR4-3e | Strict wire schema: MBet | Done | SR4-3 | — |
 | SR4-3f | Strict wire schema: SportPlus | Done | SR4-3 | — |
-| SR4-3g | Strict wire schema: EVLBet | Blocked on SR6-3 | SR4-3 | — |
+| SR4-3g | Strict wire schema: EVLBet | Blocked on a live EVLBet payload | SR4-3 | — |
 | SR4-3h | Strict wire schema: Premier Kladionica | Done | SR4-3 | — |
 | SR4-3i | Strict wire schema: WWin | Done | SR4-3 | — |
 | SR4-3j | Strict wire schema: MaxBet | Done | SR4-3 | — |
@@ -137,13 +144,18 @@ do not copy stale numbers here.
 | SR4-6 | Snapshot tests of normalised parser output | Done | SR4-2 | — |
 | SR4-7 | Property-based mutation tests for parsers | Done | SR4-6 | — |
 | SR4-7a | Drop a duplicated NSoft outcome label | Done | SR4-7 | — |
-| SR4-8 | HAR fixtures for browser books | Not started | SR3-4, SR4-2 | — |
-| SR4-9 | Scheduled live canary | Not started | SR4-4, SR4-5 | operator |
-| SR5-1 | Per-book reliability metrics | Not started | SR2-6 | — |
-| SR5-2 | Per-book health state and live cost baseline | Not started | SR5-1 | — |
-| SR6-1 | Single adapter declaration | Not started | SR2-2 | — |
+| SR4-8 | HAR fixtures for browser books | Blocked on SR4-8a | SR3-4, SR4-2 | — |
+| SR4-8a | Choose the browser replay transport | Not started | SR3-4 | operator |
+| SR4-9 | Scheduled live canary | Done | SR4-4, SR4-5 | operator |
+| SR4-10 | Mozzartbet offer rows may omit `value` | Done | SR4-3b | — |
+| SR4-11 | WWin non-JSON body classified as schema drift | Done | SR4-3i | — |
+| SR4-12 | Fingerprint over heterogeneous list pages | Done | SR4-4 | — |
+| SR4-13 | Premier delta rows shorter than the strict schema | Done | SR4-3h | — |
+| SR5-1 | Per-book reliability metrics | Done | SR2-6 | — |
+| SR5-2 | Per-book health state and live cost baseline | Done | SR5-1 | — |
+| SR6-1 | Single adapter declaration | Done | SR2-2 | — |
 | SR6-2 | Adapter `Protocol` and mypy enforcement | Not started | SR6-1 | — |
-| SR6-3 | Decide EVLBet's future | Not started | — | operator |
+| SR6-3 | Decide EVLBet's future | Done | — | operator |
 | SR7-1 | Full per-match market offers (Mozzartbet, Betole) | Done | — | operator |
 | SR7-2 | Raise the Mozzartbet request rate | Done | SR7-1 | operator |
 | M1-1 | Redesign named-key authentication | Not started | — | operator |
@@ -182,8 +194,6 @@ do not copy stale numbers here.
 
 ### SR0-1 Decide on browser fingerprint masking — Gate: operator
 
-Status: Not started
-
 Why: `launch_browser()` (`scrapers/base.py:20-65`) launches Chromium with
 `--disable-blink-features=AutomationControlled` (`:32`) and an init script that
 hides `navigator.webdriver` and fakes `navigator.plugins`, `navigator.languages`
@@ -203,16 +213,30 @@ Options to put to the operator:
 
 Recommendation: A.
 
+**Decision (2026-11-08, operator): B — keep it, as a written and scoped
+exception.** The exception is now in `AGENTS.md` ("Scraper rules") and quoted
+here:
+
+> **Browser fingerprint masking is a scoped exception** (SR0-1, operator decision
+> 2026-11-08). `launch_browser()` keeps
+> `--disable-blink-features=AutomationControlled` and the init script that hides
+> `navigator.webdriver` and supplies `navigator.plugins`, `navigator.languages`
+> and `window.chrome`, because the browser books need it to pass
+> Cloudflare/Turnstile. It stays limited to those markers inside
+> `launch_browser()`: no TLS impersonation, proxy rotation, captcha solving,
+> extra stealth or account-limit evasion. A book that is still challenged is
+> reported `blocked` and drops out; revisit SR0-1 if the browser books drop out.
+
+Status: Done
+
 Acceptance:
-- [ ] Decision and date recorded here.
+- [x] Decision and date recorded here.
 - [ ] If A: flag and init script removed; a test asserts `launch_browser()` adds
       no init script that redefines `navigator.*`; each browser book was run once
       live and its result (ok / blocked) recorded here.
-- [ ] If B: exception text added to `AGENTS.md`, quoted here.
+- [x] If B: exception text added to `AGENTS.md`, quoted here.
 
 ### SR0-2 Decide TLS verification default — Gate: operator
-
-Status: Not started
 
 Why: `VERIFY_SSL` defaults to `"false"` (`config/settings.py:364`) and is passed
 to every httpx client (`research/01_shared_infra.md` §2,
@@ -222,11 +246,24 @@ unverified connection can be tampered with in transit.
 Recommendation: default `true`; a per-book override exists only for a named book
 with a recorded reason.
 
+**Decision (2026-11-08, operator): keep the current default — `VERIFY_SSL`
+stays `false`.** Direct httpx calls and the shared transport policy keep
+`verify=VERIFY_SSL`, so certificates are not validated unless the operator sets
+`VERIFY_SSL=true` in the environment. No per-book override is added. The
+decision is pinned by
+`tests/test_transport.py::test_the_policy_has_explicit_limits_and_a_rate`, which
+asserts `policy.verify is VERIFY_SSL`, so a silent flip of the default fails the
+suite. Recorded consequence: prices read over an unverified connection can be
+tampered with in transit.
+
+Status: Done
+
 Acceptance:
-- [ ] Decision recorded.
-- [ ] Default changed (if approved); per-book override, if any, lives in the
+- [x] Decision recorded.
+- [x] Default changed (if approved); per-book override, if any, lives in the
       transport policy from SR2-2 or in settings with a comment naming the reason.
-- [ ] Test asserts the default.
+      (Not approved; the default is unchanged and no override was added.)
+- [x] Test asserts the default.
 
 ---
 
@@ -283,6 +320,46 @@ small local enum is fine; SR2-1 absorbs it).
 Acceptance:
 - [x] Unit test with a fake page whose navigation raises: the outcome is a
       failure, not an empty success.
+
+### SR1-4 Run the test suite once per task
+
+Status: Done
+
+Why: the per-task loop named four full suite runs — plain `pytest`,
+`pytest --cov`, and `check_test_isolation.py`'s empty and populated modes — and
+the measured cost on this machine is 90 s + 240 s + 180 s ≈ 8.5 min per task.
+CI's 3.11 leg already runs the empty and populated modes and the coverage gate
+(`.github/workflows/ci.yml:77-101`, `docs/CI.md`), so the local repeats add no
+evidence. Measured 2026-11-08: 2,166 tests in 89.8 s, `--cov` 243 s, isolation
+180 s; 145 test files, 1,461 plain test functions and 712 parametrized cases.
+
+Steps: in `AGENTS.md` and `ROADMAP.md`, make the per-task verification one full
+suite run in the clean runtime state, with targeted test files while coding.
+Drop `--cov` and `scripts/check_test_isolation.py` from the routine loop and
+name CI as the owner of the populated-ledger mode and the coverage floor. Keep
+one local exception: a change to the ledger, `config/generated/` or the
+isolation guard runs the populated mode too. `docs/CI.md` records the same rule.
+No test, marker or trust rule is removed.
+
+**SR1-4 Outcome (2026-11-08).** `AGENTS.md` now has a short "Test cadence"
+section; its task loop and the `ROADMAP.md` "How to use" block list **one** full
+suite run at task completion (clean state) plus targeted files while coding, and
+no `--cov`/isolation run in the routine loop. The `Definition of done` and
+`Measurement discipline` bullets now say CI's 3.11 leg owns the populated-ledger
+mode and the coverage floor, with one local exception: a change to the ledger,
+`config/generated/` or the isolation guard also runs
+`BH_ARB_TEST_RUNTIME_LEDGER=populated python -m pytest`. `docs/CI.md` says the
+same and records the measured cost. No test, marker or trust invariant was
+removed, and the full suite still passes unchanged (2,166 passed, 6 skipped,
+1 xfailed). Measured on this machine: plain suite 90 s, `--cov` 240 s, isolation
+180 s; the per-task loop drops from ~8.5 min to ~100 s.
+
+Acceptance:
+- [x] `AGENTS.md`, `ROADMAP.md` and `docs/CI.md` name one suite run per task,
+      targeted runs while coding, and CI for the second ledger mode and the
+      coverage floor.
+- [x] No test or trust rule is removed; the ledger/generated-state exception is
+      written down.
 
 ---
 
@@ -460,21 +537,48 @@ Acceptance:
 
 ### SR3-1 Upgrade Playwright
 
-Status: Not started — Depends: SR0-1
+Status: Done — Depends: SR0-1
 
 Why: pinned 1.61.0; `research/05_browser_automation_research.md` reports 1.64.1
 (2026-10-22). Confirm the latest on PyPI first. (Was the Playwright 1.64 item in
 the old maintenance backlog.)
 
+**SR3-1 Outcome (2026-11-08).** PyPI reports 1.64.1 as latest; the pin in
+`requirements.txt` moved from 1.61.0 to 1.64.1 and the Chromium bundle was
+reinstalled (`python -m playwright install chromium`, Chrome Headless Shell
+156.0.8078.4, v1248). The install procedure is unchanged (README and the
+Dockerfile already run `playwright install chromium`); README now notes that a
+pin change needs the matching `playwright install chromium`, because the bundle
+is versioned and a stale one fails with "Executable doesn't exist".
+`BH_ARB_TEST_BROWSER=1 pytest tests/test_accessibility_axe.py`: **10 passed**
+(the two opt-in Chromium tests included). Each browser book was run once live
+(`scripts/probe_feeds.py --books admiralbet,mozzartbet,wwin`):
+
+| book | result |
+|---|---|
+| admiralbet | ok — 780 matches, 9 families, 27.8 s |
+| mozzartbet | `ScrapeError: offer schema drift at match.odds.14.value: Field required`, 0 matches (SR4-10) |
+| wwin | `ScrapeError: prematch response is not JSON`, 0 matches (SR4-11) |
+
+The two failures are **not** caused by the upgrade: the same probe was re-run
+after downgrading the venv to 1.61.0 with its own Chromium, and both books
+failed identically; the 00:48 scan that day had both healthy (wwin 877 matches,
+mozzartbet 614). The failures are recorded as SR4-10 and SR4-11; the upgrade was
+then reinstalled and the browser tests re-run green. The mozzartbet list-page
+fingerprint also re-alerted on optional per-row keys — recorded as SR4-12. The
+live probe created the runtime structural-drift baseline
+`config/generated/wire_fingerprints.json`; it is now gitignored with the other
+runtime state instead of showing as an untracked file.
+
 Acceptance:
-- [ ] Pin updated, `playwright install chromium` documented if the procedure
+- [x] Pin updated, `playwright install chromium` documented if the procedure
       changes.
-- [ ] Browser tests pass with `BH_ARB_TEST_BROWSER=1`; each browser book run once
+- [x] Browser tests pass with `BH_ARB_TEST_BROWSER=1`; each browser book run once
       live, result recorded.
 
 ### SR3-2 Leak-free resource blocking
 
-Status: Not started
+Status: Done
 
 Why: `context.route("**/*", ...)` (`scrapers/base.py:58-63`) intercepts every
 request; `research/05_browser_automation_research.md` cites
@@ -486,11 +590,26 @@ Steps: if still relevant, block image/media/font with CDP
 to resource URLs.
 
 Acceptance:
-- [ ] Test or measurement showing task count does not grow across N page loads.
+- [x] Test or measurement showing task count does not grow across N page loads.
+
+**SR3-2 Outcome (2026-11-08).** Verified against the tracker: playwright-python
+#3121 ("context.route retains completed Tasks until Connection close") was
+**closed as completed on 2026-07-02**; its cause was a CPython 3.14 asyncio task
+retention fixed by python/cpython#152585, not a Playwright route defect in the
+pinned client. This project runs Python 3.11 and 3.12 (CI matrix; the Docker
+base is `python:3.11-slim`), where the leak never applied, so the route stays
+and no CDP workaround is needed. New opt-in
+`tests/test_browser_route_leak.py` pins the invariant through the real
+`launch_browser()` route: six image-heavy pages (40 blocked requests each) are
+loaded in one context and the completed `asyncio.Task` count is compared with
+the baseline. Measured: **baseline 1, after 1, growth 0** (threshold 50; a leak
+would add hundreds). Run with `BH_ARB_TEST_BROWSER=1`; `docs/CI.md` lists it
+with the accessibility checks. If the support matrix ever adds 3.14, the CPython
+fix is required and this test catches a regression.
 
 ### SR3-3 Shared browser lifecycle
 
-Status: Not started
+Status: Done
 
 Why: every scrape starts its own Playwright and Chromium; wwin starts two
 (`wwin.py:257`, `:371`) (`research/01_shared_infra.md` §3).
@@ -502,14 +621,49 @@ browser check keeps its own isolated context so its result cannot be influenced
 by scraper state.
 
 Acceptance:
-- [ ] wwin uses one browser for prematch and live.
-- [ ] Test with a fake browser: recycle after N pages; a crashed browser is
+- [x] wwin uses one browser for prematch and live.
+- [x] Test with a fake browser: recycle after N pages; a crashed browser is
       replaced and the book reports `transport`, not `ok`.
-- [ ] Scan duration and peak RSS before/after recorded.
+- [x] Scan duration and peak RSS before/after recorded.
+
+**SR3-3 Outcome (2026-11-08).** New `scrapers/browser_pool.py` owns one
+Chromium per scan: `BrowserPool` launches lazily through the existing
+`launch_browser()`, hands every book a fresh context from `new_context()`, and
+recycles the browser after `BROWSER_MAX_PAGES` (200) contexts or
+`BROWSER_MAX_AGE_SECONDS` (600). A browser that reports disconnected is replaced
+at the next acquisition; a hung browser that still reports connected is replaced
+at the age cap. `run_scan` opens `browser_pool()` around the scraping gather, so
+one scan uses one browser; `scripts/probe_feeds.py` does the same so a multi-book
+probe is comparable. Every adapter (`admiralbet`, `mozzartbet`, and both wwin
+paths) now takes its context from `browser_session()`; a standalone `scrape()`
+still gets a private one-shot pool, which keeps the capture scripts and the
+existing fake-browser tests working. The deep-link verifier still calls
+`launch_browser()` directly, so its context stays isolated from scraper state.
+`BROWSER_CONCURRENCY` still bounds how many browser books run at once; the pool
+is per scan, not per process.
+
+Measured with the same three-book probe before → after:
+
+| metric | before (one browser per scrape) | after (one browser per scan) |
+|---|---|---|
+| Chromium launches | 3 | **1** |
+| wall | 74.2 s | 66.8 s |
+| peak Chromium-tree RSS | 838.2 MB | 945.3 MB |
+
+The RSS sample is not lower (a long-lived browser serves all three books; a
+second sampled run measured 945 MB with the same 6 processes, while the books
+themselves were slower that run), so the structural win is one launch and one
+browser per scan rather than a memory reduction. `tests/test_browser_pool.py`
+(8 tests, fake launcher) pins: one launch for many contexts, a fresh context per
+book with the init script and route, recycle on the page budget, recycle on the
+age budget, replacement of a disconnected browser, browser + Playwright closed,
+the scan pool visible to a scrape, `PlaywrightError` classified `transport`, and
+a context-close failure tolerated. All existing fake-browser suites pass with
+`scrapers.base.launch_browser` patched.
 
 ### SR3-4 Response capture and failure forensics
 
-Status: Not started
+Status: Done
 
 Why: browser books capture JSON through `page.on("response")` listeners and
 `page.request` (`research/02_adapters.md`); failures leave no artefact.
@@ -520,8 +674,40 @@ for one response; on failure save a Playwright trace and a screenshot under
 or storage state in the artefact.
 
 Acceptance:
-- [ ] Forced failure in a browser test writes a trace; retention cap tested.
-- [ ] Artefact paths appear in the scan log line for that book.
+- [x] Forced failure in a browser test writes a trace; retention cap tested.
+- [x] Artefact paths appear in the scan log line for that book.
+
+**SR3-4 Outcome (2026-11-08).** New `scrapers/forensics.py`: a browser session
+starts Playwright tracing when its context is created, discards the trace on
+success, and on a failure writes `trace.zip` plus `screenshot.png` under
+`cache/forensics/<book>/<scan_id>-<timestamp>/`. A capture never writes
+`storage_state`, cookies or storage data, and it never raises — the real error
+is re-raised unchanged. `browser_session()` wires it in, so every browser book
+is covered without touching an adapter; a `CancelledError` (scan/adapter
+deadline) is not captured, because the scan already records `timeout` and a
+capture would race the cleanup. After each capture the directory is pruned by
+age (`FORENSICS_MAX_AGE_DAYS`, 7) and then by total size (`FORENSICS_MAX_MB`,
+200), never removing the newest file. `FORENSICS_ENABLED` (default true) turns
+the overhead off. The capture logs `[<book>] forensics: screenshot=…, trace=…`
+and `run_scan` appends `| forensics: …` to that book's failure note (scan cost
+and health), so the artefact paths sit on the per-book line as well.
+
+`page.expect_response` was checked and is not needed: no adapter waits on a
+single-response listener. Mozzartbet's `page.on("response")` is a supplementary
+capture of the list payload; its primary path is the paginated `page.request`
+walk, so an `expect_response` rewrite would change the flow without fixing a
+failure.
+
+Tests: `tests/test_forensics.py` (5) covers a capture writing both files and
+registering the paths, the disabled path writing nothing, age pruning, the size
+budget (oldest first, newest kept), and the log fragment. The opt-in
+`tests/test_forensics_browser.py` forces a real failure through
+`browser_session("mbet")` and asserts a non-empty `trace.zip` and
+`screenshot.png` exist under the book directory and that the warning line names
+the book and the trace path. Measured: the browser test passes with
+`BH_ARB_TEST_BROWSER=1`; `pytest`: 2199 passed, 8 skipped, 1 xfailed (17
+snapshots passed); ruff clean; mypy 257 source files clean; market doc in sync;
+refresh_fixtures and audit_admissibility `--check` passed.
 
 ---
 
@@ -661,8 +847,8 @@ refresh-fixtures and audit-admissibility checks pass.
 ### SR4-3b … SR4-3j Strict wire schemas, remaining books
 
 Status: SR4-3b … SR4-3f and SR4-3h … SR4-3j Done (2026-11-08); SR4-3g is
-Blocked on SR6-3. One row per remaining book, one book per session, picked in
-table order (Mozzartbet first).
+Blocked on a live EVLBet payload (SR6-3 capture was empty). One row per
+remaining book, one book per session, picked in table order (Mozzartbet first).
 
 Why: SR4-3 proved the pattern on MDShop (direct HTTP, NSoft envelope); every
 other adapter still trusts the raw payload and validates only the parsed result.
@@ -857,15 +1043,15 @@ Acceptance (SR4-3f):
 - [x] Unknown-key counts appear in `bh_wire_unknown_keys_total` for
       `book="sportplus"`.
 
-**SR4-3g Blocked on SR6-3 (2026-11-08).** EVLBet is disabled, its recorded
-flat-offer response is an empty list and it has no market capture
-(`tests/test_market_fixtures.py::BOOKS_WITHOUT_FIXTURES`). The strict-schema
+**SR4-3g Blocked on no live payload (2026-11-08).** EVLBet is disabled, its
+recorded flat-offer response is an empty list and it has no market capture
+(`tests/test_market_fixtures.py::BOOKS_WITHOUT_FIXTURES`). SR6-3's operator
+decision was "capture a fixture and keep the adapter"; the 2026-11-08 capture
+attempt answered HTTP 200 with `[]`, so no fixture exists. The strict-schema
 acceptance cannot be met: there is no odds row to model, no renamed price field
 to reject and no price to type. SR4-1 pinned the recorded empty response at the
-transport boundary only. SR6-3 (`Gate: operator`) owns the choice — capture a
-fixture and keep the adapter, or remove the adapter and its config. Work
-resumes here only after that written decision; no code was changed for this
-row.
+transport boundary only. Work resumes here when a capture carries markets; the
+row is no longer waiting on a decision.
 
 **SR4-3h Outcome (2026-11-08).** Premier Kladionica's PrSync is positional: the
 response is `[sections]`, each section a list of rows, and a column's meaning is
@@ -1161,7 +1347,7 @@ Acceptance:
 
 ### SR4-8 HAR fixtures for browser books
 
-Status: Not started
+Status: Blocked on SR4-8a
 
 Why: browser books are captured by hand and never replayed
 (`research/03_fixtures_and_pain_points.md` §A;
@@ -1178,12 +1364,66 @@ Acceptance:
 - [ ] One HAR replay test per browser book.
 - [ ] Scrubbing test: no `cookie`/`authorization` headers in any committed HAR.
 
-### SR4-9 Scheduled live canary — Gate: operator
+**SR4-8 Blocked on SR4-8a (2026-11-08).** Measured before writing fixtures:
+Playwright's `context.route` / `record_har_*` / `route_from_har` only see
+**page-initiated** requests. The browser adapters fetch their JSON through
+`page.request.get/post` (`measured_api_get`/`measured_api_post`), which is an
+`APIRequestContext` and bypasses both routing and HAR recording. The probe:
+a route on `**/probe` never fired for `page.request.get`, which went to DNS,
+while `page.evaluate("fetch(...)")` did fire it. A real capture confirmed it
+from the other side: a full admiralbet scrape recorded a HAR whose only entries
+were analytics/widgets (`log.cookieyes.com`, Sentry, a chat widget) — the NSoft
+event responses the adapter actually parsed were absent. So a HAR cannot serve
+a real `scrape()` and a captured HAR would be dead weight; the attempt was
+discarded (no HAR, capture tool or partial test committed). `SR4-8a` owns the
+transport decision; this row resumes after it. No code changed.
+
+### SR4-8a Choose the browser replay transport
 
 Status: Not started
 
+Gate: operator
+
+Why: the three browser adapters fetch JSON over `page.request`, which HAR
+record/replay cannot see. Two ways to make a browser scrape replayable, with
+different risk:
+
+- **A. In-page fetch transport.** Replace `measured_api_get/post` with
+  `page.evaluate(fetch(...))` (credentials included), keeping the same rate
+  limit, retry and byte accounting. Then `context.route` and `route_from_har`
+  cover every API call and SR4-8 works as written. It changes the live request
+  shape (`sec-fetch-*`, CORS, headers) and must be measured on a live scan
+  before it is trusted.
+- **B. Boundary-recorded HAR shim.** Keep `page.request`. A capture tool wraps
+  `measured_api_get/post` and records each request/response into a HAR-like
+  file (scrubbed), then records only the page document with Playwright's HAR.
+  The replay test serves the document with `route_from_har` and the API calls
+  from the same file through a test shim. No live transport change; the test
+  exercises the adapter and parser on recorded bodies but not the real
+  transport.
+
+Steps: record the choice here. For A: a measurement plan (requests/bytes/wall,
+Cloudflare pass, per-book kinds on one live scan) before merging. For B: the
+capture/replay format and the honest limit (API bodies recorded at the adapter
+boundary).
+
+Acceptance:
+- [ ] Choice recorded with the reason.
+- [ ] SR4-8 resumed with the agreed scope, or closed if the boundary shim is
+      judged not worth its maintenance.
+
+### SR4-9 Scheduled live canary — Gate: operator
+
+Status: Done
+
 Why: `research/06_parser_contract_testing_research.md` §6; offline fixtures
 cannot see a site change.
+
+**Decision (2026-11-08, operator): operator host, daily.** The canary runs from
+this machine (real network, not a CI datacentre IP) once a day, keeps its report
+under the runtime state directory, and never fails the main CI. The
+implementation lands under this row; nothing runs until it is built and the
+timer is installed.
 
 Steps: an opt-in scheduled job that runs each book once (rate-limited, no login,
 same transport policy), compares fingerprint and counts with the baseline, and
@@ -1192,8 +1432,207 @@ runs (CI from a datacentre IP may be blocked differently from the operator host)
 and how often.
 
 Acceptance:
-- [ ] Decision recorded (where, how often).
-- [ ] Report format documented; a failing canary does not fail the main CI.
+- [x] Decision recorded (where, how often).
+- [x] Report format documented; a failing canary does not fail the main CI.
+
+**SR4-9 Outcome (2026-11-08).** New `scripts/live_canary.py` probes every
+configured book once through its real adapter (so the shared transport policy,
+rate limit and deadline apply), sequentially, and writes one dated report to
+`cache/live_canary/YYYY-MM-DD.json`. It compares with the newest other report:
+an adapter error or missing scraper, a book with at least 10 matches that loses
+more than half, and a market family with at least 5 markets that loses more than
+half are reasons; a new family is listed as news, not an alarm. The default exit
+code is 0 even with alarms so a timer does not page on a feed gap; `--strict`
+returns 1. It never writes a fixture or contract and is not wired into CI.
+New `docs/LIVE_CANARY.md` documents the schema, the thresholds, the boundaries
+and the cron line for the operator host (daily, 06:17). New
+`tests/test_live_canary.py` (12 tests) covers the first run, a halved book and
+family, an erroring book, a missing scraper, a new family, the threshold table,
+that no fixture mtime changes, and `--strict`. No live probe was run in this
+session; the timer is installed by the operator, not by the repo.
+
+---
+
+### SR4-10 Mozzartbet offer rows may omit `value`
+
+Status: Done
+
+Why: the 2026-11-08 live probe (SR3-1) logged
+`mozzartbet offer schema drift at match.odds.<n>.value: Field required` for many
+matches, so the whole book dropped with zero legs. `MozzartOdd` requires all
+three fields on purpose and documents that `value` may be `null`; the live feed
+now leaves the key out entirely for some picks (suspended rows), while the
+`oddValue` price is still there. The 00:48 scan that day was healthy (614
+matches), and the same failure reproduces on Playwright 1.61.0, so it is a feed
+change, not the browser upgrade.
+
+Steps: capture one live `POST /betting/match/{id}` response that reproduces the
+omission and compare it with the dated fixture. Then either model a missing
+`value` explicitly as null (and count it) while keeping `value` present-but-null
+required as before, or treat it as a real feed change and refresh the contract.
+Do not drop the strictness before checking what a renamed price field would do.
+
+Acceptance:
+- [x] A dated capture reproduces the omission.
+- [x] The parser emits no leg without a price.
+- [x] A renamed price field still fails as schema drift; tests cover both.
+
+**SR4-10 Outcome (2026-11-08).** A live offer captured that day carries 518
+rows: 413 with a numeric `value`, 105 with no `value` key at all, 0 with
+`value: null`. The unpriced rows have the same key set minus `value` and the
+same `specialOddValue: "-1"` as priced rows; there is no second price field.
+They are suspended picks, and they occur in supported families too, not only in
+the excluded combinations. Captured in
+`docs/evidence/2026-11-08-mozzartbet-missing-value.md`. `MozzartOdd.value` is
+now optional (`float | None = None`) while `game`/`subgame` stay required and a
+string or boolean price is still `schema_drift`; `validate_mozzart_page()` adds
+one page-level guard — a list page that carries odds rows and no numeric
+`value` anywhere is `schema_drift`, which is what a renamed price field looks
+like, while a single suspended row or a fully suspended offer is accepted. The
+parser already skipped a missing price (`value` falsy → 0.0 → below the 1.01
+floor), so no leg is emitted without one and a short market still fails
+`min_legs`. Tests: a row without `value` validates as unpriced; a mixed page
+passes; a page with no priced row is drift; a renamed `value` on the list page
+is drift; an offer with the 1X2 rows unpriced yields no 1X2 leg but still
+parses the other families; a string price still drops the book. Measured
+before → after, same probe: **0 matches → 603 matches / 4,698 markets**, 28.8 s
+(1x2 603, double_chance 597, btts 590, over_under_1_5 579, over_under_2_5 603,
+over_under_3_5 591, over_under_4_5 553, first_half_1x2 582).
+
+### SR4-11 WWin non-JSON body classified as schema drift
+
+Status: Done
+
+Why: the 2026-11-08 live probe (SR3-1) got
+`wwin prematch response is not JSON: Expecting value: line 1 column 1 (char 0)`
+and the book dropped with zero legs, minutes after its events page had parsed
+(the structural-drift log shows `prematch-events`). The adapter classified any
+JSON decode failure as `SCHEMA_DRIFT`.
+
+**Corrected by the capture (2026-11-08).** The body was not HTML. Replaying the
+exact batch (15 day windows × 3 bet groups, sequential) shows **days 8 and 9
+answer HTTP 200 with a 0-byte body** for every bet group, while the other days
+answer JSON (2 KB–1.0 MB, 699 events on day 0). A 0-byte body is the feed saying
+"no rows for this window", not drift; the blanket classification dropped the
+whole book over it. An HTML body remains possible in principle (challenge) and
+is `blocked`.
+
+Steps: decode the body once in `_json_body(resp, label)`: empty/whitespace →
+`None` ("no rows"); HTML (content-type `text/html` or a `<` prefix) →
+`ScrapeError(BLOCKED)`; any other non-JSON → `ScrapeError(SCHEMA_DRIFT)`. The
+prematch slice returns an empty event list, live stops with no matches, and a
+live `headerBets` slice is skipped. All three response sites use the helper.
+
+Acceptance:
+- [x] An HTML/challenge body is `blocked`; a malformed JSON body stays
+      `schema_drift`.
+- [x] A 0-byte or whitespace body is "no rows for that slice" and does not drop
+      the book.
+- [x] No book is filled with stale or guessed prices.
+
+**SR4-11 Outcome (2026-11-08).** `scrapers/wwin.py` gained `_json_body`, used by
+the prematch day loop, the live events page and the live `headerBets` page.
+Measured replay: 45 requests, days 0–7 and 10–14 return JSON, days 8–9 return
+HTTP 200 / 0 bytes for all three groups — an out-of-horizon window, not a
+challenge. Empty ⇒ no rows for that slice; HTML ⇒ `blocked`; other non-JSON ⇒
+`schema_drift`. New tests in `tests/test_wire_schemas_wwin.py`: an empty body and
+a whitespace body are no rows (prematch and live), an HTML page is `blocked`,
+and a malformed body is drift. Measured before → after, same probe: **0 matches
+→ 1,014 matches / 5,445 markets**, 12.5 s (1x2 1,014; double_chance 996; btts
+879; over_under_2_5 817; over_under_3_5 575; over_under_1_5 336; over_under_4_5
+198; over_under_5_5 11; over_under_0_5 9; first_half_1x2 610).
+
+### SR4-12 Fingerprint over heterogeneous list pages
+
+Status: Done
+
+Why: during the SR3-1 live probe, mozzartbet's list page alerted six times and
+wwin's three times for per-item optional keys (`items[].matchComment`,
+`events[].aPrevSc`) that only some rows carry. The fingerprint is the union of
+every item's paths, so one optional key on one match changes the digest, and
+SR4-4 deliberately keeps the old baseline on drift, which means every later run
+re-alerts. The alarm is correct about the *shape* but too sensitive to a normal
+heterogeneous list.
+
+Steps: fingerprint a page by the paths common to all items (plus an explicit
+per-item-shape rule), or compare per-item shape multisets and alert only when a
+key disappears from items that used to carry it. Keep it alert-only and keep the
+last good baseline on drift.
+
+Acceptance:
+- [x] A key on only some items does not alert.
+- [x] A removed or renamed price key still alerts.
+- [x] The existing SR4-4 tests still pass.
+
+**SR4-12 Outcome (2026-11-08).** The signature now keeps only the paths
+**common to every item of a list**; per-item-only paths are recorded as
+`optional` in the baseline and never make a digest differ. Types are unioned
+across the items that carry a common path, and `null` is ignored when a real
+type is also present, so a nullable field does not flip the digest on a page
+with no null row. Drift means a common path disappeared, an unknown path
+appeared, or a common path's type set changed. A previously optional path that
+becomes common is adopted silently (so its later removal still alerts), and a
+required path demoted to optional is a removal. `FINGERPRINT_VERSION = 2` makes
+`observe` re-record an older baseline once without an alert, so the upgrade is
+not a page-wide false alarm. `structural_paths()` returns the required
+`path:type` set and new `optional_paths()` exposes the rest. New tests (7, in
+`tests/test_structural_drift.py`): optional key move, required price removal,
+price rename, type change, nullable field, optional-to-common promotion followed
+by removal, and the v1 upgrade path; the 12 SR4-4 tests still pass. `docs/CI.md`
+documents the heterogeneous-list rule. Measured: `pytest` 2223 passed, 8
+skipped, 1 xfailed (17 snapshots); ruff clean; mypy 260 source files clean;
+market doc in sync; refresh_fixtures and audit_admissibility `--check` passed.
+
+---
+
+### SR4-13 Premier delta rows shorter than the strict schema
+
+Status: Done
+
+Deps: SR4-3h.
+
+Why: the 2026-11-08 SR5-2 baseline found `premier_kladionica` dropping out of
+both scans with `schema_drift`: a delta sync odds row arrived as
+`[0, '', 1794138522410, 4, 1308500813]` (5 columns) where
+`validate_premier_sync`'s strict adapter expects at least 9. The earlier
+prematch probes passed, so the row variant is new or intermittent in the delta
+section — most likely a delete/tombstone row, but that is a guess until the
+payload is captured. Until then Premier contributes nothing to either feed.
+
+Steps: capture the live full and delta sync payloads (dated evidence under
+`docs/evidence/`), identify the short-row variant and its meaning, model it in
+`validate_premier_sync` without loosening the strict check for real odds rows,
+and add a fixture-backed parser test plus a replay of the captured shape.
+Never accept an arbitrary short row merely to stop the drift.
+
+Acceptance:
+- [x] The captured delta shape validates and still produces no fabricated odds.
+- [x] A malformed real odds row (missing price/selection columns) still drifts.
+- [x] A probe of `premier_kladionica` in both modes returns matches
+      instead of `schema_drift`, with the measured counts recorded.
+
+**SR4-13 Outcome (2026-11-08).** Root cause: the delta response is five
+positional tables, not one — execRes (5 columns), dogVar (14), dogTipK odds (9),
+dogLiveScore (43) and a scalar section — and `validate_premier_sync` was
+validating every non-empty section as odds, so the 5-column execRes row
+`[0, "", 1794138522410, 4, 1308500813]` drifted the whole book. Empty sections
+are omitted, so the index cannot identify the table; a section is now an odds
+table only when at least one row has the dogTipK shape (ints at 0/2/3/4, numeric
+price at 5, numeric result at 7), and every row of a recognised section still
+goes through the same strict adapter, so a truncated row or string price still
+drifts. The other tables stay unmodelled, as they were on a full sync; if every
+row of an odds section lost the shape, the parser reads none (fail closed) and
+SR4-4's page fingerprint still alarms. The live delta was captured in
+`tests/fixtures/wire/premier_kladionica_delta.json` (trimmed, verbatim) and
+documented in `docs/evidence/2026-11-08-premier-delta-sections.md`. Five new
+tests in `tests/test_wire_schemas_premier.py`: the real envelope validates, the
+exact execRes row is not odds, a truncated row in a recognised section drifts, a
+mistyped price drifts, and an auxiliary section alone is left unmodelled. Live
+probes: prematch **700 matches / 5,761 market rows** in 7.4 s, live **151
+matches / 868 market rows** in 5.2 s, both with `error: ""`. Measured: `pytest`
+2228 passed, 8 skipped, 1 xfailed (17 snapshots); ruff clean; mypy 260 source
+files clean; market doc in sync; refresh_fixtures and audit_admissibility
+`--check` passed.
 
 ---
 
@@ -1201,7 +1640,7 @@ Acceptance:
 
 ### SR5-1 Per-book reliability metrics
 
-Status: Not started
+Status: Done
 
 Why: `research/01_shared_infra.md` §8 — in-house registry exists; keep it
 (`research/04_http_reliability_research.md` recommendation 4).
@@ -1211,12 +1650,41 @@ histogram, breaker state gauge, last success timestamp, schema drift counter,
 unknown-key counter, browser recycle counter.
 
 Acceptance:
-- [ ] All metrics in `/api/metrics` with a test scraping the text output.
-- [ ] Metric names documented in `docs/`.
+- [x] All metrics in `/api/metrics` with a test scraping the text output.
+- [x] Metric names documented in `docs/`.
+
+**SR5-1 Outcome (2026-11-08).** The registry gained a cumulative histogram type
+(`MetricsRegistry.observe`, `HISTOGRAM_BUCKETS` 0.05 … 120 s, rendered as
+`_bucket{le=…}`/`_sum`/`_count`) and every metric in the list now exists:
+
+- attempts/retries/latency/status — `retry_call` records
+  `bh_scraper_attempts_total{book}`, `bh_scraper_retries_total{book}`,
+  `bh_scraper_attempt_seconds{book}` (histogram) and
+  `bh_http_status_total{book,status}` for every attempt, including the failed
+  ones; the rate-limit slot and existing accounting are unchanged.
+- last success — `bh_book_last_success_timestamp_seconds{mode,book}` is set on
+  an `ok` result in `run_scan` and published as 0 for every book/mode at startup.
+- schema drift — `bh_schema_drift_total{book}` increments in
+  `wire_schemas._drift()`.
+- browser recycles — `bh_browser_recycles_total{reason}` in the SR3-3 pool, with
+  `pages`, `age` or `crash`.
+- already present and kept: `bh_book_kinds_total` (outcome kind),
+  `bh_book_breaker_state`/`_failures`/`_cooldown_seconds`, and
+  `bh_wire_unknown_keys_total`.
+
+New `docs/METRICS.md` documents every family with its type, labels and meaning,
+the histogram semantics and the startup-zero rule; the README monitoring
+section links it. New `tests/test_reliability_metrics.py` (6 tests) renders the
+histogram buckets, exercises the retry path and asserts the counters, the schema
+drift counter and a pool recycle, and scrapes `/api/metrics` text for every new
+family; `tests/test_metrics.py` also asserts the last-success gauge after a real
+scan. Measured: `pytest` 2204 passed, 8 skipped, 1 xfailed (17 snapshots passed);
+ruff clean; mypy 258 source files clean; market doc in sync; refresh_fixtures and
+audit_admissibility `--check` passed. Total 2237 passed. No bookmaker traffic.
 
 ### SR5-2 Per-book health state and live cost baseline
 
-Status: Not started
+Status: Done
 
 Why: `/api/health` is rich but has no per-book state machine; the first live cost
 baseline is unmeasured (`research/03_fixtures_and_pain_points.md` §B).
@@ -1226,8 +1694,36 @@ Steps: per-book state (`healthy`, `degraded`, `open`, `blocked`, `drifted`,
 baseline (requests, bytes, seconds, browser seconds per scan).
 
 Acceptance:
-- [ ] Health test per state.
-- [ ] Baseline numbers recorded in `docs/SESSION_BRIEF.md` or a doc it links.
+- [x] Health test per state.
+- [x] Baseline numbers recorded in `docs/SESSION_BRIEF.md` or a doc it links.
+
+**SR5-2 Outcome (2026-11-08).** New `server/book_health.py` is the one place
+that reduces the existing evidence to a per-book state: `healthy`, `degraded`,
+`open`, `blocked`, `drifted` or `disabled`, each with a one-line reason. Inputs
+are the SR2-1 kind from the last N1-3 scan-cost record (with the legacy
+`outcome` fallback), the SR2-6 breaker snapshot and the runtime enable map;
+priority is disabled → blocked → drifted → open → degraded → healthy, so a
+blocked site is not hidden by the breaker it tripped, and an open breaker still
+shows when the cause was timeouts/transport. A book with no record is
+`degraded` ("no scan recorded yet"). `GET /api/health` now serves
+`book_health.{prematch,live}` for every configured book; it is diagnostic only
+(pricing keeps reading feed integrity and the certainty gate). New
+`tests/test_book_health.py` (12 tests): one per state plus the priorities, the
+outcome fallback, the builder and the endpoint for all states on the prematch
+feed and the unproven live feed.
+
+The live cost baseline is measured and recorded in
+`docs/evidence/2026-11-08-scan-cost-baseline.md` (linked from
+`docs/SCAN_COST.md`, `docs/SESSION_BRIEF.md`), one scan per feed: prematch
+144.8 s elapsed, 682 requests, 392.77 MiB, 201.06 book-seconds, 1.32
+browser-seconds, 6,610 matches / 45,192 market rows (0.030 s, 62 KB per match);
+live 33.7 s, 70 requests, 74.74 MiB, 66.52 book-seconds, 1.45 browser-seconds,
+653 matches / 3,548 market rows (0.102 s, 120 KB per match), with explicit
+`n/a` reasons. The scans also exposed a separate feed defect —
+`premier_kladionica` delta sync drifting on 5-column rows in both modes —
+recorded as **SR4-13** and not fixed here. Measured: `pytest` 2216 passed,
+8 skipped, 1 xfailed (17 snapshots); ruff clean; mypy 260 source files clean;
+market doc in sync; refresh_fixtures and audit_admissibility `--check` passed.
 
 ---
 
@@ -1235,7 +1731,7 @@ Acceptance:
 
 ### SR6-1 Single adapter declaration
 
-Status: Not started
+Status: Done
 
 Why: `SCRAPERS` (`server/api.py:1020`), `PLAYWRIGHT_BOOKIES`
 (`server/api.py:253`) and the market registry are synchronised by hand
@@ -1247,8 +1743,30 @@ fails when a module under `scrapers/` has no declaration or a declaration has no
 module.
 
 Acceptance:
-- [ ] The three lists are derived, not hand-written.
-- [ ] Consistency test.
+- [x] The three lists are derived, not hand-written.
+- [x] Consistency test.
+
+**SR6-1 Outcome (2026-11-08).** New `config/bookmakers.py` holds one
+`AdapterDeclaration` per book: name, adapter module and class (strings), the
+transport (`http`/`browser`), the default enabled flag, the UI URLs/colour and
+the per-feed HTTP timeouts. Four hand-kept lists now derive from it:
+`settings.BOOKMAKERS` (same dict shape as before), the new lazy
+`scrapers.registry.SCRAPERS`, `PLAYWRIGHT_BOOKIES` (the three browser books) and
+`scrapers.transport`'s policy table (20 books×modes, same timeout values).
+`SCRAPERS` is a `MutableMapping` that imports an adapter on first read and still
+supports `monkeypatch.setitem` for the tests; `server/api.py` no longer imports
+any adapter module, so `import server.api` loads **0** book modules (measured).
+`scrapers.__all__` is derived from the same declaration too (adding the two
+classes the old hand list had missed). The market registry stays curated JSON,
+but its book set is checked against the declaration. New
+`tests/test_adapter_declarations.py` (9 tests): AST scan fails
+when a `scrapers/*.py` module defines `async def scrape` without a declaration,
+and when a declaration has no module/class; the three lists, timeout policies
+and market-registry books must match; an unknown key raises `KeyError`; a read
+caches the class; and a subprocess proves the lazy import. Measured: `pytest`
+2237 passed, 8 skipped, 1 xfailed (17 snapshots); ruff clean; mypy 263 source
+files clean; market doc in sync; refresh_fixtures and audit_admissibility
+`--check` passed. No bookmaker traffic.
 
 ### SR6-2 Adapter `Protocol` and mypy enforcement
 
@@ -1263,15 +1781,34 @@ Acceptance:
 
 ### SR6-3 Decide EVLBet's future — Gate: operator
 
-Status: Not started
+Status: Done
 
 Why: EVLBet is disabled, returns an empty feed and has no fixture
 (`research/02_adapters.md`, `research/03_fixtures_and_pain_points.md`).
 
+**Decision (2026-11-08, operator): capture a fixture and keep the adapter.**
+The adapter, its deeplink and its registry row stay. The next step is a dated
+capture attempt against the live endpoint (`scripts/capture_market_fixtures.py
+--books evlbet`); if the feed still carries no 1/X/2 offer, the capture is
+recorded as an empty-feed proof and the adapter stays disabled, which unblocks
+`SR4-3g` only if markets exist. No fixture is invented and the book is not
+enabled until a capture carries markets.
+
 Options: capture a fixture and keep it, or remove the adapter and its config.
 
+**SR6-3 Outcome (2026-11-08).** The capture was carried out and returned a
+**dated empty-feed proof**, not a fixture: the flat offer endpoint answered
+HTTP 200 with a 2-byte body `[]` for `SportIds=388` and `SportIds=1`, with and
+without `Limit`/`Offset`
+(`https://sportapis.evlbet.com/SportsOfferApi/api/sport/offer/v3/matches/flat`).
+The adapter, deeplink and registry row stay as decided, still disabled; no
+fixture is invented and the book is not enabled. Because no payload exists,
+`SR4-3g` (strict wire schema) cannot be built from a capture and stays blocked
+on a real EVLBet offer; it unblocks when a capture carries markets.
+
 Acceptance:
-- [ ] Decision recorded and carried out.
+- [x] Decision recorded and carried out (capture attempted, negative result
+      recorded; the adapter is kept and stays disabled).
 
 ---
 
@@ -2041,3 +2578,20 @@ Useful starting points:
 | 2026-11-08 | SR4-6 | Done | Added the dev-only pin `syrupy==5.0.0`. New `tests/test_parser_snapshots.py` runs every fixture that declares `expected_markets` (17 captures) through the real parser entry point that `tests/test_market_fixtures.py::_run_parser` dispatches to, and snapshots the normalised output only: `market_type`, `settlement`, `period` and each `label`/`value` price row. Source ids, source context, outcome ids and update timestamps are deliberately left out so book identity data and the scan clock cannot churn the snapshot; raw payloads are not snapshotted (SR4-2/SR4-3 pin the raw shape and `contracts.json` pins ids/labels). Snapshots live in `tests/__snapshots__/test_parser_snapshots.ambr` and run in the normal `pytest` run (17 snapshots + one coverage guard). `pytest --snapshot-update` stays a human action: `docs/CI.md` records that a commit updating a snapshot must say why the normalised output changed and that CI never updates one. The guard asserts the snapshot case set equals the fixtures declaring `expected_markets` so a new capture cannot silently skip the layer. `pytest`: 2129 passed, 6 skipped, 1 xfailed (17 snapshots passed); `check_test_isolation.py`: both ledger modes 2129 passed, 6 skipped, 1 xfailed; `pytest --cov`: 90.40% (13,140 statements, floor 80%); ruff clean; mypy 248 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. |
 | 2026-11-08 | SR4-7 | Done | New `tests/test_properties_parsers.py` runs all 17 fixtures that declare `expected_markets` (nine parser dispatch paths; EVLBet has no capture (SR6-3)) under Hypothesis with 40 examples each. Each example keeps the payload container and applies 1-3 bounded mutations inside it: drop a key, null a value, swap a scalar type, shuffle/duplicate/drop/truncate an array, add an unknown key. A mutation the book's wire schema (SR4-3) rejects is skipped, because production never passes that shape to a parser. Accepted mutations must return a list without an unhandled exception, every emitted price must be finite and positive, no label may repeat for one `(market_type, settlement, period)`, and no emitted identity may fall outside the clean capture's sport/settlement set. The clean capture is checked against the same invariants, plus two filter tests, so the property is not vacuous. Runtime ~2 s. The run found one production-reachable defect: `parse_nsoft_bets` appends one OddsValue per raw `betOutcomes` row without deduplicating by normalized label, so a duplicated outcome (accepted by the schema) gives two legs for one book. Recorded as `SR4-7a` and pinned with a strict xfail in the same file; not fixed in this row. The schema-guarded gaps it also exposed (short Premier rows, a non-object MaxBet `specifiers`) cannot reach a parser in production and need no code change. `pytest`: 2165 passed, 6 skipped, 2 xfailed (17 snapshots passed); `check_test_isolation.py`: both ledger modes pass; `pytest --cov`: 90.53% (13,140 statements, floor 80%); ruff clean; mypy 249 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. |
 | 2026-11-08 | SR4-7a | Done | `scrapers/common.py::parse_nsoft_bets` now tracks the normalized labels it has already emitted and keeps the first offered price per label; a later duplicate raw `betOutcomes` row (and its outcome id) is ignored. The existing `actual`/`min_legs`/`issubset` acceptance logic is unchanged, so a market still needs its full label set. In `tests/test_properties_parsers.py` the strict xfail was removed, the regression test now duplicates the first outcome of the real MDShop prematch capture with a different price and asserts one label with the first price, and the mutation property enforces label uniqueness again for every parser. A duplicated outcome can no longer become two legs for one book. `pytest`: 2166 passed, 6 skipped, 1 xfailed (17 snapshots passed); `check_test_isolation.py`: both ledger modes 2166 passed, 6 skipped, 1 xfailed; `pytest --cov`: 90.53% (13,142 statements, floor 80%); ruff clean; mypy 249 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. |
+| 2026-11-08 | SR1-4 | Done | The routine per-task loop now runs the full suite **once** (clean runtime state) instead of four times; targeted test files are run while coding. `AGENTS.md` gained a "Test cadence" section and its step 6 lost `scripts/check_test_isolation.py`; the `ROADMAP.md` "How to use" block, `Definition of done` and `Measurement discipline` say the same, and `docs/CI.md` records that CI's 3.11 leg owns the populated-ledger mode and the coverage floor. The one local exception is a change to the ledger, `config/generated/` or the isolation guard, which also runs `BH_ARB_TEST_RUNTIME_LEDGER=populated python -m pytest`. No test, marker or trust invariant was removed. Measured before → after on this machine: plain suite 91.8 s, `--cov` 243 s, isolation 180 s (≈8.5 min) → one suite run plus ruff/mypy/checks ≈100 s; 145 test files, 1,461 plain test functions and 712 parametrized cases. `pytest`: 2166 passed, 6 skipped, 1 xfailed (17 snapshots passed); targeted `tests/test_readme_claims.py tests/test_ci_hardening.py tests/test_runtime_isolation.py`: 52 passed, 1 skipped; ruff clean; mypy 249 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. |
+| 2026-11-08 | SR0-1 | Done | Operator decision: **B — keep the browser masking as a written, scoped exception**. `AGENTS.md` "Scraper rules" now forbids stealth/TLS impersonation/proxy rotation/captcha solving "except the scoped browser exception below" and adds the exception: `launch_browser()` keeps `--disable-blink-features=AutomationControlled` and the `navigator.*`/`window.chrome` init script because the browser books need it for Cloudflare/Turnstile; it stays limited to those markers inside `launch_browser()`, no TLS impersonation, proxy rotation, captcha solving, extra stealth or account-limit evasion, and a challenged book still reports `blocked` and drops out. The exception is quoted in the SR0-1 row. No code changed. `pytest`: 2166 passed, 6 skipped, 1 xfailed; ruff clean; mypy 249 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. |
+| 2026-11-08 | SR0-2 | Done | Operator decision: **keep the current default — `VERIFY_SSL` stays `false`**. No code change; no per-book override. The decision is pinned by `tests/test_transport.py::test_the_policy_has_explicit_limits_and_a_rate`, which now asserts `policy.verify is VERIFY_SSL` (it previously only checked `isinstance(..., bool)`), so a silent flip of the default fails the suite. Recorded consequence in the row: prices read over an unverified connection can be tampered with in transit. `pytest`: 2166 passed, 6 skipped, 1 xfailed; ruff clean; mypy 249 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. |
+| 2026-11-08 | SR6-3 | Done | Operator decision: **capture a fixture and keep the adapter**. The capture was carried out: `scripts/capture_market_fixtures.py --books evlbet` reported `SKIPPED evlbet/prematch: the flat offer feed answered 200 with an empty list`; direct probes of `matches/flat` with `SportIds=388` (with and without `Limit`/`Offset`) and `SportIds=1` all returned **HTTP 200, 2 bytes, `[]`**. No fixture exists, so none was written and the book stays disabled; the adapter, deeplink and registry row are kept as decided. `SR4-3g` is now **Blocked on a live EVLBet payload** rather than on this decision. No code changed. `pytest`: 2166 passed, 6 skipped, 1 xfailed; ruff clean; mypy 249 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. Three capture/probe requests were sent to EVLBet. |
+| 2026-11-08 | SR4-9 | Done | Operator decision: **operator host, daily**; the canary is not part of CI. New `scripts/live_canary.py` probes every configured book once, sequentially, through its real adapter (shared transport policy, rate limit, deadline; no login) and writes one dated report to `cache/live_canary/YYYY-MM-DD.json`. It compares with the newest other report: adapter error / missing scraper, a book with at least 10 matches losing more than half, and a market family with at least 5 markets losing more than half are reasons; a new family is `new_market_types`, not an alarm. Exit is 0 with alarms so a timer does not page; `--strict` returns 1. It never writes a fixture or contract. New `docs/LIVE_CANARY.md` documents the schema, thresholds, boundaries and the 06:17 cron line; the operator installs the timer, the repo does not. New `tests/test_live_canary.py` (12 tests): first run, halved book and family, erroring book, missing scraper, new family, the threshold table, fixture mtimes unchanged, and `--strict`. No live probe in this session. `pytest`: 2178 passed, 6 skipped, 1 xfailed (17 snapshots passed); ruff clean; mypy 251 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. |
+| 2026-11-08 | SR3-1 | Done | PyPI latest confirmed 1.64.1; `requirements.txt` pin moved 1.61.0 → 1.64.1 and the matching Chromium bundle was installed (`playwright install chromium`, Chrome Headless Shell 156.0.8078.4, v1248). The procedure is unchanged (README and Dockerfile already call it); README gained a line that a pin change needs the matching `playwright install chromium` because a stale bundle fails with "Executable doesn't exist". `BH_ARB_TEST_BROWSER=1 pytest tests/test_accessibility_axe.py`: 10 passed. Live, one run per browser book (`scripts/probe_feeds.py --books admiralbet,mozzartbet,wwin --timeout 300`): **admiralbet ok** (780 matches, 9 families, 1x2/btts/double_chance/over_under_0_5…5_5, 27.8 s); **mozzartbet** `ScrapeError: offer schema drift at match.odds.14.value: Field required` (0 matches, 25.1 s); **wwin** `ScrapeError: prematch response is not JSON` (0 matches, 8.1 s). Attribution control: downgraded the venv to 1.61.0 with its own Chromium and re-ran both failing books — identical failures (mozzartbet 24.8 s, wwin 7.7 s), so the upgrade is not the cause; the 00:48 scan that day had both healthy (wwin 877 matches, mozzartbet 614). Findings opened as **SR4-10** (Mozzartbet omits `value`, model requires the key) and **SR4-11** (WWin non-JSON classified `schema_drift`, a challenge should be `blocked`); the repeated list-page fingerprint alerts are **SR4-12**. Then reinstalled 1.64.1 and re-ran the browser tests green. `pytest`: 2178 passed, 6 skipped, 1 xfailed (17 snapshots passed); ruff clean; mypy 251 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. Traffic: three book probes plus the 1.61 control pair (five book runs total), no scan. |
+| 2026-11-08 | SR4-10 | Done | Live capture: one offer has 518 odds rows — 413 with a numeric `value`, **105 with no `value` key at all**, 0 null — and the unpriced rows are otherwise identical (same keys minus `value`, same `specialOddValue: "-1"`, no second price field), i.e. suspended picks; they appear in supported families too. Evidence: `docs/evidence/2026-11-08-mozzartbet-missing-value.md`. `MozzartOdd.value` is now `float | None = None`; `game`/`subgame` stay required and a string/bool price is still `schema_drift`. `validate_mozzart_page()` gained one page-level guard: a page that carries odds rows and no numeric `value` anywhere is drift (a renamed price field); one suspended row or a fully suspended offer is accepted. The parser already skipped a missing price, so no leg is emitted without one. New/updated tests in `tests/test_wire_schemas_mozzartbet.py`: unpriced row accepted, mixed page accepted, page with no priced row is drift, renamed `value` on the list page is drift, an offer with the 1X2 rows unpriced yields no 1X2 leg but parses the other families, string price still drops the book. **Measured before → after (same probe): 0 matches / 0 markets → 603 matches / 4,698 markets, 28.8 s** (1x2 603, double_chance 597, btts 590, ou1.5 579, ou2.5 603, ou3.5 591, ou4.5 553, first_half_1x2 582). `pytest`: 2180 passed, 6 skipped, 1 xfailed (17 snapshots passed); ruff clean; mypy 251 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. Traffic: one list page + three offers for the capture, one full book probe after the fix. |
+| 2026-11-08 | SR4-11 | Done | The capture corrected the hypothesis: replaying the exact prematch batch (15 day windows × 3 bet groups, 45 requests, sequential) shows **days 8-9 answer HTTP 200 with a 0-byte body** for every group, while days 0-7 and 10-14 answer JSON (2 KB-1.0 MB; 699 events on day 0). A 0-byte body is "no rows for this out-of-horizon window", not drift, and the blanket `schema_drift` dropped the whole book over it; an HTML challenge page remains possible and is `blocked`. New `scrapers/wwin.py::_json_body(resp, label)` decodes the body once: empty/whitespace → `None` (prematch slice returns no events, live stops with no matches, `headerBets` is skipped), `text/html` or a `<` prefix → `ScrapeError(BLOCKED)`, anything else non-JSON → `ScrapeError(SCHEMA_DRIFT)`; all three response sites use it. Tests: empty body and whitespace body are no rows (prematch and live), HTML page is `blocked`, malformed body is drift. **Measured before → after (same probe): 0 matches / 0 markets → 1,014 matches / 5,445 markets, 12.5 s** (1x2 1,014; double_chance 996; btts 879; over_under_2_5 817; over_under_3_5 575; over_under_1_5 336; over_under_4_5 198; over_under_5_5 11; over_under_0_5 9; first_half_1x2 610). `pytest`: 2186 passed, 6 skipped, 1 xfailed (17 snapshots passed); ruff clean; mypy 251 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. Traffic: one single-request probe, one 45-request replay, one 45-request sequential replay, one full book probe. |
+| 2026-11-08 | SR3-2 | Done | Verified the cited tracker: playwright-python#3121 was **closed as completed on 2026-07-02**; the retained completed `asyncio.Task` objects came from a **CPython 3.14** asyncio bug fixed by python/cpython#152585, not from the pinned Playwright client. This project runs Python 3.11 and 3.12 (CI matrix; Docker base `python:3.11-slim`), where the leak never applied, so `context.route("**/*")` stays and no CDP `Network.setBlockedURLs` workaround is needed. New opt-in `tests/test_browser_route_leak.py` pins the invariant through the real `launch_browser()` route: six image-heavy pages (40 blocked requests each) in one context, completed-task count compared with the baseline. **Measured: baseline 1, after 1, growth 0** (threshold 50; a leak would add hundreds). The test is skipped without `BH_ARB_TEST_BROWSER=1` and `docs/CI.md` now lists it with the accessibility checks. `pytest`: 2186 passed, 7 skipped, 1 xfailed (17 snapshots passed); `BH_ARB_TEST_BROWSER=1 pytest tests/test_browser_route_leak.py`: 1 passed; ruff clean; mypy 252 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. Total 2237 passed. No bookmaker traffic. |
+| 2026-11-08 | SR3-3 | Done | New `scrapers/browser_pool.py` (`BrowserPool`, `browser_pool()`, `current_browser_pool()`): one Chromium per scan, launched lazily through the existing `launch_browser()`, a fresh context per book from the new `base.new_context()`, recycling after `BROWSER_MAX_PAGES=200` contexts or `BROWSER_MAX_AGE_SECONDS=600`. A disconnected browser is replaced at the next acquisition; a hung one at the age cap. `run_scan` wraps the scrape gather in `browser_pool()` and `scripts/probe_feeds.py` does the same. All three adapters (admiralbet, mozzartbet, and both wwin paths) take a context from `base.browser_session()`, so a standalone `scrape()` still gets a private one-shot pool and the capture scripts are unchanged. The deep-link verifier still calls `launch_browser()` directly (isolated context). `BROWSER_CONCURRENCY` still bounds concurrent browser books. **Measured with the same three-book probe before → after: launches 3 → 1, wall 74.2 s → 66.8 s, peak Chromium-tree RSS 838.2 MB → 945.3 MB** (a second sampled after-run measured 114.6 s / 945.3 MB while the books themselves were slower; the structural win is one launch and one browser, not memory). New `tests/test_browser_pool.py` (8 tests, fake launcher): one launch for many contexts, fresh context with init script/route, recycle on page budget, recycle on age budget, disconnected browser replaced, browser+Playwright closed, scan pool visible, `PlaywrightError` → `transport`, close failure tolerated. Fake-browser suites now patch `scrapers.base.launch_browser`. `pytest`: 2194 passed, 7 skipped, 1 xfailed (17 snapshots passed); ruff clean; mypy 254 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. Traffic: three 3-book probes (before + two after runs), no full scan. |
+| 2026-11-08 | SR3-4 | Done | New `scrapers/forensics.py` and a `browser_session()` hook: tracing starts with the context, is discarded on success, and on failure writes `trace.zip` + `screenshot.png` under `cache/forensics/<book>/<scan_id>-<timestamp>/`; no `storage_state`/cookies are ever written and a capture never replaces the real error. `CancelledError` is skipped (the scan already records `timeout`). Retention: age (`FORENSICS_MAX_AGE_DAYS=7`) then total size (`FORENSICS_MAX_MB=200`), newest file kept; `FORENSICS_ENABLED` (default true) disables the overhead. The capture logs `[<book>] forensics: screenshot=…, trace=…` and `run_scan` appends `| forensics: …` to the book's failure note. `page.expect_response` was checked and is not needed: the only response listener (mozzartbet) is supplementary to the paginated `page.request` walk, so no flow change. Tests: `tests/test_forensics.py` (5: capture, disabled, age prune, size prune keeping the newest, log fragment); opt-in `tests/test_forensics_browser.py` forces a real failure through `browser_session("mbet")` and asserts a non-empty trace and screenshot under the book and the warning line naming the trace. **Measured:** `BH_ARB_TEST_BROWSER=1 pytest tests/test_forensics_browser.py`: 1 passed; `pytest`: 2199 passed, 8 skipped, 1 xfailed (17 snapshots passed); ruff clean; mypy 257 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. Total 2237 passed. No bookmaker traffic. |
+| 2026-11-08 | SR4-8 | Blocked | Measured that Playwright HAR cannot replay these adapters: `context.route` / `record_har_*` / `route_from_har` only see page-initiated requests, while all three browser adapters fetch JSON through `page.request` (`APIRequestContext`), which bypasses routing and HAR recording. Probe: a route on `**/probe` never fired for `page.request.get` (the request went to DNS) but `page.evaluate("fetch(...)")` did fire it. A real admiralbet capture confirmed it: the HAR contained only analytics/widgets (cookieyes, Sentry, chat widget), none of the NSoft event responses the adapter parsed. The capture was discarded (no HAR, tool or partial test committed; the temporary `new_context(**overrides)`/`browser_pool(launch=)` seams were reverted). New gated row **SR4-8a** offers A (in-page fetch transport, then full HAR replay; changes live request shape, needs a measured scan) or B (boundary-recorded HAR shim, no live change, weaker claim); the operator must choose before SR4-8 resumes. `pytest`: 2199 passed, 8 skipped, 1 xfailed (17 snapshots passed); ruff clean; mypy 257 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. Traffic: one admiralbet capture run (640 matches) before the approach was abandoned. |
+| 2026-11-08 | SR5-1 | Done | Added a cumulative histogram to `server/observability.py` (`observe`, buckets 0.05–120 s, `_bucket`/`_sum`/`_count`) and filled the missing per-book metrics: `retry_call` records `bh_scraper_attempts_total{book}`, `bh_scraper_retries_total{book}`, `bh_scraper_attempt_seconds{book}` and `bh_http_status_total{book,status}` for every attempt (including failures); `run_scan` sets `bh_book_last_success_timestamp_seconds{mode,book}` on `ok` and the startup baseline publishes it as 0 for every book/mode; `wire_schemas._drift()` increments `bh_schema_drift_total{book}`; the SR3-3 pool increments `bh_browser_recycles_total{reason=pages|age|crash}`. Existing `bh_book_kinds_total`, breaker gauges and `bh_wire_unknown_keys_total` are documented with the rest. New `docs/METRICS.md` lists every family, type, labels and meaning (README links it). New `tests/test_reliability_metrics.py` (6) covers cumulative buckets, retry attempts/retries/status/latency, schema drift, a pool recycle, and scrapes `/api/metrics` for every new family; `tests/test_metrics.py` asserts the last-success gauge after a real scan. `pytest`: 2204 passed, 8 skipped, 1 xfailed (17 snapshots passed); ruff clean; mypy 258 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. Total 2237 passed. No bookmaker traffic. |
+| 2026-11-08 | SR5-2 | Done | New `server/book_health.py` reduces the existing evidence to one state per book and feed (`healthy`, `degraded`, `open`, `blocked`, `drifted`, `disabled`) with a one-line reason, from the SR2-1 last kind (N1-3 scan-cost record, legacy `outcome` fallback), the SR2-6 breaker snapshot and the runtime toggle; priority disabled → blocked → drifted → open → degraded → healthy, and no record is `degraded` ("no scan recorded yet"). `GET /api/health` now serves `book_health.{prematch,live}` for every configured book; it is diagnostic only. New `tests/test_book_health.py` (12). Baseline, one scan per feed: prematch 144.8 s elapsed, 682 requests, 392.77 MiB, 201.06 book-seconds, 1.32 browser-seconds, 6,610 matches/45,192 market rows; live 33.7 s, 70 requests, 74.74 MiB, 66.52 book-seconds, 1.45 browser-seconds, 653 matches/3,548 market rows. Recorded in `docs/evidence/2026-11-08-scan-cost-baseline.md`; `premier_kladionica` delta drifted on 5-column rows in both modes, recorded as SR4-13. `pytest`: 2216 passed, 8 skipped, 1 xfailed (17 snapshots); ruff clean; mypy 260 files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. |
+| 2026-11-08 | SR4-12 | Done | Structural signature now keeps only paths common to every list item, unions the types a common path shows across items, and ignores `null` when a real type is present; per-item-only paths are stored as `optional` and never alert, a previously optional path promoted to common is adopted silently, and a required path removed/renamed or a common type change still drifts. `FINGERPRINT_VERSION = 2` re-records older baselines once without an alert. New `optional_paths()`; `structural_paths()` is the required set. 7 new tests (19 in the file, the 12 SR4-4 tests still pass) cover optional-key move, required price removal, rename, type change, nullable field, promotion-then-removal and the v1 upgrade. `pytest`: 2223 passed, 8 skipped, 1 xfailed (17 snapshots); ruff clean; mypy 260 files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No bookmaker traffic. |
+| 2026-11-08 | SR4-13 | Done | The live delta response is five positional tables (execRes 5 cols, dogVar 14, dogTipK odds 9, dogLiveScore 43, scalars); `validate_premier_sync` was validating every non-empty section as odds, so execRes `[0,"",ts,4,ver]` drifted the book in both modes. Empty sections are omitted, so a section is now an odds table only when one row has the dogTipK shape (ints 0/2/3/4, numeric price 5, numeric result 7); all rows of a recognised section still go through the strict adapter, so truncated rows and string prices still drift. Other sections stay unmodelled; an all-malformed odds section fails closed (no legs) and SR4-4 still alarms. Trimmed live capture at `tests/fixtures/wire/premier_kladionica_delta.json`, evidence at `docs/evidence/2026-11-08-premier-delta-sections.md`; 5 new tests (24 in the premier file). Live probes: prematch 700 matches/5,761 market rows in 7.4 s, live 151/868 in 5.2 s, both `error: ""`. `pytest`: 2228 passed, 8 skipped, 1 xfailed (17 snapshots); ruff clean; mypy 260 files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. |
+| 2026-11-08 | SR6-1 | Done | New `config/bookmakers.py` `AdapterDeclaration`/`DECLARATIONS` is the single per-book source (name, adapter module/class as strings, transport, enabled, UI URLs/colour, per-feed timeouts). Derived: `settings.BOOKMAKERS`, lazy `scrapers.registry.SCRAPERS` (`MutableMapping`, imports on first read, supports test overrides), `PLAYWRIGHT_BOOKIES` (admiralbet/mozzartbet/wwin) and the 20 transport policies with unchanged values. `server/api.py` imports no adapter module; `import server.api` loads 0 book modules. Market registry stays curated but its book set is checked. `scrapers.__all__` is derived as well. New `tests/test_adapter_declarations.py` (9): AST check for undeclared/absent adapters, derived lists and package exports, policies, registry coverage, unknown key, cached read, subprocess laziness. `pytest`: 2237 passed, 8 skipped, 1 xfailed (17 snapshots); ruff clean; mypy 263 files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No bookmaker traffic. |

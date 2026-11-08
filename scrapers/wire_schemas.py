@@ -235,18 +235,21 @@ class MozzartSubgame(BaseModel):
 
 
 class MozzartOdd(BaseModel):
-    """One price row. ``value`` is null while a pick is suspended.
+    """One price row.
 
-    All three fields are required (``value`` may be null): the captures always
-    carry them, so a renamed price field is schema drift instead of a row the
-    parser silently skips as ``value == 0``.
+    ``value`` is null while a pick is suspended, and the live feed leaves the
+    key out entirely for such a pick (measured 2026-11-08: 105 of one offer's
+    518 rows omit it, with the same keys otherwise; SR4-10). ``game`` and
+    ``subgame`` stay required, and a number stays a number: a string price is
+    still schema drift. A renamed ``value`` is caught on the list page, where a
+    page always carries priced rows.
     """
 
     model_config = MODEL_CONFIG
 
     game: MozzartGame | None
     subgame: MozzartSubgame | None
-    value: float | None
+    value: float | None = None
 
 
 class MozzartMatch(BaseModel):
@@ -288,6 +291,29 @@ _MOZZART_PAGE_FIELDS = frozenset(MozzartMatchesPage.model_fields)
 _MOZZART_ODDS_ADAPTER = TypeAdapter(list[MozzartOdd])
 
 
+def _mozzart_page_carries_a_price(items: Any) -> bool:
+    """Whether at least one list row carries a numeric ``value``.
+
+    A missing ``value`` is a suspended pick (SR4-10), so one such row must not
+    fail. If a whole list page (hundreds of rows) has no price at all, the price
+    field was renamed or removed: that is schema drift for the book.
+    """
+    if not isinstance(items, list):
+        return True
+    rows = 0
+    for item in items:
+        if not isinstance(item, dict) or not isinstance(item.get("odds"), list):
+            continue
+        for row in item["odds"]:
+            if not isinstance(row, dict):
+                continue
+            rows += 1
+            value = row.get("value")
+            if isinstance(value, int | float) and not isinstance(value, bool):
+                return True
+    return rows == 0
+
+
 def _count_mozzart_odds(rows: Any, counts: Counter[str]) -> None:
     """Count unknown keys in one odds array (levels ``odd``, ``game``, ``subgame``)."""
     if not isinstance(rows, list):
@@ -306,6 +332,7 @@ def _drift(book: str, label: str, exc: ValidationError | ValueError) -> ScrapeEr
     else:
         message = f"{label}: {exc}"
     logger.warning("[%s] %s", book, message)
+    metrics.inc("bh_schema_drift_total", 1, book=book)
     return ScrapeError(ScrapeKind.SCHEMA_DRIFT, message)
 
 
@@ -358,6 +385,10 @@ def validate_mozzart_page(
         for item in items:
             if isinstance(item, dict) and isinstance(item.get("odds"), list):
                 _count_mozzart_odds(item["odds"], counts)
+    if not _mozzart_page_carries_a_price(items):
+        raise _drift(
+            book, f"{book} matches page", ValueError("no odds row carries a value")
+        )
     _record_unknown_keys(counts, book=book)
     try:
         page = MozzartMatchesPage.model_validate(payload)
@@ -841,6 +872,25 @@ _PREMIER_SET_TIP_VAR_ADAPTER = TypeAdapter(list[PremierSetTipVar])
 _PREMIER_SET_TIP_TIP_ADAPTER = TypeAdapter(list[PremierSetTipTip])
 
 
+def _premier_odds_shape(row: Any) -> bool:
+    """Whether a delta row has the dogTipK odds shape (SR4-13).
+
+    The delta response is positional but its empty sections are omitted, so a
+    section index cannot identify the odds table. Shape does: a dogTipK row has
+    the event/set ids in columns 0/2/3/4, the price in column 5, and the result
+    columns 7/8 numeric. The other tables in the envelope fail at least one of
+    those: execRes is 5 columns, dogVar carries strings in columns 6-10, and
+    dogLiveScore has no price.
+    """
+    if not isinstance(row, list) or len(row) < len(_PREMIER_ODD_COLUMNS):
+        return False
+    if not all(isinstance(row[index], int) for index in (0, 2, 3, 4)):
+        return False
+    if isinstance(row[5], bool) or not isinstance(row[5], int | float):
+        return False
+    return isinstance(row[7], int | float) and not isinstance(row[7], bool)
+
+
 def validate_premier_odds(
     rows: Any, *, book: str = "premier_kladionica"
 ) -> list[PremierOddRow]:
@@ -874,10 +924,14 @@ def validate_premier_sync(
 ) -> list:
     """Validate one PrSync response and return its raw ``sections`` list.
 
-    ``kind`` is ``"full"`` (definitions + events) or ``"delta"`` (dogTipK odds
-    rows).  Only capture-backed tables are typed: the setTip/setTipVar/setTipTip
-    rows on a full sync and every non-empty delta section as odds rows.  The
-    event and execRes sections have no dated capture and stay unmodelled.
+    ``kind`` is ``"full"`` (definitions + events) or ``"delta"`` (the changed
+    tables).  Only capture-backed tables are typed: the setTip/setTipVar/setTipTip
+    rows on a full sync, and the odds sections on a delta.  A delta is
+    positional but its empty sections are omitted, so the odds table is found
+    by row shape rather than by index (SR4-13): every section that contains a
+    dogTipK-shaped row is validated in full, so a truncated or mistyped odds row
+    in it still drifts.  The execRes, dogVar, dogLiveScore and scalar sections
+    have no dated capture and stay unmodelled, like the full-sync event tables.
     """
     if not isinstance(payload, list) or not payload or not isinstance(payload[0], list):
         raise ScrapeError(
@@ -909,7 +963,10 @@ def validate_premier_sync(
                 adapter = premier_adapters.get(index)
                 if adapter is not None:
                     adapter.validate_python(rows, strict=True)
-            else:
+            elif any(_premier_odds_shape(row) for row in rows):
+                # SR4-13: the delta has several tables and omits empty sections,
+                # so identify the odds table by shape and validate all of it.
+                # One malformed row in a recognised odds section still drifts.
                 _PREMIER_ODDS_ADAPTER.validate_python(rows, strict=True)
     except (ValidationError, ValueError) as exc:
         raise _drift(book, f"{book} {kind} sync", exc) from exc

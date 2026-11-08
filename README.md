@@ -62,6 +62,10 @@ cp .env.example .env
 python main.py
 ```
 
+Re-run `playwright install chromium` after changing the Playwright pin: the
+browser bundle is versioned, and a stale one fails with "Executable doesn't
+exist".
+
 - Dashboard: http://localhost:8000
 - API docs: http://localhost:8000/docs
 - Health check: http://localhost:8000/api/health
@@ -126,17 +130,25 @@ POST /api/scan
   copies used for pricing, with its reason shown in the dashboard; recovery
   needs three consecutive clean scans. This is a price-source restriction, not
   a change to the certainty gate.
+- **Each book has one operational health state.** `book_health` in
+  `/api/health` reduces the SR2-1 scrape kind, the SR2-6 breaker and the runtime
+  toggle to `healthy`, `degraded`, `open`, `blocked`, `drifted` or `disabled`,
+  with a one-line reason. It is a diagnostic; pricing still reads feed integrity
+  and the certainty gate.
 - **Unattended operation is observable.** Every request accepts or generates an
   `X-Request-ID`, returns it on the response, and stamps it on every log record
   emitted while the request runs; a scan gets its own `scan_id`. Set
   `LOG_FORMAT=json` for one JSON object per line. `GET /api/metrics` serves
   Prometheus text: scan started/completed/failed, per-book success/empty/error,
   surebets found/dropped, link checks, candidate-queue size, cache size, scan
-  duration, last-scan age per feed, browser slots in use, and process RSS. The
-  endpoint is protected like every other `/api` route when `API_KEY` is set;
-  the default loopback-only mode leaves it open. A completed scan emits one
-  `scan complete` record with duration, book counts, groups, surebets, drops and
-  cache size — never odds or credentials.
+  duration, last-scan age per feed, browser slots in use, process RSS, plus
+  per-book attempts/retries, HTTP status, attempt-latency histogram, schema
+  drift, browser recycles and the last-success timestamp. Every family is
+  documented in [`docs/METRICS.md`](docs/METRICS.md). The endpoint is protected
+  like every other `/api` route when `API_KEY` is set; the default
+  loopback-only mode leaves it open. A completed scan emits one `scan complete`
+  record with duration, book counts, groups, surebets, drops and cache size —
+  never odds or credentials.
 
 ## Dashboard
 
@@ -252,7 +264,10 @@ Copy `.env.example` to `.env` and set only what you need:
 | `SCRAPER_REQUESTS_PER_SECOND` | `5` | Outgoing ceiling per bookmaker, in requests per second (retries included); `0` disables it. |
 | `SCRAPER_BOOK_RATES` | `mozzartbet=60` | Per-book overrides of that ceiling, as `book=rate` pairs. Mozzartbet runs at 60/s so its per-event full offer does not dominate the scan. |
 | `SCRAPER_BOOK_TIMEOUT_SECONDS` | `240` | One adapter's budget. A book that overruns is reported `timeout` and missing from the scan; the others still price. |
-| `SCRAPER_SCAN_TIMEOUT_SECONDS` | `600` | Budget for the whole scraping phase. Books still running are cancelled (browser closed) and the scan prices what returned. |
+| `SCRAPER_SCAN_TIMEOUT_SECONDS` | `600` | Budget for the whole scraping phase. Books still running are cancelled (context released) and the scan prices what returned. |
+| `BROWSER_MAX_PAGES` / `BROWSER_MAX_AGE_SECONDS` | `200` / `600` | A scan shares one Chromium; it is recycled after this many book contexts or this many seconds. A disconnected browser is replaced at the next book. |
+| `FORENSICS_ENABLED` | `true` | Keep a Playwright trace and screenshot for a failed browser book under `cache/forensics/<book>/<scan_id>/`. Cookies and storage state are never written. |
+| `FORENSICS_MAX_MB` / `FORENSICS_MAX_AGE_DAYS` | `200` / `7` | Retention caps for that directory, applied after every capture. |
 | `BOOK_BACKOFF_AFTER_FAILURES` | `3` | Consecutive failures before a book's circuit breaker opens; `blocked`/`429` open it immediately. See `/api/health` → `scheduler.breakers`. |
 | `BOOK_BACKOFF_MAX_MINUTES` | `60` | Cap on the breaker's cooldown, which doubles on every consecutive open. |
 | `AUTO_SCAN_PREMATCH_MINUTES` | `0` | Scheduled prematch scans; `0` disables them. |
@@ -510,10 +525,13 @@ python scripts/discover_push_feeds.py --bookmaker mozzartbet --seconds 20
 
 ## Adding bookmakers, markets and names
 
-- **Bookmaker:** add `scrapers/<book>.py`, register it in `SCRAPERS` and
-  `BOOKMAKERS`, add its deep-link declaration, market registry rows and captured
-  fixtures, then add parser and gate tests. Mark it as a Playwright book only if
-  it really needs a browser.
+- **Bookmaker:** add `scrapers/<book>.py`, then one declaration in
+  `config/bookmakers.py` (name, adapter module/class, transport, enabled flag,
+  timeouts). `BOOKMAKERS`, the lazy `SCRAPERS` registry, `PLAYWRIGHT_BOOKIES`
+  and the transport policies are derived from it; the consistency test fails if
+  a module has no declaration or a declaration has no module. Then add its
+  deep-link declaration, market registry rows and captured fixtures, and the
+  parser and gate tests.
 - **Market:** add the source ids and labels to `config/bookmaker_markets.json`,
   capture a payload under `tests/fixtures/markets/`, add a registry test, and
   regenerate `MARKET_MAPPING.md`.

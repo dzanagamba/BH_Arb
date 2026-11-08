@@ -200,18 +200,35 @@ def _format_value(value: float) -> str:
     return str(int(value)) if float(value).is_integer() else repr(float(value))
 
 
-class MetricsRegistry:
-    """Counters, gauges and dynamic gauge providers with one lock.
+# Default latency buckets in seconds; a per-metric override is possible.
+HISTOGRAM_BUCKETS: tuple[float, ...] = (
+    0.05,
+    0.1,
+    0.25,
+    0.5,
+    1.0,
+    2.5,
+    5.0,
+    10.0,
+    30.0,
+    60.0,
+    120.0,
+)
 
-    Deliberately small: no histograms, no multiprocess state, no registry of
-    registry. A scan runs in one process, and the endpoint renders what that
-    process has seen since start.
+
+class MetricsRegistry:
+    """Counters, gauges, histograms and dynamic gauge providers with one lock.
+
+    Deliberately small: no multiprocess state, no registry of registries. A scan
+    runs in one process, and the endpoint renders what that process has seen
+    since start. Histograms use cumulative buckets and carry ``_sum``/``_count``.
     """
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._counters: dict[str, dict[LabelSet, float]] = {}
         self._gauges: dict[str, dict[LabelSet, float]] = {}
+        self._histograms: dict[str, dict[LabelSet, dict[str, Any]]] = {}
         self._help: dict[str, str] = {}
         self._providers: dict[str, tuple[str, GaugeProvider]] = {}
 
@@ -236,6 +253,36 @@ class MetricsRegistry:
             family[key] = family.get(key, 0.0) + float(amount)
             self._help.setdefault(name, f"BH_Arb gauge {name}")
 
+    def observe(
+        self,
+        name: str,
+        value: float,
+        *,
+        buckets: tuple[float, ...] | None = None,
+        **labels: object,
+    ) -> None:
+        """Record one observation in a cumulative histogram."""
+        key = _label_set(labels)
+        bounds = HISTOGRAM_BUCKETS if buckets is None else buckets
+        with self._lock:
+            family = self._histograms.setdefault(name, {})
+            state = family.get(key)
+            if state is None:
+                state = {
+                    "bounds": tuple(float(bound) for bound in bounds),
+                    "counts": [0] * len(bounds),
+                    "sum": 0.0,
+                    "count": 0,
+                }
+                family[key] = state
+            sample = float(value)
+            for index, bound in enumerate(state["bounds"]):
+                if sample <= bound:
+                    state["counts"][index] += 1
+            state["sum"] += sample
+            state["count"] += 1
+            self._help.setdefault(name, f"BH_Arb histogram {name}")
+
     def register_gauge_provider(
         self, name: str, help_text: str, provider: GaugeProvider
     ) -> None:
@@ -249,6 +296,23 @@ class MetricsRegistry:
         with self._lock:
             self._counters.clear()
             self._gauges.clear()
+            self._histograms.clear()
+
+    def histogram_snapshot(self) -> dict[str, dict[LabelSet, dict[str, Any]]]:
+        """A copy of the histogram state (tests and diagnostics)."""
+        with self._lock:
+            return {
+                name: {
+                    labels: {
+                        "bounds": list(state["bounds"]),
+                        "counts": list(state["counts"]),
+                        "sum": state["sum"],
+                        "count": state["count"],
+                    }
+                    for labels, state in family.items()
+                }
+                for name, family in self._histograms.items()
+            }
 
     def snapshot(self) -> tuple[dict[str, dict[LabelSet, float]], dict[str, dict[LabelSet, float]]]:
         with self._lock:
@@ -268,23 +332,69 @@ class MetricsRegistry:
         self._help.update(helps)
         return counters, gauges
 
+    @staticmethod
+    def _format_labels(labels: LabelSet, extra: tuple[str, str] | None = None) -> str:
+        pairs = list(labels)
+        if extra is not None:
+            pairs.append(extra)
+        if not pairs:
+            return ""
+        return "{" + ",".join(
+            f'{key}="{_escape_label(value)}"' for key, value in pairs
+        ) + "}"
+
     def render(self) -> str:
         """Render the registry in Prometheus text exposition format."""
         counters, gauges = self.snapshot()
+        with self._lock:
+            histograms = {
+                name: {
+                    labels: {
+                        "bounds": list(state["bounds"]),
+                        "counts": list(state["counts"]),
+                        "sum": state["sum"],
+                        "count": state["count"],
+                    }
+                    for labels, state in family.items()
+                }
+                for name, family in self._histograms.items()
+            }
         lines: list[str] = []
-        for name in sorted(set(counters) | set(gauges)):
+        for name in sorted(set(counters) | set(gauges) | set(histograms)):
+            if name in histograms:
+                lines.append(f"# HELP {name} {self._help.get(name, name)}")
+                lines.append(f"# TYPE {name} histogram")
+                for labels, state in sorted(histograms[name].items()):
+                    for bound, count in zip(
+                        state["bounds"], state["counts"], strict=True
+                    ):
+                        lines.append(
+                            f"{name}_bucket"
+                            f"{self._format_labels(labels, ('le', _format_value(bound)))}"
+                            f" {count}"
+                        )
+                    lines.append(
+                        f"{name}_bucket"
+                        f"{self._format_labels(labels, ('le', '+Inf'))}"
+                        f" {state['count']}"
+                    )
+                    lines.append(
+                        f"{name}_sum{self._format_labels(labels)} "
+                        f"{_format_value(state['sum'])}"
+                    )
+                    lines.append(
+                        f"{name}_count{self._format_labels(labels)} "
+                        f"{state['count']}"
+                    )
+                continue
             metric_type = "counter" if name in counters else "gauge"
             lines.append(f"# HELP {name} {self._help.get(name, name)}")
             lines.append(f"# TYPE {name} {metric_type}")
             values = counters.get(name) or gauges.get(name) or {}
             for labels, value in sorted(values.items()):
-                label_text = ""
-                if labels:
-                    label_text = "{" + ",".join(
-                        f'{key}="{_escape_label(label_value)}"'
-                        for key, label_value in labels
-                    ) + "}"
-                lines.append(f"{name}{label_text} {_format_value(value)}")
+                lines.append(
+                    f"{name}{self._format_labels(labels)} {_format_value(value)}"
+                )
         return "\n".join(lines) + ("\n" if lines else "")
 
 

@@ -25,6 +25,7 @@ from typing import Any
 
 import httpx
 
+from config.bookmakers import DECLARATIONS
 from config.settings import (
     SCRAPER_BOOK_RATES,
     SCRAPER_BOOK_TIMEOUT_SECONDS,
@@ -32,22 +33,11 @@ from config.settings import (
     VERIFY_SSL,
 )
 
-# Existing timeout values, moved without change. SportPlus's prematch and live
-# feeds have always used different caps.
+# SR6-1: the per-book timeouts are declared once in config/bookmakers.py. The
+# browser books make their API calls through ``page.request`` but keep a policy
+# too, so their rate limit and deadline are the same as every other book.
 _BOOK_TIMEOUTS: dict[str, dict[str, float]] = {
-    "betole": {"prematch": 30.0, "live": 30.0},
-    "evlbet": {"prematch": 20.0, "live": 20.0},
-    "maxbet": {"prematch": 60.0, "live": 60.0},
-    "mbet": {"prematch": 30.0, "live": 30.0},
-    "mdshop": {"prematch": 30.0, "live": 30.0},
-    "premier_kladionica": {"prematch": 60.0, "live": 60.0},
-    "sportplus": {"prematch": 120.0, "live": 60.0},
-    # Browser books make their API calls through ``page.request`` and keep the
-    # httpx default caps they had before the policy existed; listing them here
-    # gives them the same rate limit as every other book.
-    "admiralbet": {"prematch": 30.0, "live": 30.0},
-    "mozzartbet": {"prematch": 30.0, "live": 30.0},
-    "wwin": {"prematch": 30.0, "live": 30.0},
+    book: dict(spec.timeouts) for book, spec in DECLARATIONS.items()
 }
 
 
