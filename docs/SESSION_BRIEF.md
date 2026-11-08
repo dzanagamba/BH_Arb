@@ -3,7 +3,7 @@
 **Updated:** 2026-11-08
 **Goal:** keep `ROADMAP.md` current without weakening the trust model.
 **Current task:** none; SR0-1, SR0-2, SR1-1, SR1-2, SR1-3, SR1-4, M1-1, M1-3,
-M2-1, M2-3, SR2-1 …
+M2-1, M2-2, M2-3, SR2-1 …
 SR2-6, SR3-1, SR3-2, SR3-3, SR3-4, SR4-1, SR4-2, SR4-3, SR4-3b … SR4-3f,
 SR4-3h, SR4-3i, SR4-3j, SR4-4, SR4-5, SR4-6, SR4-7, SR4-7a, SR4-8, SR4-8a,
 SR4-9, SR4-10, SR4-11, SR4-12, SR4-13, SR5-1, SR5-2, SR6-1, SR6-2, SR6-3,
@@ -12,13 +12,27 @@ SR7-1 and SR7-2 are done.
 feed). Every other `Not started` row is `Gate: operator`; the roadmap is the
 single task list in `ROADMAP.md`, N2-4 stays deferred and P1-6 stays waived
 until the operator says otherwise.
-**Last task commit:** `33a695f` — "run the scan analysis off the event loop
-(M2-1)", pushed to `origin/main` on 2026-11-08. Before it, `2eb5324` caches key
-verification and throttles failed attempts (M1-3), `e82a0f1` closes every `/api`
-route with one key guard (M1-1), `3f9a911` carries the health-summary cache
-(M2-3), and `8a1cb90` carries SR6-2, SR4-8a and SR4-8.
+**Last task commit:** M2-2 "stop rewriting the scan cache on verify-links",
+committed on 2026-11-08. Before it, `33a695f` runs the scan analysis off the
+event loop (M2-1), `2eb5324` caches key verification and throttles failed
+attempts (M1-3), `e82a0f1` closes every `/api` route with one key guard (M1-1),
+`3f9a911` carries the health-summary cache (M2-3), and `8a1cb90` carries SR6-2,
+SR4-8a and SR4-8.
 
 ## Project state
+
+M2-2 (2026-11-08, working tree, continuing the delegated pick):
+`/api/verify-links` no longer calls `_save_cache`. The check still updates the
+in-memory `cached_matches` (proven link set, failed link cleared) and its verdict
+stays durable in the two small stores (`deep_link_verifications.json`,
+`deep_link_decisions.json`). Because the cache file can now predate a failed
+check, `_load_cache` re-derives the flag: new `_clear_stale_deep_link_flags`
+clears a cached `deep_link_verified=True` no fresh store record backs, then
+`_apply_deep_link_verifications` re-applies the fresh proofs; declared-route
+books are settled by the gate either way. Measured on the operator's files:
+`_save_cache` 71.4 ms (1.2 MB/384 matches), 201.2 ms (live 3.7 MB/942) and
+1230.3 ms (21.6 MB/6,610 matches); a check now does zero cache writes, and its
+two store writes take 0.325 ms. Three new tests in `tests/test_verify_links.py`.
 
 M2-1 (2026-11-08, working tree, continuing the delegated pick): the scan's
 analysis half now runs in worker threads. `asyncio.to_thread` wraps every heavy
@@ -642,14 +656,14 @@ the seven-day opportunity baseline remains unmeasured and N2-4 owns it.
 
 ## Next action
 
-**No `Not started` row is ungated.** M1-1, M1-3, M2-1, M2-3 and SR4-8 closed the
-last ones.
+**No `Not started` row is ungated.** M1-1, M1-3, M2-1, M2-2, M2-3 and SR4-8
+closed the last ones.
 What is left needs the operator: **SR4-3g** (blocked on a live EVLBet payload —
 do not start it), the remaining **M\*** rows (all `Gate: operator`; each needs
 explicit approval and written acceptance criteria before any work), and the
 deferred N2-4 / waived P1-6 (leave both alone). Sensible next picks, in the
-order this session would take them: **M2-2** (stop rewriting the ~55 MB cache on
-verify-links), then the M2 cache/queue rows and the M1 rows (M1-2). A HAR refresh is an operator action, not a task:
+order this session would take them: **M2-4** (the candidate queue cap), then
+**M1-2** (`accepted_odds: 0` with a stake) and the M2 cache-representation row. A HAR refresh is an operator action, not a task:
 `python scripts/capture_har.py --books all`.
 
 ## Rules

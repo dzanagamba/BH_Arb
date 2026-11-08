@@ -856,13 +856,12 @@ def test_a_restored_report_may_not_verify_a_link_the_store_no_longer_proves(
     body = run(api.get_results("prematch"))
     assert body["match_groups"] == 0
     assert body["group_statuses"] == {}
-    # The match's own flag is NOT what decided this, and is still the scan's
-    # snapshot: `_apply_deep_link_verifications` only ever sets a flag, so a
-    # `True` here is pre-existing, documented asymmetry rather than a claim the
-    # restore is entitled to make on the report's behalf.
+    # The report was decided from the STORE, not from the match flags. M2-2 also
+    # re-derives the flags at load (`_clear_stale_deep_link_flags`), so the match
+    # list agrees with the report instead of keeping the scan's stale True.
     assert {m["bookmaker"]: m["deep_link_verified"] for m in api.cached_matches} == {
         "mozzartbet": True,
-        "mdshop": True,
+        "mdshop": False,
     }
 
 
@@ -1372,6 +1371,84 @@ def test_the_proof_is_still_recorded_when_the_cache_write_is_skipped(monkeypatch
     client.post("/api/verify-links?bookmaker=mozzartbet")
 
     assert f"mozzartbet|{EVENT_ID}" in api._deep_link_verifications["prematch"]
+
+
+def test_a_completed_check_does_not_rewrite_the_scan_cache(monkeypatch):
+    """M2-2: the verdict is persisted in the small stores, not the 27 MB cache.
+
+    A check changes a handful of `deep_link_verified` flags, and rewriting the
+    whole scan cache per call was the cost this row removes. The proof still has
+    to survive, so it must be in the store; the in-memory cache must still show
+    it immediately, so the running process needs no scan to catch up.
+    """
+    saves: list[str] = []
+
+    async def fake(bookmaker, matches, *, mode, live, limit, base_url=None, offset=0, settled=()):
+        return _report(outcomes=[_verified_outcome()])
+
+    monkeypatch.setattr(api, "_run_link_verification", fake)
+    monkeypatch.setattr(api, "_save_cache", lambda mode="prematch": saves.append(mode))
+    api.cached_matches.extend(_cached(_match()))
+
+    body = client.post("/api/verify-links?bookmaker=mozzartbet").json()
+
+    assert body["applied"] is True
+    assert saves == [], "the scan cache must not be rewritten for a link flag"
+    assert api.cached_matches[0]["deep_link_verified"] is True
+    assert f"mozzartbet|{EVENT_ID}" in api._deep_link_verifications["prematch"]
+
+
+def test_a_failed_check_is_persisted_without_the_cache_write(monkeypatch):
+    """The FAIL is the result that must not be lost: it removes the proof and
+    clears the flag in memory, and both stores record that it happened."""
+    saves: list[str] = []
+    _record(EVENT_ID, verified=True, age_seconds=60)
+    api.cached_matches.extend(_cached(_match(deep_link_verified=True)))
+
+    async def fake(bookmaker, matches, *, mode, live, limit, base_url=None, offset=0, settled=()):
+        return _report(outcomes=[_failed_outcome()])
+
+    monkeypatch.setattr(api, "_run_link_verification", fake)
+    monkeypatch.setattr(api, "_save_cache", lambda mode="prematch": saves.append(mode))
+
+    body = client.post("/api/verify-links?bookmaker=mozzartbet").json()
+
+    assert body["failed"] == 1
+    assert saves == []
+    assert f"mozzartbet|{EVENT_ID}" not in api._deep_link_verifications["prematch"]
+    assert f"mozzartbet|{EVENT_ID}" in api._deep_link_decisions["prematch"]
+    assert api.cached_matches[0]["deep_link_verified"] is False
+
+
+def test_a_restart_does_not_resurrect_a_link_a_check_found_dead(monkeypatch, tmp_path):
+    """The cache file can predate the check now, so the load path re-derives.
+
+    Before M2-2 every check rewrote the file and the flag was always current. With
+    the write gone, a scan cache written before a failed check still says
+    `deep_link_verified: true`; trusting it would put back a link a browser check
+    found dead.
+    """
+    cache_file = tmp_path / "last_scan.json"
+    cache_file.write_text(
+        json.dumps(
+            {
+                "surebets": [],
+                "matches": _cached(_match(deep_link_verified=True)),
+                "scan_time": datetime.now(UTC).replace(tzinfo=None).isoformat(),
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(api, "_PREMATCH_CACHE_FILE", str(cache_file))
+    monkeypatch.setattr(api, "_LIVE_CACHE_FILE", str(tmp_path / "last_live_scan.json"))
+    # The store is empty: the completed check removed the proof.
+    api._deep_link_verifications.clear()
+    api.cached_matches.clear()
+
+    api._load_cache()
+
+    assert len(api.cached_matches) == 1
+    assert api.cached_matches[0]["deep_link_verified"] is False
 
 
 def test_a_normal_run_reports_that_it_applied(monkeypatch):

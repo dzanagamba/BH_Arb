@@ -3537,6 +3537,56 @@ def _restorable_match_groups(report: object, mode: str) -> list[dict]:
     return kept
 
 
+def _clear_stale_deep_link_flags(matches: list, mode: str) -> int:
+    """Clear a cached `deep_link_verified=True` that no fresh proof backs (M2-2).
+
+    `/api/verify-links` no longer rewrites the scan cache, and a completed failed
+    check only REMOVES the proof from the store while clearing the in-memory
+    flag. The persisted cache can therefore still carry `deep_link_verified:
+    true` from the scan that preceded the check, and trusting it on restart
+    would resurrect a link a browser check found dead — the exact staleness the
+    link TTL exists to prevent.
+
+    The store is the authority: `_apply_deep_link_verifications` re-applies every
+    proof that is still fresh, and this clears every other True. A book the gate
+    settles by declaration — a verified route pattern or no per-event route —
+    does not need the flag (see `CertaintyGate._link_evidence` cases 2-3), so
+    clearing it neither blocks nor unblocks such a group.
+    """
+    with _DEEP_LINK_LOCK:
+        entries = dict(_deep_link_verifications.get(mode) or {})
+    reference = datetime.now(UTC).replace(tzinfo=None)
+    cleared = 0
+    for match in matches:
+        is_dict = isinstance(match, dict)
+        current = bool(
+            match.get("deep_link_verified")
+            if is_dict
+            else getattr(match, "deep_link_verified", False)
+        )
+        if not current:
+            continue
+        bookmaker = str(
+            (match.get("bookmaker") if is_dict else getattr(match, "bookmaker", ""))
+            or ""
+        )
+        raw_id = match.get("event_id") if is_dict else getattr(match, "event_id", "")
+        event_id = "" if raw_id is None else str(raw_id)
+        record = (
+            entries.get(_deep_link_key(bookmaker, event_id))
+            if bookmaker and event_id
+            else None
+        )
+        if _deep_link_record_is_fresh(record, reference):
+            continue
+        if is_dict:
+            match["deep_link_verified"] = False
+        else:
+            match.deep_link_verified = False
+        cleared += 1
+    return cleared
+
+
 def _load_cache():
     """Restore last scan results from the JSON cache files on startup (TTL 30min P0-6)."""
     _load_opportunity_metrics()
@@ -3581,6 +3631,10 @@ def _load_cache():
             matches_cache[:] = data.get("matches", [])
             # A restored cache is re-stamped with any link proof that is still
             # inside its TTL, so a restart does not silently demote every group.
+            # M2-2: it is re-derived, not trusted — a cached flag can be older
+            # than a completed check that removed the proof, because the check
+            # no longer rewrites this file.
+            _clear_stale_deep_link_flags(matches_cache, mode)
             _apply_deep_link_verifications(matches_cache, mode)
             # And the report is re-checked against that store rather than trusted:
             # see `_restorable_match_groups` for why a stored `verified` row can
@@ -5314,9 +5368,15 @@ async def verify_links(
     applied = not scan_underway
     applied_note = ""
     if applied:
+        # M2-2: update the in-memory cache, never `_save_cache`. A check
+        # changes a handful of `deep_link_verified` flags, and serialising the
+        # whole 27 MB scan cache per call to persist that is the cost this row
+        # removes. The verdict is durable already: `_record_deep_link_outcomes`
+        # writes or removes the proof and `_record_deep_link_decisions` records
+        # the event, both small atomic files. `_load_cache` re-derives the flag
+        # from that store, so the next start cannot resurrect a cleared proof.
         apply_report(matches_cache, report)
         _apply_deep_link_verifications(matches_cache, mode)
-        _save_cache(mode)
     else:
         applied_note = (
             f"a {mode} scan started while this check was running, so the cached "
@@ -5331,7 +5391,7 @@ async def verify_links(
         f"Deep-link check {bookmaker}/{mode}: {report.verified} verified, "
         f"{report.failed} failed, {report.errored} errored of {report.checked} checked "
         f"({report.unchecked} of {available} not checked) in {report.duration_seconds}s"
-        f"{'' if applied else ' — cache write skipped'}"
+        f"{'' if applied else ' — cache left to the scan'}"
     )
     return {
         "bookmaker": bookmaker,

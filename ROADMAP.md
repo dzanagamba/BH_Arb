@@ -162,7 +162,7 @@ do not copy stale numbers here.
 | M1-2 | Decide `accepted_odds: 0` with a stake | Not started | — | operator |
 | M1-3 | Auth-failure rate limit and PBKDF2 cache | Done | — | operator |
 | M2-1 | Move scan CPU/I/O off the event loop | Done | — | operator |
-| M2-2 | Stop rewriting the cache on verify-links | Not started | — | operator |
+| M2-2 | Stop rewriting the cache on verify-links | Done | — | operator |
 | M2-3 | Serve a cached `/api/health` summary | Done | — | operator |
 | M2-4 | Decide the candidate queue cap | Not started | — | operator |
 | M2-5 | Review compact cache/ledger representations | Not started | — | operator |
@@ -2299,16 +2299,73 @@ Acceptance (written before coding, 2026-11-08):
 
 ### M2-2 Stop rewriting the cache on verify-links
 
-Status: Not started
+Status: Done
 
 Gate: operator
+
+**Decision (2026-11-08, operator: continue after M2-1).** Every
+`/api/verify-links` call ends in `_save_cache(mode)`, which serialises and
+atomically rewrites the whole scan cache — 27 MB prematch / 3.6 MB live on the
+operator's host, ~55 MB across a sweep — to persist at most a handful of
+`deep_link_verified` flags. The verdict itself is already persisted in two small
+stores (`deep_link_verifications.json`, `deep_link_decisions.json`), so the big
+write buys only the cached copy of the flag, and it runs once per checked event.
+The catch that makes it non-trivial: the cache file trusts its own flags on
+restart, and `_apply_deep_link_verifications` only ever SETS one, so a failed
+check (which removes the proof) would be resurrected by the next start unless the
+load path re-derives the flag from the store.
 
 Why / what: Stop rewriting the ~55 MB scan cache on every `/api/verify-links`
 call; persist failed-check results without a full cache write.
 
-Acceptance:
-- [x] Operator approval recorded here.
-- [x] Acceptance criteria written here before coding.
+**M2-2 Outcome (2026-11-08).** `verify_links` no longer calls `_save_cache`.
+A completed check still applies `apply_report` and
+`_apply_deep_link_verifications` to the in-memory `cached_matches`, so the
+running server serves the new flags immediately; the verdict is durable in the
+two small stores `_record_deep_link_outcomes` and `_record_deep_link_decisions`
+already wrote. New `_clear_stale_deep_link_flags(matches, mode)` runs in
+`_load_cache` before `_apply_deep_link_verifications`: a fresh proof is
+re-applied, and a cached `deep_link_verified=True` that no fresh record backs is
+cleared, so a restart cannot resurrect a link a completed check found dead. A
+book the gate settles by declaration (verified route pattern, or no event route)
+is unaffected. The one existing test that pinned the old asymmetry — the match
+list keeping a stale `True` while the restored report dropped the group — now
+asserts the flag is re-derived too (`mdshop` False, `mozzartbet` True); that is
+strictly stronger, and the report filter still decides from the store.
+**Measured** on this host with the operator's real cache files: `_save_cache`
+cost **71.4 ms** on today's prematch cache (1.2 MB, 384 matches), **201.2 ms**
+on the live cache (3.7 MB, 942 matches) and **1230.3 ms** on a 6,610-match
+prematch cache (21.6 MB, the SR5-2 baseline shape and the size the row cites).
+A check now performs **no cache write**; the two store writes for one outcome
+measure **0.325 ms**. New tests: a completed check writes no cache yet persists
+the proof and updates memory; a failed check removes the proof, records the
+decision and clears the flag without a write; a restart with an emptied store
+clears the cached flag. `pytest`: 2298 passed, 12 skipped (17 snapshots) in
+116.27 s; ruff clean; mypy 275 source files clean; market doc in sync;
+refresh_fixtures and audit_admissibility `--check` exit 0. No live scan, no
+bookmaker traffic.
+
+Acceptance (written before coding, 2026-11-08):
+- [x] `/api/verify-links` no longer calls `_save_cache`; its completed verdicts
+      are still persisted through `_record_deep_link_outcomes` (a proof is
+      written or removed) and `_record_deep_link_decisions` (the event is
+      decided), both small atomic writes.
+- [x] The in-memory `cached_matches` still reflects the check immediately:
+      `apply_report` clears a failed link and sets a proven one, so the running
+      process serves the new state without waiting for a scan.
+- [x] `_load_cache` re-derives the flag from the store instead of trusting the
+      cached `deep_link_verified=True`: a fresh proof is re-applied, and a
+      True that no fresh record backs is cleared. A book settled by its own
+      declaration (verified route pattern, or no event route) keeps verifying,
+      because the gate decides those without this flag.
+- [x] A completed check that ran while a scan started still leaves the in-memory
+      matches alone (`applied: false`) and still records the proof/decision.
+- [x] Tests: a normal check writes no cache and persists the verdict; a failed
+      check removes the proof and is not resurrected on restart; a fresh proof
+      still survives a restart; the concurrent-scan test keeps its meaning.
+- [x] Measured before → after on the operator's real cache files, and the
+      numbers recorded in the outcome.
+
 
 ### M2-3 Serve a cached `/api/health` summary
 
@@ -2973,3 +3030,4 @@ Useful starting points:
 | 2026-11-08 | M1-1 | Done | Operator delegated the pick; chose this because 16 of 34 `/api` routes had no auth dependency (`/results`, `/status`, `/config`, `/groups`, `/debug/*`, `/bets`, `/paper/*`, `/link-sweeps`), so with `API_KEY` set they served odds, config, bet history and CSV to anyone, and a valid named key was rejected whenever a bootstrap key was also configured. `server/auth.py` gained `resolve_api_key` (env key first via `hmac.compare_digest`, then the hashed store) shared by `server/app.py::api_key_guard` and `server/api._require_api_key`; the middleware resolves the key for every `/api` route except `/api/health`, returns 401 when no key resolves and 403 for a `GET`/`HEAD` without `read`/`admin`, and keeps the documented local-only open mode when nothing is configured. Seven write routes that accepted any key (`/verify`, `/recalculate`, `/link-sweeps`, `/bets`, `/bets/{id}/settle`, `/bets/{id}/closing`, `/paper/positions/{id}/settle`) now require `scan`. **The strict xfail is removed by fixing the gap** (suite xfailed 1 → 0); `tests/conftest.py` gives each test a private key store so the operator's `config/generated/api_keys.json` cannot decide the suite. New `tests/test_api_auth.py` (9 tests): every `/api` path except health from the OpenAPI schema is 401 without a key (32 paths), health public, named key beside bootstrap key, read-cannot-write, scan-cannot-read, local-only open, revoked-only store closes reads, near-miss env key rejected. Three test modules now patch `api.API_KEY` (single owner) instead of the removed `server.app` binding. `docs/AUTH.md` and `README.md` document the middleware and the scope matrix; `AGENTS.md` records that the tripwire is fixed. `pytest`: 2280 passed, 12 skipped, 0 xfailed (17 snapshots) in 108.03 s; ruff clean; mypy 274 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No live scan, no bookmaker traffic. |
 | 2026-11-08 | M1-3 | Done | Follow-up to M1-1, which made the middleware resolve a key on every `/api` request: a successful named-key verify measured **84.75 ms** (PBKDF2, 200k iterations) per request on this host, paid again on every 30 s dashboard poll and on every wrong-key attempt, with a full store rewrite for `last_used_at` each time. `ApiKeyStore.verify` now caches successes for `AUTH_CACHE_SECONDS` (default 60, 0 disables) under `sha256(token)` with the scope snapshot; a hit spends no PBKDF2 and writes no file. `create()`/`revoke()` clear the cache, so revocation is immediate; cache hits compare the store file's mtime+size, so an out-of-band edit is seen at once (the TTL only bounds an unchanging store); failures are never cached; `last_used_at` is persisted at most once per key per TTL. A process-wide `FailureLimiter` (`auth.auth_failures`) throttles failed attempts per client address at `AUTH_FAILURE_RATE_LIMIT` (default 10, 0 disables) inside the shared `RATE_LIMIT_WINDOW_SECONDS`, checked **before** resolving so a blocked client spends no PBKDF2; a success clears the counter and `/api/health` stays public. **Measured** with 10 stored keys, 25 requests to `/api/results` per mode: **83.47 → 3.33 ms per request (25.1x, −80.1 ms)** for cache off → on. New `tests/test_auth_limits.py` (14 tests); `tests/conftest.py` resets the shared budget per test and the route-coverage sweep resets it per request so it still asserts 401, not 429. `README.md`, `.env.example`, `docs/AUTH.md` updated. `pytest`: 2294 passed, 12 skipped (17 snapshots) in 141.15 s; ruff clean; mypy 275 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No live scan, no bookmaker traffic. |
 | 2026-11-08 | M2-1 | Done | The scan's analysis half ran on the event loop with no yielding `await` — grouping, stale/skin/feed-integrity, the candidate walk, the pricing pass and the 27 MB cache write — so a real scan blocked `/api/status` for about 100 s. Every heavy stage is now a sync helper called through `asyncio.to_thread`, in the same order: `_finish_scan_cost`, `_evaluate_feed_diagnostics`, `learn_scan_mappings`, `MatchMatcher()` + `group_matches`, `measure_price_agreement`/`apply_measured_twins`, `get_match_report`, `evaluate_stale_prices`, `compute_feed_integrity`, `_build_candidates` (the candidate walk split from the async AI ranking), `find_surebets`, `filter_price_outliers`, `capture_closing`, the paper writes, `_summarize_pricing`, `_serialise_scan_caches` and `_persist_scan_state` (cache + sibling JSON writes). Logic, inputs, outputs and ordering are unchanged; the scan tests in `test_e2e_certified`, `test_metrics`, `test_record_only`, `test_scan_candidates`, `test_auto_clv` and `test_health_cache` pass unchanged. New `test_the_scan_analysis_runs_off_the_event_loop` calibrates itself: with `to_thread` neutralised the same 3-match scan (group_matches stubbed to 0.5 s) held the loop for a **695.5 ms** heartbeat gap; offloaded it was **15.4 ms**, and all nine wrapped heavy stages ran off the main thread. A cancelled scan may let one worker finish (threads are not interruptible); every orphanable stage re-reads shared state at call time and writes idempotent diagnostics. `pytest`: 2295 passed, 12 skipped (17 snapshots) in 115.41 s; ruff clean; mypy 275 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No live scan. |
+| 2026-11-08 | M2-2 | Done | Each `/api/verify-links` call ended in `_save_cache(mode)`, rewriting the whole scan cache to persist at most a handful of `deep_link_verified` flags, once per checked event. The write is gone: `apply_report` + `_apply_deep_link_verifications` still update the in-memory cache, and the verdict stays durable in `deep_link_verifications.json` (proof written or removed) and `deep_link_decisions.json` (the event is decided). Because the cache file can now predate a failed check, `_load_cache` re-derives the flag: new `_clear_stale_deep_link_flags` clears a cached True that no fresh store record backs, then `_apply_deep_link_verifications` re-applies the fresh ones; a book the gate settles by declaration is unaffected. The one test pinning the old asymmetry (match list kept a stale True while the report was filtered) now asserts the flag is re-derived as well. **Measured** on the operator's real files: `_save_cache` 71.4 ms at 1.2 MB/384 matches (today's prematch), 201.2 ms at 3.7 MB/942 matches (live), 1230.3 ms at 21.6 MB/6,610 matches (the SR5-2 baseline shape, the row's size); a check now does zero cache writes and its two store writes take 0.325 ms. New tests: normal check writes no cache but persists the proof and updates memory; failed check removes the proof, records the decision, clears the flag; restart with an emptied store clears the cached flag. `pytest`: 2298 passed, 12 skipped (17 snapshots) in 116.27 s; ruff clean; mypy 275 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No live scan. |
