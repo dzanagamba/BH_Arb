@@ -2,9 +2,8 @@
 
 **Updated:** 2026-11-08
 **Goal:** keep `ROADMAP.md` current without weakening the trust model.
-**Current task:** **M3-1 in progress** (stages 1–2 done; stage 3, the JSON-store
-layer, remains). Done rows: SR0-1, SR0-2, SR1-1, SR1-2, SR1-3, SR1-4, M1-1, M1-2,
-M1-3, M2-1, M2-2, M2-3, M2-4, M2-5, SR2-1 …
+**Current task:** none; SR0-1, SR0-2, SR1-1, SR1-2, SR1-3, SR1-4, M1-1, M1-2,
+M1-3, M2-1, M2-2, M2-3, M2-4, M2-5, M3-1, SR2-1 …
 SR2-6, SR3-1, SR3-2, SR3-3, SR3-4, SR4-1, SR4-2, SR4-3, SR4-3b … SR4-3f,
 SR4-3h, SR4-3i, SR4-3j, SR4-4, SR4-5, SR4-6, SR4-7, SR4-7a, SR4-8, SR4-8a,
 SR4-9, SR4-10, SR4-11, SR4-12, SR4-13, SR5-1, SR5-2, SR6-1, SR6-2, SR6-3,
@@ -26,14 +25,16 @@ SR4-8a and SR4-8.
 
 ## Project state
 
-M3-1 stages 1–2 (2026-11-08, working tree, operator: continue): the pure
-candidate scoring now lives in `server/candidate_scoring.py` (one definition;
-api imports it and keeps no private copy), and `_state_for` returns a named
-`FeedState` instead of a five-value tuple. `server/api.py` is down from 5,903 to
-5,782 lines. Scores, ids, ordering and deep-link verdicts are unchanged; the
-script/test tuple unpacking still works. **Stage 3 (the JSON-store layer) is the
-remaining work on M3-1**, so the row stays `In progress` and the next session
-resumes it rather than picking a new row.
+M3-1 (2026-11-08, working tree, operator: continue): `server/api.py` fell from
+5,903 to **5,714 lines** in three behaviour-preserving stages. Pure candidate
+scoring lives in `server/candidate_scoring.py` (one definition, no import back
+into api); `_state_for` returns a named `FeedState`; and
+`server/json_store.py` owns `atomic_write_json`/`read_json`, used by every JSON
+reader and writer in api (toggles, allowlist, suppressed decisions, both
+deep-link stores, history, diagnostics stores, scan cache, link sweeps), with
+api no longer importing `json` or `tempfile`. Validation, locks, TTLs and merge
+rules stayed with each store's owner; scores, ids, ordering, scan results and
+deep-link verdicts are unchanged.
 
 M2-5 (2026-11-08, working tree, operator: continue): the mapping evidence
 ledger is now written as compact JSON, the same form as the scan caches, because
@@ -702,15 +703,14 @@ the seven-day opportunity baseline remains unmeasured and N2-4 owns it.
 
 ## Next action
 
-**M3-1 is in progress** (stage 3 remains); every other `Not started` row is
-gated. M1-1, M1-2, M1-3, M2-1, M2-2, M2-3, M2-4, M2-5 and SR4-8 closed the last
-ungated ones.
+**No `Not started` row is ungated.** M1-1, M1-2, M1-3, M2-1, M2-2, M2-3, M2-4,
+M2-5, M3-1 and SR4-8 closed the last ones.
 What is left needs the operator: **SR4-3g** (blocked on a live EVLBet payload —
 do not start it), the remaining **M\*** rows (all `Gate: operator`; each needs
 explicit approval and written acceptance criteria before any work), and the
 deferred N2-4 / waived P1-6 (leave both alone). Sensible next picks, in the
-order this session would take them: finish M3-1 stage 3, then M3-2 … M3-6,
-then M4/M5. All are `Gate: operator`. A HAR refresh is an operator action, not a task:
+order this session would take them: M3-2 … M3-6, then M4/M5. All are
+`Gate: operator`. A HAR refresh is an operator action, not a task:
 `python scripts/capture_har.py --books all`.
 
 ## Rules

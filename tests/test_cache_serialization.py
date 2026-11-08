@@ -8,7 +8,7 @@ from pathlib import Path
 
 from engine.certainty import CertaintyGate
 from models.schemas import Match, MatchGroup
-from server.api import _atomic_write_json
+from server.json_store import atomic_write_json
 
 
 def _match(bookmaker: str, home: str, away: str, home_n: str) -> Match:
@@ -74,7 +74,7 @@ def test_cached_group_payload_is_bounded(tmp_path: Path):
 
 def test_atomic_write_serializes_a_datetime(tmp_path: Path):
     path = tmp_path / "cache.json"
-    _atomic_write_json(
+    atomic_write_json(
         str(path),
         {"scan_time": datetime(2026, 11, 3, 5, 30), "matches": []},
         "cache",

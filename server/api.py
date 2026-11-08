@@ -8,12 +8,10 @@ diagnostics include ``/api/health``, ``/api/results``, ``/api/groups``,
 """
 
 import asyncio
-import json
 import logging
 import math
 import os
 import signal
-import tempfile
 import threading
 import time
 from datetime import UTC, datetime
@@ -192,6 +190,7 @@ from server.candidate_scoring import (
     pair_priority,
     team_similarity,
 )
+from server.json_store import atomic_write_json, read_json
 from server.maintenance import maintenance_running, retention_health
 from server.mapping_coverage import build_coverage, load_ledger
 from server.observability import (
@@ -295,9 +294,8 @@ def _load_market_state() -> None:
     """Restore runtime experimental-market toggles from the state file."""
     global _market_enabled
     try:
-        if os.path.exists(_MARKET_STATE_FILE):
-            with open(_MARKET_STATE_FILE, encoding="utf-8") as f:
-                saved = json.load(f)
+        saved = read_json(_MARKET_STATE_FILE)
+        if saved is not None:
             for market, state in saved.items():
                 if market in _market_enabled and isinstance(state, bool):
                     _market_enabled[market] = state
@@ -309,7 +307,7 @@ def _load_market_state() -> None:
 def _save_market_state() -> None:
     """Persist runtime experimental-market toggles to the state file."""
     try:
-        _atomic_write_json(_MARKET_STATE_FILE, _market_enabled, "market_state")
+        atomic_write_json(_MARKET_STATE_FILE, _market_enabled, "market_state")
     except Exception as e:
         logger.warning(f"Market state save failed: {e}")
 
@@ -323,9 +321,8 @@ def _load_bookmaker_state() -> None:
     """Restore runtime bookmaker toggles from the state file on startup."""
     global _bookmaker_enabled
     try:
-        if os.path.exists(_BOOKMAKER_STATE_FILE):
-            with open(_BOOKMAKER_STATE_FILE, encoding="utf-8") as f:
-                saved = json.load(f)
+        saved = read_json(_BOOKMAKER_STATE_FILE)
+        if saved is not None:
             for bid, state in saved.items():
                 if bid in _bookmaker_enabled and isinstance(state, bool):
                     _bookmaker_enabled[bid] = state
@@ -337,7 +334,7 @@ def _load_bookmaker_state() -> None:
 def _save_bookmaker_state() -> None:
     """Persist runtime bookmaker toggles to the state file."""
     try:
-        _atomic_write_json(_BOOKMAKER_STATE_FILE, _bookmaker_enabled, "bookmaker_state")
+        atomic_write_json(_BOOKMAKER_STATE_FILE, _bookmaker_enabled, "bookmaker_state")
     except Exception as e:
         logger.warning(f"Bookmaker state save failed: {e}")
 
@@ -417,42 +414,9 @@ _suppressed_premises: dict[str, str] = {}
 _SUPPRESSED_LOCK = threading.Lock()
 
 
-def _atomic_write_json(path: str, payload: object, prefix: str, indent: int | None = 2) -> None:
-    """Write JSON through a temp file so a reader never sees a partial document.
-
-    ``indent=None`` writes compact JSON. The scan cache uses that: it is a
-    machine file, never hand-edited, and indentation was a material share of a
-    218 MB cache before P0-1. Configuration and decision files keep the default
-    readable layout.
-    """
-    directory = os.path.dirname(path) or "."
-    os.makedirs(directory, exist_ok=True)
-    fd, temp_path = tempfile.mkstemp(prefix=f".{prefix}.", suffix=".tmp", dir=directory, text=True)
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as file:
-            json.dump(
-                payload,
-                file,
-                ensure_ascii=False,
-                indent=indent,
-                separators=(",", ":") if indent is None else None,
-                default=str,
-            )
-            file.flush()
-            os.fsync(file.fileno())
-        os.replace(temp_path, path)
-    finally:
-        if os.path.exists(temp_path):
-            try:
-                os.unlink(temp_path)
-            except OSError:
-                pass
-
-
 def _load_allowlist() -> set[str]:
     try:
-        with open(ALLOWLIST_FILE, encoding="utf-8") as file:
-            data = json.load(file)
+        data = read_json(ALLOWLIST_FILE)
         if not isinstance(data, dict) or not isinstance(data.get("aliases"), list):
             return set()
         return {alias for alias in data["aliases"] if isinstance(alias, str)}
@@ -461,7 +425,7 @@ def _load_allowlist() -> set[str]:
 
 
 def _save_allowlist(aliases: set[str]) -> None:
-    _atomic_write_json(ALLOWLIST_FILE, {"aliases": sorted(aliases)}, "team_alias_allowlist")
+    atomic_write_json(ALLOWLIST_FILE, {"aliases": sorted(aliases)}, "team_alias_allowlist")
 
 
 def _using_default_decision_store() -> bool:
@@ -481,22 +445,18 @@ def _load_suppressed_candidates() -> dict[str, str]:
         else:
             if stored:
                 return stored
-    try:
-        with open(SUPPRESSED_CANDIDATES_FILE, encoding="utf-8") as file:
-            data = json.load(file)
-        decisions = data.get("decisions") if isinstance(data, dict) else None
-        if not isinstance(decisions, dict):
-            # A file written before premises existed: a flat id -> decision map.
-            decisions = data
-        if not isinstance(decisions, dict):
-            return {}
-        return {
-            candidate_id: decision
-            for candidate_id, decision in decisions.items()
-            if isinstance(candidate_id, str) and decision in ("approved", "rejected")
-        }
-    except (OSError, TypeError, ValueError):
+    data = read_json(SUPPRESSED_CANDIDATES_FILE)
+    decisions = data.get("decisions") if isinstance(data, dict) else None
+    if not isinstance(decisions, dict):
+        # A file written before premises existed: a flat id -> decision map.
+        decisions = data
+    if not isinstance(decisions, dict):
         return {}
+    return {
+        candidate_id: decision
+        for candidate_id, decision in decisions.items()
+        if isinstance(candidate_id, str) and decision in ("approved", "rejected")
+    }
 
 
 def _load_suppressed_premises() -> dict[str, str]:
@@ -513,23 +473,19 @@ def _load_suppressed_premises() -> dict[str, str]:
         else:
             if stored:
                 return stored
-    try:
-        with open(SUPPRESSED_CANDIDATES_FILE, encoding="utf-8") as file:
-            data = json.load(file)
-        premises = data.get("premises") if isinstance(data, dict) else None
-        if not isinstance(premises, dict):
-            return {}
-        return {
-            candidate_id: premise
-            for candidate_id, premise in premises.items()
-            if isinstance(candidate_id, str) and isinstance(premise, str)
-        }
-    except (OSError, TypeError, ValueError):
+    data = read_json(SUPPRESSED_CANDIDATES_FILE)
+    premises = data.get("premises") if isinstance(data, dict) else None
+    if not isinstance(premises, dict):
         return {}
+    return {
+        candidate_id: premise
+        for candidate_id, premise in premises.items()
+        if isinstance(candidate_id, str) and isinstance(premise, str)
+    }
 
 
 def _save_suppressed_candidates() -> None:
-    _atomic_write_json(
+    atomic_write_json(
         SUPPRESSED_CANDIDATES_FILE,
         {
             "decisions": dict(sorted(_suppressed_candidates.items())),
@@ -804,11 +760,7 @@ def _deep_link_record_is_fresh(record: dict | None, now: datetime | None = None)
 def _load_deep_link_verifications() -> dict[str, dict[str, dict]]:
     """Load the store, dropping entries that are malformed or past their TTL."""
     state: dict[str, dict[str, dict]] = {}
-    try:
-        with open(DEEP_LINK_VERIFICATIONS_FILE, encoding="utf-8") as f:
-            data = json.load(f)
-    except (OSError, TypeError, ValueError):
-        return state
+    data = read_json(DEEP_LINK_VERIFICATIONS_FILE)
     if not isinstance(data, dict):
         return state
     for mode, entries in data.items():
@@ -822,7 +774,7 @@ def _load_deep_link_verifications() -> dict[str, dict[str, dict]]:
 
 
 def _save_deep_link_verifications(state: dict[str, dict[str, dict]]) -> None:
-    _atomic_write_json(DEEP_LINK_VERIFICATIONS_FILE, state, "deep_link_verifications")
+    atomic_write_json(DEEP_LINK_VERIFICATIONS_FILE, state, "deep_link_verifications")
 
 
 def _record_deep_link_outcomes(mode: str, bookmaker: str, outcomes: list) -> None:
@@ -877,11 +829,7 @@ def _deep_link_decision_is_fresh(record: dict, now: datetime | None = None) -> b
 def _load_deep_link_decisions() -> dict[str, dict[str, dict]]:
     """Load the decision store, dropping entries that are malformed or past TTL."""
     state: dict[str, dict[str, dict]] = {}
-    try:
-        with open(DEEP_LINK_DECISIONS_FILE, encoding="utf-8") as f:
-            data = json.load(f)
-    except (OSError, TypeError, ValueError):
-        return state
+    data = read_json(DEEP_LINK_DECISIONS_FILE)
     if not isinstance(data, dict):
         return state
     for mode, entries in data.items():
@@ -895,7 +843,7 @@ def _load_deep_link_decisions() -> dict[str, dict[str, dict]]:
 
 
 def _save_deep_link_decisions(state: dict[str, dict[str, dict]]) -> None:
-    _atomic_write_json(DEEP_LINK_DECISIONS_FILE, state, "deep_link_decisions")
+    atomic_write_json(DEEP_LINK_DECISIONS_FILE, state, "deep_link_decisions")
 
 
 def _record_deep_link_decisions(mode: str, bookmaker: str, outcomes: list) -> None:
@@ -1040,8 +988,7 @@ def _load_history() -> None:
         if rows:
             scan_history = rows
         elif os.path.exists(_HISTORY_FILE):
-            with open(_HISTORY_FILE, encoding="utf-8") as file:
-                loaded = json.load(file)
+            loaded = read_json(_HISTORY_FILE)
             if isinstance(loaded, list):
                 scan_history = loaded
         logger.info("Loaded %s scan history entries", len(scan_history))
@@ -1052,7 +999,7 @@ def _load_history() -> None:
 def _save_history() -> None:
     """Persist the JSON compatibility export."""
     try:
-        _atomic_write_json(_HISTORY_FILE, scan_history, "scan_history")
+        atomic_write_json(_HISTORY_FILE, scan_history, "scan_history")
     except Exception as e:
         logger.warning(f"History save failed: {e}")
 
@@ -3043,11 +2990,7 @@ def _freshness_block(mode: str, status: ScanStatus, matches: list[dict]) -> dict
 def _load_opportunity_metrics() -> None:
     """Restore the last aggregate summary and bounded crossing-key store."""
     global _opportunity_by_mode, _crossing_lifetimes, _opportunity_history
-    try:
-        with open(_OPPORTUNITY_METRICS_FILE, encoding="utf-8") as file:
-            data = json.load(file)
-    except (OSError, ValueError):
-        return
+    data = read_json(_OPPORTUNITY_METRICS_FILE)
     if not isinstance(data, dict):
         return
     last = data.get("last")
@@ -3077,7 +3020,7 @@ def _load_opportunity_metrics() -> None:
 def _save_opportunity_metrics() -> None:
     """Persist only aggregates and crossing keys, never the full board."""
     try:
-        _atomic_write_json(
+        atomic_write_json(
             _OPPORTUNITY_METRICS_FILE,
             {
                 "last": _opportunity_by_mode,
@@ -3094,11 +3037,7 @@ def _save_opportunity_metrics() -> None:
 def _load_feed_integrity() -> None:
     """Restore the per-book scorecards and their bounded recent history."""
     global _feed_integrity
-    try:
-        with open(_FEED_INTEGRITY_FILE, encoding="utf-8") as file:
-            data = json.load(file)
-    except (OSError, ValueError):
-        return
+    data = read_json(_FEED_INTEGRITY_FILE)
     if not isinstance(data, dict):
         return
     restored: dict[str, dict[str, dict]] = {"prematch": {}, "live": {}}
@@ -3116,7 +3055,7 @@ def _load_feed_integrity() -> None:
 def _save_feed_integrity() -> None:
     """Persist the scorecard; history is already bounded per book."""
     try:
-        _atomic_write_json(
+        atomic_write_json(
             _FEED_INTEGRITY_FILE,
             _feed_integrity,
             "feed_integrity",
@@ -3129,11 +3068,7 @@ def _save_feed_integrity() -> None:
 def _load_stale_price_state() -> None:
     """Restore the bounded observation store and last scan's refusals."""
     global _stale_price_store, _stale_price_evidence, _stale_price_checked_at
-    try:
-        with open(_STALE_PRICE_FILE, encoding="utf-8") as file:
-            data = json.load(file)
-    except (OSError, ValueError):
-        return
+    data = read_json(_STALE_PRICE_FILE)
     if not isinstance(data, dict):
         return
     stores = data.get("stores")
@@ -3160,7 +3095,7 @@ def _load_stale_price_state() -> None:
 def _save_stale_price_state() -> None:
     """Persist only the bounded store and the compact refusal evidence."""
     try:
-        _atomic_write_json(
+        atomic_write_json(
             _STALE_PRICE_FILE,
             {
                 "stores": _stale_price_store,
@@ -3205,11 +3140,7 @@ def _load_coverage_budget() -> None:
     global _coverage_budget, _coverage_history, _mapping_coverage
     global _coverage_trend, _zero_result_streaks
     global _cardinality, _cardinality_history
-    try:
-        with open(_COVERAGE_BUDGET_FILE, encoding="utf-8") as file:
-            data = json.load(file)
-    except (OSError, ValueError):
-        return
+    data = read_json(_COVERAGE_BUDGET_FILE)
     if not isinstance(data, dict):
         return
     last = data.get("last")
@@ -3289,7 +3220,7 @@ def _load_coverage_budget() -> None:
 
 def _save_coverage_budget() -> None:
     try:
-        _atomic_write_json(
+        atomic_write_json(
             _COVERAGE_BUDGET_FILE,
             {
                 "last": _coverage_budget,
@@ -3310,11 +3241,7 @@ def _save_coverage_budget() -> None:
 def _load_scan_cost() -> None:
     """Restore the bounded per-scan per-book cost history."""
     global _scan_cost, _scan_cost_history
-    try:
-        with open(_SCAN_COST_FILE, encoding="utf-8") as file:
-            data = json.load(file)
-    except (OSError, ValueError):
-        return
+    data = read_json(_SCAN_COST_FILE)
     if not isinstance(data, dict):
         return
     last = data.get("last")
@@ -3333,7 +3260,7 @@ def _load_scan_cost() -> None:
 
 def _save_scan_cost() -> None:
     try:
-        _atomic_write_json(
+        atomic_write_json(
             _SCAN_COST_FILE,
             {"last": _scan_cost, "history": _scan_cost_history},
             "scan_cost",
@@ -3385,7 +3312,7 @@ def _save_cache(mode: str = "prematch"):
     cache_file = _LIVE_CACHE_FILE if mode == "live" else _PREMATCH_CACHE_FILE
     try:
         scan_time = status.last_scan_time.isoformat() if status.last_scan_time else None
-        # `_atomic_write_json` uses `default=str`, so the payload is written
+        # `atomic_write_json` uses `default=str`, so the payload is written
         # directly. Round-tripping it through `json.dumps`/`json.loads` first
         # built two full-size strings for a 180 MB cache and left the RSS
         # high-water mark behind after every scan.
@@ -3403,7 +3330,7 @@ def _save_cache(mode: str = "prematch"):
             "scan_time": scan_time,
             "fetched_at": scan_time,
         }
-        _atomic_write_json(
+        atomic_write_json(
             cache_file, payload, os.path.basename(cache_file), indent=None
         )
         size = _cache_size(cache_file)
@@ -3564,10 +3491,9 @@ def _load_cache():
     ):
         status, surebets_cache, matches_cache, report_cache = state_fields
         try:
-            if not os.path.exists(cache_file):
+            data = read_json(cache_file)
+            if not isinstance(data, dict):
                 continue
-            with open(cache_file, encoding="utf-8") as f:
-                data = json.load(f)
             scan_time = data.get("scan_time")
             # TTL: discard cache older than 30 minutes (stale cache replay guard)
             if scan_time:
@@ -5440,11 +5366,7 @@ async def verify_links(
 
 
 def _load_link_sweeps() -> dict[str, Any]:
-    try:
-        with open(_LINK_SWEEP_FILE, encoding="utf-8") as file:
-            loaded = json.load(file)
-    except (OSError, ValueError):
-        return {"sweeps": []}
+    loaded = read_json(_LINK_SWEEP_FILE)
     if not isinstance(loaded, dict) or not isinstance(loaded.get("sweeps"), list):
         return {"sweeps": []}
     return loaded
@@ -5459,7 +5381,7 @@ async def save_link_sweep(
     payload = _load_link_sweeps()
     payload["sweeps"].append(report.model_dump(mode="json"))
     payload["sweeps"] = payload["sweeps"][-_LINK_SWEEP_MAX:]
-    _atomic_write_json(_LINK_SWEEP_FILE, payload, "link_sweeps")
+    atomic_write_json(_LINK_SWEEP_FILE, payload, "link_sweeps")
     return {"saved": True, "count": len(payload["sweeps"])}
 
 

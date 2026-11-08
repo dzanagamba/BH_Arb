@@ -59,6 +59,13 @@ ledger (16,649 claims): **93,981,475 → 50,054,456 bytes (−46.7 %)**, under t
 67.1 MB budget, with load **1.83 → 1.73 s** and save **4.45 → 4.01 s** (best of
 three and two runs). No claim or evidence record was removed.
 
+All of these documents go through `server/json_store.py` (M3-1 stage 3):
+`atomic_write_json` replaces a file whole through a temp file in its directory,
+so a reader never sees a partial write, and `read_json` reads a missing,
+unreadable or malformed document as `None` so the store's owner starts from its
+own default. The layer carries no schema, lock or merge policy; shape checks,
+TTLs and decisions stay with each store.
+
 ## Retention and maintenance (N1-1)
 
 Every runtime store now has a configured window in `config/settings.py`:

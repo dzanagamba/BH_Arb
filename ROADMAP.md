@@ -166,7 +166,7 @@ do not copy stale numbers here.
 | M2-3 | Serve a cached `/api/health` summary | Done | — | operator |
 | M2-4 | Decide the candidate queue cap | Done | — | operator |
 | M2-5 | Review compact cache/ledger representations | Done | — | operator |
-| M3-1 | Decompose `server/api.py` | In progress | — | operator |
+| M3-1 | Decompose `server/api.py` | Done | — | operator |
 | M3-2 | Move the deep-link store to `engine/` | Not started | — | operator |
 | M3-3 | One link-settled predicate | Not started | — | operator |
 | M3-4 | Unify datetime and SQLite helpers | Not started | — | operator |
@@ -2670,7 +2670,7 @@ Acceptance (written before coding, 2026-11-08):
 
 ### M3-1 Decompose `server/api.py`
 
-Status: In progress
+Status: Done
 
 Gate: operator
 
@@ -2696,23 +2696,37 @@ Acceptance (written before coding, 2026-11-08):
       (`status`, `surebets`, `matches`, `report`, `per_bookie`), route call sites
       read named fields instead of five anonymous values, and the pre-existing
       tuple unpacking in scripts/tests keeps working.
-- [ ] Stage 3: the JSON-store layer is extracted without touching scan or
+- [x] Stage 3: the JSON-store layer is extracted without touching scan or
       deep-link semantics.
 - [x] Behaviour is unchanged: scores, ids, ordering, scan results and deep-link
       verdicts are the same before and after; the suite is green.
 
-**Stage 1 & 2 Outcome (2026-11-08).** `server/candidate_scoring.py` (198 lines)
-now owns the scoring helpers; `server/api.py` fell from 5,903 to 5,782 lines and
-imports the one definition (no duplicate). `FeedState` names the five values
-`_state_for` returned, and the route call sites read `state.report` /
-`state.matches` / `state.status`; a NamedTuple keeps the old tuple unpacking in
-`scripts/record_scan.py` and the tests working. `server.mapping_coverage`
-accepts a `Sequence` so the typed match list stays assignable. New
-`tests/test_candidate_scoring.py` pins the no-`server.api`-import rule and that
-api re-uses the module's objects; `tests/test_ci_hardening.py` follows the
-`usedforsecurity=False` call site to the new module. Full suite 2,314 passed,
-12 skipped (see the execution log). Stage 3 (the JSON-store layer) is the
-remaining work on this row.
+**Outcome (2026-11-08, all three stages).** `server/api.py` fell from **5,903
+to 5,714 lines** across three behaviour-preserving extractions:
+
+1. `server/candidate_scoring.py` (198 lines) owns the scoring helpers; api
+   imports the one definition (no duplicate) and the module never imports
+   `server.api`.
+2. `FeedState` names the five values `_state_for` returned; route call sites
+   read `state.report` / `state.matches` / `state.status`, and the NamedTuple
+   keeps the old tuple unpacking in `scripts/record_scan.py` and the tests
+   working. `server.mapping_coverage` accepts a `Sequence` so the typed match
+   list stays assignable.
+3. `server/json_store.py` (70 lines) owns the JSON-store layer:
+   `atomic_write_json` (whole-document replacement through a temp file) and
+   `read_json` (missing or malformed reads as `None`). Every JSON reader and
+   writer in api uses it — toggles, allowlist, suppressed decisions, both
+   deep-link stores, history export, the diagnostics stores, the scan cache and
+   link sweeps — and `json`/`tempfile` are no longer imported by api. Validation,
+   locks, TTL filtering and merge rules stay with each store's owner; no scan or
+   deep-link behaviour changed.
+
+`tests/test_candidate_scoring.py` pins the module boundary,
+`tests/test_json_store.py` pins whole-file replacement (a failed write keeps the
+old document and no temp file), the forgiving read and the compact form;
+`tests/test_ci_hardening.py` and `tests/test_cache_serialization.py` follow the
+moved call sites. Full suite **2,320 passed, 12 skipped** (17 snapshots) in
+117.95 s (see the execution log).
 
 
 ### M3-2 Move the deep-link store to `engine/`
@@ -3237,3 +3251,4 @@ Useful starting points:
 | 2026-11-08 | M1-2 | Done | Operator: continue. Decision: **reject with 422**. `accepted_odds: 0` is the explicit "not placed" sentinel, but it is a sentinel on both fields: `BetStore.settle` already treats either zero as not placed (bankroll, staked and profit stay correct) and CLV skips a falsy accepted odds, so the old behaviour was safe for money but silent — a positive stake at a price that cannot exist was neutralised and the operator's claimed stake vanished from P/L with no warning. The dashboard cannot produce it ("Mark placed" refuses odds < 1.01 and sends both accepted fields from the same `placed` flag), so only a hand-written client could. New `BetLegPayload` model validator `_a_stake_needs_a_price` refuses `accepted_stake > 0` with `accepted_odds == 0` with a 422 that names both fields, and writes no row. The sentinel stays: both zero = not placed, `accepted_odds: null` still falls back to the planned price, a zero stake with a real price is still accepted. `BetStore.settle` unchanged, so an already-stored inconsistent row still settles as not placed (verified: staked 0.0, payout 0.0, profit 0.0). Four new tests in `tests/test_bet_log.py`; `docs/BET_LOG.md` documents the pair rule. `pytest`: 2310 passed, 12 skipped (17 snapshots) in 117.63 s; ruff clean; mypy 275 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No live scan. |
 | 2026-11-08 | M2-5 | Done | Operator: continue. Decision: **keep every piece of evidence; compact the representation that has no human reader.** The operator's `config/generated/mapping_evidence.json` was 93,981,475 bytes / 16,649 claims written with `indent=2` — over the 67.1 MB `MAPPING_LEDGER_BUDGET_BYTES` — while every consumer loads it through `MappingLedger.load()` or `json.load`: the gate, learner, replay, league resolver (`detail["teams"]`), candidate remediation and mapping coverage (evidence types), `scripts/generate_market_registry.py` (last evidence detail), maintenance prune and `/api/health.retention` bytes. The scan caches and every diagnostics file were already compact; only the ledger (and the two small human-inspectable decision/link-sweep files) were indented. `MappingLedger.save()` now writes `separators=(",", ":")` with `sort_keys=True`; schema, claims, evidence, statuses, TTLs and the prune rule are unchanged, and `prune()` remains the only evidence-dropping step (maintenance only). Audit recorded in `docs/STORAGE.md`. Two tests: compact file (no newline, smaller than indented), and a nine-record claim round-trips intact above the prune cap. **Measured on a copy of the real ledger: 93,981,475 -> 50,054,456 bytes (-46.7 %), under budget without pruning; load 1.83 -> 1.73 s, save 4.45 -> 4.01 s.** `pytest`: 2312 passed, 12 skipped (17 snapshots) in 116.23 s; ruff clean; mypy 275 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No live scan, no runtime state rewritten. |
 | 2026-11-08 | M3-1 (stages 1–2) | In progress | Operator: continue. Stage 1: the pure candidate scoring moved to **`server/candidate_scoring.py`** (198 lines) — `TeamTokens`, `FoundPair`, kickoff keys/bucketing, `match_event_ref`/`match_side_key`, `bigrams`, `shares_any_signal`, `team_similarity`, `token_run_shared`, `canonical_pair_key`, `candidate_id`, `pair_priority` — with one definition; `server/api.py` imports it (5,903 → 5,782 lines), no private copy remains, and the module imports no `server.api`. `tests/test_scan_candidates.py` and `scripts/audit_league_pairs.py` read the new module; `tests/test_candidate_scoring.py` pins the import rule and object identity. Stage 2: `_state_for` now returns a **`FeedState`** NamedTuple (`status`, `surebets`, `matches`, `report`, `per_bookie`); api route call sites read named fields, while the existing tuple unpacking in `scripts/record_scan.py` and tests keeps working; `server.mapping_coverage` takes a `Sequence` so the typed list stays assignable. `tests/test_ci_hardening.py` follows the `usedforsecurity=False` call site to the new module. Stage 3 (JSON-store layer) remains. `pytest`: 2314 passed, 12 skipped (17 snapshots) in 112.49 s; ruff clean; mypy 277 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No live scan; scores, ids, ordering and deep-link verdicts unchanged. |
+| 2026-11-08 | M3-1 (stage 3) | Done | Operator: continue. New **`server/json_store.py`** (70 lines) owns the JSON-store layer: `atomic_write_json` (temp file + `os.replace`, the writer moved out of api) and `read_json` (missing/unreadable/malformed → `None`). Every JSON reader and writer in `server/api.py` now uses it: market/bookmaker toggles, allowlist, suppressed decisions and premises, both deep-link stores, the history export, opportunity metrics, feed integrity, stale price state, coverage budget, scan cost, the scan cache loaders and link sweeps. Shape validation, locks, TTL filtering and merge rules stay with each store's owner, so scan and deep-link semantics are unchanged. `server/api.py` **5,782 → 5,714 lines** (5,903 → 5,714 across M3-1) and no longer imports `json` or `tempfile`. New `tests/test_json_store.py`: compact output, readable default, whole replacement with no temp file, a failed write keeping the previous document, and the forgiving read; `tests/test_cache_serialization.py` and `tests/test_candidates_api.py` follow the moved writer. `pytest`: 2320 passed, 12 skipped (17 snapshots) in 117.95 s; ruff clean; mypy 279 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No live scan. |

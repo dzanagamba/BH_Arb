@@ -13,7 +13,7 @@ from engine.matcher import MatchMatcher
 from models.schemas import CandidateReview, Match
 from scrapers import common
 from scrapers.common import declares_no_event_id, effective_deeplink_declarations
-from server import api
+from server import api, json_store
 from server.app import app
 
 client = TestClient(app)
@@ -334,7 +334,7 @@ def test_allowlist_replace_is_atomic_for_concurrent_reader(monkeypatch):
         release_dump.wait(5)
         return original_dump(payload, file, *args, **kwargs)
 
-    monkeypatch.setattr(api.json, "dump", paused_dump)
+    monkeypatch.setattr(json_store.json, "dump", paused_dump)
 
     def write_allowlist():
         try:
