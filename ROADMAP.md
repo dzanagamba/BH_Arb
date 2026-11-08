@@ -2297,6 +2297,149 @@ Acceptance (written before coding, 2026-11-08):
       `/api/status` latency during a stubbed scan written into the outcome.
 
 
+### M2-2 Stop rewriting the cache on verify-links
+
+Status: Not started
+
+Gate: operator
+
+Why / what: Stop rewriting the ~55 MB scan cache on every `/api/verify-links`
+call; persist failed-check results without a full cache write.
+
+Acceptance:
+- [x] Operator approval recorded here.
+- [x] Acceptance criteria written here before coding.
+
+### M2-3 Serve a cached `/api/health` summary
+
+Status: Done
+
+Gate: operator
+
+**Decision (2026-11-08, operator): cache the health summary.** Picked from the
+gated queue as the next row.
+
+Why / what: Serve a cached `/api/health` summary instead of recomputing freshness
+and the candidate queue on every poll.
+
+**M2-3 Outcome (2026-11-08).** `server/api.py::health()` is split in two:
+`_health_summary()` builds the 31 measured blocks (parser contracts,
+admissibility audit, retention, cache sizes, freshness, stale prices, feed
+integrity, cardinality, mapping coverage/trends, scan cost, pairing, candidate
+blockers/remediation/trends, the cached counters and the `unverified_links`
+walk) and caches them for `HEALTH_CACHE_SECONDS` (new setting, env
+`HEALTH_CACHE_SECONDS`, default 2.0 s, `0` disables); the endpoint adds the 18
+live fields per request (scanning state, the cached surebet/match counters,
+`book_health`, the breaker snapshots, `memory`, `alerts`, `ai_available`,
+per-bookie errors and the deep-link declaration source/audit). The payload gains
+`health_cache: {ttl_seconds, generated_at, age_seconds}`; no shipped key was
+renamed or removed (pinned by `tests/test_health_cache.py`). `run_scan` drops
+the cache when it starts and in its `finally`, so progress and a completed scan
+are visible on the next poll, and `tests/conftest.py` drops it per test so one
+test's scan data cannot answer another's diagnostics.
+**Measured** with `health()` called directly in the same process: empty state
+2.241 ms → 0.337 ms with the cache (85 % less); 6,600 prematch + 2,000 live
+cached matches 20.32 ms → 0.33 ms (98 % less), the walk over the cached matches
+being the dominant cost. Through `TestClient`, `/api/health` went from 5.74 ms
+to 3.80 ms (the client's own overhead dominates there). Roughly 1.7 ms of the
+empty-state cost was the three file-backed blocks (`admissibility_health`
+0.98 ms, `retention_health` 0.46 ms, `contract_health` 0.22 ms). Health stays a
+diagnostic: the certainty gate, feed integrity and pricing never read it.
+New `tests/test_health_cache.py` (6 tests: hit does not rebuild, TTL expiry
+rebuilds, `0` disables, live fields stay fresh, shipped key set unchanged, a
+scan drops it). Two existing helpers that emulate a completed scan now drop the
+cache before reading (`tests/test_frontend_empty_state.py`), and the one test
+that changed the declaration map mid-test does the same
+(`tests/test_candidates_api.py`), with the reason recorded there. `README.md`
+and `.env.example` document the setting.
+
+**M1-3 Outcome (2026-11-08).** `config/settings.py` gained
+`AUTH_FAILURE_RATE_LIMIT` (default 10, `0` disables) and `AUTH_CACHE_SECONDS`
+(default 60, `0` disables). `server/auth.py::ApiKeyStore.verify` now keeps a
+bounded, in-memory cache of successful verifications keyed by `sha256(token)`
+(the token is never held), with the key id and scope snapshot; a hit runs no
+PBKDF2 and writes no file. `invalidate()` clears the cache on `create()` and
+`revoke()`, so a revoked key answers 401 on its very next request inside the
+TTL, a new key works at once, and a failure is never cached. Every hit also
+compares the store file's mtime+size, so a hand edit or a second process is
+noticed without a re-hash (the TTL only bounds a store that never changes).
+`last_used_at` is persisted at most once per key per TTL instead of on every
+request; with the cache disabled the old write-per-request remains. A
+process-wide `FailureLimiter` (`auth.auth_failures`, counter per client address
+in the shared `RATE_LIMIT_WINDOW_SECONDS`) is consulted by `api_key_guard`
+**before** resolving, so `AUTH_FAILURE_RATE_LIMIT` failures then `429` with
+`Retry-After` spend no PBKDF2; a success clears that address's counter and
+`/api/health` is never throttled.
+**Measured** on this host with 10 stored keys, 25 requests to `/api/results` per
+mode: **83.47 → 3.33 ms per request** (25.1x, −80.1 ms) with
+`AUTH_CACHE_SECONDS` 0 → 60; the PBKDF2 alone measured 84.75 ms per verify
+before the change. New `tests/test_auth_limits.py` (14 tests) covers the cache
+(hit spends no `_hash`, TTL expiry, `0` disables, revoke immediate, out-of-band
+revoke seen, wrong token not cached, no store write on a hit) and the limiter
+(N failures then 429 + `Retry-After`, success resets, `0` disables,
+per-address isolation, sliding window, no PBKDF2 while blocked, public health).
+`tests/conftest.py` resets the process-wide budget per test; the route-coverage
+test resets it per request so the sweep still proves 401 rather than 429.
+`README.md`, `.env.example` and `docs/AUTH.md` document both knobs.
+
+Acceptance (written before coding, 2026-11-08):
+- [x] Operator approval recorded here.
+- [x] The expensive summary blocks are cached for `HEALTH_CACHE_SECONDS`
+      (default 2.0 s, `0` disables): parser contracts, admissibility audit,
+      retention, cache sizes, freshness, stale prices, unverified links,
+      candidate blockers/remediation and the trends, mapping coverage, closing
+      capture, skin detection, cardinality, feed integrity, pairing, scan cost
+      and the cached counters that walk the scan data. Measured baseline:
+      `admissibility_health` 0.98 ms + `retention_health` 0.46 ms +
+      `contract_health` 0.22 ms of a 2.17 ms call, and the gate-facing
+      `unverified_links` walk alone costs ~16 ms at 6,600 cached matches.
+- [x] The live fields stay per request: `scanning`, the cached
+      surebet/match counters, `book_health`, the breaker snapshots, `memory`,
+      `alerts`, `ai_available`, per-bookie errors and the deep-link declaration
+      fields (a test edits that file and re-reads health).
+- [x] A scan start and a scan finish reset the cache, so progress and a
+      completed scan are visible on the next poll.
+- [x] The payload gains `health_cache: {ttl_seconds, generated_at,
+      age_seconds}`; no existing key is renamed or removed, so `/api/health`
+      stays a diagnostic and no pricing path reads it.
+- [x] Measured before/after (`health()` called directly, same process state)
+      pasted in the execution log.
+- [x] Tests: a cache hit does not call the builders again, the TTL expiry
+      rebuilds, `HEALTH_CACHE_SECONDS=0` always rebuilds, a live field changes
+      between two cached calls, the key set is unchanged, a scan resets it, and
+      the suite clears the cache between tests. `unverified_links` stays in the
+      cached summary (its walk is the expensive part), so
+      `tests/test_candidates_api.py` drops the cache explicitly before it reads
+      the second count.
+
+### M2-4 Decide the candidate queue cap
+
+Status: Not started
+
+Gate: operator
+
+Why / what: Decide whether to cap the candidate review queue (14k+ rows) and how
+to report the denominator. Do not trim silently.
+
+Acceptance:
+- [x] Operator approval recorded here.
+- [x] Acceptance criteria written here before coding.
+
+### M2-5 Review compact cache/ledger representations
+
+Status: Not started
+
+Gate: operator
+
+Why / what: Evaluate the compact cache/ledger representations against every
+consumer; never delete runtime evidence to meet a budget.
+
+Acceptance:
+- [x] Operator approval recorded here.
+- [x] Acceptance criteria written here before coding.
+
+---
+
 ### M3 — Architecture (from the old maintenance backlog)
 
 ### M3-1 Decompose `server/api.py`
