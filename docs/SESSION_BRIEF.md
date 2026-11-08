@@ -3,16 +3,15 @@
 **Updated:** 2026-11-08
 **Goal:** keep `ROADMAP.md` current without weakening the trust model.
 **Current task:** none; SR1-1, SR1-2, SR1-3, SR2-1, SR2-2, SR2-3, SR2-4, SR2-5,
-SR2-6, SR7-1 and SR7-2 are done. SR7-1 and SR7-2 are uncommitted in the
-working tree. The roadmap
+SR2-6, SR7-1 and SR7-2 are done and pushed. The roadmap
 is the single task list in `ROADMAP.md`; N2-4 stays deferred and P1-6 stays
 waived until the operator says otherwise.
-**Last task commit:** `a13229a` — per-book rate limit, scan deadlines and
-circuit breaker (SR2-4, SR2-5, SR2-6).
+**Last task commit:** `d963625` — full per-match offers for Mozzartbet and
+Betole, and the per-book request rate (SR7-1, SR7-2).
 
 ## Project state
 
-SR7-1 (2026-11-08, **uncommitted**): both books now parse their full offer.
+SR7-1 (2026-11-08, commit `d963625`): both books now parse their full offer.
 Betole uses the batched `matches/by-ids` endpoint (22 requests for 809 matches);
 Mozzartbet needs one `POST /betting/match/{id}` per event (678 requests,
 159.9 s). Betole gained double chance and the 1.5/3.5/4.5/5.5 totals, Mozzartbet
@@ -24,7 +23,7 @@ re-recorded as `docs/evidence/2026-11-08-admissibility-baseline.json`. Handicap
 and Asian handicap stay unmapped: the offer carries the picks but not the line
 value.
 
-SR7-2 (2026-11-08, **uncommitted**): `SCRAPER_BOOK_RATES` overrides the outgoing
+SR7-2 (2026-11-08, commit `d963625`): `SCRAPER_BOOK_RATES` overrides the outgoing
 ceiling per book (`mozzartbet=60` by default; every other book keeps 5/s).
 Betole's full-offer batches run 8-in-flight. Measured: scan wall 237 s → 121-124 s,
 Mozzartbet 159.9 s → ~41 s, Betole 31.3 s → 13.3 s, requests unchanged. The
