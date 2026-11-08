@@ -164,7 +164,7 @@ do not copy stale numbers here.
 | M2-1 | Move scan CPU/I/O off the event loop | Done | — | operator |
 | M2-2 | Stop rewriting the cache on verify-links | Done | — | operator |
 | M2-3 | Serve a cached `/api/health` summary | Done | — | operator |
-| M2-4 | Decide the candidate queue cap | Not started | — | operator |
+| M2-4 | Decide the candidate queue cap | Done | — | operator |
 | M2-5 | Review compact cache/ledger representations | Not started | — | operator |
 | M3-1 | Decompose `server/api.py` | Not started | — | operator |
 | M3-2 | Move the deep-link store to `engine/` | Not started | — | operator |
@@ -2471,16 +2471,87 @@ Acceptance (written before coding, 2026-11-08):
 
 ### M2-4 Decide the candidate queue cap
 
-Status: Not started
+Status: Done
 
 Gate: operator
+
+**Decision (2026-11-08, operator: "Continue with M2-4, the candidate queue
+cap"): cap the queue and report the denominator.** Measured from the operator's
+own scan history (`cache/bh_arb.sqlite3`, 25 recorded scans): the prematch queue
+reached **14,249** pairs (11,657 matches, 1,800 groups), median 5,855; the live
+queue peaked at 766. Only **473** (3.3 % of the peak) were actionable, and the
+queue is already ordered so the actionable ones come first. Cost of keeping all
+of them, measured at 14,249 on this host: `/api/candidates` **8.9 ms** per poll
+(it is sync on the event loop), health's candidate blocks **1.7 + 20.5 ms** per
+summary rebuild, and **~19.8 MB** of candidate JSON (more as pydantic objects),
+held until the next scan.
+
+So: keep the queue capped at `CANDIDATE_QUEUE_MAX` (default **2,000**, `0`
+disables) in the existing priority order — closeable, alias-actionable, fewest
+human blockers, tightest kickoff, closest names, id — and never trim silently:
+the found/retained/dropped numbers are reported everywhere the queue is
+described.
 
 Why / what: Decide whether to cap the candidate review queue (14k+ rows) and how
 to report the denominator. Do not trim silently.
 
-Acceptance:
-- [x] Operator approval recorded here.
-- [x] Acceptance criteria written here before coding.
+**M2-4 Outcome (2026-11-08).** `server/api.py` gained
+`CANDIDATE_QUEUE_MAX` (env of the same name, default 2000, `0` disables) and
+`CANDIDATE_TRIM_FACTOR` (4). `_build_candidates` counts every pair it finds,
+bounds its transient list with `_pair_priority` (the same total order the final
+cut uses, so the answer cannot change) and keeps the top N; it returns the
+retained queue, the ordered pairs and the found/retained/dropped/cap plus
+found-side actionable/closeable counts. `_collect_candidates` takes an optional
+`stats` out-parameter, so its many test callers keep the plain queue. `run_scan`
+stores the numbers in `candidate_totals[mode]`. `/api/candidates` now reports
+`found`, `retained`, `dropped`, `cap`, `actionable_found`, `closeable_found`
+beside the retained `total`/`actionable_total`/`closeable_total`; health serves
+`candidate_queue.{prematch,live}`; the history row keeps `candidate_queue` as
+the found count (so old and new rows stay comparable) and adds
+`candidate_retained`; the blocker trend point carries `retained`/`dropped`/`cap`;
+`bh_candidate_queue_size` is the retained queue and the new `bh_candidates_found`
+gauge is the denominator (startup baseline included). The review tab states the
+cap when it bites (`renderCandidates` takes `capInfo`), with the Bosnian string
+in `frontend/js/i18n.js`.
+**Measured** at the recorded peak of 14,249 found pairs: the same queue served
+**7.8 → 2.8 ms** per `/api/candidates` poll and health's candidate blocks
+**22.7 → 2.7 ms** (1.7 + 21.0 → 0.2 + 2.5), with the retained queue's JSON
+footprint **~19.8 MB → ~2.8 MB**. New tests: the cap keeps the actionable pair
+over a league-blocked one at cap 1, `0` disables, a mid-walk trim yields the same
+retained ids, `/api/candidates` reports the denominator, health serves it, a
+history row keeps the found count and names the retained one, the trend point
+carries the cap, and the frontend note is pinned. `README.md` and
+`.env.example` document the knob; `docs/METRICS.md` and
+`docs/CANDIDATE_REMEDIATION.md` document the gauge and the cap. `pytest`: 2306
+passed, 12 skipped (17 snapshots) in 118.23 s; ruff clean; mypy 275 source files
+clean; market doc in sync; refresh_fixtures and audit_admissibility `--check`
+exit 0. No live scan, no bookmaker traffic.
+
+Acceptance (written before coding, 2026-11-08):
+- [x] `CANDIDATE_QUEUE_MAX` (env, default 2000, `0` disables) keeps the top N by
+      the existing priority order. The transient pair list is bounded during the
+      walk too (trimmed to 4×N with the same total order), so the answer is
+      unchanged and the peak does not grow to five figures.
+- [x] `/api/candidates` reports `found` (the denominator), `retained`,
+      `dropped` and `cap`; `total` stays the retained queue the page is drawn
+      from; `actionable_found`/`closeable_found` report the found set alongside
+      the retained `actionable_total`/`closeable_total`.
+- [x] Health serves `candidate_queue.{prematch,live}` with
+      found/retained/dropped/cap/actionable_found/closeable_found;
+      `pending_candidates` stays the retained count.
+- [x] History keeps `candidate_queue` as the found count (comparable with older
+      rows) and `candidate_actionable` as the found-side actionable count; the
+      blocker trend point gains `retained`, `dropped` and `cap`.
+- [x] Metrics: `bh_candidate_queue_size` is the retained queue, new
+      `bh_candidates_found` is the denominator; `docs/METRICS.md` updated.
+- [x] The dashboard states the cap when it bites, localized, so a reviewer is
+      never shown a trimmed queue as if it were complete.
+- [x] Tests: cap applied in priority order, `0` disables, mid-walk trimming
+      yields the same top N, and found/retained/dropped reach the endpoint,
+      health, history and the trend; the frontend note is pinned.
+- [x] Measured before → after poll/health cost at the peak queue size, in the
+      outcome.
+
 
 ### M2-5 Review compact cache/ledger representations
 
@@ -3031,3 +3102,4 @@ Useful starting points:
 | 2026-11-08 | M1-3 | Done | Follow-up to M1-1, which made the middleware resolve a key on every `/api` request: a successful named-key verify measured **84.75 ms** (PBKDF2, 200k iterations) per request on this host, paid again on every 30 s dashboard poll and on every wrong-key attempt, with a full store rewrite for `last_used_at` each time. `ApiKeyStore.verify` now caches successes for `AUTH_CACHE_SECONDS` (default 60, 0 disables) under `sha256(token)` with the scope snapshot; a hit spends no PBKDF2 and writes no file. `create()`/`revoke()` clear the cache, so revocation is immediate; cache hits compare the store file's mtime+size, so an out-of-band edit is seen at once (the TTL only bounds an unchanging store); failures are never cached; `last_used_at` is persisted at most once per key per TTL. A process-wide `FailureLimiter` (`auth.auth_failures`) throttles failed attempts per client address at `AUTH_FAILURE_RATE_LIMIT` (default 10, 0 disables) inside the shared `RATE_LIMIT_WINDOW_SECONDS`, checked **before** resolving so a blocked client spends no PBKDF2; a success clears the counter and `/api/health` stays public. **Measured** with 10 stored keys, 25 requests to `/api/results` per mode: **83.47 → 3.33 ms per request (25.1x, −80.1 ms)** for cache off → on. New `tests/test_auth_limits.py` (14 tests); `tests/conftest.py` resets the shared budget per test and the route-coverage sweep resets it per request so it still asserts 401, not 429. `README.md`, `.env.example`, `docs/AUTH.md` updated. `pytest`: 2294 passed, 12 skipped (17 snapshots) in 141.15 s; ruff clean; mypy 275 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No live scan, no bookmaker traffic. |
 | 2026-11-08 | M2-1 | Done | The scan's analysis half ran on the event loop with no yielding `await` — grouping, stale/skin/feed-integrity, the candidate walk, the pricing pass and the 27 MB cache write — so a real scan blocked `/api/status` for about 100 s. Every heavy stage is now a sync helper called through `asyncio.to_thread`, in the same order: `_finish_scan_cost`, `_evaluate_feed_diagnostics`, `learn_scan_mappings`, `MatchMatcher()` + `group_matches`, `measure_price_agreement`/`apply_measured_twins`, `get_match_report`, `evaluate_stale_prices`, `compute_feed_integrity`, `_build_candidates` (the candidate walk split from the async AI ranking), `find_surebets`, `filter_price_outliers`, `capture_closing`, the paper writes, `_summarize_pricing`, `_serialise_scan_caches` and `_persist_scan_state` (cache + sibling JSON writes). Logic, inputs, outputs and ordering are unchanged; the scan tests in `test_e2e_certified`, `test_metrics`, `test_record_only`, `test_scan_candidates`, `test_auto_clv` and `test_health_cache` pass unchanged. New `test_the_scan_analysis_runs_off_the_event_loop` calibrates itself: with `to_thread` neutralised the same 3-match scan (group_matches stubbed to 0.5 s) held the loop for a **695.5 ms** heartbeat gap; offloaded it was **15.4 ms**, and all nine wrapped heavy stages ran off the main thread. A cancelled scan may let one worker finish (threads are not interruptible); every orphanable stage re-reads shared state at call time and writes idempotent diagnostics. `pytest`: 2295 passed, 12 skipped (17 snapshots) in 115.41 s; ruff clean; mypy 275 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No live scan. |
 | 2026-11-08 | M2-2 | Done | Each `/api/verify-links` call ended in `_save_cache(mode)`, rewriting the whole scan cache to persist at most a handful of `deep_link_verified` flags, once per checked event. The write is gone: `apply_report` + `_apply_deep_link_verifications` still update the in-memory cache, and the verdict stays durable in `deep_link_verifications.json` (proof written or removed) and `deep_link_decisions.json` (the event is decided). Because the cache file can now predate a failed check, `_load_cache` re-derives the flag: new `_clear_stale_deep_link_flags` clears a cached True that no fresh store record backs, then `_apply_deep_link_verifications` re-applies the fresh ones; a book the gate settles by declaration is unaffected. The one test pinning the old asymmetry (match list kept a stale True while the report was filtered) now asserts the flag is re-derived as well. **Measured** on the operator's real files: `_save_cache` 71.4 ms at 1.2 MB/384 matches (today's prematch), 201.2 ms at 3.7 MB/942 matches (live), 1230.3 ms at 21.6 MB/6,610 matches (the SR5-2 baseline shape, the row's size); a check now does zero cache writes and its two store writes take 0.325 ms. New tests: normal check writes no cache but persists the proof and updates memory; failed check removes the proof, records the decision, clears the flag; restart with an emptied store clears the cached flag. `pytest`: 2298 passed, 12 skipped (17 snapshots) in 116.27 s; ruff clean; mypy 275 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No live scan. |
+| 2026-11-08 | M2-4 | Done | Operator: "Continue with M2-4, the candidate queue cap." The operator's scan history (`cache/bh_arb.sqlite3`, 25 scans) shows a prematch queue peaking at **14,249** pairs (11,657 matches), median 5,855, of which at most **473** were actionable; live peaked at 766. Keeping all of them cost 8.9 ms per `/api/candidates` poll, ~22.7 ms per health summary rebuild and ~19.8 MB of candidate JSON. New `CANDIDATE_QUEUE_MAX` (env, default 2000, 0 disables) keeps the top N in the existing priority order (closeable, alias-actionable, fewest blockers, tightest kickoff, closest names, id), with `_pair_priority` shared by a mid-walk trim at 4×N so the transient list stays bounded and the retained set is identical. Nothing is silent: `/api/candidates` gains `found`/`retained`/`dropped`/`cap` and found-side `actionable_found`/`closeable_found`; health gains `candidate_queue.{prematch,live}`; history keeps `candidate_queue` = found (comparable with old rows) plus `candidate_retained`; the blocker trend point gains `retained`/`dropped`/`cap`; `bh_candidate_queue_size` is retained and new `bh_candidates_found` is the denominator; the Review tab shows the cap note (Bosnian string added). **Measured at the 14,249 peak: `/api/candidates` 7.8 → 2.8 ms, health candidate blocks 22.7 → 2.7 ms, retained JSON ~19.8 → ~2.8 MB.** New tests: cap keeps the actionable pair, 0 disables, trim is exact, endpoint/health/history/trend denominator, frontend note. `README.md`, `.env.example`, `docs/METRICS.md`, `docs/CANDIDATE_REMEDIATION.md` updated. `pytest`: 2306 passed, 12 skipped (17 snapshots) in 118.23 s; ruff clean; mypy 275 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No live scan. |

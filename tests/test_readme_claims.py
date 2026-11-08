@@ -868,7 +868,12 @@ def test_documented_endpoints_exist_in_the_router():
 
 def test_endpoint_check_fails_when_the_readme_names_a_route_that_does_not_exist():
     """Proves the previous test reads the endpoint strings out of the document."""
-    broken = README.replace("/api/candidates?mode=prematch|live", "/api/queue")
+    # The README may name the endpoint in more than one place (the review-tab
+    # description and the cap note); the mutation has to remove them all, or the
+    # check would pass on a remaining mention rather than on this mutation.
+    broken = README.replace("/api/candidates?mode=prematch|live", "/api/queue").replace(
+        "/api/candidates", "/api/queue"
+    )
     assert broken != README, "the mutation did not apply; the check is untested"
     problems = _endpoint_problems(broken)
     assert problems, "a README naming a non-existent route passed"

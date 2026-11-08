@@ -58,6 +58,24 @@ The queue groups by `(action, book pair, league, exact gate reasons)`.
 `share = count / queue total` for the same feed. A big queue is a diagnostic
 fact, never evidence that coverage improved or regressed.
 
+## The queue cap (M2-4)
+
+A full scan can produce five figures of pairs — the operator's history peaked at
+14,249, of which 473 were actionable — and every poll walked all of them. The
+retained queue is capped at `CANDIDATE_QUEUE_MAX` (default 2000, `0` disables),
+keeping the existing priority order: closeable first, then alias-actionable, then
+fewest human blockers, tightest kickoff, closest names, id. The walk also trims
+its transient list to four times the cap with the same total order, so the peak
+does not grow to five figures and the retained set is identical.
+
+Nothing is trimmed silently. `/api/candidates` reports `found` (the denominator),
+`retained`, `dropped` and `cap`, plus `actionable_found`/`closeable_found` over
+the found set; `/api/health` serves the same six numbers under
+`candidate_queue.<mode>`; a scan history row keeps `candidate_queue` as the found
+count (comparable with older rows) and the blocker trend point carries
+`retained`/`dropped`/`cap`. Group shares and counts in this document are shares
+of the **retained** queue, which is the queue a reviewer can page through.
+
 Strict misses are grouped in `scripts/pairing_audit.py` by
 `(book pair, league, spelling pattern)`, where the spelling pattern is the
 identity-normalized pair of each team slot. The report gives:

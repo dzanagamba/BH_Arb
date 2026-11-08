@@ -382,3 +382,18 @@ def test_a_filtered_out_selection_closes_the_mobile_slip():
     assert 'data-action="close-slip"' in _js_function_body("renderSlip")
     switch = _js_function_body("switchMode")
     assert "closeSlip()" in switch
+
+
+def test_a_capped_queue_says_so_on_the_review_tab():
+    """M2-4: the retained page must not read as the whole queue.
+
+    The server reports `found`/`dropped`/`cap` next to `total`; the tab only has
+    to say it. A silent trim is the failure this pins against.
+    """
+    body = _js_function_body("renderCandidates")
+    assert "capInfo" in body
+    assert "dropped" in body
+    assert "'cap'" in body or "cap:" in body
+    load = _js_function_body("loadCandidates")
+    assert "found:" in load
+    assert "dropped:" in load

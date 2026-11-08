@@ -2503,6 +2503,11 @@ async function loadCandidates() {
             Number(data.closeable_total ?? data.actionable_total) || 0,
             data.blocker_counts || {},
             data.remediation_counts || {},
+            {
+                found: Number(data.found) || 0,
+                dropped: Number(data.dropped) || 0,
+                cap: Number(data.cap) || 0,
+            },
         );
     } catch (error) {
         console.error('Candidates load failed:', error);
@@ -2511,7 +2516,7 @@ async function loadCandidates() {
     }
 }
 
-function renderCandidates(candidates, total, closeableTotal, blockerCounts = {}, remediationCounts = {}) {
+function renderCandidates(candidates, total, closeableTotal, blockerCounts = {}, remediationCounts = {}, capInfo = {}) {
     const list = document.getElementById('candidates-list');
     const count = document.getElementById('review-count');
     const queue = Array.isArray(candidates) ? candidates : [];
@@ -2546,6 +2551,12 @@ function renderCandidates(candidates, total, closeableTotal, blockerCounts = {},
         return (Number(right.name_score) || 0) - (Number(left.name_score) || 0);
     });
 
+    // M2-4: the queue is capped, so the tab says so. A reviewer must never read
+    // a retained page as the whole queue.
+    const droppedByCap = Number(capInfo.dropped) || 0;
+    const capNote = droppedByCap > 0
+        ? `<p class="candidates-page-note">${escapeHtml(tr('The review queue keeps {retained} of {found} pairings found this scan (cap {cap}); {dropped} lower-priority pairings were not retained.', { retained: total, found: Number(capInfo.found) || total, cap: Number(capInfo.cap) || 0, dropped: droppedByCap }))}</p>`
+        : '';
     const pageNote = total > queue.length
         ? `<p class="candidates-page-note">${escapeHtml(tr('Showing {shown} of {closeable} pairings a mapping can close, of {total} queued in total. The rest cannot be closed by a team alias or league mapping.', { shown: queue.length, closeable: closeableTotal, total }))}</p>`
         : '';
@@ -2566,7 +2577,7 @@ function renderCandidates(candidates, total, closeableTotal, blockerCounts = {},
         ? `<p class="candidates-page-note">${escapeHtml(tr('Queue: {alias} actionable · {league} league-blocked · {link} link-pending · {other} informational. Closeable by a proposed mapping: {rAlias} alias · {rLeague} league · {rBoth} alias+league · {rLink} system-link · {rNone} none of {total}.', { alias: blockers.alias, league: blockers.league, link: blockers.link, other: blockers.other, rAlias: remediation.alias, rLeague: remediation.league, rBoth: remediation.both, rLink: remediation.systemLink, rNone: remediation.none, total }))}</p>`
         : '';
 
-    list.innerHTML = blockerNote + pageNote + orderedCandidates.map((candidate) => {
+    list.innerHTML = capNote + blockerNote + pageNote + orderedCandidates.map((candidate) => {
         const id = escapeHtml(candidate.id || '');
         const homeTeam = escapeHtml(formatTeamName(candidate.home_team || tr('Unknown')));
         const awayTeam = escapeHtml(formatTeamName(candidate.away_team || tr('Unknown')));

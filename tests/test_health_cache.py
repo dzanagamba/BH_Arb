@@ -33,6 +33,8 @@ SHIPPED_KEYS = {
     "cache",
     "candidate_blocker_trend",
     "candidate_blockers",
+    # M2-4: found/retained/dropped/cap per feed, next to the retained queue.
+    "candidate_queue",
     "candidate_remediation",
     "cardinality_floor",
     "closing_capture",

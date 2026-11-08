@@ -368,6 +368,10 @@ scan_history: list[dict] = []           # recent scan entries (newest first)
 # no longer wipe the prematch queue a reviewer is working through.
 pending_candidates: dict[str, CandidateReview] = {}        # prematch
 pending_live_candidates: dict[str, CandidateReview] = {}   # live
+# M2-4: the found/retained/dropped numbers of the last scan, per feed. The
+# retained queue alone cannot answer "how many were found", and the cap must not
+# be silent, so these are kept next to it.
+candidate_totals: dict[str, dict[str, int]] = {}
 
 
 def _candidates_for(mode: str) -> dict[str, CandidateReview]:
@@ -1027,10 +1031,23 @@ def _append_history(num_groups: int, mode: str) -> None:
         "surebets_found": status.surebets_found,
         "per_bookie": dict(per_bookie),
         "errors": list(status.errors),
-        "candidate_queue": len(_candidates_for(mode)),
-        "candidate_actionable": sum(
-            1 for candidate in _candidates_for(mode).values() if candidate.alias_actionable
+        # M2-4: `candidate_queue` keeps its old meaning — every pair the walk
+        # found, not the capped queue — so old and new rows stay comparable. The
+        # retained split lives in `candidate_retained` (JSON export; the SQLite
+        # schema keeps its fixed columns).
+        "candidate_queue": int(
+            (candidate_totals.get(mode) or {}).get("found")
+            or len(_candidates_for(mode))
         ),
+        "candidate_actionable": int(
+            (candidate_totals.get(mode) or {}).get("actionable_found")
+            or sum(
+                1
+                for candidate in _candidates_for(mode).values()
+                if candidate.alias_actionable
+            )
+        ),
+        "candidate_retained": len(_candidates_for(mode)),
     }
     scan_history.insert(0, entry)
     del scan_history[_HISTORY_MAX:]
@@ -1066,6 +1083,16 @@ AI_RANK_TIME_BUDGET_SECONDS = 90.0
 # actionability the first page is the part a reviewer actually works through.
 CANDIDATE_PAGE_SIZE = 100
 CANDIDATE_PAGE_MAX = 500
+# M2-4: the RETAINED queue is capped. The operator's history peaked at 14,249
+# pairs of which at most 473 were actionable, and every poll walked all of them.
+# The cap keeps the top N in the existing priority order and the found/retained/
+# dropped numbers are reported, so nothing is trimmed silently. 0 disables it.
+CANDIDATE_QUEUE_MAX = int(os.getenv("CANDIDATE_QUEUE_MAX", "2000"))
+# The pair walk trims its transient list to this multiple of the cap, so a
+# 14k-pair scan does not have to hold every Pair before it is trimmed once. The
+# trim uses the same total order, so the final top N is identical.
+CANDIDATE_TRIM_FACTOR = 4
+
 CANDIDATE_REVIEW_HISTORY_MAX = 200   # in-memory log; the allowlist file is the durable record
 # Reasons the gate raises only because a bookmaker's event link is unproven.
 # They come from the per-book deep-link system check, never from a name, so no
@@ -1552,17 +1579,34 @@ async def _rank_candidates_with_ai(ai: MatchAI, found: list[_FoundPair]) -> None
         pair.candidate.ai_reason = proposal.reason
 
 
+def _pair_priority(pair: _FoundPair) -> tuple:
+    """The review order: what a human can act on first, then the closest pair.
+
+    One definition for the transient trim and the final cut (M2-4), so the two
+    cannot disagree about which pairs survive the cap.
+    """
+    return (
+        not pair.closeable,
+        not pair.alias_actionable,
+        pair.human_blockers,
+        pair.kickoff_delta_minutes,
+        -pair.team_similarity,
+        pair.candidate.id,
+    )
+
+
 def _build_candidates(
     all_matches: list[Match],
     matcher: MatchMatcher,
     groups: list[MatchGroup] | None = None,
-) -> tuple[dict[str, CandidateReview], list[_FoundPair]]:
+) -> tuple[dict[str, CandidateReview], list[_FoundPair], dict[str, int]]:
     """Find plausible same-event pairs the matcher could not verify (M2-1).
 
     Pure CPU over the scan's matches, so `_collect_candidates` runs it in a
     worker thread: the pair walk and the gate calls were part of the ~100 s
-    block that used to hold the event loop. Returns the queue and the ordered
-    `_FoundPair`s, because only the top of that order is worth an AI call.
+    block that used to hold the event loop. Returns the retained queue, the
+    ordered `_FoundPair`s it was cut from (only the top is worth an AI call),
+    and the found/retained/dropped numbers the cap must report (M2-4).
 
     Pairs are discovered with a kickoff-bucket index (not an O(n^2) sweep) and a
     cheap team-token prefilter before the full gate runs. AI only ranks; it never
@@ -1594,6 +1638,12 @@ def _build_candidates(
     decided = set(_suppressed_candidates)
     seen_pairs: set[str] = set()
     found: list[_FoundPair] = []
+    # M2-4: how many pairs the walk produced versus how many survive the cap.
+    # Counted as pairs are found, because the transient list may be trimmed.
+    found_count = 0
+    actionable_found = 0
+    closeable_found = 0
+    cap = CANDIDATE_QUEUE_MAX
 
     for index in sorted(buckets):
         here = [(match, _TeamTokens.of(match)) for match in buckets[index]]
@@ -1713,26 +1763,41 @@ def _build_candidates(
                     left=left,
                     right=right,
                 ))
+                found_count += 1
+                if actionable:
+                    actionable_found += 1
+                if remediation.closeable:
+                    closeable_found += 1
+                # M2-4: bound the transient list while walking, with the same
+                # total order the final cut uses, so a five-figure scan does not
+                # hold every pair at once. A total order makes the trim exact:
+                # an entry dropped here can never be in the final top N.
+                if cap > 0 and len(found) > cap * CANDIDATE_TRIM_FACTOR:
+                    found.sort(key=_pair_priority)
+                    del found[cap:]
 
     # What a reviewer can act on first, then the fewest remaining blockers, then
     # the tightest kickoff and closest names. The AI cap is taken from the top of
     # this order, so the hosted calls land on pairs a human could actually close.
-    found.sort(key=lambda pair: (
-        not pair.closeable,
-        not pair.alias_actionable,
-        pair.human_blockers,
-        pair.kickoff_delta_minutes,
-        -pair.team_similarity,
-        pair.candidate.id,
-    ))
-    candidates = {pair.candidate.id: pair.candidate for pair in found}
+    found.sort(key=_pair_priority)
+    kept = found[:cap] if cap > 0 else found
+    candidates = {pair.candidate.id: pair.candidate for pair in kept}
     logger.info(
-        f"Review candidates: {len(candidates)} unverified pairs from {len(all_matches)} matches "
-        f"({sum(1 for pair in found if pair.alias_actionable)} alias-actionable, "
-        f"{sum(1 for pair in found if pair.closeable)} closeable by a proposed mapping, "
-        f"{len(decided)} suppressed by earlier decisions)"
+        f"Review candidates: {len(candidates)} retained of {found_count} unverified "
+        f"pairs from {len(all_matches)} matches "
+        f"({actionable_found} alias-actionable, {closeable_found} closeable by a "
+        f"proposed mapping, {len(decided)} suppressed by earlier decisions, "
+        f"cap {cap or 'off'})"
     )
-    return candidates, found
+    stats = {
+        "found": found_count,
+        "retained": len(kept),
+        "dropped": found_count - len(kept),
+        "cap": cap,
+        "actionable_found": actionable_found,
+        "closeable_found": closeable_found,
+    }
+    return candidates, kept, stats
 
 
 async def _collect_candidates(
@@ -1741,21 +1806,28 @@ async def _collect_candidates(
     groups: list[MatchGroup] | None = None,
     *,
     rank_with_ai: bool = True,
+    stats: dict[str, int] | None = None,
 ) -> dict[str, CandidateReview]:
     """Build the review queue off the event loop, then rank it with AI (M2-1).
 
     The pair walk is CPU; the AI ranking is the only network step and is already
     async. ``rank_with_ai=False`` lets an offline report build the same queue
     without a network call; it changes nothing about the verdicts or proposals.
+
+    ``stats`` receives the found/retained/dropped numbers (M2-4) when the caller
+    has somewhere to keep them; it is optional so the offline callers and the
+    tests that only care about the queue stay unchanged.
     """
-    candidates, found = await asyncio.to_thread(
+    candidates, kept, build_stats = await asyncio.to_thread(
         _build_candidates, all_matches, matcher, groups
     )
-    ai = _shared_client_ai() if (found and rank_with_ai) else None
+    if stats is not None:
+        stats.update(build_stats)
+    ai = _shared_client_ai() if (kept and rank_with_ai) else None
     if ai is None:
         return candidates
     try:
-        await _rank_candidates_with_ai(ai, found)
+        await _rank_candidates_with_ai(ai, kept)
     finally:
         await ai.aclose()
     return candidates
@@ -1878,6 +1950,7 @@ def _init_metric_baseline() -> None:
             "bh_surebets_dropped_total", 0, mode=metric_mode, reason="price_outlier"
         )
         metrics.set_gauge("bh_candidate_queue_size", 0, mode=metric_mode)
+        metrics.set_gauge("bh_candidates_found", 0, mode=metric_mode)
         metrics.set_gauge("bh_coverage_flags", 0, mode=metric_mode)
         metrics.inc("bh_coverage_flags_total", 0, mode=metric_mode)
         metrics.set_gauge("bh_cardinality_flags", 0, mode=metric_mode)
@@ -2572,9 +2645,16 @@ async def run_scan(
         try:
             queue = _candidates_for(mode)
             queue.clear()
-            queue.update(await _collect_candidates(all_matches, matcher, groups))
+            candidate_stats: dict[str, int] = {}
+            queue.update(
+                await _collect_candidates(
+                    all_matches, matcher, groups, stats=candidate_stats
+                )
+            )
+            candidate_totals[mode] = candidate_stats
         except Exception as e:
             _candidates_for(mode).clear()
+            candidate_totals[mode] = {}
             logger.error(f"❌ Candidate collection failed: {e}", exc_info=True)
             status.errors.append(f"Candidate review failed: {str(e)[:200]}")
 
@@ -2726,6 +2806,11 @@ async def run_scan(
         )
         metrics.set_gauge(
             "bh_candidate_queue_size", len(_candidates_for(mode)), mode=mode
+        )
+        metrics.set_gauge(
+            "bh_candidates_found",
+            int((candidate_totals.get(mode) or {}).get("found") or len(_candidates_for(mode))),
+            mode=mode,
         )
         metrics.set_gauge("bh_cache_size_bytes", cache_bytes, mode=mode)
         metrics.set_gauge("bh_cache_budget_bytes", CACHE_SIZE_BUDGET_BYTES)
@@ -2940,11 +3025,17 @@ def _record_candidate_trend(mode: str, scan_time: datetime | None = None) -> Non
     try:
         queue = list(_candidates_for(mode).values())
         counts = remediation_counts(queue)
+        stats = candidate_totals.get(mode) or {}
         point = {
             "scan_time": _naive_utc(
                 scan_time or datetime.now(UTC)
             ).isoformat(timespec="seconds"),
-            "total": len(queue),
+            # M2-4: `total` stays the found denominator; the retained queue and
+            # the cap that produced it travel with it.
+            "total": int(stats.get("found") or len(queue)),
+            "retained": int(stats.get("retained") or len(queue)),
+            "dropped": int(stats.get("dropped") or 0),
+            "cap": int(stats.get("cap") or CANDIDATE_QUEUE_MAX),
             "closeable": (
                 counts["alias"] + counts["league"] + counts["alias+league"]
             ),
@@ -3961,6 +4052,13 @@ def _health_summary() -> tuple[dict[str, Any], dict[str, Any]]:
         ),
         "pending_candidates": len(pending_candidates),
         "live_pending_candidates": len(pending_live_candidates),
+        # M2-4: the review queue is capped, so the found denominator and the
+        # dropped tail sit next to the retained count; nothing is trimmed
+        # silently.
+        "candidate_queue": {
+            "prematch": candidate_totals.get("prematch") or {},
+            "live": candidate_totals.get("live") or {},
+        },
         "candidate_blockers": {
             "prematch": blocker_counts(pending_candidates.values()),
             "live": blocker_counts(pending_live_candidates.values()),
@@ -4631,6 +4729,13 @@ async def get_candidates(
     blockers = blocker_counts(queue)
     counts = remediation_counts(queue)
     closeable_total = counts["alias"] + counts["league"] + counts["alias+league"]
+    # M2-4: `total` is the retained queue the page is drawn from; `found` is the
+    # denominator (every unverified pair the scan's walk produced). A capped
+    # queue that reported only `total` would read as "that is all there was".
+    stats = candidate_totals.get(mode) or {}
+    found = int(stats.get("found") or total)
+    dropped = int(stats.get("dropped") or 0)
+    cap = int(stats.get("cap") or CANDIDATE_QUEUE_MAX)
     if closeable_only:
         queue = [candidate for candidate in queue if _candidate_closeable(candidate)]
     elif actionable_only:
@@ -4639,8 +4744,16 @@ async def get_candidates(
     return {
         "mode": mode,
         "total": total,
+        "found": found,
+        "retained": total,
+        "dropped": dropped,
+        "cap": cap,
         "actionable_total": actionable_total,
         "closeable_total": closeable_total,
+        # The same two answers over the FOUND set, so a cap that ever drops an
+        # actionable pair does not hide it behind a retained-set count.
+        "actionable_found": int(stats.get("actionable_found") or actionable_total),
+        "closeable_found": int(stats.get("closeable_found") or closeable_total),
         "blocker_counts": blockers,
         "remediation_counts": counts,
         "actionable_only": actionable_only,

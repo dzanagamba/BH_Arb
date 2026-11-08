@@ -237,6 +237,58 @@ def _pure_similarity(left: Match, right: Match) -> float:
 # ─── The queue itself ────────────────────────────────────────────────────────────
 
 
+def test_the_queue_cap_keeps_the_pairs_a_reviewer_can_close(monkeypatch):
+    """M2-4: the retained queue is the top of the existing priority order.
+
+    A full scan can queue five figures of pairs; the cap keeps the ones a human
+    decision can move first, and reports what it dropped.
+    """
+    monkeypatch.setattr(api, "CANDIDATE_QUEUE_MAX", 1)
+    matches = [*_ambiguous_pair(), *_league_blocked_pair()]
+    stats: dict[str, int] = {}
+
+    queue = run(api._collect_candidates(matches, MatchMatcher(), stats=stats))
+
+    assert len(queue) == 1, "the cap kept more than it was told to"
+    kept = next(iter(queue.values()))
+    assert kept.alias_actionable is True, "an actionable pair lost to a blocked one"
+    assert kept.home_team == "Lech Poznan"
+    assert stats["found"] == 2
+    assert stats["retained"] == 1
+    assert stats["dropped"] == 1
+    assert stats["cap"] == 1
+
+
+def test_zero_disables_the_queue_cap(monkeypatch):
+    monkeypatch.setattr(api, "CANDIDATE_QUEUE_MAX", 0)
+    matches = [*_ambiguous_pair(), *_league_blocked_pair()]
+    stats: dict[str, int] = {}
+
+    queue = run(api._collect_candidates(matches, MatchMatcher(), stats=stats))
+
+    assert len(queue) == 2
+    assert stats["dropped"] == 0
+    assert stats["cap"] == 0
+
+
+def test_the_transient_trim_does_not_change_the_retained_answer(monkeypatch):
+    """The walk bounds its list with the same total order as the final cut.
+
+    Without that, a 14k-pair scan would have to hold every pair before trimming
+    once, and a mid-walk trim with a different order could drop a pair the cap
+    would have kept.
+    """
+    matches = [*_ambiguous_pair(), *_league_blocked_pair()]
+    monkeypatch.setattr(api, "CANDIDATE_QUEUE_MAX", 1)
+    monkeypatch.setattr(api, "CANDIDATE_TRIM_FACTOR", 32)
+    baseline = run(api._collect_candidates(matches, MatchMatcher()))
+
+    monkeypatch.setattr(api, "CANDIDATE_TRIM_FACTOR", 1)  # trims after the second pair
+    trimmed = run(api._collect_candidates(matches, MatchMatcher()))
+
+    assert list(trimmed) == list(baseline)
+
+
 def test_run_scan_creates_pending_candidate_for_gate_failure(stub_scan_inputs):
     api.pending_candidates.clear()
 

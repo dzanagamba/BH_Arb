@@ -520,3 +520,83 @@ def test_legacy_approval_routes_are_absent():
     assert client.post("/api/candidates/does-not-exist/approve").status_code == 404
     assert client.post("/api/candidates/does-not-exist/reject").status_code == 404
     assert client.post("/api/candidates/approve-bulk", json={"ids": []}).status_code == 404
+
+
+# ─── The cap's denominator (M2-4) ─────────────────────────────────────────────
+
+
+def _totals() -> dict[str, int]:
+    """What a capped scan records: the found set and what survived the cap."""
+    return {
+        "found": 14249,
+        "retained": 1,
+        "dropped": 14248,
+        "cap": 2000,
+        "actionable_found": 473,
+        "closeable_found": 300,
+    }
+
+
+def test_the_endpoint_reports_the_found_denominator_and_the_cap():
+    """`total` is the retained queue; `found` says what the cap left out.
+
+    Reporting only the retained size would read as "that is all there was",
+    which is exactly the silent trim this row forbids.
+    """
+    candidate = _candidate()
+    api.pending_candidates[candidate.id] = candidate
+    api.candidate_totals["prematch"] = _totals()
+
+    body = client.get("/api/candidates").json()
+
+    assert body["total"] == 1
+    assert body["retained"] == 1
+    assert body["found"] == 14249
+    assert body["dropped"] == 14248
+    assert body["cap"] == 2000
+    assert body["actionable_found"] == 473
+    assert body["closeable_found"] == 300
+    assert [row["id"] for row in body["candidates"]] == [candidate.id]
+
+
+def test_health_serves_the_candidate_queue_denominator():
+    api.candidate_totals["prematch"] = _totals()
+
+    body = client.get("/api/health").json()
+
+    queue = body["candidate_queue"]["prematch"]
+    assert queue == _totals()
+    assert body["pending_candidates"] == 0, "the retained queue is still the live one"
+
+
+def test_a_history_row_keeps_the_found_count_and_names_the_retained_one(monkeypatch):
+    """Old rows say `candidate_queue` = every pair the walk found; a capped row
+    must stay comparable, so the retained size travels beside it."""
+    candidate = _candidate()
+    api.pending_candidates[candidate.id] = candidate
+    api.candidate_totals["prematch"] = _totals()
+    monkeypatch.setattr(api, "_save_history", lambda: None)
+    monkeypatch.setattr(api, "_storage", None)
+    api.scan_history.clear()
+
+    api._append_history(0, "prematch")
+
+    row = api.scan_history[0]
+    assert row["candidate_queue"] == 14249
+    assert row["candidate_actionable"] == 473
+    assert row["candidate_retained"] == 1
+
+
+def test_the_blocker_trend_point_carries_the_cap():
+    candidate = _candidate()
+    api.pending_candidates[candidate.id] = candidate
+    api.candidate_totals["prematch"] = _totals()
+    api._candidate_blocker_trend["prematch"].clear()
+
+    api._record_candidate_trend("prematch", datetime(2026, 11, 8, 12, 0))
+
+    point = api._candidate_blocker_trend["prematch"][-1]
+    assert point["total"] == 14249
+    assert point["retained"] == 1
+    assert point["dropped"] == 14248
+    assert point["cap"] == 2000

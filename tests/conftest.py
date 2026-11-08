@@ -313,6 +313,9 @@ def _isolated_runtime_state(
     monkeypatch.setattr(
         api, "_candidate_blocker_trend", {"prematch": [], "live": []}
     )
+    # M2-4: the found/retained numbers belong to the scan that produced them, so
+    # a previous test's queue must not decide this test's denominator.
+    monkeypatch.setattr(api, "candidate_totals", {})
 
     # M2-3: the cached /api/health summary is per-test; a previous test's scan
     # data must not decide what this test's diagnostics say.

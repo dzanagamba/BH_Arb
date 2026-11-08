@@ -507,6 +507,7 @@ window.I18N = {
         "Unknown league": "Nepoznata liga",
         "Showing {shown} of {closeable} pairings a mapping can close, of {total} queued in total. The rest cannot be closed by a team alias or league mapping.": "Prikazano {shown} od {closeable} parova koje mapiranje može riješiti, od {total} u redu. Ostale ne može riješiti alias tima ni mapiranje lige.",
         "Queue: {alias} actionable · {league} league-blocked · {link} link-pending · {other} informational. Closeable by a proposed mapping: {rAlias} alias · {rLeague} league · {rBoth} alias+league · {rLink} system-link · {rNone} none of {total}.": "Red: {alias} rješivo · {league} blokirano ligom · {link} čeka link · {other} informativno. Rješivo predloženim mapiranjem: {rAlias} alias · {rLeague} liga · {rBoth} alias+liga · {rLink} sistemski link · {rNone} ništa od {total}.",
+        "The review queue keeps {retained} of {found} pairings found this scan (cap {cap}); {dropped} lower-priority pairings were not retained.": "Red za pregled zadržava {retained} od {found} parova nađenih u ovom skeniranju (ograničenje {cap}); {dropped} parova nižeg prioriteta nije zadržano.",
         "How alike the least-alike name pair is": "Koliko su slični najmanje slični nazivi",
         "Failed to load history": "Učitavanje historije nije uspjelo",
         "No matching groups.": "Nema odgovarajućih grupa.",

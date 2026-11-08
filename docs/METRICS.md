@@ -87,7 +87,8 @@ multiprocess aggregation.
 | `bh_surebets_found_total` | counter | `mode` | Summed surebets. |
 | `bh_surebets_dropped_total` | counter | `mode`, `reason` | Dropped by the price guard. |
 | `bh_recorded_opportunities` | gauge | `mode` | Opportunity rows recorded. |
-| `bh_candidate_queue_size` | gauge | `mode` | Candidate review queue. |
+| `bh_candidate_queue_size` | gauge | `mode` | Retained candidate review queue (after `CANDIDATE_QUEUE_MAX`). |
+| `bh_candidates_found` | gauge | `mode` | Every unverified pair the last scan's walk found, before the cap. |
 | `bh_alerts_sent_total` / `bh_alerts_failed_total` / `bh_alerts_suppressed_total` | counter | `kind` | Alert transport results. |
 | `bh_link_checks_total` | counter | `outcome` | Deep-link checks by result. |
 

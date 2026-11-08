@@ -279,6 +279,7 @@ Copy `.env.example` to `.env` and set only what you need:
 | `SCAN_RATE_LIMIT` | `3` | Maximum scans a client may trigger per minute. |
 | `VERIFY_RATE_LIMIT` | `10` | On-demand surebet re-verifications per client per minute; `0` disables the limit. |
 | `DEEP_LINK_VERIFY_RATE_LIMIT` | `2` | Deep-link checks per client per minute; `0` disables the limit. |
+| `CANDIDATE_QUEUE_MAX` | `2000` | Review-queue cap, keeping the highest-priority pairs (closeable, then actionable). `0` keeps every pair. The found/retained/dropped counts are reported by `/api/candidates` and `/api/health`. |
 | `AUTH_FAILURE_RATE_LIMIT` | `10` | Failed API-key attempts per client address per `RATE_LIMIT_WINDOW_SECONDS` before `429`; `0` disables the limit. A wrong key costs one PBKDF2 hash, so this is the CPU ceiling. |
 | `AUTH_CACHE_SECONDS` | `60` | How long a successful named-key verification is cached in memory, so polling does not repeat the ~85 ms PBKDF2; `0` disables the cache. A revocation through the API is immediate; this only bounds an out-of-band edit. |
 | `HEADLESS` | `true` | Set `false` to watch Playwright browsers. |
