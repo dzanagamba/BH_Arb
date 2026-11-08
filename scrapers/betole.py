@@ -13,8 +13,13 @@ from datetime import UTC, datetime
 from engine.market_registry import record_unmapped, registered_spec
 from models.schemas import Market, MarketType, Match, OddsValue
 from scrapers.common import parse_dt
+from scrapers.errors import ScrapeError, ScrapeKind
 from scrapers.retry import fetch_with_retry
 from scrapers.transport import transport_client
+from scrapers.wire_schemas import (
+    validate_betole_desk,
+    validate_betole_offers,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -218,7 +223,17 @@ async def _fetch_full_offers(client, events: list[dict], live: bool) -> dict[str
                         "matchIdsToken": ",".join(chunk),
                     },
                 )
-                return response.json()
+                try:
+                    payload = response.json()
+                except ValueError as exc:
+                    raise ScrapeError(
+                        ScrapeKind.SCHEMA_DRIFT,
+                        f"betole full-offer batch is not JSON: {exc}",
+                    ) from exc
+                # SR4-3d: validate the raw rows before they can reach the parser.
+                return validate_betole_offers(payload, book=BOOKMAKER_ID)
+            except ScrapeError:
+                raise
             except Exception as exc:  # noqa: BLE001 - a batch failure keeps the desk odds
                 logger.warning(
                     "[Betole] full-offer batch for %d events failed, keeping "
@@ -228,15 +243,16 @@ async def _fetch_full_offers(client, events: list[dict], live: bool) -> dict[str
                 )
                 return None
 
-    for payload in await asyncio.gather(*(one(chunk) for chunk in chunks)):
-        if not isinstance(payload, list):
+    results = await asyncio.gather(
+        *(one(chunk) for chunk in chunks), return_exceptions=True
+    )
+    for result in results:
+        if isinstance(result, ScrapeError):
+            raise result
+        if not isinstance(result, list):
             continue
-        for row in payload:
-            if not isinstance(row, dict) or row.get("id") is None:
-                continue
-            odds = row.get("odds")
-            if isinstance(odds, dict) and odds:
-                offers[str(row["id"])] = odds
+        for row in result:
+            offers[str(row.id)] = row.odds
     logger.debug("[Betole] %s: %d full offers", mode, len(offers))
     return offers
 
@@ -274,12 +290,17 @@ class BetoleScraper:
 
                 try:
                     data = response.json()
-                    page_events = (
-                        data.get("esMatches", []) if isinstance(data, dict) else []
-                    )
-                except (ValueError, TypeError):
-                    break
-                if not isinstance(page_events, list) or not page_events:
+                except ValueError as exc:
+                    raise ScrapeError(
+                        ScrapeKind.SCHEMA_DRIFT,
+                        f"betole desk page at offset {offset} is not JSON: {exc}",
+                    ) from exc
+                # SR4-3d: validate the envelope and every event's odds map
+                # before the parser reads them.
+                page_events = validate_betole_desk(
+                    data, book=BOOKMAKER_ID
+                ).esMatches
+                if not page_events:
                     break
 
                 new_events = 0

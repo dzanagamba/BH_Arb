@@ -19,9 +19,10 @@ from scrapers.base import (
     settle,
 )
 from scrapers.common import parse_dt
-from scrapers.errors import ScrapeError
+from scrapers.errors import ScrapeError, ScrapeKind
 from scrapers.retry import retry_call
 from scrapers.transport import policy_for
+from scrapers.wire_schemas import validate_mozzart_offer, validate_mozzart_page
 
 logger = logging.getLogger(__name__)
 
@@ -402,7 +403,9 @@ class MozzartbetScraper:
         The endpoint is a POST (an empty JSON body is enough); a GET answers
         ``{"error": "Not found. Sorry."}``. A failed offer keeps the list odds
         for that event (the events that were read still price); the failure is
-        logged so it is not silent.
+        logged so it is not silent. SR4-3b: the raw payload is validated before
+        the parser sees it. A drifted price row drops the whole book, because
+        the same wire shape serves every event.
         """
         try:
             response = await retry_call(
@@ -421,17 +424,25 @@ class MozzartbetScraper:
                 label=f"mozzartbet offer {event_id}",
                 account=False,
             )
-            payload = await response.json()
         except Exception as exc:  # noqa: BLE001 - this event keeps its list odds
             logger.warning(
                 "[Mozzartbet] full offer for %s failed: %s", event_id, exc
             )
             return None
-        odds = (
-            (payload or {}).get("match", {}).get("odds")
-            if isinstance(payload, dict)
-            else None
-        )
+        try:
+            payload = await response.json()
+        except ValueError as exc:
+            raise ScrapeError(
+                ScrapeKind.SCHEMA_DRIFT,
+                f"{BOOKMAKER_ID} offer for {event_id} is not JSON: {exc}",
+            ) from exc
+        except Exception as exc:  # noqa: BLE001 - this event keeps its list odds
+            logger.warning(
+                "[Mozzartbet] full offer for %s failed: %s", event_id, exc
+            )
+            return None
+        offer = validate_mozzart_offer(payload, book=BOOKMAKER_ID)
+        odds = payload.get("match", {}).get("odds") if offer.match is not None else None
         return odds if isinstance(odds, list) and odds else None
 
     async def _build_matches(
@@ -460,7 +471,16 @@ class MozzartbetScraper:
                 if match is not None:
                     matches.append(match)
 
-        await asyncio.gather(*(one(event) for event in items), return_exceptions=True)
+        results = await asyncio.gather(
+            *(one(event) for event in items), return_exceptions=True
+        )
+        # A drifted offer is the book's wire shape changing, so it drops the
+        # whole book (fail closed) instead of leaving the other events priced.
+        for result in results:
+            if isinstance(result, ScrapeError):
+                raise result
+            if isinstance(result, BaseException):
+                logger.debug("[Mozzartbet] event parse failed: %s", result)
         return matches
 
     async def fetch_and_parse(self, live: bool = False, scan_time: datetime | None = None) -> list[Match]:
@@ -482,6 +502,9 @@ class MozzartbetScraper:
                         all_raw_items.extend(items)
                     except Exception:
                         pass
+                # SR4-3b: the listener is a supplement to the paginated walk,
+                # which is the path that validates the envelope and odds rows;
+                # this handler cannot propagate a ScrapeError to the scrape.
 
             page.on("response", capture_response)
 
@@ -526,13 +549,22 @@ class MozzartbetScraper:
                         label=f"mozzartbet page {page_num}",
                         account=False,
                     )
-                    data = await resp.json()
+                    try:
+                        data = await resp.json()
+                    except ValueError as exc:
+                        raise ScrapeError(
+                            ScrapeKind.SCHEMA_DRIFT,
+                            f"{BOOKMAKER_ID} matches page {page_num} is not JSON: {exc}",
+                        ) from exc
+                    # SR4-3b: the list envelope and every item's odds array are
+                    # validated before the parser reads them.
+                    page_payload = validate_mozzart_page(data, book=BOOKMAKER_ID)
                     nonlocal max_pages
                     # Only totalPages is reliable for total; matchCount is per-page
-                    total_pages = data.get("totalPages")
+                    total_pages = page_payload.totalPages
                     if isinstance(total_pages, int) and total_pages > 0:
                         max_pages = min(total_pages, 100)
-                    return data.get("items", [])
+                    return page_payload.items
                 except ScrapeError:
                     raise
                 except Exception as e:

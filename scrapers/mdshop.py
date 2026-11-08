@@ -23,9 +23,10 @@ from scrapers.common import (
     parse_nsoft_live_bets,
     parse_teams_from_name,
 )
-from scrapers.errors import ScrapeError
+from scrapers.errors import ScrapeError, ScrapeKind
 from scrapers.retry import fetch_with_retry
 from scrapers.transport import transport_client
+from scrapers.wire_schemas import validate_response
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +120,17 @@ class MDShopScraper:
                 )
                 try:
                     response = await fetch_with_retry(client, url, headers=self.headers)
-                    data = response.json()
+                    # SR4-3: validate the raw wire payload before any parser can
+                    # coerce it. A renamed price field or a string price is
+                    # schema drift, and the book drops out as a whole.
+                    try:
+                        data = response.json()
+                    except ValueError as exc:
+                        raise ScrapeError(
+                            ScrapeKind.SCHEMA_DRIFT,
+                            f"{BOOKMAKER_ID} response is not JSON: {exc}",
+                        ) from exc
+                    validate_response(data, book=BOOKMAKER_ID)
                     events = data.get("events", [])
                     if not events:
                         continue

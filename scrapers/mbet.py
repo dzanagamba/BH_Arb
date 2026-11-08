@@ -16,9 +16,10 @@ from engine.market_registry import MARKET_REGISTRY, record_unmapped, registered_
 from models.schemas import Market, MarketType, Match, OddsValue
 from scrapers.base import fetch_pages
 from scrapers.common import ah_label, parse_dt
-from scrapers.errors import ScrapeError
+from scrapers.errors import ScrapeError, ScrapeKind
 from scrapers.retry import fetch_with_retry
 from scrapers.transport import transport_client
+from scrapers.wire_schemas import validate_mbet_response
 
 logger = logging.getLogger(__name__)
 
@@ -589,12 +590,21 @@ class MBetScraper:
                 )
                 try:
                     resp = await fetch_with_retry(client, url, headers=self.headers)
-                    return resp.json().get("events", [])
                 except ScrapeError:
                     raise
                 except Exception as e:
                     logger.error(f"[MBet] Error at offset {offset}: {e}")
                     return None
+                try:
+                    payload = resp.json()
+                except ValueError as exc:
+                    raise ScrapeError(
+                        ScrapeKind.SCHEMA_DRIFT,
+                        f"mbet page at offset {offset} is not JSON: {exc}",
+                    ) from exc
+                # SR4-3e: validate the envelope and every event's odds map
+                # before the parser reads them.
+                return validate_mbet_response(payload, book=BOOKMAKER_ID).events
 
             raw_events = await fetch_pages(fetch_page, page_size=100, max_pages=200)
 

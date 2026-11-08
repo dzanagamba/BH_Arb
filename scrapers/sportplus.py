@@ -16,9 +16,13 @@ from engine import sports
 from engine.market_registry import record_unmapped, registered_spec
 from models.schemas import Market, MarketType, Match, OddsValue
 from scrapers.common import betradar_id, normalize_outcome, parse_local_dt, qualify_league
-from scrapers.errors import ScrapeError
+from scrapers.errors import ScrapeError, ScrapeKind
 from scrapers.retry import fetch_with_retry
 from scrapers.transport import transport_client
+from scrapers.wire_schemas import (
+    validate_sportplus_live,
+    validate_sportplus_prematch,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -238,11 +242,27 @@ class SportPlusScraper:
                 resp = await fetch_with_retry(client, self.url, headers=self.headers)
 
                 # Response may be double-serialized
-                data = resp.json()
+                try:
+                    data = resp.json()
+                except ValueError as exc:
+                    raise ScrapeError(
+                        ScrapeKind.SCHEMA_DRIFT,
+                        f"{BOOKMAKER_ID} response is not JSON: {exc}",
+                    ) from exc
                 if isinstance(data, str):
-                    data = json.loads(data)
+                    try:
+                        data = json.loads(data)
+                    except ValueError as exc:
+                        raise ScrapeError(
+                            ScrapeKind.SCHEMA_DRIFT,
+                            f"{BOOKMAKER_ID} double-serialised body is not JSON: {exc}",
+                        ) from exc
 
-                raw_matches = data.get("matches", [])
+                # SR4-3f: validate the envelope and every market block before
+                # the parser reads them.
+                raw_matches = validate_sportplus_prematch(
+                    data, book=BOOKMAKER_ID
+                ).matches
                 logger.info(f"[SportPlus] {len(raw_matches)} raw matches")
 
                 for m in raw_matches:
@@ -276,12 +296,24 @@ class SportPlusScraper:
             try:
                 resp = await fetch_with_retry(client, LIVE_API, headers=self.headers)
 
-                data = resp.json()
+                try:
+                    data = resp.json()
+                except ValueError as exc:
+                    raise ScrapeError(
+                        ScrapeKind.SCHEMA_DRIFT,
+                        f"{BOOKMAKER_ID} live response is not JSON: {exc}",
+                    ) from exc
                 if isinstance(data, str):
-                    data = json.loads(data)
+                    try:
+                        data = json.loads(data)
+                    except ValueError as exc:
+                        raise ScrapeError(
+                            ScrapeKind.SCHEMA_DRIFT,
+                            f"{BOOKMAKER_ID} live body is not JSON: {exc}",
+                        ) from exc
 
                 # Live payload: { "date": ..., "sports": [{ id, name, matches: [...] }] }
-                sports_raw = data.get("sports", []) if isinstance(data, dict) else []
+                sports_raw = validate_sportplus_live(data, book=BOOKMAKER_ID).sports
                 for sport in sports_raw:
                     if not isinstance(sport, dict):
                         continue

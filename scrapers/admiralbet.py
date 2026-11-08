@@ -23,9 +23,10 @@ from scrapers.common import (
     parse_nsoft_live_bets,
     qualify_league,
 )
-from scrapers.errors import ScrapeError
+from scrapers.errors import ScrapeError, ScrapeKind
 from scrapers.retry import retry_call
 from scrapers.transport import policy_for
+from scrapers.wire_schemas import validate_response
 
 logger = logging.getLogger(__name__)
 
@@ -164,8 +165,23 @@ class AdmiralbetScraper:
                     label="admiralbet events",
                     account=False,
                 )
-                data = await resp.json()
-                events = data.get("events", []) if isinstance(data, dict) else data
+                try:
+                    data = await resp.json()
+                except ValueError as exc:
+                    raise ScrapeError(
+                        ScrapeKind.SCHEMA_DRIFT,
+                        f"{BOOKMAKER_ID} response is not JSON: {exc}",
+                    ) from exc
+                # SR4-3c: Admiralbet serves the same NSoft envelope as MDShop,
+                # so it reuses the NSoft models. The adapter's historical
+                # bare-list form is wrapped so the same schema applies; a
+                # non-JSON body or a drifted row is schema drift.
+                if isinstance(data, list):
+                    envelope: dict = {"events": data}
+                else:
+                    envelope = data
+                validate_response(envelope, book=BOOKMAKER_ID)
+                events = envelope.get("events", []) if isinstance(envelope, dict) else []
                 if isinstance(events, list):
                     all_raw_events.extend(events)
         except ScrapeError:
