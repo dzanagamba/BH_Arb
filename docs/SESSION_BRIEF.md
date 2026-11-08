@@ -12,17 +12,18 @@ SR7-1 and SR7-2 are done.
 feed). Every other `Not started` row is `Gate: operator`; the roadmap is the
 single task list in `ROADMAP.md`, N2-4 stays deferred and P1-6 stays waived
 until the operator says otherwise.
-**Last task commit:** `42297ee` — "move the deep-link store and AH labels into
-engine (M3-2)", pushed to `origin/main` on 2026-11-09. Before it, `7e982eb`
-extracts the JSON-store layer (M3-1 stage 3), `68f2eaf` extracts candidate
-scoring and names the feed state (M3-1 stages 1-2), `e0448d2` writes the mapping
-evidence ledger compact (M2-5), `e616ac8` rejects a positive accepted stake at
-zero odds (M1-2), `276b6f4` caps the candidate review queue and reports the
-denominator (M2-4), `fbdd5cc` stops rewriting the scan cache on verify-links
-(M2-2), `33a695f` runs the scan analysis off the event loop (M2-1), `2eb5324`
-caches key verification and throttles failed attempts (M1-3), `e82a0f1` closes
-every `/api` route with one key guard (M1-1), `3f9a911` carries the health-summary
-cache (M2-3), and `8a1cb90` carries SR6-2, SR4-8a and SR4-8.
+**Last task commit:** `7b49156` — "share one link-settled predicate (M3-3)",
+pushed to `origin/main` on 2026-11-09. Before it, `42297ee` moves the deep-link
+store and AH labels into engine (M3-2), `7e982eb` extracts the JSON-store layer
+(M3-1 stage 3), `68f2eaf` extracts candidate scoring and names the feed state
+(M3-1 stages 1-2), `e0448d2` writes the mapping evidence ledger compact (M2-5),
+`e616ac8` rejects a positive accepted stake at zero odds (M1-2), `276b6f4` caps
+the candidate review queue and reports the denominator (M2-4), `fbdd5cc` stops
+rewriting the scan cache on verify-links (M2-2), `33a695f` runs the scan
+analysis off the event loop (M2-1), `2eb5324` caches key verification and
+throttles failed attempts (M1-3), `e82a0f1` closes every `/api` route with one
+key guard (M1-1), `3f9a911` carries the health-summary cache (M2-3), and
+`8a1cb90` carries SR6-2, SR4-8a and SR4-8.
 
 ## Project state
 
