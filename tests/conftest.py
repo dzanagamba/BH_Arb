@@ -70,6 +70,63 @@ RUNTIME_LEDGER_ENV = "BH_ARB_TEST_RUNTIME_LEDGER"
 # that used to supersede the allowlist proof in tests/test_e2e_certified.py.
 POPULATED_LEDGER_ALIAS = ("FK Sarajevo", "Sarajevo")
 
+
+@pytest.fixture(scope="session", autouse=True)
+def _no_real_network():
+    """Fail loudly if any test opens a real network connection (SR4-1).
+
+    HTTP-level adapter tests serve their captures through ``respx``. Without a
+    guard, one adapter that stops being mocked would quietly reach the live
+    bookmaker, which is both a test flake and unsolicited traffic. Name
+    resolution and connection setup are blocked at the ``socket`` module so a
+    library that bypasses httpx (a raw socket, a future client) is caught too.
+    """
+    import socket
+
+    loopback = {"127.0.0.1", "::1", "localhost", "0.0.0.0"}
+
+    def _is_loopback(value) -> bool:
+        if isinstance(value, tuple) and value:
+            return str(value[0]).lower() in loopback
+        return isinstance(value, str) and value.lower() in loopback
+
+    def _blocked(original):
+        def guard(*args, **kwargs):
+            # Local test servers (the opt-in Chromium audit serves the
+            # dashboard from 127.0.0.1) are not the network this guard is
+            # about.
+            if any(_is_loopback(arg) for arg in args):
+                return original(*args, **kwargs)
+            target = next(
+                (arg for arg in args if isinstance(arg, str | tuple)), ""
+            )
+            raise AssertionError(
+                "a test tried a real network connection"
+                f"{f' to {target!r}' if target else ''}; serve it with respx or "
+                "a fake transport (SR4-1)"
+            )
+
+        return guard
+
+    originals = {
+        name: getattr(socket, name)
+        for name in ("create_connection", "getaddrinfo")
+    }
+    originals["socket.connect"] = socket.socket.connect
+    originals["socket.connect_ex"] = socket.socket.connect_ex
+
+    socket.create_connection = _blocked(socket.create_connection)
+    socket.getaddrinfo = _blocked(socket.getaddrinfo)
+    socket.socket.connect = _blocked(socket.socket.connect)
+    socket.socket.connect_ex = _blocked(socket.socket.connect_ex)
+    try:
+        yield
+    finally:
+        for name in ("create_connection", "getaddrinfo"):
+            setattr(socket, name, originals[name])
+        socket.socket.connect = originals["socket.connect"]
+        socket.socket.connect_ex = originals["socket.connect_ex"]
+
 # Every module-level JSON store the server owns. Names are the attributes on
 # ``server.api``; values are the file names under the redirected cache.
 _API_RUNTIME_FILES = {
