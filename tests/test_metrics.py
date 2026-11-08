@@ -13,7 +13,6 @@ from fastapi.testclient import TestClient
 
 from models.schemas import Match
 from server import api
-from server import app as app_module
 from server.app import app
 from server.observability import JsonLogFormatter, metrics
 
@@ -57,7 +56,7 @@ def test_metrics_endpoint_returns_text_without_a_live_server():
 
 
 def test_metrics_endpoint_is_protected_like_other_api_routes(monkeypatch):
-    monkeypatch.setattr(app_module, "API_KEY", "secret")
+    monkeypatch.setattr(api, "API_KEY", "secret")
     client = TestClient(app)
 
     assert client.get("/api/metrics").status_code == 401

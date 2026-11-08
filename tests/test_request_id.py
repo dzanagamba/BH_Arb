@@ -7,6 +7,7 @@ import logging
 
 from fastapi.testclient import TestClient
 
+from server import api as api_module
 from server import app as app_module
 from server.app import app
 from server.observability import (
@@ -59,7 +60,7 @@ def test_an_oversized_header_is_replaced():
 
 def test_the_id_survives_on_a_refused_request(monkeypatch):
     """A 401 still carries the id, so the log line can be tied to the caller."""
-    monkeypatch.setattr(app_module, "API_KEY", "secret")
+    monkeypatch.setattr(api_module, "API_KEY", "secret")
     response = client.get("/api/metrics", headers={"X-Request-ID": "refused-1"})
 
     assert response.status_code == 401

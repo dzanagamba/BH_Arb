@@ -128,16 +128,14 @@ def test_revoking_the_last_key_keeps_a_dependency_guard_closed(tmp_path, monkeyp
     assert client.get("/api/history", headers={"X-API-Key": token}).status_code == 401
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "auth path redesign (C-01/C-02/C-07) is deferred: /api/results has no "
-        "_require_api_key dependency, so a named-key store cannot close it"
-    ),
-)
-def test_the_results_route_should_close_when_only_revoked_named_keys_exist(
+def test_the_results_route_closes_when_only_revoked_named_keys_exist(
     tmp_path, monkeypatch
 ):
+    """C-01/C-02/C-07, fixed by M1-1: the middleware covers every read route.
+
+    Before the middleware resolved keys, `/api/results` had no auth dependency,
+    so a store holding only a revoked key still served it.
+    """
     store = _store(tmp_path)
     token, record = store.create("laptop", ["read"])
     monkeypatch.setattr(api, "api_key_store", store)
@@ -146,6 +144,7 @@ def test_the_results_route_should_close_when_only_revoked_named_keys_exist(
 
     assert store.revoke(record["id"])
     assert client.get("/api/results").status_code == 401
+    assert client.get("/api/results", headers={"X-API-Key": token}).status_code == 401
 
 
 def test_a_corrupt_key_store_with_the_env_key_still_fails_closed(tmp_path, monkeypatch):

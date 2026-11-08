@@ -17,12 +17,12 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from config.settings import (
-    API_KEY,
     AUTO_SCAN_LIVE_MINUTES,
     AUTO_SCAN_PREMATCH_MINUTES,
     CORS_ORIGINS,
     MAINTENANCE_ENABLED,
 )
+from server import api as api_module
 from server.api import (
     _deep_link_decisions,
     _deep_link_verifications,
@@ -39,6 +39,7 @@ from server.api import (
     _suppressed_premises,
     router,
 )
+from server.auth import SCOPES, resolve_api_key
 from server.observability import (
     REQUEST_ID_HEADER,
     new_request_id,
@@ -51,6 +52,10 @@ from server.scheduler import maintenance_loop, scan_loop
 # Fix Windows ProactorEventLoop policy for Playwright when running via uvicorn/fastapi CLI
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
+
+#: The header both the middleware and the dashboard use for the API key.
+X_API_KEY_HEADER = "X-API-Key"
 
 
 @asynccontextmanager
@@ -140,19 +145,40 @@ async def same_origin_guard(request, call_next):
 
 @app.middleware("http")
 async def api_key_guard(request, call_next):
-    """Require the configured API key on every /api route except health.
+    """Require the configured key on every /api route except health (M1-1).
 
-    State-changing routes also check the key through their dependency; this
-    guard closes the read routes too, so an exposed deployment does not leak
-    results, candidates or history.
+    One resolver handles the env ``API_KEY`` and the named hashed store, so a
+    deployment with both accepts either. The per-route dependency then checks
+    the scope: every read needs ``read`` (or ``admin``), and the write routes
+    ask for ``scan`` or ``admin`` themselves. This closes the read routes too,
+    so an exposed deployment does not leak results, config, bets or history.
+
+    With no bootstrap key and no key record at all the historical local-only
+    behaviour remains (the documented default bind is loopback): the API is
+    open and the request gets every scope.
     """
-    if (
-        API_KEY
-        and request.url.path.startswith("/api")
-        and request.url.path != "/api/health"
-        and request.headers.get("X-API-Key") != API_KEY
-    ):
+    path = request.url.path
+    if not path.startswith("/api") or path == "/api/health":
+        return await call_next(request)
+
+    env_key = api_module.API_KEY
+    store = api_module.api_key_store
+    if not env_key and not store.has_any_keys():
+        request.state.api_key_id = ""
+        request.state.api_key_scopes = set(SCOPES)
+        return await call_next(request)
+
+    resolved = resolve_api_key(
+        request.headers.get(X_API_KEY_HEADER, ""), env_key=env_key, store=store
+    )
+    if resolved is None:
         return JSONResponse({"detail": "Invalid or missing API key"}, status_code=401)
+    request.state.api_key_id = resolved.key_id
+    request.state.api_key_scopes = set(resolved.scopes)
+    if request.method in {"GET", "HEAD"} and not resolved.scopes & {"read", "admin"}:
+        return JSONResponse(
+            {"detail": "This API key lacks the 'read' scope"}, status_code=403
+        )
     return await call_next(request)
 
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from server import app as app_module
+from server import api as api_module
 from server.app import app
 
 
@@ -24,7 +24,7 @@ def test_security_headers_cover_the_dashboard_and_api():
 
 
 def test_security_headers_survive_a_rejected_request(monkeypatch):
-    monkeypatch.setattr(app_module, "API_KEY", "secret")
+    monkeypatch.setattr(api_module, "API_KEY", "secret")
     response = TestClient(app).get("/api/results?mode=prematch")
     assert response.status_code == 401
     assert response.headers["x-content-type-options"] == "nosniff"

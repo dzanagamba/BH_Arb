@@ -2,7 +2,7 @@
 
 **Updated:** 2026-11-08
 **Goal:** keep `ROADMAP.md` current without weakening the trust model.
-**Current task:** none; SR0-1, SR0-2, SR1-1, SR1-2, SR1-3, SR1-4, M2-3, SR2-1 …
+**Current task:** none; SR0-1, SR0-2, SR1-1, SR1-2, SR1-3, SR1-4, M1-1, M2-3, SR2-1 …
 SR2-6, SR3-1, SR3-2, SR3-3, SR3-4, SR4-1, SR4-2, SR4-3, SR4-3b … SR4-3f,
 SR4-3h, SR4-3i, SR4-3j, SR4-4, SR4-5, SR4-6, SR4-7, SR4-7a, SR4-8, SR4-8a,
 SR4-9, SR4-10, SR4-11, SR4-12, SR4-13, SR5-1, SR5-2, SR6-1, SR6-2, SR6-3,
@@ -17,6 +17,17 @@ SR4-8, and `e549267` carries SR1-4, the gate decisions, SR4-9 … SR4-13, SR5-1,
 SR5-2 and SR6-1.
 
 ## Project state
+
+M1-1 (2026-11-08, working tree, operator-delegated pick): `api_key_guard`
+(`server/app.py`) now resolves the env `API_KEY` or a named key through
+`server.auth.resolve_api_key` for **every** `/api` route except `/api/health`,
+401 when nothing resolves and 403 for a read without `read`/`admin`. Sixteen
+routes had no auth dependency before this (`/results`, `/status`, `/config`,
+`/groups`, `/debug/*`, `/bets`, `/paper/*`, `/link-sweeps`), and a named key was
+unusable beside a bootstrap key. Seven write routes now require `scan`; the
+strict xfail is removed by fixing the gap (suite xfailed 1 → 0), and every test
+gets a private key store. New `tests/test_api_auth.py` (9 tests).
+`docs/AUTH.md` and `README.md` carry the scope matrix.
 
 M2-3 (2026-11-08, working tree, operator-approved): `/api/health` now builds its
 measured summary once per `HEALTH_CACHE_SECONDS` (new setting, default 2.0 s, `0`
@@ -600,13 +611,16 @@ the seven-day opportunity baseline remains unmeasured and N2-4 owns it.
 
 ## Next action
 
-**No `Not started` row is ungated.** SR4-8 and M2-3 closed the last ones. What is
-left needs the operator: **SR4-3g** (blocked on a live EVLBet payload — do not
-start it), the remaining **M\*** rows (all `Gate: operator`, deliberately
-deferred from the old backlog; each needs explicit approval and written
-acceptance criteria before any work), and the deferred N2-4 / waived P1-6 (leave
-both alone). Do not invent a task or reopen a done one. A HAR refresh is an
-operator action, not a task: `python scripts/capture_har.py --books all`.
+**No `Not started` row is ungated.** M1-1, M2-3 and SR4-8 closed the last ones.
+What is left needs the operator: **SR4-3g** (blocked on a live EVLBet payload —
+do not start it), the remaining **M\*** rows (all `Gate: operator`; each needs
+explicit approval and written acceptance criteria before any work), and the
+deferred N2-4 / waived P1-6 (leave both alone). Sensible next picks, in the
+order this session would take them: **M1-3** (auth-failure rate limit and a
+PBKDF2 verification cache — the new middleware now verifies on every request),
+**M2-1** (move the scan's CPU/I/O off the event loop), **M2-2** (stop rewriting
+the cache on verify-links). A HAR refresh is an operator action, not a task:
+`python scripts/capture_har.py --books all`.
 
 ## Rules
 

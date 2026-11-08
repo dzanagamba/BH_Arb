@@ -245,6 +245,25 @@ For UID/GID matching, systemd, health checks, and the exact backup/restore list
 CycloneDX SBOM, grouped dependency updates and the local equivalents) are in
 [`docs/RELEASE.md`](docs/RELEASE.md).
 
+### Authentication and scopes
+
+One middleware guards every `/api` route except `/api/health`. It accepts the
+bootstrap `API_KEY` or a named key from `config/generated/api_keys.json`
+(stored as a PBKDF2 hash, revocable, audited). With neither a bootstrap key nor
+any stored key the API stays open, which is the documented local-only mode and
+safe only on the loopback default; set `API_KEY` before exposing the port.
+
+| Scope | Grants |
+|---|---|
+| `read` | Every `GET`/`HEAD` (results, status, config, groups, history, metrics, candidates, bets/paper reads, CSV downloads). |
+| `scan` | The write routes: `POST /api/scan`, `/api/verify`, `/api/recalculate`, `/api/verify-links`, `/api/link-sweeps`, `/api/bets`, the bet/paper settle and closing writes. |
+| `admin` | Config toggles, shutdown, key creation/listing/revocation and the audit log. |
+
+A dashboard key normally needs `read` and `scan`; `admin` is for operator
+actions. A key with only `scan` cannot read results, and a revoked key fails on
+its next request. The dashboard sends the key on every fetch, poll and download
+(it asks once and keeps it in `sessionStorage`).
+
 ## Configuration
 
 Copy `.env.example` to `.env` and set only what you need:
@@ -252,7 +271,7 @@ Copy `.env.example` to `.env` and set only what you need:
 | Variable | Default | Purpose |
 |---|---|---|
 | `HOST` / `PORT` | `127.0.0.1` / `8000` | Bind address and port. Use `0.0.0.0` only behind a firewall and with `API_KEY` set. |
-| `API_KEY` | *(empty)* | When set, every `/api` route except `/api/health` requires an `X-API-Key` header. |
+| `API_KEY` | *(empty)* | The bootstrap/admin key. When set, every `/api` route except `/api/health` requires a key: this value or a named key from `config/generated/api_keys.json`. |
 | `CORS_ORIGINS` | *(empty)* | Allowed origins for a separate frontend; empty means same-origin only. |
 | `SCAN_RATE_LIMIT` | `3` | Maximum scans a client may trigger per minute. |
 | `VERIFY_RATE_LIMIT` | `10` | On-demand surebet re-verifications per client per minute; `0` disables the limit. |

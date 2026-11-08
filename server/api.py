@@ -178,7 +178,7 @@ from server.alerts import (
     surebet_alert,
     zero_result_alert,
 )
-from server.auth import SCOPES, api_key_store
+from server.auth import SCOPES, api_key_store, resolve_api_key
 from server.bets import BetStore
 from server.book_health import build_book_health
 from server.maintenance import maintenance_running, retention_health
@@ -217,23 +217,23 @@ def _require_api_key(
 ) -> None:
     """Resolve the env bootstrap key or a named hashed key into request state.
 
-    With neither configured the historical local-only behavior remains: the
-    route is open and gets all scopes, which is safe only because the default
-    bind is loopback. A revoked named key fails on its next request.
+    The `api_key_guard` middleware normally does this for every /api route; this
+    dependency reuses its result and only resolves on its own when a route is
+    exercised without the middleware (a direct call in a test). With neither key
+    configured the historic local-only behaviour remains: the request gets every
+    scope, which is safe only because the documented default bind is loopback.
     """
-    request.state.api_key_id = ""
-    request.state.api_key_scopes = set(SCOPES)
-    if not API_KEY and not api_key_store.has_any_keys():
+    if getattr(request.state, "api_key_scopes", None) is not None:
         return
-    if API_KEY and x_api_key == API_KEY:
-        request.state.api_key_id = "env"
+    if not API_KEY and not api_key_store.has_any_keys():
+        request.state.api_key_id = ""
         request.state.api_key_scopes = set(SCOPES)
         return
-    record = api_key_store.verify(x_api_key)
-    if record is None:
+    resolved = resolve_api_key(x_api_key, env_key=API_KEY, store=api_key_store)
+    if resolved is None:
         raise HTTPException(status_code=401, detail="Invalid or missing X-API-Key header")
-    request.state.api_key_id = str(record["id"])
-    request.state.api_key_scopes = set(record.get("scopes") or [])
+    request.state.api_key_id = resolved.key_id
+    request.state.api_key_scopes = set(resolved.scopes)
 
 
 def _require_scope(scope: str):
@@ -4726,7 +4726,7 @@ def _find_surebet_group(
 async def verify_surebet(
     req: VerifyRequest,
     request: Request,
-    _auth: None = Depends(_require_api_key),
+    _auth: None = Depends(_require_scope("scan")),
 ):
     """
     Live odds verification: re-scrape ONLY the bookmakers involved in a surebet,
@@ -4910,7 +4910,7 @@ async def verify_surebet(
 @router.post("/recalculate")
 async def recalculate_stakes(
     req: RecalculateRequest,
-    _auth: None = Depends(_require_api_key),
+    _auth: None = Depends(_require_scope("scan")),
 ):
     """Recalculate optimal stakes for a given investment amount."""
     if req.investment <= 0:
@@ -5265,7 +5265,7 @@ def _load_link_sweeps() -> dict[str, Any]:
 @router.post("/link-sweeps")
 async def save_link_sweep(
     report: LinkSweepReport,
-    _auth: None = Depends(_require_api_key),
+    _auth: None = Depends(_require_scope("scan")),
 ):
     """Persist one completed link sweep for the Diagnostics view."""
     payload = _load_link_sweeps()
@@ -5336,7 +5336,7 @@ def _enrich_bet_payload(payload: dict[str, Any]) -> dict[str, Any]:
 @router.post("/bets")
 async def create_bet(
     req: BetCreateRequest,
-    _auth: None = Depends(_require_api_key),
+    _auth: None = Depends(_require_scope("scan")),
 ):
     """Log a manually placed bet. The scanner never places it."""
     if req.investment <= 0:
@@ -5500,7 +5500,7 @@ async def export_paper_csv(
 async def settle_paper_position(
     position_id: str,
     req: BetSettlementRequest,
-    _auth: None = Depends(_require_api_key),
+    _auth: None = Depends(_require_scope("scan")),
 ):
     """Settle a paper position from operator-entered results; no bet exists."""
     result = _paper_store_or_init().settle(
@@ -5515,7 +5515,7 @@ async def settle_paper_position(
 async def settle_bet(
     bet_id: str,
     req: BetSettlementRequest,
-    _auth: None = Depends(_require_api_key),
+    _auth: None = Depends(_require_scope("scan")),
 ):
     """Settle every leg; the realized P/L is computed from accepted amounts."""
     result = _require_bet_store().settle(
@@ -5530,7 +5530,7 @@ async def settle_bet(
 async def set_bet_closing(
     bet_id: str,
     req: BetClosingRequest,
-    _auth: None = Depends(_require_api_key),
+    _auth: None = Depends(_require_scope("scan")),
 ):
     """Record closing prices for CLV without changing the bet's state."""
     result = _require_bet_store().set_closing(

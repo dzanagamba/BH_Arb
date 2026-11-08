@@ -18,7 +18,7 @@ import secrets
 import threading
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 SCOPES = {"read", "scan", "admin"}
 AUDIT_MAX = 500
@@ -167,6 +167,31 @@ class ApiKeyStore:
 
     def audit_log(self, limit: int = 100) -> list[dict[str, Any]]:
         return self._load()["audit"][-max(1, min(limit, AUDIT_MAX)):][::-1]
+
+
+class ResolvedKey(NamedTuple):
+    """What a request's key resolved to: the audit id and its scopes."""
+
+    key_id: str
+    scopes: frozenset[str]
+
+
+def resolve_api_key(
+    presented: str, *, env_key: str, store: ApiKeyStore
+) -> ResolvedKey | None:
+    """Resolve the bootstrap key or a named key; ``None`` means not authorized.
+
+    One resolver for the middleware and the route dependencies, so a bootstrap
+    key that is also configured cannot make a valid named key unusable: the env
+    key is tried first (constant-time), then the hashed store (which refuses a
+    revoked record on its next request).
+    """
+    if env_key and presented and hmac.compare_digest(presented, env_key):
+        return ResolvedKey("env", frozenset(SCOPES))
+    record = store.verify(presented)
+    if record is None:
+        return None
+    return ResolvedKey(str(record["id"]), frozenset(record.get("scopes") or []))
 
 
 api_key_store = ApiKeyStore(default_key_path())

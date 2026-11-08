@@ -272,6 +272,12 @@ def _isolated_runtime_state(
     monkeypatch.setattr(forensics, "FORENSICS_DIR", cache / "forensics")
     monkeypatch.setattr(forensics, "FORENSICS_ENABLED", False)
     monkeypatch.setattr(api, "CACHE_DIR", str(cache))
+    # M1-1: every test gets a private key store. The operator's
+    # config/generated/api_keys.json must never decide whether the suite's API
+    # requests are authenticated.
+    from server.auth import ApiKeyStore
+
+    monkeypatch.setattr(api, "api_key_store", ApiKeyStore(str(cache / "api_keys.json")))
     monkeypatch.setenv("STORAGE_PATH", str(cache / "bh_arb.sqlite3"))
     for attribute, filename in _API_RUNTIME_FILES.items():
         monkeypatch.setattr(api, attribute, str(cache / filename))

@@ -110,9 +110,12 @@ them on every push.
   directly (`from engine.matcher import MatchMatcher`) instead of re-exporting
   eagerly.
 
-The suite contains one strict `xfail` at `tests/test_auth_keys.py:131` for the
-deferred named-key auth gap. Do not delete it without fixing the gap; do not turn
-it into a skip.
+The auth gap that used to be pinned by a strict `xfail` in
+`tests/test_auth_keys.py` is fixed (M1-1): `api_key_guard` in `server/app.py`
+resolves the env key or a named key for every `/api` route except
+`/api/health`, so a new route cannot rely on a per-route dependency alone. Do
+not weaken that back to per-route-only auth; with no bootstrap key and no stored
+key record the API is open by documented design (local-only, loopback bind).
 
 ## Trust invariants — never weaken
 

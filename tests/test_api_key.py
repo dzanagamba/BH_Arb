@@ -1,14 +1,19 @@
-"""With API_KEY set, every /api route except health needs the header."""
+"""With API_KEY set, every /api route except health needs the header (M1-1).
+
+The bootstrap key now lives on `server.api` (one owner for the middleware and
+the route dependencies), so these tests patch that binding.
+"""
 
 from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
+from server import api
 from server import app as app_module
 
 
 def test_read_routes_require_the_key_when_configured(monkeypatch):
-    monkeypatch.setattr(app_module, "API_KEY", "secret")
+    monkeypatch.setattr(api, "API_KEY", "secret")
     client = TestClient(app_module.app)
     assert client.get("/api/results?mode=prematch").status_code == 401
     ok = client.get("/api/results?mode=prematch", headers={"X-API-Key": "secret"})
@@ -18,6 +23,6 @@ def test_read_routes_require_the_key_when_configured(monkeypatch):
 
 
 def test_a_wrong_key_is_rejected(monkeypatch):
-    monkeypatch.setattr(app_module, "API_KEY", "secret")
+    monkeypatch.setattr(api, "API_KEY", "secret")
     client = TestClient(app_module.app)
     assert client.get("/api/config", headers={"X-API-Key": "wrong"}).status_code == 401

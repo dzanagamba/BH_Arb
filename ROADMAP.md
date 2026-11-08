@@ -158,7 +158,7 @@ do not copy stale numbers here.
 | SR6-3 | Decide EVLBet's future | Done | — | operator |
 | SR7-1 | Full per-match market offers (Mozzartbet, Betole) | Done | — | operator |
 | SR7-2 | Raise the Mozzartbet request rate | Done | SR7-1 | operator |
-| M1-1 | Redesign named-key authentication | Not started | — | operator |
+| M1-1 | Redesign named-key authentication | Done | — | operator |
 | M1-2 | Decide `accepted_odds: 0` with a stake | Not started | — | operator |
 | M1-3 | Auth-failure rate limit and PBKDF2 cache | Not started | — | operator |
 | M2-1 | Move scan CPU/I/O off the event loop | Not started | — | operator |
@@ -2049,9 +2049,19 @@ Acceptance:
 
 ### M1-1 Redesign named-key authentication
 
-Status: Not started
+Status: Done
 
 Gate: operator
+
+**Decision (2026-11-08, operator): "start whichever you think is more
+important" — this row is the pick.** Measured why: 16 of the 34 `/api` routes
+had no auth dependency at all (`/results`, `/status`, `/config`, `/groups`,
+`/debug/*`, `/bets`, `/paper/*`, `/link-sweeps`), so with the bootstrap
+`API_KEY` set they served odds, config, bet history and CSV exports to anyone,
+and a store holding only revoked named keys left them open — the strict xfail at
+`tests/test_auth_keys.py`. The named-key path was also unusable next to a
+bootstrap key: the middleware checked exactly `API_KEY`, so a valid named key
+got 401 before `api_key_store.verify` ran.
 
 Why / what: Redesign named-key authentication as one coherent change: a middleware
 resolves the env `API_KEY` or a named key for every `/api` route except
@@ -2062,10 +2072,63 @@ the key on every fetch and download. Then remove the strict xfail in
 The strict xfail at `tests/test_auth_keys.py:131` must stay until this is fixed;
 do not delete it without fixing the gap, and do not turn it into a skip.
 
-Acceptance:
-- [ ] Operator approval recorded here.
-- [ ] Acceptance criteria written here before coding.
-- [ ] The strict xfail is removed by fixing the gap, not deleted or skipped.
+**M1-1 Outcome (2026-11-08).** `server/auth.py` gained
+`resolve_api_key(presented, env_key=, store=) -> ResolvedKey | None`, the single
+resolver the middleware and the route dependencies share; the env key is compared
+with `hmac.compare_digest`, then the hashed store is tried, so a valid named key
+now works beside a bootstrap `API_KEY` (before, the middleware compared only
+`API_KEY` and answered 401 first). `server/app.py::api_key_guard` now resolves
+either key for **every** `/api` route except `/api/health`, sets
+`request.state.api_key_id`/`api_key_scopes`, returns 401 for no valid key and
+403 for a `GET`/`HEAD` whose key lacks `read`/`admin`; with no bootstrap key and
+no stored record the documented local-only mode stays open with every scope.
+`server/api._require_api_key` reuses the middleware's result and only resolves on
+its own when a route is exercised without the middleware. Seven write routes that
+accepted any valid key (`/verify`, `/recalculate`, `/link-sweeps`, `/bets`,
+`/bets/{id}/settle`, `/bets/{id}/closing`, `/paper/positions/{id}/settle`) now
+require `scan`; `/verify-links` and `/scan` already did, and config
+toggles/shutdown/key management/audit stay `admin`.
+**The strict xfail is gone because the gap is fixed**: with a store holding only
+revoked keys, `/api/results` answers 401 (suite xfailed count 1 → 0).
+`tests/conftest.py` now gives every test a private `ApiKeyStore` under its runtime
+tree, so the operator's `config/generated/api_keys.json` can no longer decide the
+suite. `tests/test_api_key.py`, `tests/test_metrics.py`,
+`tests/test_request_id.py` and `tests/test_security_headers.py` patch
+`api.API_KEY` (the single owner) instead of the removed `server.app` binding.
+New `tests/test_api_auth.py` (9 tests): every `/api` route enumerated from the
+OpenAPI schema except health is 401 without a key (32 paths), health stays
+public, a named key works beside a bootstrap key, a read key cannot write, a scan
+key cannot read, local-only stays open, a revoked-only store closes the read
+routes, and a near-miss bootstrap key is rejected. `docs/AUTH.md` documents the
+enforcement and the updated scope matrix, `README.md` gained the scope table,
+and `AGENTS.md` records that the tripwire is fixed rather than removed.
+
+Acceptance (written before coding, 2026-11-08):
+- [x] One `api_key_guard` middleware resolves the env `API_KEY` **or** a named
+      key for every `/api/*` route except `/api/health`; no valid key is 401;
+      `/api/health` stays public.
+- [x] A valid named key is accepted while a bootstrap `API_KEY` is also
+      configured (today it is rejected by the middleware).
+- [x] The env key is compared with `hmac.compare_digest`.
+- [x] Explicit scopes: every GET/HEAD request needs `read` or `admin`; the write
+      routes that accepted any key (`/verify`, `/recalculate`, `/verify-links`,
+      `/link-sweeps`, `/bets`, `/bets/{id}/settle`, `/bets/{id}/closing`,
+      `/paper/positions/{id}/settle`) now require `scan`; config toggles,
+      shutdown and key management stay `admin`.
+- [x] With no bootstrap key and no stored key record (local-only, loopback) the
+      API stays open exactly as documented, and the dependency and the
+      middleware share one resolver so they cannot disagree.
+- [x] The strict xfail is removed by fixing the gap, not deleted or skipped.
+- [x] `tests/conftest.py` gives every test a private key store, so the
+      operator's `config/generated/api_keys.json` can never decide the suite.
+- [x] Tests: every `/api` route except health is 401 without a key; a named key
+      works beside a bootstrap key; a read key cannot write; a scan key cannot
+      read results; a revoked-only store closes the read routes; health stays
+      public; local-only stays open. The dashboard's `apiFetch`/
+      `downloadProtected` already send the key on every fetch and download
+      (pinned by `tests/test_frontend_review.py`).
+- [x] `README.md` documents the middleware, the scope matrix and the local-only
+      mode.
 
 ### M1-2 Decide `accepted_odds: 0` with a stake
 
@@ -2758,3 +2821,4 @@ Useful starting points:
 | 2026-11-08 | SR4-8a | Done | Operator chose **A (in-page fetch)**. `scrapers/base.py` now issues the browser books' API calls with `fetch` inside the loaded document (`_page_fetch`): same `headers`/`params`/`data` arguments, same returned surface (`status`/`status_code`, `headers`, `body()`, `json()`, `content`), `credentials: "include"` for the browser's cookies and Cloudflare clearance, request and body bytes still counted, and a Python-side 30 s cap (`PAGE_FETCH_TIMEOUT_SECONDS`, the old `APIRequestContext` default) so an overrun is the shared `timeout` kind, not a text-matched JS error. Dict/list bodies are JSON-serialised with `application/json`, string bodies are sent unchanged (Playwright's `data` rules), so both POST endpoints keep their shape. New `PageResponse` keeps the adapters unchanged; no adapter calls `page.request` any more. **Measured (2026-11-08, prematch, live, in-page → `page.request` control minutes later on the same offer):** admiralbet 3 req / 4.71 MB / 13.2 s / 121 matches → 3 / 4.71 MB / 10.3 s / 121; mozzartbet 234 / 72.27 MB / 25.5 s (19.2 s on an earlier pass) / 215 → 233 / 71.95 MB / 37.0 s / 215; wwin 46 / 2.03 MB / 13.2 s / 459 → 46 / 2.03 MB / 12.1 s / 459. Cloudflare passed on all three including cross-origin admiralbet: zero `blocked`/`transport`, three `ok`; requests within one event, bytes within 0.5 %, parsed output identical modulo that event. Evidence and boundaries in `docs/evidence/2026-11-08-sr4-8a-inpage-fetch.md`. New `tests/test_page_fetch.py` (10 tests: request shape, JSON/string bodies, empty-body and non-ASCII round-trip, byte accounting, Python timeout, page error as `transport`, 403 one `blocked` attempt, 503 retry, challenge header, no `page.request` in `scrapers/`) and opt-in `tests/test_page_fetch_browser.py` (real Chromium: `context.route` sees the document and the in-page API call with its POST body). `docs/CI.md` lists the opt-in check; `docs/SCAN_COST.md` names the in-page fetch in the `requests` definition. `pytest`: 2252 passed, 9 skipped, 1 xfailed (17 snapshots) in 108.71 s; ruff clean; mypy 267 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. Traffic: three live prematch passes over the three books (two on the new transport, one control), ~848 API requests plus 9 navigations; no login, no bet. |
 | 2026-11-08 | SR4-8 | Done | The browser books' transport is committed and replayed. New `scrapers/har_fixtures.py` owns the rules: `REPLAY_PREFIXES` (each book's API), `MAX_REPLAY_OFFERS` (30 for mozzartbet), `trim()` (keeps the page document — `_resourceType: document` — plus the book's API calls; drops analytics/JS/images/fonts), `scrub()` (drops `cookie`/`set-cookie`/`authorization`/`proxy-authorization` headers from both sides and empties the HAR cookie jar; odds payloads stay), and gzip `loads`/`dumps`. New `scripts/capture_har.py` records a live HAR through the real adapter and pool (`browser_pool(record_har_path=...)`), trims and scrubs it, writes `tests/fixtures/har/<book>.har.gz` + `<book>.meta.json`, then replays the new file offline through the same adapter and records the measured counts in the sidecar (a zero-match replay fails the capture). Committed set 1.72 MB gzipped: admiralbet 492 KB (93 matches / 739 markets, 38 entries), wwin 341 KB (450 / 2,643, 56 entries), mozzartbet 892 KB (207 / 941, 54 entries — 30 offers kept, the rest abort into the adapter's list-odds fallback). Raw captures were 31.8 / 8.8 / 88.0 MB, hence gzip and the offer bound. Replay uses `browser_pool(har_path=...)` → `route_from_har(not_found="abort")`, so a missing entry aborts and nothing leaves the browser; the sidecar's `scan_time` is passed to `scrape()` because admiralbet and wwin build their date windows from it. New `tests/test_har_fixtures.py` (8, normal suite) proves every file is present, holds only its document plus API calls, carries no secret header, has an empty cookie jar, has a consistent sidecar, is idempotently trimmed and is under the size budget; `tests/test_har_seams.py` (4) proves a scan records nothing and routes nothing while the capture/replay seams pass their path. New opt-in `tests/test_browser_har_replay.py` (3) runs each book's real `scrape()` from its file and asserts the sidecar counts (measured: 3 passed). New `docs/HAR_REPLAY.md`; `docs/CI.md`, `README.md` and `AGENTS.md` point at it. New `.github/workflows/browser.yml` runs the Chromium checks (page-fetch route, HAR replay, accessibility, route leak) on `workflow_dispatch` only. `pytest`: 2264 passed, 12 skipped, 1 xfailed (17 snapshots) in 117.69 s; `BH_ARB_TEST_BROWSER=1` on the two new files: 4 passed; ruff clean; mypy 272 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. Traffic: six live prematch passes over the three browser books (three sizing probes plus one capture pass per book) with the shared transport policy; the replays run offline; no login, no bet. |
 | 2026-11-08 | M2-3 | Done | `/api/health` is split into a cached summary and live fields. `_health_summary()` builds and caches 31 blocks for `HEALTH_CACHE_SECONDS` (new setting, env of the same name, default 2.0 s, `0` disables): parser contracts, admissibility audit, retention, cache sizes, freshness, stale prices, feed integrity, cardinality, mapping coverage/trends, scan cost, pairing, candidate blockers/remediation/trends, the cached counters and the `unverified_links` walk. The endpoint adds the 18 live fields per request (scanning state, surebet/match counters, `book_health`, breaker snapshots, memory, alerts, `ai_available`, per-bookie errors, deep-link declaration source/audit). The payload gains `health_cache{ttl_seconds,generated_at,age_seconds}` and keeps every shipped key (pinned by a key-set test). `run_scan` resets the cache at start and in its `finally`; `tests/conftest.py` resets it per test. **Measured** (`health()` direct, same process): empty 2.241 → 0.337 ms (85 % less); 6,600 prematch + 2,000 live cached matches 20.32 → 0.33 ms (98 % less); through `TestClient` 5.74 → 3.80 ms. The three file-backed blocks were 1.7 ms of the empty-state call (`admissibility_health` 0.98, `retention_health` 0.46, `contract_health` 0.22). New `tests/test_health_cache.py` (6 tests). Two scan-emulating helpers drop the cache before reading (`tests/test_frontend_empty_state.py`) and the declaration-map test does too (`tests/test_candidates_api.py`). `README.md` and `.env.example` document the setting; health stays diagnostic, no gate or pricing path reads it. `pytest`: 2270 passed, 12 skipped, 1 xfailed (17 snapshots) in 120.60 s; ruff clean; mypy 273 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No live scan. |
+| 2026-11-08 | M1-1 | Done | Operator delegated the pick; chose this because 16 of 34 `/api` routes had no auth dependency (`/results`, `/status`, `/config`, `/groups`, `/debug/*`, `/bets`, `/paper/*`, `/link-sweeps`), so with `API_KEY` set they served odds, config, bet history and CSV to anyone, and a valid named key was rejected whenever a bootstrap key was also configured. `server/auth.py` gained `resolve_api_key` (env key first via `hmac.compare_digest`, then the hashed store) shared by `server/app.py::api_key_guard` and `server/api._require_api_key`; the middleware resolves the key for every `/api` route except `/api/health`, returns 401 when no key resolves and 403 for a `GET`/`HEAD` without `read`/`admin`, and keeps the documented local-only open mode when nothing is configured. Seven write routes that accepted any key (`/verify`, `/recalculate`, `/link-sweeps`, `/bets`, `/bets/{id}/settle`, `/bets/{id}/closing`, `/paper/positions/{id}/settle`) now require `scan`. **The strict xfail is removed by fixing the gap** (suite xfailed 1 → 0); `tests/conftest.py` gives each test a private key store so the operator's `config/generated/api_keys.json` cannot decide the suite. New `tests/test_api_auth.py` (9 tests): every `/api` path except health from the OpenAPI schema is 401 without a key (32 paths), health public, named key beside bootstrap key, read-cannot-write, scan-cannot-read, local-only open, revoked-only store closes reads, near-miss env key rejected. Three test modules now patch `api.API_KEY` (single owner) instead of the removed `server.app` binding. `docs/AUTH.md` and `README.md` document the middleware and the scope matrix; `AGENTS.md` records that the tripwire is fixed. `pytest`: 2280 passed, 12 skipped, 0 xfailed (17 snapshots) in 108.03 s; ruff clean; mypy 274 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No live scan, no bookmaker traffic. |
