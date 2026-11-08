@@ -3,13 +3,132 @@
 **Updated:** 2026-11-08
 **Goal:** keep `ROADMAP.md` current without weakening the trust model.
 **Current task:** none; SR1-1, SR1-2, SR1-3, SR2-1, SR2-2, SR2-3, SR2-4, SR2-5,
-SR2-6, SR7-1 and SR7-2 are done and pushed. The roadmap
-is the single task list in `ROADMAP.md`; N2-4 stays deferred and P1-6 stays
-waived until the operator says otherwise.
+SR2-6, SR4-1, SR4-2, SR4-3, SR4-3b, SR4-3c, SR4-3d, SR4-3e, SR4-3f, SR7-1 and
+SR7-2 are done. SR4-1, SR4-2, SR4-3, SR4-3b, SR4-3c, SR4-3d, SR4-3e and SR4-3f
+are in the working tree (not yet committed). The roadmap is the single task list
+in `ROADMAP.md`; N2-4 stays deferred and P1-6 stays waived until the operator
+says otherwise.
 **Last task commit:** `d963625` — full per-match offers for Mozzartbet and
 Betole, and the per-book request rate (SR7-1, SR7-2).
 
 ## Project state
+
+SR4-3f (2026-11-08, working tree): SportPlus's fixtures freeze one match's
+`markets[]` array, so `SportplusMarket` (`id`/`name`/`odds`, required but
+nullable so a renamed key is drift and `odds: null` still parses) and
+`SportplusOdd` (`alias`/`value`) model the block, and
+`SportplusPrematchPage`/`SportplusLivePage` the `{"matches": [...]}` and
+`{"sports": [...]}` envelopes (the live `date` key is declared but unread).
+`scrape()` validates the prematch body after the optional double-serialised
+decode and the live body before parsing; non-JSON or drifted data raises
+`ScrapeError(SCHEMA_DRIFT)` and drops the book with zero legs. Unknown keys count
+at `root`/`market`/`odd` in `bh_wire_unknown_keys_total{book="sportplus",...}`.
+The match shell stays unmodelled (no dated capture), so a renamed team field
+still drops that match silently (the gap SR4-4/SR5-1 close). New
+`tests/test_wire_schemas_sportplus.py` (19 tests) drives the real `scrape()`
+through respx in both modes, including the double-serialised body. No live scan
+was run.
+
+SR4-3e (2026-11-08, working tree): MBet (Alea, plain HTTP) has the NSoft
+`{"events": [...]}` envelope but a different odds shape: each event's `odds` is
+a map whose keys are oddtype keys (data, not an allow-list) and whose values are
+either a typed entry or a bare number. `MbetOdd` requires `value`,
+`market_key`, `oddtype_key`, `market_status` and `oddtype_status` (nullable but
+present in every captured entry), so a renamed price/status field is drift
+instead of an odd the parser reads as suspended. `MbetResponse` requires
+`events`. `fetch_page` validates the envelope and every event's odds map right
+after `response.json()`; a non-JSON page or drifted entry raises
+`ScrapeError(SCHEMA_DRIFT)`, propagated by `fetch_pages`, so the book drops with
+zero legs. String prices are drift; integers, bare numbers and `null` entries
+are kept (the parser already handles those forms). Unknown keys count at
+`root`/`odd` in `bh_wire_unknown_keys_total{book="mbet",...}`. The event shell
+(sport id, competitors, kickoff, tournament) stays unmodelled — no dated capture
+— so a renamed team field still drops that event silently (the gap SR4-4/SR5-1
+close). New `tests/test_wire_schemas_mbet.py` (16 tests) drives the real
+`scrape()` through respx in both modes. No live scan was run.
+
+SR4-3d (2026-11-08, working tree): Betole's "price row" is a
+`{pick_code: price}` map, so it got its own models. `BetoleDeskPage` shapes the
+`{"esMatches": [...]}` desk envelope (`esMatches` required, so a renamed key
+cannot read as an empty page) and `BetoleOfferRow` the batched full offer
+(`id` + `odds` required). Map keys are pick codes (data, not an allow-list), so
+every code is accepted and the unmapped `284` control stays in the capture;
+values are strict numbers (a string/boolean price is drift, an integer is
+accepted, a `null` pick is kept as "no price"). `validate_betole_desk` runs in
+the pagination loop and `validate_betole_offers` in `_fetch_full_offers`, both
+right after `response.json()`; a non-JSON body or a drifted row raises
+`ScrapeError(SCHEMA_DRIFT)` and is not swallowed by the "failed batch keeps desk
+odds" fallback, so the book drops with zero legs. Unknown keys count at
+`root`/`row` in `bh_wire_unknown_keys_total{book="betole",...}`. The desk event
+shell (teams, kickoff, live flags) stays unmodelled — no dated capture — so a
+renamed team field still drops that event silently (the gap SR4-4/SR5-1 close).
+New `tests/test_wire_schemas_betole.py` (16 tests) drives the real `scrape()`
+through respx. No live scan was run.
+
+SR4-3c (2026-11-08, working tree): Admiralbet serves the same NSoft
+`getwebevents` envelope as MDShop, so it **reuses** the `NSoft*` models instead
+of defining a second shape; reuse was gated on a fixture-backed test. `scrape()`
+calls `validate_response(data, book="admiralbet")` right after `response.json()`
+and wraps the adapter's historical bare-list form as `{"events": [...]}` so both
+shapes get the same schema. A non-JSON body or a drifted row is
+`ScrapeError(SCHEMA_DRIFT)`, re-raised by the existing `except ScrapeError:
+raise`, so the book drops out with zero legs. Unknown keys are counted in
+`bh_wire_unknown_keys_total{book="admiralbet",...}` at the shared NSoft levels
+(`root`/`event`/`bet`/`outcome`). The event shell is validated only through the
+fields MDShop's capture proved; Admiralbet's extra fallback keys
+(`home`/`guest`, `dateFrom`/`kickoff`, `leagueName`) stay unmodelled and are
+counted as unknown event keys if present (the gap SR4-4/SR5-1 close). New
+`tests/test_wire_schemas_admiralbet.py` (18 tests) drives the real `scrape()`
+through a fake browser. No live scan was run.
+
+SR4-3b (2026-11-08, working tree): Mozzartbet validates its raw JSON in the two
+places the adapter reads it. `scrapers/wire_schemas.py` models the odds row
+(`MozzartGame`/`MozzartSubgame`/`MozzartOdd`), the per-event offer
+(`MozzartOffer`, `{"match": {"odds": [...]}}`) and the list envelope
+(`MozzartMatchesPage`, `items` + `totalPages`), all `strict=True,
+extra="allow"`. `_complete_offer` validates after `response.json()`;
+`validate_mozzart_page` checks the pagination envelope and each item's fallback
+odds. A renamed `value`, a string price or a non-JSON body raises
+`ScrapeError(SCHEMA_DRIFT)`; `_build_matches` re-raises it, so the book drops
+out (fail closed) instead of pricing the other events. A per-event
+`{"error": ...}` payload (validated with `match = None`) and a request failure
+keep that event's list odds. Unknown keys are counted in
+`bh_wire_unknown_keys_total{book="mozzartbet",level=root|match|odd|game|subgame}`.
+The list item shell (teams, kickoff, competition) has no dated capture yet and
+stays unmodelled; `docs/WIRE_SCHEMAS.md` records the gap. New
+`tests/test_wire_schemas_mozzartbet.py` (19 tests). No live scan was run.
+
+SR4-3 (2026-11-08, working tree): MDShop validates its raw `getwebevents`
+payload before the parser runs. `scrapers/wire_schemas.py` models the NSoft
+envelope, event, market block and price row with `strict=True, extra="allow"`;
+`fetch_and_parse` calls `validate_response` right after `response.json()`.
+Renamed price fields, string/boolean prices and non-JSON bodies raise
+`ScrapeError(SCHEMA_DRIFT)`, which the adapter re-raises, so the book drops out
+instead of returning zero legs as an empty feed. Unknown keys are kept, counted
+in `bh_wire_unknown_keys_total{book,level,field}` and logged, never fatal.
+`validate_bets` proves each dated fixture; `tests/test_wire_schemas.py` has 13
+tests including the real `scrape()` drift path. The pattern and the remaining
+`SR4-3g` … `SR4-3j` follow-up rows (one per book) are in
+`docs/WIRE_SCHEMAS.md`.
+
+SR4-2 (2026-11-08, working tree): every fixture in
+`tests/fixtures/markets/` now carries a metadata header (`recorded_at` with its
+source, `endpoint`/`http_method`, `http_status`, `capture_tool_version`, book,
+mode, reviewed `captured_at`, `source`, `payload_kind`, `provenance`). The 17
+existing captures were backfilled from their last commit and marked
+`git_commit`/`metadata_backfilled`; `captured_at` and the 120-day policy are
+unchanged. `refresh_fixtures.py --check` now fails on a missing header or a
+credential-shaped key, and `--backfill-metadata` is the reproducible operator
+command. New `tests/test_fixture_metadata.py` (25 tests).
+
+SR4-1 (2026-11-08, working tree): `tests/test_transport_adapters.py` (37 tests)
+now drives every HTTP adapter's real `scrape()` through `respx` with the
+captured fixture payload inside the envelope the adapter requests, and checks
+the market families the capture declares. 403/429/503/timeout responses through
+all seven adapters must surface the SR2-1 `ScrapeError` kind. EVLBet has no
+market capture (SR6-3), so its recorded empty flat offer is pinned as empty.
+`tests/conftest.py` blocks real sockets for the whole session; `docs/CI.md`
+documents the layer. Dev pin: `respx==0.22.0`.
 
 SR7-1 (2026-11-08, commit `d963625`): both books now parse their full offer.
 Betole uses the batched `matches/by-ids` endpoint (22 requests for 809 matches);
@@ -90,11 +209,11 @@ On 2026-11-07 the old roadmaps and the maintenance backlog were folded into
 `ROADMAP.md` and deleted; the research briefs moved to `research/`. The
 `P*`/`N*` IDs are now historical labels with a glossary in the `ROADMAP.md`
 History section. P1-6 is waived and excluded. The suite runs
-**1,861 passed, 6 skipped, 1 xfailed, 1 warning** in both ledger modes, with
-**86.23%** coverage (floor 80%; 12,166 statements). The six skips are the two
+**2,024 passed, 6 skipped, 1 xfailed, 1 warning** in both ledger modes, with
+**89.18%** coverage (floor 80%; 12,666 statements). The six skips are the two
 opt-in runtime-state checks, the two Chromium tests unless
 `BH_ARB_TEST_BROWSER=1`, and the two load budgets unless `BH_ARB_TEST_SLOW=1`.
-Ruff, MyPy (232 source files), Node syntax checks and the generated market doc
+Ruff, MyPy (236 source files), Node syntax checks and the generated market doc
 are clean. The xfail documents the deferred named-key auth gap (see below).
 
 ### 2026-11-06 maintenance pass (`2e06756`)
@@ -144,10 +263,16 @@ latter and is deferred.
 
 ## Next action
 
-Start **SR4-1** (transport-level tests with respx); it is the next ungated task,
-now that SR2-3 is Done. The SR3 rows are still blocked on SR3-1 (gate SR0-1).
-The operator gates waiting for a decision are SR0-1, SR0-2, SR4-9 and SR6-3. N2-4 stays deferred and P1-6 stays waived. Do not invent a task or
-reopen a done one.
+Start **SR4-3g** (strict wire schema for EVLBet), the next follow-up row after
+SR4-3f, subject to SR6-3: EVLBet is disabled, returns an empty flat offer and
+has no market capture, so a payload schema cannot be proved. Record that against
+the row; if SR6-3 has no written operator decision, take the next row after it
+(SR4-3h Premier Kladionica) instead and leave SR4-3g blocked on SR6-3. SR4-5 is
+also ungated, but the SR4-3 follow-ups are earlier rows. The SR3 rows are still
+blocked on SR3-1 (gate SR0-1). The operator gates waiting for a decision are
+SR0-1, SR0-2, SR4-9 and SR6-3. N2-4 stays deferred and P1-6 stays waived. Do not
+invent a task or reopen a done one. SR4-1, SR4-2, SR4-3, SR4-3b, SR4-3c, SR4-3d,
+SR4-3e and SR4-3f are in the working tree; commit them if the operator asks.
 
 ## Rules
 

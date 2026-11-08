@@ -30,6 +30,10 @@ operator machine with a populated `config/generated/mapping_evidence.json`,
 * Shipped config inputs (`config/bookmaker_markets.json`, the deeplink
   declarations, the reviewed allowlist) are not redirected: they are source, not
   runtime state.
+* A session-scoped socket guard makes a real network connection fail the test
+  (loopback test servers stay allowed). HTTP-level adapter tests serve their
+  captures through `respx`, so an adapter that loses its mock fails loudly
+  instead of reaching the live bookmaker (SR4-1).
 
 A test that intentionally reads this machine's runtime state is marked
 `@pytest.mark.real_runtime_state` and is skipped unless
@@ -55,9 +59,33 @@ script stays the one-command local equivalent.
 The 3.11 leg also runs `python scripts/refresh_fixtures.py --check`. It fails
 when a frozen market fixture no longer matches its dated contract (top-level
 keys, source-id set, labels, nested shape), when an enabled book has no
-contract, or when a capture is older than the 120-day policy. A capture failure
-is reported separately and never treated as a feed change. See
+contract, when a capture is older than the 120-day policy, or when a fixture is
+missing its SR4-2 metadata header (or carries a credential-shaped key). A
+capture failure is reported separately and never treated as a feed change. See
 `docs/PARSER_CONTRACTS.md` for the refresh cadence and the diff format.
+
+## Transport-level adapter tests
+
+`tests/test_transport_adapters.py` joins the parser-contract and transport
+layers (SR4-1). For each HTTP adapter it inserts the captured payload from
+`tests/fixtures/markets/` into the response envelope the adapter actually
+requests, serves it through `respx`, and runs the real `scrape()`. The market
+families the capture declares must be exactly the families the scrape returns.
+The same module drives 403, 429, 5xx and timeout responses through every
+adapter and asserts the shared `ScrapeError` kind from `scrapers/errors.py`, so
+a refused feed can never be mistaken for an empty one. EVLBet has no market
+capture (see SR6-3); its recorded empty flat-offer response is pinned instead.
+
+`respx` is a dev-only pin in `requirements-dev.txt`.
+
+## Strict wire schemas
+
+MDShop validates its raw `getwebevents` payload with a pydantic
+`strict=True, extra="allow"` model before the parser sees it (SR4-3). A renamed
+price field, a string price or a non-JSON body is `schema_drift` and the book
+drops out; unknown keys are counted in `bh_wire_unknown_keys_total` and logged,
+not fatal. The pattern for the remaining books, and their `SR4-3b`…`SR4-3j`
+follow-up rows, are in `docs/WIRE_SCHEMAS.md`.
 
 ## Admissibility audit
 

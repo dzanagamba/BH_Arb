@@ -120,9 +120,18 @@ do not copy stale numbers here.
 | SR3-2 | Leak-free resource blocking | Not started | SR3-1 | — |
 | SR3-3 | Shared browser lifecycle | Not started | SR3-2, SR2-5 | — |
 | SR3-4 | Response capture and failure forensics | Not started | SR3-3 | — |
-| SR4-1 | Transport-level tests with respx | Not started | SR2-3 | — |
-| SR4-2 | Fixture metadata and age policy | Not started | — | — |
-| SR4-3 | Strict wire schemas, one book first | Not started | SR2-1 | — |
+| SR4-1 | Transport-level tests with respx | Done | SR2-3 | — |
+| SR4-2 | Fixture metadata and age policy | Done | — | — |
+| SR4-3 | Strict wire schemas, one book first | Done | SR2-1 | — |
+| SR4-3b | Strict wire schema: Mozzartbet | Done | SR4-3 | — |
+| SR4-3c | Strict wire schema: Admiralbet | Done | SR4-3 | — |
+| SR4-3d | Strict wire schema: Betole | Done | SR4-3 | — |
+| SR4-3e | Strict wire schema: MBet | Done | SR4-3 | — |
+| SR4-3f | Strict wire schema: SportPlus | Done | SR4-3 | — |
+| SR4-3g | Strict wire schema: EVLBet | Not started | SR4-3 | — |
+| SR4-3h | Strict wire schema: Premier Kladionica | Not started | SR4-3 | — |
+| SR4-3i | Strict wire schema: WWin | Not started | SR4-3 | — |
+| SR4-3j | Strict wire schema: MaxBet | Not started | SR4-3 | — |
 | SR4-4 | Structural fingerprint and drift alarm | Not started | SR4-3 | — |
 | SR4-5 | Cardinality floors against a baseline | Not started | SR2-1 | — |
 | SR4-6 | Snapshot tests of normalised parser output | Not started | SR4-2 | — |
@@ -519,7 +528,7 @@ Acceptance:
 
 ### SR4-1 Transport-level tests with respx
 
-Status: Not started
+Status: Done
 
 Why: no test drives an HTTP adapter's `scrape()` through a fake transport except
 one MDShop test with `fetch_with_retry` monkeypatched
@@ -531,12 +540,32 @@ cases using SR2-1 kinds. Block real network in the test session (respx
 `assert_all_mocked` or a socket guard).
 
 Acceptance:
-- [ ] Seven HTTP adapters covered (EVLBet per SR6-3 outcome).
-- [ ] A test that tries a real request fails loudly.
+- [x] Seven HTTP adapters covered (EVLBet per SR6-3 outcome).
+- [x] A test that tries a real request fails loudly.
+
+**Outcome (2026-11-08).** New `tests/test_transport_adapters.py` (37 tests)
+re-inserts each captured payload into the response envelope the adapter
+requests, serves it through `respx==0.22.0` (dev pin) and runs the real
+`scrape()`. Six books are checked against their prematch capture — mdshop, mbet,
+maxbet, sportplus, betole and premier_kladionica — with the contract that the
+market families the capture declares are exactly the families returned. The
+seven-adapters box is met for EVLBet at the transport boundary: no market
+capture exists (SR6-3 is still open), so the test pins its recorded empty
+flat-offer response as empty rather than an error. The error matrix drives 403,
+429 (with `Retry-After`), 503 and a connect timeout through every adapter and
+asserts the SR2-1 `ScrapeError` kinds `blocked`, `rate_limited`,
+`upstream_5xx` and `timeout`, so a refused feed cannot look like an empty one.
+`tests/conftest.py` gained a session-scoped socket guard (connect, connect_ex,
+create_connection, getaddrinfo) so any test that escapes respx fails loudly;
+two tests prove the guard and the unmocked-request failure. `docs/CI.md`
+documents the layer. `pytest`: 1898 passed, 6 skipped, 1 xfailed in both ledger
+modes (`check_test_isolation.py`); `pytest --cov`: 87.97% (12,166 statements,
+floor 80%); ruff clean; mypy 233 source files clean; market doc in sync;
+refresh_fixtures and audit_admissibility `--check` passed.
 
 ### SR4-2 Fixture metadata and age policy
 
-Status: Not started
+Status: Done
 
 Why: fixtures are trimmed JSON with a 120-day policy enforced by
 `scripts/refresh_fixtures.py --check`
@@ -548,13 +577,42 @@ HTTP status, capture tool version; scrub cookies/tokens; `--check` reports
 missing metadata. Do not change the 120-day policy without the operator.
 
 Acceptance:
-- [ ] All existing fixtures carry metadata (backfill `recorded_at` from git if
+- [x] All existing fixtures carry metadata (backfill `recorded_at` from git if
       unknown, marked as such).
-- [ ] `--check` fails on a fixture without metadata (test).
+- [x] `--check` fails on a fixture without metadata (test).
+
+**Outcome (2026-11-08).** Every capture now carries the SR4-2 header: `book`
+(`bookmaker`), `mode`, the reviewed `captured_at`, `recorded_at` plus
+`recorded_at_source`/`recorded_at_commit`, `endpoint`/`http_method`,
+`http_status`, `capture_tool_version` and the existing `source`, `payload_kind`
+and `provenance`. The 17 existing fixtures were backfilled with
+`refresh_fixtures.py --backfill-metadata --write`: `recorded_at` is the
+fixture's last commit time (`git log -1 --format=%cI%n%h`) and is marked
+`recorded_at_source: "git_commit"` with its short sha and
+`metadata_backfilled: true`. Backfilled captures carry
+`capture_tool_version: "pre-metadata"`; new captures write version `2` from
+`CAPTURE_TOOL_VERSION`. `captured_at` was not rewritten, and the 120-day age
+policy still reads it (`stale_contracts` untouched): `recorded_at` is
+provenance only. `engine/parser_contracts.py` gained `metadata_issues`,
+`metadata_report`, `scrub_secrets`, `backfill_metadata` and
+`http_method_for`; `refresh_fixtures.build_report` reports a `metadata` block
+and includes it in `ok`, so CI's `--check` fails on a missing header or a
+credential-shaped key. The capture tool scrubs cookies, authorization headers,
+bearer/access/refresh tokens, CSRF and session ids before writing; exact key
+matching keeps Betole's `matchIdsToken` event-id list from being mistaken for
+a credential. Contracts were regenerated for the new required top-level keys.
+Docs: `docs/PARSER_CONTRACTS.md` (metadata table, backfill command) and
+`docs/CI.md`. New `tests/test_fixture_metadata.py` (25 tests: shipped headers,
+missing-field name, isolated `--check` failure at `main(["--check"]) == 1`,
+git/capture-date backfill, scrub, token false-positive, age-policy pin).
+`pytest`: 1923 passed, 6 skipped, 1 xfailed in both ledger modes
+(`check_test_isolation.py`); `pytest --cov`: 87.95% (12,255 statements, floor
+80%); ruff clean; mypy 234 source files clean; market doc in sync;
+refresh_fixtures and audit_admissibility `--check` passed.
 
 ### SR4-3 Strict wire schemas, one book first
 
-Status: Not started
+Status: Done
 
 Why: no adapter validates the raw payload against a schema; correctness rests on
 pydantic models of the parsed result (`research/02_adapters.md`;
@@ -568,10 +626,235 @@ fatal. Record the pattern so the other books can follow in later sessions (one
 book per session after this).
 
 Acceptance:
-- [ ] Fixture passes; mutated fixture (renamed price field) yields
+- [x] Fixture passes; mutated fixture (renamed price field) yields
       `schema_drift`, zero legs.
-- [ ] Unknown-key count visible in metrics.
-- [ ] Follow-up rows "SR4-3b … SR4-3j" added to the table, one per remaining book.
+- [x] Unknown-key count visible in metrics.
+- [x] Follow-up rows "SR4-3b … SR4-3j" added to the table, one per remaining book.
+
+**Outcome (2026-11-08).** MDShop (the simplest direct-HTTP feed) now validates
+its raw `getwebevents` response before any parser runs. New
+`scrapers/wire_schemas.py` models the envelope, event, market block and price
+row with `ConfigDict(strict=True, extra="allow")`; `validate_response` is
+called in `scrapers/mdshop.py::fetch_and_parse` immediately after
+`response.json()`. `strict=True` rejects a string price, a boolean price and a
+renamed price field (`odd` → `price`); `extra="allow"` keeps an added key.
+`validate_bets` validates the captured `bets` array directly, which is what the
+dated fixtures freeze. A failure raises `ScrapeError(ScrapeKind.SCHEMA_DRIFT)`,
+which MDShop's existing `except ScrapeError: raise` propagates, so the book
+drops out instead of returning zero legs as an empty feed; a non-JSON body is
+the same kind. Unknown keys outside the allow-list are counted in
+`bh_wire_unknown_keys_total{book,level,field}` (`level` is `root`, `event`,
+`bet` or `outcome`), logged once per payload, and never fatal. The pattern and
+the follow-up mapping are in `docs/WIRE_SCHEMAS.md`; `docs/CI.md` links it.
+New `tests/test_wire_schemas.py` (13 tests): both fixtures pass with no unknown
+keys, the event shell passes, renamed/string prices raise `schema_drift`
+through `validate_bets` and through the real `scrape()` (both modes, zero
+legs), integer prices stay numeric, unknown bet/outcome/event keys are kept,
+counted in the rendered metric and logged, an unknown key still scrapes, and a
+non-JSON body is `schema_drift`.
+`pytest`: 1936 passed, 6 skipped, 1 xfailed; `check_test_isolation.py`: both
+ledger modes 1936 passed, 6 skipped, 1 xfailed; coverage 88.02% (12,365
+statements, floor 80%); ruff clean; mypy 236 source files clean; market doc,
+refresh-fixtures and audit-admissibility checks pass.
+
+### SR4-3b … SR4-3j Strict wire schemas, remaining books
+
+Status: SR4-3b … SR4-3f Done (2026-11-08); SR4-3g … SR4-3j not started. One row
+per remaining book, one book per session, picked in table order (Mozzartbet
+first).
+
+Why: SR4-3 proved the pattern on MDShop (direct HTTP, NSoft envelope); every
+other adapter still trusts the raw payload and validates only the parsed result.
+
+Steps: follow `docs/WIRE_SCHEMAS.md` for one book. Model its raw envelope and
+leaf price rows with `strict=True, extra="allow"`, add the allow-list of
+consumed keys, validate immediately after the transport read, raise
+`ScrapeError(SCHEMA_DRIFT)` on failure (fail closed), count unknown keys in
+`bh_wire_unknown_keys_total` and log them. Admiralbet serves the same NSoft
+shape as MDShop but still needs its own fixture-backed test before it may reuse
+the models. Browser books validate the captured JSON response inside the
+Playwright flow, not the DOM.
+
+Acceptance:
+- [ ] That book's dated fixture passes the strict schema with no unknown keys.
+- [ ] A renamed price field and a string price yield `schema_drift` and zero
+      legs through the real adapter.
+- [ ] Unknown-key counts appear in `bh_wire_unknown_keys_total` for that book.
+
+**SR4-3b Outcome (2026-11-08).** Mozzartbet now validates its raw wire payload
+in both paths: `validate_mozzart_offer` in `_complete_offer` (the per-event
+`{"match": {"odds": [...]}}` response, immediately after `response.json()`) and
+`validate_mozzart_page` in the pagination loop (`items` + `totalPages`, plus
+every item's `odds` array, which is the per-event fallback). The models are
+`MozzartGame` / `MozzartSubgame` / `MozzartOdd` plus `MozzartMatch`,
+`MozzartOffer` and `MozzartMatchesPage`, all `strict=True, extra="allow"`.
+`value` is required but nullable (the captures carry `null` for suspended
+picks), so a renamed price field or a string price is `SCHEMA_DRIFT` instead of
+a row the parser skips as `value == 0`. `_build_matches` re-raises a
+`ScrapeError` from a per-event task, so the book drops out (fail closed) rather
+than keeping the other events' legs. A per-event `{"error": ...}` payload
+validates with `match = None` and keeps that event's list odds; a request or
+non-JSON failure still keeps the list odds too. Unknown keys are counted at
+`root`/`match`/`odd`/`game`/`subgame`. The list **item** shell (teams, kickoff,
+competition) has no dated capture yet, so it is deliberately unmodelled and
+documented as a gap (SR4-4/SR5-1 own structural drift). New
+`tests/test_wire_schemas_mozzartbet.py` (19 tests): both fixtures pass,
+`null`/integer prices are accepted, renamed and string prices raise through
+`validate_mozzart_odds` and through the real `_complete_offer`/`_build_matches`
+(both modes, zero legs), an unknown key is kept/counted/logged, the offer
+envelope, a non-JSON offer body, the page envelope and a drifted page odds array
+are covered, and the item shell stays unmodelled. `docs/WIRE_SCHEMAS.md`
+records the book and levels.
+
+Acceptance (SR4-3b):
+- [x] Both dated fixtures (prematch and live) pass the strict odds schema with
+      no unknown keys.
+- [x] A renamed price field and a string price yield `schema_drift` through the
+      real adapter, with zero legs returned.
+- [x] Unknown-key counts appear in `bh_wire_unknown_keys_total` for
+      `book="mozzartbet"`.
+
+**SR4-3c Outcome (2026-11-08).** Admiralbet serves the same NSoft
+`getwebevents` envelope as MDShop, so it **reuses** `NSoftResponse` /
+`NSoftEvent` / `NSoftBet` / `NSoftOutcome` rather than defining a second shape.
+Reuse was allowed only after its own dated captures proved it:
+`tests/test_wire_schemas_admiralbet.py` checks both the prematch and live `bets`
+arrays against `validate_bets(..., book="admiralbet")` with no unknown keys and
+runs the real `scrape()` against them. `validate_response` now runs in
+`scrape()` immediately after `response.json()`, before any event is parsed; the
+adapter's historical bare-list form (the payload being the events array itself)
+is wrapped as `{"events": [...]}` first, so both shapes get the same schema. A
+non-JSON body or a drifted row raises `ScrapeError(SCHEMA_DRIFT)`, which the
+existing `except ScrapeError: raise` propagates, so the book drops out with zero
+legs. Unknown keys are counted in
+`bh_wire_unknown_keys_total{book="admiralbet",...}` at the shared NSoft levels
+(`root`/`event`/`bet`/`outcome`) and logged once per payload. The event shell is
+validated only through the fields MDShop's capture proved: Admiralbet's extra
+fallback keys (`home`/`guest`, `dateFrom`/`kickoff`, `leagueName`) have no dated
+capture, stay unmodelled and are counted as unknown event keys if the live shell
+carries them — recorded as the gap SR4-4/SR5-1 close. `docs/WIRE_SCHEMAS.md`
+gained the Admiralbet section. New `tests/test_wire_schemas_admiralbet.py` (18
+tests): both fixtures pass, integer prices are accepted, renamed/string prices
+raise through `validate_bets` and through the real `scrape()` (both modes, zero
+legs), the envelope and event shell pass, unknown keys are kept/counted/logged,
+the real scrape emits exactly each capture's declared families, the bare-list
+form is validated, and a non-JSON body is `schema_drift`.
+
+Acceptance (SR4-3c):
+- [x] Both dated fixtures (prematch and live) pass the shared strict NSoft
+      schema with no unknown keys.
+- [x] A renamed price field and a string price yield `schema_drift` through the
+      real adapter, with zero legs returned.
+- [x] Unknown-key counts appear in `bh_wire_unknown_keys_total` for
+      `book="admiralbet"`.
+
+**SR4-3d Outcome (2026-11-08).** Betole's "price row" is a `{pick_code: price}`
+map, not an object with a price field, so the NSoft/Mozzart models do not fit.
+`scrapers/wire_schemas.py` gained `BetoleDeskPage` (`{"esMatches": [event, ...]}`,
+`esMatches` required) and `BetoleOfferRow` (`id`, `odds` required) plus
+`validate_betole_offer_map`, `validate_betole_desk` and `validate_betole_offers`.
+The map's **keys are data, not an allow-list**: every pick code is accepted, the
+unmapped `284` control stays in the capture, and `record_unmapped` keeps
+tracking codes the parser cannot price. Its **values** are the pricing surface:
+`strict=True` rejects a string or boolean price, accepts an integer, and keeps
+a `null` pick because the parser already reads it as "no price". The adapter
+validates the desk page and each event's odds map immediately after
+`response.json()` (the desk odds are the per-event fallback) and the batched
+full-offer rows in `_fetch_full_offers`; a non-JSON body or a drifted row raises
+`ScrapeError(SCHEMA_DRIFT)`, it is re-raised rather than swallowed by the
+"failed batch keeps desk odds" fallback, and the book drops out with zero legs.
+Unknown keys are counted at `root` (desk envelope) and `row` (offer rows) in
+`bh_wire_unknown_keys_total{book="betole",...}` and logged once per payload. The
+desk *event* shell (teams, kickoff, live flags) has no dated capture and stays
+unmodelled — its keys are neither rejected nor counted, so a renamed team field
+still drops that event silently (the gap SR4-4/SR5-1 close). `docs/WIRE_SCHEMAS.md`
+gained the Betole section and levels. New `tests/test_wire_schemas_betole.py`
+(16 tests): the capture's map passes, integer and null picks are accepted,
+string prices, a renamed `esMatches`, an offer row without `odds` and non-JSON
+desk/offer bodies raise (through the schema and through the real `scrape()` with
+zero legs), unknown root/row keys are kept/counted/logged, and the real scrape
+emits exactly the capture's expected plus experimental families.
+
+Acceptance (SR4-3d):
+- [x] The dated fixture's odds map passes the strict schema with no unknown
+      keys.
+- [x] A renamed price envelope key and a string price yield `schema_drift`
+      through the real adapter, with zero legs returned.
+- [x] Unknown-key counts appear in `bh_wire_unknown_keys_total` for
+      `book="betole"`.
+
+**SR4-3e Outcome (2026-11-08).** MBet (Alea platform, plain HTTP) has the NSoft
+`{"events": [...]}` envelope but a different odds shape: each event's `odds` is
+a map whose keys are oddtype keys (`ofb:fs:1`, `lfb:tg:over|2.5`, ...) and whose
+values are either an entry object or a bare number. `scrapers/wire_schemas.py`
+gained `MbetOdd` (`value`, `market_key`, `oddtype_key`, `market_status`,
+`oddtype_status` — all required but nullable, since the capture writes all five
+for every key) and `MbetResponse` (`events` required) plus
+`validate_mbet_odds` and `validate_mbet_response`. `scrapers/mbet.py` validates
+the page envelope and every event's odds map in `fetch_page()` immediately
+after `response.json()`; a non-JSON page or a drifted entry raises
+`ScrapeError(SCHEMA_DRIFT)`, which `fetch_pages` propagates, so the book drops
+out with zero legs instead of reading as an empty or fully suspended feed.
+Oddtype keys are data, not an allow-list: every key is accepted and
+`record_unmapped` keeps tracking families the parser cannot price. Values are
+strict: a string price is drift, an integer is accepted, and a bare number or a
+`null` entry is kept because the parser already supports that form. Unknown keys
+are counted at `root` and `odd` in
+`bh_wire_unknown_keys_total{book="mbet",...}` and logged once per payload. The
+event shell (sport id, competitors, kickoff, tournament) has no dated capture
+and stays unmodelled — its keys are neither rejected nor counted, so a renamed
+team field still drops that event silently (the gap SR4-4/SR5-1 close).
+`docs/WIRE_SCHEMAS.md` gained the MBet section and levels. New
+`tests/test_wire_schemas_mbet.py` (16 tests): both fixtures pass, integer/bare
+number/null entries are accepted, renamed and string prices plus a renamed
+`events` key raise (through the schema and the real `scrape()` in both modes,
+zero legs), non-JSON pages are drift, unknown root/odd keys are
+kept/counted/logged, and the real scrape emits exactly each capture's declared
+families.
+
+Acceptance (SR4-3e):
+- [x] Both dated fixtures (prematch and live) pass the strict schema with no
+      unknown keys.
+- [x] A renamed price field and a string price yield `schema_drift` through the
+      real adapter, with zero legs returned.
+- [x] Unknown-key counts appear in `bh_wire_unknown_keys_total` for
+      `book="mbet"`.
+
+**SR4-3f Outcome (2026-11-08).** SportPlus's dated fixtures freeze one match's
+`markets[]` array, so `scrapers/wire_schemas.py` gained `SportplusMarket`
+(`id`, `name`, `odds` required but nullable) and `SportplusOdd` (`alias`,
+`value` required but nullable), plus `SportplusPrematchPage` (`{"matches":
+[...]}`), `SportplusLivePage` (`{"sports": [...]}`, with a declared-but-unread
+`date` key kept out of the telemetry) and `validate_sportplus_markets` /
+`validate_sportplus_prematch` / `validate_sportplus_live`. `scrapers/sportplus.py`
+validates the prematch response after the optional double-serialised decode
+(`resp.json()` returning a JSON *string*) and the live response before any
+match is parsed; a non-JSON body or a drifted block/price raises
+`ScrapeError(SCHEMA_DRIFT)`, re-raised by the existing `except ScrapeError:
+raise`, so the book drops out with zero legs. Both envelope keys (`matches`,
+`sports`) are required, so a renamed one cannot read as an empty offer. A
+renamed `value`/`alias` is drift, a string price is drift, an integer price is
+accepted and a block with a null `odds` list is kept (the parser already treats
+it as empty). Unknown keys are counted at `root`/`market`/`odd` in
+`bh_wire_unknown_keys_total{book="sportplus",...}` and logged once per payload.
+The match shell (sport name, competitors, kickoff, league) has no dated capture
+and stays unmodelled — its keys are neither rejected nor counted, so a renamed
+team field still drops that match silently (the gap SR4-4/SR5-1 close).
+`docs/WIRE_SCHEMAS.md` gained the SportPlus section and levels. New
+`tests/test_wire_schemas_sportplus.py` (19 tests): both fixtures pass with no
+unknown keys, the prematch/live envelopes pass, renamed and string prices raise
+through the schema and the real `scrape()` in both modes with zero legs, integer
+prices and a null odds block are accepted, the double-serialised prematch body
+still scrapes, renamed `matches`/`sports` keys and non-JSON bodies are drift,
+and unknown root/market/odd keys are kept/counted/logged.
+
+Acceptance (SR4-3f):
+- [x] Both dated fixtures (prematch and live) pass the strict schema with no
+      unknown keys.
+- [x] A renamed price field and a string price yield `schema_drift` through the
+      real adapter, with zero legs returned.
+- [x] Unknown-key counts appear in `bh_wire_unknown_keys_total` for
+      `book="sportplus"`.
 
 ### SR4-4 Structural fingerprint and drift alarm
 
@@ -1500,3 +1783,11 @@ Useful starting points:
 | 2026-11-08 | SR7-1 | Done | Operator chose **B (full fetch)**. Betole now calls the batched full-offer endpoint (`GET /restapi/offer/ba/matches/by-ids?matchIdsToken=<40 ids>&annex=0`) after the desk listing; the annex code comes from the site's `parametersData.json` (`BOOK_ANNEX_CODE=0`). Desk events are filtered (mode/live, blocked, teams) before batching, so 809 matches cost 22 requests. Parser gains double chance (7/8/9) and totals 1.5/2.5/3.5/4.5/5.5 (242/21, 24/22, 25/219, 27/453, 223/266); the registry gains `over_under_4_5`/`over_under_5_5` for betole; the 22 combination/special picks stay in `_excluded`. Mozzartbet has no bulk variant (tested `loadAllTemplateGames`/`loadExtendedOffer`/`packGroupsInMatch`: the list payload is unchanged), so it fetches `POST /betting/match/{id}` per unique event with 8 in flight, the shared 5/s limiter, and the list odds as the fallback per event; the GET form returns `{"error":"Not found. Sorry."}` (caught in the first live run: 642 wasted GETs, fixed to POST). Parser gains game 4 first-half 1X2 (experimental, like Betole's) and the 1.5/3.5/4.5 complete totals; unsupported game ids (5,7,8,9,16,19,20,26,128,129,131,132,139,140,142,143,153,154,179,297) are declared in `_excluded`. Fixtures re-captured from the live endpoints and contracts rewritten (`refresh_fixtures --write`): betole full-offer odds map, mozzartbet match-offer rows; `UNCOVERED_ROWS` entries for the now-covered rows removed. New admissibility baseline `docs/evidence/2026-11-08-admissibility-baseline.json` (betole's two new families were `new_family_without_evidence` warnings on the 2026-11-05 baseline; `DEFAULT_BASELINE` and the docs now point at the 2026-11-08 file). **Measured before → after (same machine, 2026-11-07 22:18 → 2026-11-08 01:05):** requests/scan 124 → 777 (+5.9x), bytes 234.7 MB → 433.0 MB, scan wall 105 s → 237 s, mozzartbet adapter 57 s → 159.9 s (under the 240 s deadline), betole 22 requests / 31.3 s, mozzart 678 requests / 159.9 s; markets betole 3,275 → 6,628 (4.0 → 8.2 per event), mozzartbet 2,598 → 4,976 (4.1 → 7.9); feed integrity mozzartbet 0.558 missing (degraded) → 0.170 (healthy), betole 0.028 (healthy); 26 surebets on the final scan. Handicap/Asian handicap stay unmapped: the offer carries the picks but not the line value (recorded under the task). New `tests/test_full_offer_markets.py` (9 tests: family sets, incomplete legs, batching, failed batch fallback, desk prefilter, first-half 1X2, offer-failure fallback). `pytest`: 1861 passed, 6 skipped, 1 xfailed; `check_test_isolation.py`: both ledger modes green; `pytest --cov`: 86.23% (12,149 statements, floor 80%); ruff clean; mypy 232 files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. |
 | 2026-11-08 | SR7-2 | Done | Operator asked to raise the rate to 60 requests/second. Added `SCRAPER_BOOK_RATES` (parsed `"book=rate,..."` pairs, default `mozzartbet=60`) as a per-book override of `SCRAPER_REQUESTS_PER_SECOND`; `TransportPolicy.requests_per_second` takes the override, every other book stays at 5/s. Betole's full-offer batches now run 8-in-flight; Mozzartbet keeps 32 in flight. **Measured on two live prematch scans:** scan wall 237 s → 124 s and 121 s; mozzartbet 159.9 s → 43.8 s / 40.8 s; betole 31.3 s → 13.3 s; requests unchanged at 777/779; kinds stayed `ok`, no 429/blocked (one Betole batch 503'd and the retry succeeded). The limiter is no longer binding: 675 Mozzartbet requests in 40.8 s ≈ 16.5 req/s, because `page.request` shares the browser's per-host connection pool; the remaining ~80 s is local matching/pricing (M2-1, operator-gated). `SCRAPER_BOOK_RATES` documented in README and `.env.example`; `tests/test_ratelimit.py` pins mozzartbet 60/s, mbet 5/s. `pytest`: 1861 passed, 6 skipped, 1 xfailed; `check_test_isolation.py`: both ledger modes green; `pytest --cov`: 86.23% (12,166 statements, floor 80%); ruff clean; mypy 232 files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. |
 | 2026-11-08 | SR7-1 | Investigation | Operator asked why Mozzartbet and Betole carry so few markets. Live probes (read-only): Betole `GET /restapi/offer/ba/sport/S/desk` returned 1,415 events with 30 distinct pick codes; the 10 mapped codes are 1X2, BTTS, O/U 2.5 and the experimental first-half 1X2, and the other 20 (present on 1,106 events) are exactly `_excluded.betole`. Decoding them through Betole's own catalog (`GET /restapi/offer/ba/ttg_lang`, 1,204 bets / 6,426 picks) shows they are combination/special/advance markets (team wins match-or-first-half, wins both halves, goals per half mixes, qualification, two-goals-in-a-row) — no supported family. Mozzartbet `POST /betting/matches` returned 15 events with 14 odds and 5 groups each: 1X2, DC, BTTS (`gg`/`ng`/`gg3+`), totals with only the 2.5 line complete, and per-half goals; `totalOddsCount` is 518 against the 14 listed, so the full offer is only on the match page. Neither parser drops a supported family; more markets require one request per event (652 + 820 in the 2026-11-07 scan), i.e. ~1,470 requests (+12.9x) and ~130 s per book at the 5/s ceiling, over the 240 s adapter deadline. Recorded as gated **SR7-1** with evidence in `docs/evidence/2026-11-08-market-coverage-probe.md`; no code, book or market was changed. `pytest`/ruff/mypy unchanged from the previous entry (no source changes). |
+| 2026-11-08 | SR4-1 | Done | New `tests/test_transport_adapters.py` (37 tests) with `respx==0.22.0` (dev-only pin in `requirements-dev.txt`). Each case re-inserts the captured payload into the response envelope the adapter actually requests and runs the real `scrape()`: mdshop, mbet, maxbet, sportplus, betole and premier_kladionica are asserted against their fixture's declared market families, so a changed URL, query key or envelope now fails. EVLBet is covered at the transport boundary with its recorded empty flat-offer response (no market capture exists; SR6-3 still open), pinning empty as `[]` rather than an error. The error matrix runs 403, 429 `Retry-After: 0`, 503 and a connect timeout through all seven adapters and asserts `ScrapeError.kind` is `blocked`, `rate_limited`, `upstream_5xx` and `timeout` (SR2-1), with zero jitter and no rate slot via a patched policy so the matrix stays fast. `tests/conftest.py` gained a session-scoped socket guard (connect/connect_ex/create_connection/getaddrinfo) and two tests prove it plus respx's `AllMockedAssertionError`; `docs/CI.md` documents the layer. `pytest`: 1898 passed, 6 skipped, 1 xfailed; `check_test_isolation.py`: both ledger modes 1898 passed, 6 skipped, 1 xfailed; `pytest --cov`: 87.97% (12,166 statements, floor 80%); ruff clean; mypy 233 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. |
+| 2026-11-08 | SR4-2 | Done | Every market fixture now carries a metadata header: `bookmaker`, `mode`, reviewed `captured_at`, `recorded_at` with `recorded_at_source`/`recorded_at_commit`, `endpoint`/`http_method`, `http_status`, `capture_tool_version`, plus the existing `source`, `payload_kind` and `provenance`. The 17 existing captures were backfilled by `refresh_fixtures.py --backfill-metadata --write` from each fixture's last commit (`git log -1 --format=%cI%n%h`), marked `recorded_at_source: "git_commit"`, `metadata_backfilled: true` and `capture_tool_version: "pre-metadata"`; `captured_at` is unchanged, so the 120-day policy and `stale_contracts` keep their exact meaning (`recorded_at` is provenance only). `engine/parser_contracts.py` gained `metadata_issues`, `metadata_report`, `scrub_secrets`, `backfill_metadata`, `http_method_for` and the extended `REQUIRED_TOP_LEVEL_KEYS`; `refresh_fixtures.build_report` reports a `metadata` block and folds it into `ok`, so CI `--check` fails on a missing field or a credential-shaped key. The capture tool writes `CAPTURE_TOOL_VERSION = "2"`, `recorded_at` from the capture clock, derives GET/POST and scrubs cookies, authorization, bearer/access/refresh tokens, CSRF and session ids; exact key matching keeps Betole's `matchIdsToken` event-id list unflagged. Contracts regenerated for the new keys. Docs: `docs/PARSER_CONTRACTS.md`, `docs/CI.md`; new `tests/test_fixture_metadata.py` (25 tests, including an isolated `main(["--check"]) == 1` for a stripped header). `pytest`: 1923 passed, 6 skipped, 1 xfailed; `check_test_isolation.py`: both ledger modes 1923 passed, 6 skipped, 1 xfailed; `pytest --cov`: 87.95% (12,255 statements, floor 80%); ruff clean; mypy 234 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. |
+| 2026-11-08 | SR4-3 | Done | MDShop (simplest direct-HTTP feed) now validates its raw `getwebevents` payload before any parser runs. New `scrapers/wire_schemas.py` models the NSoft envelope, event, market block and price row with `ConfigDict(strict=True, extra="allow")`; `validate_response` runs in `scrapers/mdshop.py::fetch_and_parse` immediately after `response.json()`, and `validate_bets` validates the `bets` array the dated fixtures freeze. `strict=True` rejects a string price, a boolean price and a renamed price field (`odd` → `price`); `extra="allow"` keeps an added key. A failure raises `ScrapeError(ScrapeKind.SCHEMA_DRIFT)`, propagated by MDShop's existing `except ScrapeError: raise`, so the book drops out instead of contributing zero legs as an empty feed; a non-JSON body is the same kind. Unknown keys outside the allow-list are counted in `bh_wire_unknown_keys_total{book,level,field}` (`root`/`event`/`bet`/`outcome`), logged once per payload and never fatal. The pattern is in `docs/WIRE_SCHEMAS.md`; `docs/CI.md` links it. Follow-up rows `SR4-3b`…`SR4-3j` added, one per remaining book, starting with Mozzartbet. New `tests/test_wire_schemas.py` (13 tests): both fixtures pass with no unknown keys, the captured event shell passes, renamed and string prices raise `schema_drift` through `validate_bets` and through the real `scrape()` (both modes, zero legs), integer prices stay numeric, unknown bet/outcome/event keys are kept, counted in the rendered metric and logged, an unknown key still scrapes, and a non-JSON body is `schema_drift`. `pytest`: 1936 passed, 6 skipped, 1 xfailed; `check_test_isolation.py`: both ledger modes 1936 passed, 6 skipped, 1 xfailed; `pytest --cov`: 88.02% (12,365 statements, floor 80%); ruff clean; mypy 236 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. |
+| 2026-11-08 | SR4-3b | Done | Mozzartbet (Playwright hybrid) now validates its raw JSON in both adapter paths. `scrapers/wire_schemas.py` gained `MozzartGame`/`MozzartSubgame`/`MozzartOdd`, `MozzartMatch`/`MozzartOffer` (the per-event `{"match": {"odds": [...]}}` response) and `MozzartMatchesPage` (`items` + `totalPages`), all `strict=True, extra="allow"`; the three entry points are `validate_mozzart_odds`/`validate_mozzart_offer`/`validate_mozzart_page`. `value`, `game` and `subgame` are required but nullable because every captured row carries them (`null` marks a suspended pick), so a renamed price field or a string price is `SCHEMA_DRIFT`, not a row the parser skips as `value == 0`. `scrapers/mozzartbet.py::_complete_offer` validates the offer immediately after `response.json()` and turns a non-JSON body into `SCHEMA_DRIFT`; a request failure or a per-event `{"error": ...}` payload (validated with `match = None`) still keeps that event's list odds. The pagination loop validates the list envelope and every item's `odds` array (the fallback offer); a non-JSON page is `SCHEMA_DRIFT`. `_build_matches` re-raises a `ScrapeError` returned by a per-event task, so a drifted row drops the whole book instead of pricing the other events. Unknown keys are counted at `root`/`match`/`odd`/`game`/`subgame` in `bh_wire_unknown_keys_total` and logged once per payload. The list **item** shell (teams, kickoff, competition) has no dated capture yet, so it stays unmodelled and undocumented keys there are neither rejected nor counted — recorded as the gap SR4-4/SR5-1 will close. `docs/WIRE_SCHEMAS.md` gained the Mozzartbet section and its levels. New `tests/test_wire_schemas_mozzartbet.py` (19 tests). No live scan was run and no bookmaker traffic was generated. `pytest`: 1955 passed, 6 skipped, 1 xfailed; `check_test_isolation.py`: both ledger modes 1955 passed, 6 skipped, 1 xfailed; `pytest --cov`: 88.26% (12,463 statements, floor 80%); ruff clean; mypy 237 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. |
+| 2026-11-08 | SR4-3c | Done | Admiralbet serves the same NSoft `getwebevents` envelope as MDShop, so it **reuses** `NSoftResponse`/`NSoftEvent`/`NSoftBet`/`NSoftOutcome` instead of adding a second shape; reuse was gated on a fixture-backed test. `scrapers/admiralbet.py::fetch_and_parse` now calls `validate_response(data, book="admiralbet")` immediately after `response.json()`, before any event is parsed. The adapter's historical bare-list form (the payload being the events array itself) is wrapped as `{"events": [...]}` first so the same schema applies to both shapes; a non-JSON body is `SCHEMA_DRIFT` too. A drift raises `ScrapeError(SCHEMA_DRIFT)`, which the existing `except ScrapeError: raise` propagates, so the book drops out with zero legs instead of an empty scan. Unknown keys are counted in `bh_wire_unknown_keys_total{book="admiralbet",...}` at the shared NSoft levels (`root`/`event`/`bet`/`outcome`) and logged once per payload. The event shell is validated only through the fields MDShop's capture proved; Admiralbet's extra fallback keys (`home`/`guest`, `dateFrom`/`kickoff`, `leagueName`) have no dated capture and stay unmodelled, counted as unknown event keys if present (the gap SR4-4/SR5-1 close). New `tests/test_wire_schemas_admiralbet.py` (18 tests) drives the real `scrape()` through a fake browser: both dated fixtures pass with no unknown keys, the real scrape emits exactly each capture's declared families, integer prices stay numeric, renamed/string prices raise in `validate_bets` and through `scrape()` (both modes, zero legs), unknown keys are kept/counted/logged, the bare-list form is validated, and a non-JSON body is `schema_drift`. `docs/WIRE_SCHEMAS.md` gained the Admiralbet section. No live scan was run and no bookmaker traffic was generated. `pytest`: 1973 passed, 6 skipped, 1 xfailed; `check_test_isolation.py`: both ledger modes 1973 passed, 6 skipped, 1 xfailed; `pytest --cov`: 88.77% (12,471 statements, floor 80%); ruff clean; mypy 238 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. |
+| 2026-11-08 | SR4-3d | Done | Betole's "price row" is a `{pick_code: price}` map, so the NSoft/Mozzart shapes do not fit. `scrapers/wire_schemas.py` gained `BetoleDeskPage` (the `{"esMatches": [...]}` desk envelope, `esMatches` required so a renamed key cannot read as an empty page), `BetoleOfferRow` (`id` + `odds` required) and `validate_betole_offer_map`/`validate_betole_desk`/`validate_betole_offers`. Map keys are pick codes, i.e. data rather than an allow-list — every code is accepted and the unmapped `284` control stays in the capture (`record_unmapped` keeps tracking codes the parser cannot price). Values are the pricing surface: `strict=True` rejects a string or boolean price, accepts an integer, keeps a `null` pick (the parser already reads it as "no price"). `scrapers/betole.py` validates the desk page and each event's odds map right after `response.json()` (desk odds are the per-event fallback), and the batched full-offer rows in `_fetch_full_offers`; a non-JSON body or a drifted row raises `ScrapeError(SCHEMA_DRIFT)`, which the "failed batch keeps desk odds" fallback now re-raises instead of swallowing, so the book drops out with zero legs. Unknown keys are counted at `root`/`row` in `bh_wire_unknown_keys_total{book="betole",...}` and logged once per payload. The desk event shell (teams, kickoff, live flags) has no dated capture and stays unmodelled, so a renamed team field still drops that event silently (the gap SR4-4/SR5-1 close). `docs/WIRE_SCHEMAS.md` gained the Betole section and levels. New `tests/test_wire_schemas_betole.py` (16 tests): the capture passes, integer/null picks accepted, string prices, renamed `esMatches`, a row without `odds` and non-JSON desk/offer bodies raise (through the schema and the real `scrape()`, zero legs), unknown root/row keys kept/counted/logged, and the real scrape emits the capture's expected plus experimental families. No live scan was run and no bookmaker traffic was generated. `pytest`: 1989 passed, 6 skipped, 1 xfailed; `check_test_isolation.py`: both ledger modes 1989 passed, 6 skipped, 1 xfailed; `pytest --cov`: 88.83% (12,517 statements, floor 80%); ruff clean; mypy 239 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. |
+| 2026-11-08 | SR4-3e | Done | MBet (Alea platform, plain HTTP) has the NSoft `{"events": [...]}` envelope but a different odds shape: each event's `odds` is a map whose keys are oddtype keys and whose values are either a typed entry or a bare number. `scrapers/wire_schemas.py` gained `MbetOdd` (`value`, `market_key`, `oddtype_key`, `market_status`, `oddtype_status`, all required but nullable because the capture writes all five for every key) and `MbetResponse` (`events` required), plus `validate_mbet_odds`/`validate_mbet_response`. `scrapers/mbet.py::fetch_page` validates the page envelope and every event's odds map immediately after `response.json()`; a non-JSON page or a drifted entry raises `ScrapeError(SCHEMA_DRIFT)`, which `fetch_pages` propagates, so the book drops with zero legs instead of reading as empty or fully suspended. Oddtype keys are data, not an allow-list (every key accepted; `record_unmapped` still tracks unpriceable families); values are strict — string price is drift, integer accepted, bare number and `null` entry kept because the parser supports that form. Unknown keys count at `root`/`odd` in `bh_wire_unknown_keys_total{book="mbet",...}` and are logged once per payload. The event shell (sport id, competitors, kickoff, tournament) has no dated capture and stays unmodelled, so a renamed team field still drops that event silently (the gap SR4-4/SR5-1 close). `docs/WIRE_SCHEMAS.md` gained the MBet section and levels. New `tests/test_wire_schemas_mbet.py` (16 tests): both fixtures pass, integer/bare-number/null entries accepted, renamed and string prices plus a renamed `events` key raise (schema and real `scrape()`, both modes, zero legs), non-JSON pages are drift, unknown root/odd keys kept/counted/logged, and the real scrape emits each capture's declared families. No live scan was run and no bookmaker traffic was generated. `pytest`: 2005 passed, 6 skipped, 1 xfailed; `check_test_isolation.py`: both ledger modes 2005 passed, 6 skipped, 1 xfailed; `pytest --cov`: 88.88% (12,568 statements, floor 80%); ruff clean; mypy 240 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. |
+| 2026-11-08 | SR4-3f | Done | SportPlus's dated fixtures freeze one match's `markets[]` array, so `scrapers/wire_schemas.py` gained `SportplusMarket` (`id`/`name`/`odds` required but nullable) and `SportplusOdd` (`alias`/`value` required but nullable), plus `SportplusPrematchPage` (`{"matches": [...]}`), `SportplusLivePage` (`{"sports": [...]}`, with a declared-but-unread `date` key kept out of the telemetry) and `validate_sportplus_markets`/`validate_sportplus_prematch`/`validate_sportplus_live`. `scrapers/sportplus.py` validates the prematch body after the optional double-serialised decode (`resp.json()` returning a JSON string) and the live body before any match is parsed; a non-JSON body or drifted block/price raises `ScrapeError(SCHEMA_DRIFT)`, re-raised by the existing `except ScrapeError: raise`, so the book drops with zero legs. `matches`/`sports` are required so a renamed envelope key cannot read as an empty offer; a renamed `value`/`alias` or a string price is drift, an integer price is accepted, and a block with `odds: null` is kept (the parser already treats it as empty). Unknown keys count at `root`/`market`/`odd` in `bh_wire_unknown_keys_total{book="sportplus",...}` and are logged once per payload. The match shell (sport name, competitors, kickoff, league) has no dated capture and stays unmodelled, so a renamed team field still drops that match silently (the gap SR4-4/SR5-1 close). `docs/WIRE_SCHEMAS.md` gained the SportPlus section and levels. New `tests/test_wire_schemas_sportplus.py` (19 tests): both fixtures pass, both envelopes pass, renamed/string prices raise through the schema and the real `scrape()` in both modes with zero legs, integer prices and a null odds block are accepted, the double-serialised prematch body still scrapes, renamed `matches`/`sports` and non-JSON bodies are drift, and unknown root/market/odd keys are kept/counted/logged. No live scan was run and no bookmaker traffic was generated. `pytest`: 2024 passed, 6 skipped, 1 xfailed; `check_test_isolation.py`: both ledger modes 2024 passed, 6 skipped, 1 xfailed; `pytest --cov`: 89.18% (12,666 statements, floor 80%); ruff clean; mypy 241 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. |
