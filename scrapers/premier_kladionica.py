@@ -43,9 +43,10 @@ import httpx
 
 from engine.market_registry import record_unmapped, registered_spec
 from models.schemas import Market, MarketType, Match, OddsValue
-from scrapers.errors import ScrapeError
+from scrapers.errors import ScrapeError, ScrapeKind
 from scrapers.retry import fetch_with_retry
 from scrapers.transport import transport_client
+from scrapers.wire_schemas import validate_premier_sync
 
 logger = logging.getLogger(__name__)
 
@@ -432,12 +433,18 @@ class PremierKladionicaScraper:
         return markets
 
     async def _full_sync(self, client: httpx.AsyncClient) -> list | None:
-        return await self._sync_call(client, {"dogadjajIDs": "", "clientVer": 0})
+        return await self._sync_call(
+            client, {"dogadjajIDs": "", "clientVer": 0}, kind="full"
+        )
 
     async def _delta_sync(self, client: httpx.AsyncClient, dog_ids: str, client_ver) -> list | None:
-        return await self._sync_call(client, {"dogadjajIDs": dog_ids, "clientVer": client_ver})
+        return await self._sync_call(
+            client, {"dogadjajIDs": dog_ids, "clientVer": client_ver}, kind="delta"
+        )
 
-    async def _sync_call(self, client: httpx.AsyncClient, payload: dict) -> list | None:
+    async def _sync_call(
+        self, client: httpx.AsyncClient, payload: dict, *, kind: str
+    ) -> list | None:
         # The JSON-RPC body is a read-only odds query, so POST retries are safe.
         try:
             response = await fetch_with_retry(
@@ -454,12 +461,14 @@ class PremierKladionicaScraper:
             return None
         try:
             data = response.json()
-        except (ValueError, TypeError):
-            logger.warning("[PremierKladionica] Sync response not JSON")
-            return None
-        if not isinstance(data, list) or not data or not isinstance(data[0], list):
-            return None
-        return data[0]
+        except ValueError as exc:
+            raise ScrapeError(
+                ScrapeKind.SCHEMA_DRIFT,
+                f"{BOOKMAKER_ID} sync response is not JSON: {exc}",
+            ) from exc
+        # SR4-3h: PrSync is positional, so the schema checks the envelope shape
+        # and types the capture-backed tables before the parser reads them.
+        return validate_premier_sync(data, kind=kind, book=BOOKMAKER_ID)
 
     async def scrape(self, live: bool = False, scan_time: datetime | None = None) -> list[Match]:
         return await self.fetch_and_parse(live=live, scan_time=scan_time)

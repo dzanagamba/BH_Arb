@@ -7,7 +7,8 @@ envelope.  SR4-3c reuses the NSoft models for Admiralbet after its own dated
 captures proved the same shape.  SR4-3d added Betole, whose "price row" is a
 ``{pick_code: price}`` map rather than a price field.  SR4-3e added MBet, whose
 odds map holds either a typed entry object or a bare number.  SR4-3f added
-SportPlus, whose fixtures freeze a match's ``markets[]`` array.  The pattern the
+SportPlus, whose fixtures freeze a match's ``markets[]`` array.  SR4-3h added
+Premier Kladionica, whose PrSync rows are positional arrays.  The pattern the
 remaining books follow, one per session:
 
 1. Model the *raw* response (envelope, event and leaf price row) with pydantic
@@ -24,9 +25,10 @@ remaining books follow, one per session:
 The ``NSoft*`` models serve MDShop and Admiralbet (and later its sibling NSoft
 books), the ``Mozzart*`` models serve Mozzartbet, the ``Betole*`` models serve
 Betole's two ExeFeed envelopes, the ``Mbet*`` models serve MBet's
-``events_cached`` envelope, and the ``Sportplus*`` models serve SportPlus's
-prematch and live offers.  Each follow-up row still needs its own fixture-backed
-test before it may reuse a model.
+``events_cached`` envelope, the ``Sportplus*`` models serve SportPlus's
+prematch and live offers, and the ``Premier*`` models serve Premier
+Kladionica's positional PrSync tables.  Each follow-up row still needs its own
+fixture-backed test before it may reuse a model.
 """
 
 from __future__ import annotations
@@ -35,7 +37,14 @@ import logging
 from collections import Counter
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    TypeAdapter,
+    ValidationError,
+    model_validator,
+)
 
 from scrapers.errors import ScrapeError, ScrapeKind
 from server.observability import metrics
@@ -287,8 +296,11 @@ def _count_mozzart_odds(rows: Any, counts: Counter[str]) -> None:
         _count_unknown(row.get("subgame"), _MOZZART_SUBGAME_FIELDS, "subgame", counts)
 
 
-def _drift(book: str, label: str, exc: ValidationError) -> ScrapeError:
-    message = _drift_message(label, exc)
+def _drift(book: str, label: str, exc: ValidationError | ValueError) -> ScrapeError:
+    if isinstance(exc, ValidationError):
+        message = _drift_message(label, exc)
+    else:
+        message = f"{label}: {exc}"
     logger.warning("[%s] %s", book, message)
     return ScrapeError(ScrapeKind.SCHEMA_DRIFT, message)
 
@@ -694,6 +706,212 @@ def validate_sportplus_live(
     return page
 
 
+# ---- Premier Kladionica (SR4-3h) -----------------------------------------
+#
+# PrSync answers with ``[sections]`` where every section is a list of rows and a
+# column's meaning is its index.  The dated fixtures freeze two of those
+# tables: the dogTipK odds rows (``bets``) and the setTip/setTipVar/setTipTip
+# definition rows (``lookup``).  "Unknown keys" has no per-field meaning here,
+# so the counter reports *unknown sections* (slots past the fifteen the parser
+# documents) instead.
+
+_PREMIER_ODD_COLUMNS = (
+    "dog_id",
+    "grupa_tip_id",
+    "set_tip_id",
+    "var_id",
+    "tip_id",
+    "koef",
+    "na_pon",
+    "dobitni",
+    "koef1",
+)
+
+
+class PremierOddRow(BaseModel):
+    """One dogTipK odds row; ``koef`` (column 5) is the price."""
+
+    model_config = MODEL_CONFIG
+
+    dog_id: int
+    grupa_tip_id: int
+    set_tip_id: int
+    var_id: int
+    tip_id: int
+    koef: float
+    na_pon: int | str
+    dobitni: str | int | None
+    koef1: str | int | None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _from_columns(cls, value: Any) -> Any:
+        if not isinstance(value, list):
+            raise ValueError("odds row must be a list of columns")
+        if len(value) < len(_PREMIER_ODD_COLUMNS):
+            raise ValueError(
+                f"odds row has {len(value)} columns, expected at least "
+                f"{len(_PREMIER_ODD_COLUMNS)}"
+            )
+        return dict(zip(_PREMIER_ODD_COLUMNS, value, strict=False))
+
+
+class PremierSetTip(BaseModel):
+    """One setTip row: ``[sport, setTipID, name, ...]``."""
+
+    model_config = MODEL_CONFIG
+
+    sport_id: int
+    set_tip_id: int
+    name: str
+
+    @model_validator(mode="before")
+    @classmethod
+    def _from_columns(cls, value: Any) -> Any:
+        if not isinstance(value, list):
+            raise ValueError("setTip row must be a list of columns")
+        if len(value) < 3:
+            raise ValueError(f"setTip row has {len(value)} columns, expected at least 3")
+        return dict(zip(("sport_id", "set_tip_id", "name"), value, strict=False))
+
+
+class PremierSetTipVar(BaseModel):
+    """One setTipVar row; the line specifier is column 9."""
+
+    model_config = MODEL_CONFIG
+
+    sport_id: int
+    set_tip_id: int
+    var_id: int
+    line: str | None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _from_columns(cls, value: Any) -> Any:
+        if not isinstance(value, list):
+            raise ValueError("setTipVar row must be a list of columns")
+        if len(value) < 10:
+            raise ValueError(
+                f"setTipVar row has {len(value)} columns, expected at least 10"
+            )
+        return {
+            "sport_id": value[0],
+            "set_tip_id": value[1],
+            "var_id": value[2],
+            "line": value[9],
+        }
+
+
+class PremierSetTipTip(BaseModel):
+    """One setTipTip row; the outcome code is column 4."""
+
+    model_config = MODEL_CONFIG
+
+    sport_id: int
+    set_tip_id: int
+    tip_id: int
+    code: str | None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _from_columns(cls, value: Any) -> Any:
+        if not isinstance(value, list):
+            raise ValueError("setTipTip row must be a list of columns")
+        if len(value) < 5:
+            raise ValueError(
+                f"setTipTip row has {len(value)} columns, expected at least 5"
+            )
+        return {
+            "sport_id": value[0],
+            "set_tip_id": value[1],
+            "tip_id": value[2],
+            "code": value[4],
+        }
+
+
+PREMIER_SECTION_COUNT = 15
+
+_PREMIER_ODDS_ADAPTER = TypeAdapter(list[PremierOddRow])
+_PREMIER_SET_TIP_ADAPTER = TypeAdapter(list[PremierSetTip])
+_PREMIER_SET_TIP_VAR_ADAPTER = TypeAdapter(list[PremierSetTipVar])
+_PREMIER_SET_TIP_TIP_ADAPTER = TypeAdapter(list[PremierSetTipTip])
+
+
+def validate_premier_odds(
+    rows: Any, *, book: str = "premier_kladionica"
+) -> list[PremierOddRow]:
+    """Validate one event's dogTipK rows (the fixtures' ``bets``)."""
+    try:
+        return _PREMIER_ODDS_ADAPTER.validate_python(rows, strict=True)
+    except ValidationError as exc:
+        raise _drift(book, f"{book} odds rows", exc) from exc
+
+
+def validate_premier_lookup(
+    set_tip: Any,
+    set_tip_var: Any,
+    set_tip_tip: Any,
+    *,
+    book: str = "premier_kladionica",
+) -> tuple[list[PremierSetTip], list[PremierSetTipVar], list[PremierSetTipTip]]:
+    """Validate the three definition tables (the fixtures' ``lookup``)."""
+    try:
+        return (
+            _PREMIER_SET_TIP_ADAPTER.validate_python(set_tip, strict=True),
+            _PREMIER_SET_TIP_VAR_ADAPTER.validate_python(set_tip_var, strict=True),
+            _PREMIER_SET_TIP_TIP_ADAPTER.validate_python(set_tip_tip, strict=True),
+        )
+    except ValidationError as exc:
+        raise _drift(book, f"{book} lookup rows", exc) from exc
+
+
+def validate_premier_sync(
+    payload: Any, *, kind: str, book: str = "premier_kladionica"
+) -> list:
+    """Validate one PrSync response and return its raw ``sections`` list.
+
+    ``kind`` is ``"full"`` (definitions + events) or ``"delta"`` (dogTipK odds
+    rows).  Only capture-backed tables are typed: the setTip/setTipVar/setTipTip
+    rows on a full sync and every non-empty delta section as odds rows.  The
+    event and execRes sections have no dated capture and stay unmodelled.
+    """
+    if not isinstance(payload, list) or not payload or not isinstance(payload[0], list):
+        raise ScrapeError(
+            ScrapeKind.SCHEMA_DRIFT,
+            f"{book} sync response is not [[sections]]",
+        )
+    sections = payload[0]
+    if kind == "full" and len(sections) < 10:
+        raise ScrapeError(
+            ScrapeKind.SCHEMA_DRIFT,
+            f"{book} full sync has {len(sections)} sections, expected at least 10",
+        )
+    counts: Counter[str] = Counter()
+    for index in range(PREMIER_SECTION_COUNT, len(sections)):
+        counts[f"section.{index}"] += 1
+    _record_unknown_keys(counts, book=book)
+    try:
+        for index, rows in enumerate(sections):
+            if rows is None:
+                continue
+            if not isinstance(rows, list):
+                raise ValueError(f"section {index} is not a list of rows")
+            if kind == "full":
+                premier_adapters: dict[int, TypeAdapter[Any]] = {
+                    7: _PREMIER_SET_TIP_ADAPTER,
+                    8: _PREMIER_SET_TIP_VAR_ADAPTER,
+                    9: _PREMIER_SET_TIP_TIP_ADAPTER,
+                }
+                adapter = premier_adapters.get(index)
+                if adapter is not None:
+                    adapter.validate_python(rows, strict=True)
+            else:
+                _PREMIER_ODDS_ADAPTER.validate_python(rows, strict=True)
+    except (ValidationError, ValueError) as exc:
+        raise _drift(book, f"{book} {kind} sync", exc) from exc
+    return sections
+
+
 def validate_bets(bets: Any, *, book: str = "mdshop") -> list[NSoftBet]:
     """Validate just the ``events[*].bets`` array a captured fixture holds.
 
@@ -727,6 +945,10 @@ __all__ = [
     "NSoftEvent",
     "NSoftOutcome",
     "NSoftResponse",
+    "PremierOddRow",
+    "PremierSetTip",
+    "PremierSetTipTip",
+    "PremierSetTipVar",
     "SportplusLivePage",
     "SportplusMarket",
     "SportplusOdd",
@@ -741,6 +963,9 @@ __all__ = [
     "validate_mozzart_odds",
     "validate_mozzart_offer",
     "validate_mozzart_page",
+    "validate_premier_lookup",
+    "validate_premier_odds",
+    "validate_premier_sync",
     "validate_response",
     "validate_sportplus_live",
     "validate_sportplus_markets",
