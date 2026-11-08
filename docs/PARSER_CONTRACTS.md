@@ -9,6 +9,40 @@ them; a book that cannot be reached or serves no qualifying payload is reported
 `SKIPPED` and gets no fixture. A fixture is never hand-written from the parser's
 own constants.
 
+## Fixture metadata (SR4-2)
+
+Every capture carries a metadata header next to the payload:
+
+| Field | Meaning |
+|---|---|
+| `bookmaker`, `mode` | the book and feed the capture belongs to |
+| `captured_at` | the reviewed capture date (`YYYY-MM-DD`); the 120-day age policy reads this |
+| `recorded_at` | ISO 8601 timestamp of the capture, provenance only |
+| `recorded_at_source` | `capture`, `git_commit` or `captured_at` |
+| `recorded_at_commit` | short sha when the timestamp came from git history |
+| `endpoint`, `http_method` | the request shape that produced the payload |
+| `http_status` | the HTTP status the payload was read from (a 2xx) |
+| `capture_tool_version` | the capture tool that wrote it (`pre-metadata` when backfilled) |
+| `source`, `payload_kind`, `provenance` | how it was read and what was trimmed |
+| `metadata_backfilled` | true when the header was added after the capture |
+
+Captures from before SR4-2 were backfilled with `recorded_at` taken from the
+fixture's last commit and marked `recorded_at_source: "git_commit"`; when git
+history is unavailable the reviewed capture date is used at midnight and marked
+`captured_at`. `captured_at` is never rewritten, so the 120-day policy keeps
+the same meaning.
+
+The capture tool scrubs credential-shaped keys (cookies, authorization headers,
+bearer/access/refresh tokens, CSRF and session ids) before writing, and
+`--check` fails on any fixture that carries one. `refresh_fixtures.py --check`
+also fails when a fixture is missing any required metadata field.
+
+Backfill (operator action, once per old capture or after merging an old branch):
+
+```bash
+python scripts/refresh_fixtures.py --backfill-metadata --write
+```
+
 `tests/fixtures/markets/contracts.json` is the dated **contract** for those
 fixtures. For every capture it stores:
 

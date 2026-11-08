@@ -52,5 +52,12 @@
     "223": 11.25,
     "266": 1.01,
     "284": 1.35
-  }
+  },
+  "recorded_at": "2026-11-08T02:23:42+01:00",
+  "recorded_at_source": "git_commit",
+  "recorded_at_commit": "d963625",
+  "http_method": "GET",
+  "http_status": 200,
+  "capture_tool_version": "pre-metadata",
+  "metadata_backfilled": true
 }

@@ -25,6 +25,12 @@ because it would be wrong in the same direction as the code it is meant to check
 ``expected_markets`` is written by each book's capturer from the registry rows
 that the trimmed payload actually carries -- never from parser output, which
 would make the assertion a tautology.
+
+Every written fixture also carries the SR4-2 metadata header: ``recorded_at``
+(UTC, source ``capture``), ``http_method``, ``http_status``,
+``capture_tool_version`` and, already present, the book, mode, reviewed
+``captured_at``, endpoint, source and provenance. Credential-shaped keys
+(cookies, authorization, tokens) are scrubbed before writing.
 """
 
 from __future__ import annotations
@@ -83,10 +89,22 @@ def _registry_rows(bookmaker: str, mode: str) -> list[str]:
 
 def _finish(fixture: dict[str, Any], exercised: list[str]) -> dict[str, Any]:
     """Attach expected_markets plus the declared rows the payload cannot reach."""
+    from engine.parser_contracts import (
+        CAPTURE_TOOL_VERSION,
+        http_method_for,
+        scrub_secrets,
+    )
+
     declared = _registry_rows(fixture["bookmaker"], fixture["mode"])
     unknown = sorted(set(exercised) - set(declared))
     if unknown:
         raise SystemExit(f"exercised market(s) absent from the registry: {unknown}")
+    fixture.setdefault("recorded_at", datetime.now(UTC).isoformat(timespec="seconds"))
+    fixture.setdefault("recorded_at_source", "capture")
+    fixture.setdefault("http_method", http_method_for(fixture.get("endpoint")))
+    fixture.setdefault("http_status", 200)
+    fixture.setdefault("capture_tool_version", CAPTURE_TOOL_VERSION)
+    fixture = scrub_secrets(fixture)
     fixture["expected_markets"] = sorted(exercised)
     fixture["uncovered_registry_rows"] = sorted(set(declared) - set(exercised))
     os.makedirs(FIXTURE_DIR, exist_ok=True)

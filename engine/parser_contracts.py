@@ -20,6 +20,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Iterable
+from copy import deepcopy
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
@@ -29,17 +30,62 @@ FIXTURE_DIR = REPO_ROOT / "tests" / "fixtures" / "markets"
 CONTRACTS_PATH = FIXTURE_DIR / "contracts.json"
 
 # Keys every capture must keep, whatever the book. A payload that loses one is
-# no longer a usable dated capture.
+# no longer a usable dated capture. SR4-2 added the metadata header:
+# ``recorded_at`` is provenance (with the source it came from) while
+# ``captured_at`` remains the reviewed date the 120-day age policy reads.
 REQUIRED_TOP_LEVEL_KEYS = (
     "bookmaker",
     "mode",
     "captured_at",
+    "recorded_at",
+    "recorded_at_source",
     "endpoint",
+    "http_method",
+    "http_status",
+    "capture_tool_version",
     "source",
     "provenance",
     "payload_kind",
     "expected_markets",
     "bets",
+)
+
+# Where a ``recorded_at`` came from. ``capture`` is written by the capture tool;
+# ``git_commit`` is the backfilled fallback for captures that predate SR4-2
+# (marked with ``metadata_backfilled``); ``captured_at`` is the last resort when
+# git history is unavailable.
+RECORDED_AT_SOURCES = frozenset({"capture", "git_commit", "captured_at"})
+HTTP_METHODS = frozenset({"GET", "POST"})
+CAPTURE_TOOL_VERSION = "2"
+# Fixtures captured before the tool wrote a version carry this marker instead
+# of inventing a version number.
+LEGACY_CAPTURE_TOOL_VERSION = "pre-metadata"
+
+# Header/key names that must never be frozen into a fixture. Matching is exact
+# and case-insensitive, so ``matchIdsToken`` (an event-id list in Betole's
+# endpoint) is not mistaken for a credential.
+SECRET_KEYS = frozenset(
+    {
+        "cookie",
+        "set-cookie",
+        "authorization",
+        "proxy-authorization",
+        "www-authenticate",
+        "x-api-key",
+        "api_key",
+        "api-key",
+        "bearer",
+        "access_token",
+        "refresh_token",
+        "id_token",
+        "csrf",
+        "csrf_token",
+        "xsrf",
+        "session_id",
+        "sessionid",
+        "phpsessid",
+        "cf_clearance",
+    }
 )
 
 # Payloads whose parser emits an experimental market that has no registry row
@@ -267,6 +313,162 @@ def save_contracts(
     path.write_text(
         json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
+
+
+def _secret_key_paths(value: Any, prefix: str = "") -> list[str]:
+    """Every path whose key is a header/credential name, recursively."""
+    found: list[str] = []
+    if isinstance(value, dict):
+        for key, child in value.items():
+            path = f"{prefix}.{key}" if prefix else str(key)
+            if str(key).lower() in SECRET_KEYS:
+                found.append(path)
+            found.extend(_secret_key_paths(child, path))
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            found.extend(_secret_key_paths(child, f"{prefix}[{index}]"))
+    return found
+
+
+def scrub_secrets(value: Any) -> Any:
+    """Return ``value`` without any header/credential key (SR4-2).
+
+    The capture tool trims payloads to the data a parser reads, but it earlier
+    kept whatever the source object carried. Scrubbing by key name means a
+    future capture cannot freeze a cookie, bearer token or CSRF value into the
+    repository.
+    """
+    if isinstance(value, dict):
+        return {
+            key: scrub_secrets(child)
+            for key, child in value.items()
+            if str(key).lower() not in SECRET_KEYS
+        }
+    if isinstance(value, list):
+        return [scrub_secrets(child) for child in value]
+    return value
+
+
+def http_method_for(endpoint: Any) -> str:
+    """The request method an endpoint string records (``POST ...`` or GET)."""
+    return "POST" if str(endpoint or "").strip().upper().startswith("POST ") else "GET"
+
+
+def metadata_issues(data: dict[str, Any]) -> list[str]:
+    """Reasons one fixture's metadata header is not usable, if any."""
+    issues: list[str] = []
+    missing = [key for key in REQUIRED_TOP_LEVEL_KEYS if key not in data]
+    if missing:
+        issues.append("missing metadata: " + ", ".join(missing))
+
+    for key in (
+        "bookmaker",
+        "mode",
+        "endpoint",
+        "source",
+        "payload_kind",
+        "provenance",
+        "recorded_at_source",
+        "capture_tool_version",
+    ):
+        if key in data and not str(data.get(key) or "").strip():
+            issues.append(f"{key} is empty")
+
+    try:
+        date.fromisoformat(str(data.get("captured_at") or ""))
+    except ValueError:
+        issues.append("captured_at is not an ISO date (YYYY-MM-DD)")
+
+    recorded = str(data.get("recorded_at") or "")
+    try:
+        recorded_at = datetime.fromisoformat(recorded)
+    except ValueError:
+        issues.append("recorded_at is not an ISO 8601 timestamp")
+    else:
+        if recorded_at.tzinfo is None:
+            issues.append("recorded_at has no timezone")
+
+    source = str(data.get("recorded_at_source") or "")
+    if source and source not in RECORDED_AT_SOURCES:
+        issues.append(
+            "recorded_at_source must be one of "
+            + ", ".join(sorted(RECORDED_AT_SOURCES))
+        )
+    if source == "git_commit" and not str(data.get("recorded_at_commit") or "").strip():
+        issues.append("recorded_at_source is git_commit but recorded_at_commit is empty")
+
+    method = str(data.get("http_method") or "").upper()
+    if method and method not in HTTP_METHODS:
+        issues.append("http_method must be GET or POST")
+
+    status = data.get("http_status")
+    if (
+        not isinstance(status, int)
+        or isinstance(status, bool)
+        or not 200 <= status <= 299
+    ):
+        issues.append("http_status is not a 2xx integer")
+
+    if "metadata_backfilled" in data and not isinstance(
+        data["metadata_backfilled"], bool
+    ):
+        issues.append("metadata_backfilled must be a boolean")
+
+    for path in _secret_key_paths(data):
+        issues.append(f"secret-bearing metadata at {path}")
+    return issues
+
+
+def metadata_report(fixture_dir: Path = FIXTURE_DIR) -> dict[str, Any]:
+    """The fixture metadata gate: one entry per fixture with an issue."""
+    fixtures = sorted(
+        path for path in fixture_dir.glob("*.json") if path.name != "contracts.json"
+    )
+    issues: dict[str, list[str]] = {}
+    for fixture in fixtures:
+        try:
+            data = json.loads(fixture.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            issues[fixture.stem] = [f"unreadable fixture: {exc}"]
+            continue
+        if not isinstance(data, dict):
+            issues[fixture.stem] = ["fixture is not a JSON object"]
+            continue
+        found = metadata_issues(data)
+        if found:
+            issues[fixture.stem] = found
+    return {
+        "ok": not issues,
+        "checked": len(fixtures),
+        "required": list(REQUIRED_TOP_LEVEL_KEYS),
+        "issues": issues,
+    }
+
+
+def backfill_metadata(
+    data: dict[str, Any],
+    *,
+    recorded_at: str,
+    commit: str = "",
+    source: str = "git_commit",
+) -> dict[str, Any]:
+    """Fill the SR4-2 header on an older capture without changing its payload.
+
+    The caller supplies the timestamp (from git history) and marks the source,
+    so a backfilled fixture is never presented as a fresh capture. Existing
+    values win; the payload, endpoint and provenance are untouched.
+    """
+    result = deepcopy(data)
+    if recorded_at:
+        result.setdefault("recorded_at", recorded_at)
+    result.setdefault("recorded_at_source", source)
+    if commit:
+        result.setdefault("recorded_at_commit", commit)
+    result.setdefault("http_method", http_method_for(result.get("endpoint")))
+    result.setdefault("http_status", 200)
+    result.setdefault("capture_tool_version", LEGACY_CAPTURE_TOOL_VERSION)
+    result.setdefault("metadata_backfilled", True)
+    return scrub_secrets(result)
 
 
 def stale_contracts(

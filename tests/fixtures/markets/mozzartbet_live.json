@@ -194,5 +194,12 @@
   "uncovered_registry_rows": [
     "over_under_1_5",
     "over_under_3_5"
-  ]
+  ],
+  "recorded_at": "2026-10-20T10:58:05+02:00",
+  "recorded_at_source": "git_commit",
+  "recorded_at_commit": "1999d0c",
+  "http_method": "POST",
+  "http_status": 200,
+  "capture_tool_version": "pre-metadata",
+  "metadata_backfilled": true
 }
