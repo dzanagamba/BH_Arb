@@ -11,11 +11,10 @@ SR7-1 and SR7-2 are done.
 feed). Every other `Not started` row is `Gate: operator`; the roadmap is the
 single task list in `ROADMAP.md`, N2-4 stays deferred and P1-6 stays waived
 until the operator says otherwise.
-**Last task commit:** `e549267` — "reliability, browser lifecycle and
-observability chain", the pushed `origin/main` head that carries SR1-4, the gate
-decisions, SR4-9 … SR4-13, SR5-1, SR5-2 and SR6-1. **SR6-2, SR4-8a and SR4-8 are
-uncommitted** (adapter protocol; in-page fetch; scrubbed HAR fixtures and their
-replay).
+**Last task commit:** `8a1cb90` — "adapter protocol, in-page fetch and HAR replay
+for browser books" (SR6-2, SR4-8a, SR4-8), pushed to `origin/main` on
+2026-11-08. The working tree is clean; the commit before it, `e549267`, carries
+SR1-4, the gate decisions, SR4-9 … SR4-13, SR5-1, SR5-2 and SR6-1.
 
 ## Project state
 
@@ -594,9 +593,8 @@ left needs the operator: **SR4-3g** (blocked on a live EVLBet payload — do not
 start it), the **M1-1 … M6-1** rows (all `Gate: operator`, deliberately deferred
 from the old backlog; each needs explicit approval before any work), and the
 deferred N2-4 / waived P1-6 (leave both alone). Do not invent a task or reopen a
-done one. The working tree holds SR6-2, SR4-8a and SR4-8 (uncommitted); HEAD
-`e549267` carries the rest. A HAR refresh is an operator action, not a task:
-`python scripts/capture_har.py --books all`.
+done one. The working tree is clean at `8a1cb90`; a HAR refresh is an operator
+action, not a task: `python scripts/capture_har.py --books all`.
 
 ## Rules
 
