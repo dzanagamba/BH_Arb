@@ -275,9 +275,12 @@ def _isolated_runtime_state(
     # M1-1: every test gets a private key store. The operator's
     # config/generated/api_keys.json must never decide whether the suite's API
     # requests are authenticated.
-    from server.auth import ApiKeyStore
+    from server.auth import ApiKeyStore, auth_failures
 
     monkeypatch.setattr(api, "api_key_store", ApiKeyStore(str(cache / "api_keys.json")))
+    # M1-3: the failed-attempt budget is process-wide; a previous test's wrong
+    # keys must not 429 this test's first request.
+    auth_failures.reset()
     monkeypatch.setenv("STORAGE_PATH", str(cache / "bh_arb.sqlite3"))
     for attribute, filename in _API_RUNTIME_FILES.items():
         monkeypatch.setattr(api, attribute, str(cache / filename))

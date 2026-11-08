@@ -41,6 +41,33 @@ Before M1-1 sixteen `/api` routes had no auth dependency (`/results`, `/status`,
 whenever a bootstrap key was also configured. Both are fixed by the middleware;
 do not add an `/api` route that relies on a per-route dependency alone.
 
+## Verification cache and failed-attempt throttle (M1-3)
+
+A successful named-key verification costs one 200k-iteration PBKDF2 hash
+(~85 ms measured on the operator host), and the dashboard polls. So
+`ApiKeyStore.verify` caches a success in memory for `AUTH_CACHE_SECONDS`
+(default 60, `0` disables) under `sha256(token)` — the token itself is never
+held — together with the key's scope snapshot. A cache hit runs no PBKDF2 and
+writes no file. `last_used_at` is persisted at most once per key per TTL instead
+of on every request.
+
+Invalidation is immediate, not TTL-based:
+
+- `revoke()` clears every cached verification, so a revoked key answers 401 on
+  its next request even inside the TTL; `create()` clears it too, so a new key
+  works at once;
+- a failed verification is never cached;
+- every cache hit compares the store file's mtime+size, so a hand edit or a
+  second process is noticed at once. The TTL therefore only bounds how long a
+  record survives without any store change.
+
+Wrong keys are throttled per client address: after `AUTH_FAILURE_RATE_LIMIT`
+(default 10, `0` disables) failures inside `RATE_LIMIT_WINDOW_SECONDS`, further
+`/api` requests from that address get `429` with `Retry-After` **before** any
+PBKDF2 runs, so an exposed port cannot be made to burn CPU. A successful key
+clears that address's counter. `/api/health` is never throttled. The budget and
+the cache are per process, which matches this single-operator deployment.
+
 ## Revocation and no-reopen rule
 
 A revoked key fails on its next request. If a store **has ever** had a key, the
@@ -65,8 +92,13 @@ and shutdown, with the acting key id (or `env`/empty for open local mode).
 
 `tests/test_auth_keys.py` covers one-time token return, hashed storage,
 verification, revocation, scopes, env bootstrap, audit and the no-reopen rule.
-`tests/test_api_key.py` pins the bootstrap key behavior, and
+`tests/test_api_key.py` pins the bootstrap key behavior,
 `tests/test_api_auth.py` proves the middleware closes every `/api` route except
 `/api/health` (enumerated from the OpenAPI schema), the read/scan matrix and the
-local-only mode. `tests/conftest.py` gives every test a private key store, so
-the operator's file cannot decide the suite.
+local-only mode, and `tests/test_auth_limits.py` covers the verification cache
+(hit spends no PBKDF2, TTL, disable, immediate revoke, out-of-band edit, no
+negative cache, coalesced writes) and the failed-attempt throttle (N failures
+then 429, success resets, disable, per-address isolation, no hashing while
+blocked, public health). `tests/conftest.py` gives every test a private key
+store and resets the process-wide failure budget, so the operator's file and a
+previous test cannot decide the suite.

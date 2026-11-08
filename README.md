@@ -262,7 +262,10 @@ safe only on the loopback default; set `API_KEY` before exposing the port.
 A dashboard key normally needs `read` and `scan`; `admin` is for operator
 actions. A key with only `scan` cannot read results, and a revoked key fails on
 its next request. The dashboard sends the key on every fetch, poll and download
-(it asks once and keeps it in `sessionStorage`).
+(it asks once and keeps it in `sessionStorage`). Successful verifications are
+cached for `AUTH_CACHE_SECONDS` (a revocation is still immediate) and repeated
+wrong keys are throttled per address by `AUTH_FAILURE_RATE_LIMIT` before any
+PBKDF2 work; see [`docs/AUTH.md`](docs/AUTH.md).
 
 ## Configuration
 
@@ -276,6 +279,8 @@ Copy `.env.example` to `.env` and set only what you need:
 | `SCAN_RATE_LIMIT` | `3` | Maximum scans a client may trigger per minute. |
 | `VERIFY_RATE_LIMIT` | `10` | On-demand surebet re-verifications per client per minute; `0` disables the limit. |
 | `DEEP_LINK_VERIFY_RATE_LIMIT` | `2` | Deep-link checks per client per minute; `0` disables the limit. |
+| `AUTH_FAILURE_RATE_LIMIT` | `10` | Failed API-key attempts per client address per `RATE_LIMIT_WINDOW_SECONDS` before `429`; `0` disables the limit. A wrong key costs one PBKDF2 hash, so this is the CPU ceiling. |
+| `AUTH_CACHE_SECONDS` | `60` | How long a successful named-key verification is cached in memory, so polling does not repeat the ~85 ms PBKDF2; `0` disables the cache. A revocation through the API is immediate; this only bounds an out-of-band edit. |
 | `HEADLESS` | `true` | Set `false` to watch Playwright browsers. |
 | `LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING` or `ERROR`. |
 | `LOG_FORMAT` | `text` | `text` for the readable line, `json` for one JSON object per line. Both carry `request_id`/`scan_id`. |

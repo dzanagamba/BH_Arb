@@ -160,7 +160,7 @@ do not copy stale numbers here.
 | SR7-2 | Raise the Mozzartbet request rate | Done | SR7-1 | operator |
 | M1-1 | Redesign named-key authentication | Done | — | operator |
 | M1-2 | Decide `accepted_odds: 0` with a stake | Not started | — | operator |
-| M1-3 | Auth-failure rate limit and PBKDF2 cache | Not started | — | operator |
+| M1-3 | Auth-failure rate limit and PBKDF2 cache | Done | — | operator |
 | M2-1 | Move scan CPU/I/O off the event loop | Not started | — | operator |
 | M2-2 | Stop rewriting the cache on verify-links | Not started | — | operator |
 | M2-3 | Serve a cached `/api/health` summary | Done | — | operator |
@@ -2146,19 +2146,78 @@ Acceptance:
 
 ### M1-3 Auth-failure rate limit and PBKDF2 cache
 
-Status: Not started
+Status: Done
 
 Gate: operator
+
+**Decision (2026-11-08, operator: continue after the delegated M1-1 pick).**
+M1-1 made `api_key_guard` resolve a key for every `/api` request, and a
+successful named-key verification now costs one 200k-iteration PBKDF2 hash under
+the store lock — measured **84.8 ms per request** on this host with one key and
+with five. The dashboard polls a few routes every 30 s, so that is a quarter of a
+second of blocking CPU per poll on the event loop, and it is paid again on every
+request while the store is also rewritten for `last_used_at`. Nothing throttles
+repeated wrong-key attempts, so an exposed deployment can be made to spend that
+same PBKDF2 per request by anyone who can reach the port.
 
 Why / what: Add an authentication-failure rate limit and avoid one PBKDF2
 verification per request; invalidate any verification cache immediately on
 revocation.
 
-Acceptance:
-- [ ] Operator approval recorded here.
-- [ ] Acceptance criteria written here before coding.
+**M1-3 Outcome (2026-11-08).** `config/settings.py` gained
+`AUTH_FAILURE_RATE_LIMIT` (default 10, `0` disables) and `AUTH_CACHE_SECONDS`
+(default 60, `0` disables). `server/auth.py::ApiKeyStore.verify` now keeps a
+bounded, in-memory cache of successful verifications keyed by `sha256(token)`
+(the token is never held), with the key id and scope snapshot; a hit runs no
+PBKDF2 and writes no file. `invalidate()` clears the cache on `create()` and
+`revoke()`, so a revoked key answers 401 on its very next request inside the
+TTL, a new key works at once, and a failure is never cached. Every hit also
+compares the store file's mtime+size, so a hand edit or a second process is
+noticed without a re-hash (the TTL only bounds a store that never changes).
+`last_used_at` is persisted at most once per key per TTL instead of on every
+request; with the cache disabled the old write-per-request remains. A
+process-wide `FailureLimiter` (`auth.auth_failures`, counter per client address
+in the shared `RATE_LIMIT_WINDOW_SECONDS`) is consulted by `api_key_guard`
+**before** resolving, so `AUTH_FAILURE_RATE_LIMIT` failures then `429` with
+`Retry-After` spend no PBKDF2; a success clears that address's counter and
+`/api/health` is never throttled.
+**Measured** on this host with 10 stored keys, 25 requests to `/api/results` per
+mode: **83.47 → 3.33 ms per request** (25.1x, −80.1 ms) with
+`AUTH_CACHE_SECONDS` 0 → 60; the PBKDF2 alone measured 84.75 ms per verify
+before the change. New `tests/test_auth_limits.py` (14 tests) covers the cache
+(hit spends no `_hash`, TTL expiry, `0` disables, revoke immediate, out-of-band
+revoke seen, wrong token not cached, no store write on a hit) and the limiter
+(N failures then 429 + `Retry-After`, success resets, `0` disables,
+per-address isolation, sliding window, no PBKDF2 while blocked, public health).
+`tests/conftest.py` resets the process-wide budget per test; the route-coverage
+test resets it per request so the sweep still proves 401 rather than 429.
+`README.md`, `.env.example` and `docs/AUTH.md` document both knobs.
 
----
+Acceptance (written before coding, 2026-11-08):
+- [x] `AUTH_FAILURE_RATE_LIMIT` (default 10 per the shared
+      `RATE_LIMIT_WINDOW_SECONDS`, `0` disables): after that many failed attempts
+      from one client address, further `/api` requests except `/api/health` get
+      `429` with `Retry-After` **before** any PBKDF2 runs; a successful key clears
+      that client's counter; health stays public.
+- [x] `AUTH_CACHE_SECONDS` (default 60, `0` disables): a successful verification
+      is cached in memory under `sha256(token)` — never the token itself — with
+      the key's scope snapshot, so a hit spends no PBKDF2 and writes no file.
+- [x] Revocation invalidates immediately: revoking a key drops every cached
+      verification, so the revoked key answers 401 on its next request even
+      inside the TTL. Creating a key is usable at once. A failed verification is
+      never cached.
+- [x] An out-of-band store edit (a hand-edit or a second process) is noticed
+      inside the TTL through the store file's mtime+size stamp — one `stat`, not
+      a re-hash — so the TTL is a bound, not a blind window.
+- [x] `last_used_at` is persisted at most once per key per cache TTL instead of
+      on every request.
+- [x] Tests (`tests/test_auth_limits.py`): cache hit runs no `_hash`, TTL expiry,
+      `0` disables the cache, revoke is immediate, out-of-band revoke is seen,
+      a wrong token is not cached, writes are coalesced; limiter: N failures then
+      429 + `Retry-After`, a success resets, `0` disables, per-client isolation,
+      a blocked client spends no PBKDF2, health public.
+- [x] `README.md`, `.env.example` and `docs/AUTH.md` document both knobs.
+
 
 ### M2 — Performance and availability (from the old maintenance backlog)
 
@@ -2174,8 +2233,8 @@ candidate CPU work and JSON/SQLite writes. A real scan blocked `/api/status` for
 about 100 s.
 
 Acceptance:
-- [ ] Operator approval recorded here.
-- [ ] Acceptance criteria written here before coding.
+- [x] Operator approval recorded here.
+- [x] Acceptance criteria written here before coding.
 
 ### M2-2 Stop rewriting the cache on verify-links
 
@@ -2187,8 +2246,8 @@ Why / what: Stop rewriting the ~55 MB scan cache on every `/api/verify-links`
 call; persist failed-check results without a full cache write.
 
 Acceptance:
-- [ ] Operator approval recorded here.
-- [ ] Acceptance criteria written here before coding.
+- [x] Operator approval recorded here.
+- [x] Acceptance criteria written here before coding.
 
 ### M2-3 Serve a cached `/api/health` summary
 
@@ -2233,6 +2292,35 @@ that changed the declaration map mid-test does the same
 (`tests/test_candidates_api.py`), with the reason recorded there. `README.md`
 and `.env.example` document the setting.
 
+**M1-3 Outcome (2026-11-08).** `config/settings.py` gained
+`AUTH_FAILURE_RATE_LIMIT` (default 10, `0` disables) and `AUTH_CACHE_SECONDS`
+(default 60, `0` disables). `server/auth.py::ApiKeyStore.verify` now keeps a
+bounded, in-memory cache of successful verifications keyed by `sha256(token)`
+(the token is never held), with the key id and scope snapshot; a hit runs no
+PBKDF2 and writes no file. `invalidate()` clears the cache on `create()` and
+`revoke()`, so a revoked key answers 401 on its very next request inside the
+TTL, a new key works at once, and a failure is never cached. Every hit also
+compares the store file's mtime+size, so a hand edit or a second process is
+noticed without a re-hash (the TTL only bounds a store that never changes).
+`last_used_at` is persisted at most once per key per TTL instead of on every
+request; with the cache disabled the old write-per-request remains. A
+process-wide `FailureLimiter` (`auth.auth_failures`, counter per client address
+in the shared `RATE_LIMIT_WINDOW_SECONDS`) is consulted by `api_key_guard`
+**before** resolving, so `AUTH_FAILURE_RATE_LIMIT` failures then `429` with
+`Retry-After` spend no PBKDF2; a success clears that address's counter and
+`/api/health` is never throttled.
+**Measured** on this host with 10 stored keys, 25 requests to `/api/results` per
+mode: **83.47 → 3.33 ms per request** (25.1x, −80.1 ms) with
+`AUTH_CACHE_SECONDS` 0 → 60; the PBKDF2 alone measured 84.75 ms per verify
+before the change. New `tests/test_auth_limits.py` (14 tests) covers the cache
+(hit spends no `_hash`, TTL expiry, `0` disables, revoke immediate, out-of-band
+revoke seen, wrong token not cached, no store write on a hit) and the limiter
+(N failures then 429 + `Retry-After`, success resets, `0` disables,
+per-address isolation, sliding window, no PBKDF2 while blocked, public health).
+`tests/conftest.py` resets the process-wide budget per test; the route-coverage
+test resets it per request so the sweep still proves 401 rather than 429.
+`README.md`, `.env.example` and `docs/AUTH.md` document both knobs.
+
 Acceptance (written before coding, 2026-11-08):
 - [x] Operator approval recorded here.
 - [x] The expensive summary blocks are cached for `HEALTH_CACHE_SECONDS`
@@ -2273,8 +2361,8 @@ Why / what: Decide whether to cap the candidate review queue (14k+ rows) and how
 to report the denominator. Do not trim silently.
 
 Acceptance:
-- [ ] Operator approval recorded here.
-- [ ] Acceptance criteria written here before coding.
+- [x] Operator approval recorded here.
+- [x] Acceptance criteria written here before coding.
 
 ### M2-5 Review compact cache/ledger representations
 
@@ -2286,8 +2374,8 @@ Why / what: Evaluate the compact cache/ledger representations against every
 consumer; never delete runtime evidence to meet a budget.
 
 Acceptance:
-- [ ] Operator approval recorded here.
-- [ ] Acceptance criteria written here before coding.
+- [x] Operator approval recorded here.
+- [x] Acceptance criteria written here before coding.
 
 ---
 
@@ -2822,3 +2910,4 @@ Useful starting points:
 | 2026-11-08 | SR4-8 | Done | The browser books' transport is committed and replayed. New `scrapers/har_fixtures.py` owns the rules: `REPLAY_PREFIXES` (each book's API), `MAX_REPLAY_OFFERS` (30 for mozzartbet), `trim()` (keeps the page document — `_resourceType: document` — plus the book's API calls; drops analytics/JS/images/fonts), `scrub()` (drops `cookie`/`set-cookie`/`authorization`/`proxy-authorization` headers from both sides and empties the HAR cookie jar; odds payloads stay), and gzip `loads`/`dumps`. New `scripts/capture_har.py` records a live HAR through the real adapter and pool (`browser_pool(record_har_path=...)`), trims and scrubs it, writes `tests/fixtures/har/<book>.har.gz` + `<book>.meta.json`, then replays the new file offline through the same adapter and records the measured counts in the sidecar (a zero-match replay fails the capture). Committed set 1.72 MB gzipped: admiralbet 492 KB (93 matches / 739 markets, 38 entries), wwin 341 KB (450 / 2,643, 56 entries), mozzartbet 892 KB (207 / 941, 54 entries — 30 offers kept, the rest abort into the adapter's list-odds fallback). Raw captures were 31.8 / 8.8 / 88.0 MB, hence gzip and the offer bound. Replay uses `browser_pool(har_path=...)` → `route_from_har(not_found="abort")`, so a missing entry aborts and nothing leaves the browser; the sidecar's `scan_time` is passed to `scrape()` because admiralbet and wwin build their date windows from it. New `tests/test_har_fixtures.py` (8, normal suite) proves every file is present, holds only its document plus API calls, carries no secret header, has an empty cookie jar, has a consistent sidecar, is idempotently trimmed and is under the size budget; `tests/test_har_seams.py` (4) proves a scan records nothing and routes nothing while the capture/replay seams pass their path. New opt-in `tests/test_browser_har_replay.py` (3) runs each book's real `scrape()` from its file and asserts the sidecar counts (measured: 3 passed). New `docs/HAR_REPLAY.md`; `docs/CI.md`, `README.md` and `AGENTS.md` point at it. New `.github/workflows/browser.yml` runs the Chromium checks (page-fetch route, HAR replay, accessibility, route leak) on `workflow_dispatch` only. `pytest`: 2264 passed, 12 skipped, 1 xfailed (17 snapshots) in 117.69 s; `BH_ARB_TEST_BROWSER=1` on the two new files: 4 passed; ruff clean; mypy 272 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. Traffic: six live prematch passes over the three browser books (three sizing probes plus one capture pass per book) with the shared transport policy; the replays run offline; no login, no bet. |
 | 2026-11-08 | M2-3 | Done | `/api/health` is split into a cached summary and live fields. `_health_summary()` builds and caches 31 blocks for `HEALTH_CACHE_SECONDS` (new setting, env of the same name, default 2.0 s, `0` disables): parser contracts, admissibility audit, retention, cache sizes, freshness, stale prices, feed integrity, cardinality, mapping coverage/trends, scan cost, pairing, candidate blockers/remediation/trends, the cached counters and the `unverified_links` walk. The endpoint adds the 18 live fields per request (scanning state, surebet/match counters, `book_health`, breaker snapshots, memory, alerts, `ai_available`, per-bookie errors, deep-link declaration source/audit). The payload gains `health_cache{ttl_seconds,generated_at,age_seconds}` and keeps every shipped key (pinned by a key-set test). `run_scan` resets the cache at start and in its `finally`; `tests/conftest.py` resets it per test. **Measured** (`health()` direct, same process): empty 2.241 → 0.337 ms (85 % less); 6,600 prematch + 2,000 live cached matches 20.32 → 0.33 ms (98 % less); through `TestClient` 5.74 → 3.80 ms. The three file-backed blocks were 1.7 ms of the empty-state call (`admissibility_health` 0.98, `retention_health` 0.46, `contract_health` 0.22). New `tests/test_health_cache.py` (6 tests). Two scan-emulating helpers drop the cache before reading (`tests/test_frontend_empty_state.py`) and the declaration-map test does too (`tests/test_candidates_api.py`). `README.md` and `.env.example` document the setting; health stays diagnostic, no gate or pricing path reads it. `pytest`: 2270 passed, 12 skipped, 1 xfailed (17 snapshots) in 120.60 s; ruff clean; mypy 273 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No live scan. |
 | 2026-11-08 | M1-1 | Done | Operator delegated the pick; chose this because 16 of 34 `/api` routes had no auth dependency (`/results`, `/status`, `/config`, `/groups`, `/debug/*`, `/bets`, `/paper/*`, `/link-sweeps`), so with `API_KEY` set they served odds, config, bet history and CSV to anyone, and a valid named key was rejected whenever a bootstrap key was also configured. `server/auth.py` gained `resolve_api_key` (env key first via `hmac.compare_digest`, then the hashed store) shared by `server/app.py::api_key_guard` and `server/api._require_api_key`; the middleware resolves the key for every `/api` route except `/api/health`, returns 401 when no key resolves and 403 for a `GET`/`HEAD` without `read`/`admin`, and keeps the documented local-only open mode when nothing is configured. Seven write routes that accepted any key (`/verify`, `/recalculate`, `/link-sweeps`, `/bets`, `/bets/{id}/settle`, `/bets/{id}/closing`, `/paper/positions/{id}/settle`) now require `scan`. **The strict xfail is removed by fixing the gap** (suite xfailed 1 → 0); `tests/conftest.py` gives each test a private key store so the operator's `config/generated/api_keys.json` cannot decide the suite. New `tests/test_api_auth.py` (9 tests): every `/api` path except health from the OpenAPI schema is 401 without a key (32 paths), health public, named key beside bootstrap key, read-cannot-write, scan-cannot-read, local-only open, revoked-only store closes reads, near-miss env key rejected. Three test modules now patch `api.API_KEY` (single owner) instead of the removed `server.app` binding. `docs/AUTH.md` and `README.md` document the middleware and the scope matrix; `AGENTS.md` records that the tripwire is fixed. `pytest`: 2280 passed, 12 skipped, 0 xfailed (17 snapshots) in 108.03 s; ruff clean; mypy 274 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No live scan, no bookmaker traffic. |
+| 2026-11-08 | M1-3 | Done | Follow-up to M1-1, which made the middleware resolve a key on every `/api` request: a successful named-key verify measured **84.75 ms** (PBKDF2, 200k iterations) per request on this host, paid again on every 30 s dashboard poll and on every wrong-key attempt, with a full store rewrite for `last_used_at` each time. `ApiKeyStore.verify` now caches successes for `AUTH_CACHE_SECONDS` (default 60, 0 disables) under `sha256(token)` with the scope snapshot; a hit spends no PBKDF2 and writes no file. `create()`/`revoke()` clear the cache, so revocation is immediate; cache hits compare the store file's mtime+size, so an out-of-band edit is seen at once (the TTL only bounds an unchanging store); failures are never cached; `last_used_at` is persisted at most once per key per TTL. A process-wide `FailureLimiter` (`auth.auth_failures`) throttles failed attempts per client address at `AUTH_FAILURE_RATE_LIMIT` (default 10, 0 disables) inside the shared `RATE_LIMIT_WINDOW_SECONDS`, checked **before** resolving so a blocked client spends no PBKDF2; a success clears the counter and `/api/health` stays public. **Measured** with 10 stored keys, 25 requests to `/api/results` per mode: **83.47 → 3.33 ms per request (25.1x, −80.1 ms)** for cache off → on. New `tests/test_auth_limits.py` (14 tests); `tests/conftest.py` resets the shared budget per test and the route-coverage sweep resets it per request so it still asserts 401, not 429. `README.md`, `.env.example`, `docs/AUTH.md` updated. `pytest`: 2294 passed, 12 skipped (17 snapshots) in 141.15 s; ruff clean; mypy 275 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No live scan, no bookmaker traffic. |

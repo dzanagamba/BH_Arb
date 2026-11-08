@@ -16,12 +16,24 @@ import json
 import os
 import secrets
 import threading
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, NamedTuple
 
+from config.settings import (
+    AUTH_CACHE_SECONDS,
+    AUTH_FAILURE_RATE_LIMIT,
+    RATE_LIMIT_WINDOW_SECONDS,
+)
+
 SCOPES = {"read", "scan", "admin"}
 AUDIT_MAX = 500
+#: Cached verifications kept before the oldest is dropped; a single operator has
+#: a handful of keys, so this only guards a pathological caller.
+AUTH_CACHE_MAX = 256
+#: Failed-attempt buckets kept before the oldest is pruned (one per address).
+AUTH_FAILURE_MAX_CLIENTS = 4096
 
 
 def default_key_path() -> str:
@@ -50,6 +62,25 @@ class ApiKeyStore:
     def __init__(self, path: str) -> None:
         self.path = path
         self._lock = threading.RLock()
+        # Successful verifications keyed by sha256(token): the plaintext key is
+        # never held here. digest -> (expires_at, public record, file stamp).
+        self._verified: dict[
+            str, tuple[float, dict[str, Any], tuple[int, int] | None]
+        ] = {}
+        self._last_used_write: dict[str, float] = {}
+
+    def _stamp(self) -> tuple[int, int] | None:
+        """The store file's (mtime_ns, size), to notice an out-of-band edit."""
+        try:
+            stat = Path(self.path).stat()
+        except OSError:
+            return None
+        return (stat.st_mtime_ns, stat.st_size)
+
+    def invalidate(self) -> None:
+        """Drop every cached verification; a create or a revoke changes the set."""
+        with self._lock:
+            self._verified.clear()
 
     def _load(self) -> dict[str, Any]:
         try:
@@ -108,12 +139,30 @@ class ApiKeyStore:
             data["keys"].append(record)
             self._save(data)
         self.audit("key_created", str(record["id"]), str(record["label"]))
+        self.invalidate()
         return token, self._public(record)
 
     def verify(self, token: str) -> dict[str, Any] | None:
+        """Return the public key record for ``token``, or ``None``.
+
+        A successful verification is cached (``AUTH_CACHE_SECONDS``) under
+        ``sha256(token)``: the 200k-iteration PBKDF2 costs ~85 ms, and the
+        dashboard polls. A cache hit does no hashing and no store write. The
+        store file's mtime+size is checked on every hit, so an out-of-band
+        edit is seen at once rather than after the TTL.
+        """
         if not token:
             return None
+        ttl = AUTH_CACHE_SECONDS
+        digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
         with self._lock:
+            if ttl > 0:
+                cached = self._verified.get(digest)
+                if cached is not None:
+                    expires_at, record, stamp = cached
+                    if expires_at > time.monotonic() and stamp == self._stamp():
+                        return dict(record)
+                    self._verified.pop(digest, None)
             data = self._load()
             for record in data["keys"]:
                 if not isinstance(record, dict) or record.get("revoked_at"):
@@ -123,10 +172,41 @@ class ApiKeyStore:
                 if salt and expected and hmac.compare_digest(
                     _hash(token, salt), expected
                 ):
-                    record["last_used_at"] = _now()
-                    self._save(data)
-                    return self._public(record)
+                    public = self._public(record)
+                    self._touch_last_used(record, data, ttl)
+                    if ttl > 0:
+                        self._remember(digest, public, ttl)
+                    return dict(public)
         return None
+
+    def _touch_last_used(
+        self, record: dict[str, Any], data: dict[str, Any], ttl: float
+    ) -> None:
+        """Persist ``last_used_at`` at most once per key per cache TTL.
+
+        The value is informational, and rewriting the store on every poll (the
+        old behaviour) cost a parse, a serialise and an atomic replace per
+        request. With the cache disabled the old write-per-request remains.
+        """
+        key_id = str(record.get("id") or "")
+        now = time.monotonic()
+        last = self._last_used_write.get(key_id)
+        if ttl > 0 and last is not None and now - last < ttl:
+            return
+        record["last_used_at"] = _now()
+        self._save(data)
+        self._last_used_write[key_id] = now
+
+    def _remember(self, digest: str, record: dict[str, Any], ttl: float) -> None:
+        if len(self._verified) >= AUTH_CACHE_MAX:
+            now = time.monotonic()
+            for key in [k for k, v in self._verified.items() if v[0] <= now]:
+                self._verified.pop(key, None)
+            while len(self._verified) >= AUTH_CACHE_MAX:
+                self._verified.pop(next(iter(self._verified)))
+        # Read the stamp after any write, so our own save does not look like an
+        # out-of-band edit on the next hit.
+        self._verified[digest] = (time.monotonic() + ttl, dict(record), self._stamp())
 
     def revoke(self, key_id: str) -> bool:
         with self._lock:
@@ -137,6 +217,7 @@ class ApiKeyStore:
                         return True
                     record["revoked_at"] = _now()
                     self._save(data)
+                    self.invalidate()
                     self.audit("key_revoked", key_id, str(record.get("label") or ""))
                     return True
         return False
@@ -192,6 +273,58 @@ def resolve_api_key(
     if record is None:
         return None
     return ResolvedKey(str(record["id"]), frozenset(record.get("scopes") or []))
+
+
+class FailureLimiter:
+    """Throttle failed key attempts per client address (M1-3).
+
+    A wrong key costs one PBKDF2 run, so an unthrottled flood of them is a CPU
+    denial of service against an exposed deployment. The check runs before the
+    key is resolved: a blocked client spends no hashing at all. A success clears
+    the counter, so a dashboard that once had a stale key is not locked out.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._failures: dict[str, list[float]] = {}
+
+    def _window(self, client: str) -> list[float]:
+        cutoff = time.monotonic() - RATE_LIMIT_WINDOW_SECONDS
+        window = [at for at in self._failures.get(client, []) if at >= cutoff]
+        if window:
+            self._failures[client] = window
+        else:
+            self._failures.pop(client, None)
+        return window
+
+    def blocked(self, client: str) -> bool:
+        if AUTH_FAILURE_RATE_LIMIT <= 0:
+            return False
+        with self._lock:
+            return len(self._window(client)) >= AUTH_FAILURE_RATE_LIMIT
+
+    def failed(self, client: str) -> None:
+        if AUTH_FAILURE_RATE_LIMIT <= 0:
+            return
+        with self._lock:
+            window = self._window(client)
+            window.append(time.monotonic())
+            self._failures[client] = window
+            if len(self._failures) > AUTH_FAILURE_MAX_CLIENTS:
+                for key in list(self._failures)[: len(self._failures) // 2]:
+                    self._failures.pop(key, None)
+
+    def succeeded(self, client: str) -> None:
+        with self._lock:
+            self._failures.pop(client, None)
+
+    def reset(self) -> None:
+        with self._lock:
+            self._failures.clear()
+
+
+#: Process-wide failure budget, shared by every route (the middleware consults it).
+auth_failures = FailureLimiter()
 
 
 api_key_store = ApiKeyStore(default_key_path())

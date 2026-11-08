@@ -23,6 +23,7 @@ from config.settings import (
     MAINTENANCE_ENABLED,
 )
 from server import api as api_module
+from server import auth as auth_module
 from server.api import (
     _deep_link_decisions,
     _deep_link_verifications,
@@ -168,11 +169,30 @@ async def api_key_guard(request, call_next):
         request.state.api_key_scopes = set(SCOPES)
         return await call_next(request)
 
+    # M1-3: check the failure budget before resolving. A wrong key costs one
+    # PBKDF2 run, so a blocked client must not be able to make us spend it.
+    client = request.client.host if request.client else "unknown"
+    if auth_module.auth_failures.blocked(client):
+        window = auth_module.RATE_LIMIT_WINDOW_SECONDS
+        limit = auth_module.AUTH_FAILURE_RATE_LIMIT
+        return JSONResponse(
+            {
+                "detail": (
+                    f"Too many failed API-key attempts: max {limit} per "
+                    f"{window} seconds"
+                )
+            },
+            status_code=429,
+            headers={"Retry-After": str(window)},
+        )
+
     resolved = resolve_api_key(
         request.headers.get(X_API_KEY_HEADER, ""), env_key=env_key, store=store
     )
     if resolved is None:
+        auth_module.auth_failures.failed(client)
         return JSONResponse({"detail": "Invalid or missing API key"}, status_code=401)
+    auth_module.auth_failures.succeeded(client)
     request.state.api_key_id = resolved.key_id
     request.state.api_key_scopes = set(resolved.scopes)
     if request.method in {"GET", "HEAD"} and not resolved.scopes & {"read", "admin"}:

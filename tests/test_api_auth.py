@@ -26,6 +26,7 @@ from fastapi.testclient import TestClient
 
 from server import api
 from server import app as app_module
+from server import auth as auth_module
 from server.auth import ApiKeyStore
 
 API_PREFIX = "/api"
@@ -65,11 +66,13 @@ def test_every_api_route_except_health_requires_a_key(tmp_path, monkeypatch):
 
     routes = _api_routes()
     assert len(routes) >= 30, "route discovery found too few routes"
-    anonymous = [
-        f"{method} {path}"
-        for method, path in routes
-        if client.request(method, path).status_code != 401
-    ]
+    anonymous = []
+    for method, path in routes:
+        # M1-3's failed-attempt budget would turn the tail of this sweep into
+        # 429s; reset it so every route is answered on its own auth check.
+        auth_module.auth_failures.reset()
+        if client.request(method, path).status_code != 401:
+            anonymous.append(f"{method} {path}")
     assert not anonymous, anonymous
 
 

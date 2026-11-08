@@ -408,6 +408,15 @@ VERIFY_RATE_LIMIT = int(os.getenv("VERIFY_RATE_LIMIT", "10"))
 # Sliding window shared by every per-client-IP rate limit, so tuning one endpoint
 # cannot silently move another's. It is NOT a per-endpoint knob.
 RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
+# Wrong API keys are throttled per client address in the shared window. Each
+# attempt costs a 200k-iteration PBKDF2 hash, so an unthrottled flood is a CPU
+# denial of service. 0 disables the limit.
+AUTH_FAILURE_RATE_LIMIT = int(os.getenv("AUTH_FAILURE_RATE_LIMIT", "10"))
+# A successful key verification is cached in memory for this long, so a polling
+# dashboard does not repeat the PBKDF2 hash on every request (measured ~85 ms on
+# this host). A revocation through the API drops the cache immediately; this TTL
+# only bounds an out-of-band edit. 0 disables the cache.
+AUTH_CACHE_SECONDS = float(os.getenv("AUTH_CACHE_SECONDS", "60"))
 
 # --- Feed integrity (P0-7) ---
 # A book is quarantined from pricing when its feed cannot be trusted for this

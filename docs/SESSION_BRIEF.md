@@ -2,7 +2,8 @@
 
 **Updated:** 2026-11-08
 **Goal:** keep `ROADMAP.md` current without weakening the trust model.
-**Current task:** none; SR0-1, SR0-2, SR1-1, SR1-2, SR1-3, SR1-4, M1-1, M2-3, SR2-1 …
+**Current task:** none; SR0-1, SR0-2, SR1-1, SR1-2, SR1-3, SR1-4, M1-1, M1-3,
+M2-3, SR2-1 …
 SR2-6, SR3-1, SR3-2, SR3-3, SR3-4, SR4-1, SR4-2, SR4-3, SR4-3b … SR4-3f,
 SR4-3h, SR4-3i, SR4-3j, SR4-4, SR4-5, SR4-6, SR4-7, SR4-7a, SR4-8, SR4-8a,
 SR4-9, SR4-10, SR4-11, SR4-12, SR4-13, SR5-1, SR5-2, SR6-1, SR6-2, SR6-3,
@@ -11,11 +12,25 @@ SR7-1 and SR7-2 are done.
 feed). Every other `Not started` row is `Gate: operator`; the roadmap is the
 single task list in `ROADMAP.md`, N2-4 stays deferred and P1-6 stays waived
 until the operator says otherwise.
-**Last task commit:** `e82a0f1` — "close every /api route with one key guard
-(M1-1)", pushed to `origin/main` on 2026-11-08. Before it, `3f9a911` carries the
-health-summary cache (M2-3), and `8a1cb90` carries SR6-2, SR4-8a and SR4-8.
+**Last task commit:** M1-3 "cache key verification and throttle failed
+attempts", committed on 2026-11-08. Before it, `e82a0f1` closes every `/api`
+route with one key guard (M1-1), `3f9a911` carries the health-summary cache
+(M2-3), and `8a1cb90` carries SR6-2, SR4-8a and SR4-8.
 
 ## Project state
+
+M1-3 (2026-11-08, working tree, continuing the delegated pick): one named-key
+verification cost 84.75 ms of PBKDF2, paid per request by the M1-1 middleware.
+`ApiKeyStore.verify` now caches successes for `AUTH_CACHE_SECONDS` (default 60,
+0 disables) under `sha256(token)`; a hit spends no PBKDF2 and writes no file, a
+revoke or create clears the cache immediately, and a cache hit compares the
+store's mtime+size so an out-of-band edit is seen at once. `last_used_at` is
+written at most once per key per TTL. A process-wide `FailureLimiter` returns
+429 with `Retry-After` after `AUTH_FAILURE_RATE_LIMIT` (default 10, 0 disables)
+failed attempts per address, checked before any hashing; `/api/health` is never
+throttled. Measured 83.47 → 3.33 ms per `/api/results` request (25.1x) with 10
+keys. New `tests/test_auth_limits.py` (14 tests); `README.md`, `.env.example`
+and `docs/AUTH.md` document both knobs.
 
 M1-1 (2026-11-08, working tree, operator-delegated pick): `api_key_guard`
 (`server/app.py`) now resolves the env `API_KEY` or a named key through
@@ -610,15 +625,14 @@ the seven-day opportunity baseline remains unmeasured and N2-4 owns it.
 
 ## Next action
 
-**No `Not started` row is ungated.** M1-1, M2-3 and SR4-8 closed the last ones.
+**No `Not started` row is ungated.** M1-1, M1-3, M2-3 and SR4-8 closed the last
+ones.
 What is left needs the operator: **SR4-3g** (blocked on a live EVLBet payload —
 do not start it), the remaining **M\*** rows (all `Gate: operator`; each needs
 explicit approval and written acceptance criteria before any work), and the
 deferred N2-4 / waived P1-6 (leave both alone). Sensible next picks, in the
-order this session would take them: **M1-3** (auth-failure rate limit and a
-PBKDF2 verification cache — the new middleware now verifies on every request),
-**M2-1** (move the scan's CPU/I/O off the event loop), **M2-2** (stop rewriting
-the cache on verify-links). A HAR refresh is an operator action, not a task:
+order this session would take them: **M2-1** (move the scan's CPU/I/O off the
+event loop), **M2-2** (stop rewriting the cache on verify-links). A HAR refresh is an operator action, not a task:
 `python scripts/capture_har.py --books all`.
 
 ## Rules
