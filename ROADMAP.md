@@ -163,7 +163,7 @@ do not copy stale numbers here.
 | M1-3 | Auth-failure rate limit and PBKDF2 cache | Not started | — | operator |
 | M2-1 | Move scan CPU/I/O off the event loop | Not started | — | operator |
 | M2-2 | Stop rewriting the cache on verify-links | Not started | — | operator |
-| M2-3 | Serve a cached `/api/health` summary | Not started | — | operator |
+| M2-3 | Serve a cached `/api/health` summary | Done | — | operator |
 | M2-4 | Decide the candidate queue cap | Not started | — | operator |
 | M2-5 | Review compact cache/ledger representations | Not started | — | operator |
 | M3-1 | Decompose `server/api.py` | Not started | — | operator |
@@ -2129,16 +2129,76 @@ Acceptance:
 
 ### M2-3 Serve a cached `/api/health` summary
 
-Status: Not started
+Status: Done
 
 Gate: operator
+
+**Decision (2026-11-08, operator): cache the health summary.** Picked from the
+gated queue as the next row.
 
 Why / what: Serve a cached `/api/health` summary instead of recomputing freshness
 and the candidate queue on every poll.
 
-Acceptance:
-- [ ] Operator approval recorded here.
-- [ ] Acceptance criteria written here before coding.
+**M2-3 Outcome (2026-11-08).** `server/api.py::health()` is split in two:
+`_health_summary()` builds the 31 measured blocks (parser contracts,
+admissibility audit, retention, cache sizes, freshness, stale prices, feed
+integrity, cardinality, mapping coverage/trends, scan cost, pairing, candidate
+blockers/remediation/trends, the cached counters and the `unverified_links`
+walk) and caches them for `HEALTH_CACHE_SECONDS` (new setting, env
+`HEALTH_CACHE_SECONDS`, default 2.0 s, `0` disables); the endpoint adds the 18
+live fields per request (scanning state, the cached surebet/match counters,
+`book_health`, the breaker snapshots, `memory`, `alerts`, `ai_available`,
+per-bookie errors and the deep-link declaration source/audit). The payload gains
+`health_cache: {ttl_seconds, generated_at, age_seconds}`; no shipped key was
+renamed or removed (pinned by `tests/test_health_cache.py`). `run_scan` drops
+the cache when it starts and in its `finally`, so progress and a completed scan
+are visible on the next poll, and `tests/conftest.py` drops it per test so one
+test's scan data cannot answer another's diagnostics.
+**Measured** with `health()` called directly in the same process: empty state
+2.241 ms → 0.337 ms with the cache (85 % less); 6,600 prematch + 2,000 live
+cached matches 20.32 ms → 0.33 ms (98 % less), the walk over the cached matches
+being the dominant cost. Through `TestClient`, `/api/health` went from 5.74 ms
+to 3.80 ms (the client's own overhead dominates there). Roughly 1.7 ms of the
+empty-state cost was the three file-backed blocks (`admissibility_health`
+0.98 ms, `retention_health` 0.46 ms, `contract_health` 0.22 ms). Health stays a
+diagnostic: the certainty gate, feed integrity and pricing never read it.
+New `tests/test_health_cache.py` (6 tests: hit does not rebuild, TTL expiry
+rebuilds, `0` disables, live fields stay fresh, shipped key set unchanged, a
+scan drops it). Two existing helpers that emulate a completed scan now drop the
+cache before reading (`tests/test_frontend_empty_state.py`), and the one test
+that changed the declaration map mid-test does the same
+(`tests/test_candidates_api.py`), with the reason recorded there. `README.md`
+and `.env.example` document the setting.
+
+Acceptance (written before coding, 2026-11-08):
+- [x] Operator approval recorded here.
+- [x] The expensive summary blocks are cached for `HEALTH_CACHE_SECONDS`
+      (default 2.0 s, `0` disables): parser contracts, admissibility audit,
+      retention, cache sizes, freshness, stale prices, unverified links,
+      candidate blockers/remediation and the trends, mapping coverage, closing
+      capture, skin detection, cardinality, feed integrity, pairing, scan cost
+      and the cached counters that walk the scan data. Measured baseline:
+      `admissibility_health` 0.98 ms + `retention_health` 0.46 ms +
+      `contract_health` 0.22 ms of a 2.17 ms call, and the gate-facing
+      `unverified_links` walk alone costs ~16 ms at 6,600 cached matches.
+- [x] The live fields stay per request: `scanning`, the cached
+      surebet/match counters, `book_health`, the breaker snapshots, `memory`,
+      `alerts`, `ai_available`, per-bookie errors and the deep-link declaration
+      fields (a test edits that file and re-reads health).
+- [x] A scan start and a scan finish reset the cache, so progress and a
+      completed scan are visible on the next poll.
+- [x] The payload gains `health_cache: {ttl_seconds, generated_at,
+      age_seconds}`; no existing key is renamed or removed, so `/api/health`
+      stays a diagnostic and no pricing path reads it.
+- [x] Measured before/after (`health()` called directly, same process state)
+      pasted in the execution log.
+- [x] Tests: a cache hit does not call the builders again, the TTL expiry
+      rebuilds, `HEALTH_CACHE_SECONDS=0` always rebuilds, a live field changes
+      between two cached calls, the key set is unchanged, a scan resets it, and
+      the suite clears the cache between tests. `unverified_links` stays in the
+      cached summary (its walk is the expensive part), so
+      `tests/test_candidates_api.py` drops the cache explicitly before it reads
+      the second count.
 
 ### M2-4 Decide the candidate queue cap
 
@@ -2697,3 +2757,4 @@ Useful starting points:
 | 2026-11-08 | SR6-2 | Done | New `scrapers/protocol.py`: `BookAdapter` (runtime-checkable `Protocol`) and `AdapterClass = type[BookAdapter]` — no-argument construction plus an async `scrape()` with `live`, `scan_time` and `sports_wanted`. The five adapters that lacked `sports_wanted` (mozzartbet, betole, evlbet, premier_kladionica, wwin) accept it and ignore it; before, `server/api.py` reached them through a `TypeError` fallback, so the fetched offer is unchanged. `scrapers.registry.__getitem__` is typed `AdapterClass` and a new `adapter(book) -> AdapterClass | None` is used at the two scan call sites in `server/api.py`, so mypy now checks `scraper.scrape(...)` against the protocol instead of `Any`; the `TypeError` fallback stays for monkeypatched test fakes. `tests/test_adapter_declarations.py`'s AST guard now requires a concrete class with an async `scrape`, so the Protocol is not counted as an undeclared adapter. New `tests/test_adapter_protocol.py` (5 tests): every declared class matches the protocol at runtime (no-arg construction, coroutine, keyword defaults, `get_type_hints`), the registry annotations are the protocol types, the contract imports without loading an adapter module, mypy accepts a generated module typing all ten declared classes as `type[BookAdapter]`, and mypy rejects three broken adapters (missing entry point, sync entry point, wrong return type) with each file named in its output. `pytest`: 2242 passed, 8 skipped, 1 xfailed (17 snapshots passed) in 100.81 s; ruff clean; mypy 265 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No live scan, no bookmaker traffic. |
 | 2026-11-08 | SR4-8a | Done | Operator chose **A (in-page fetch)**. `scrapers/base.py` now issues the browser books' API calls with `fetch` inside the loaded document (`_page_fetch`): same `headers`/`params`/`data` arguments, same returned surface (`status`/`status_code`, `headers`, `body()`, `json()`, `content`), `credentials: "include"` for the browser's cookies and Cloudflare clearance, request and body bytes still counted, and a Python-side 30 s cap (`PAGE_FETCH_TIMEOUT_SECONDS`, the old `APIRequestContext` default) so an overrun is the shared `timeout` kind, not a text-matched JS error. Dict/list bodies are JSON-serialised with `application/json`, string bodies are sent unchanged (Playwright's `data` rules), so both POST endpoints keep their shape. New `PageResponse` keeps the adapters unchanged; no adapter calls `page.request` any more. **Measured (2026-11-08, prematch, live, in-page → `page.request` control minutes later on the same offer):** admiralbet 3 req / 4.71 MB / 13.2 s / 121 matches → 3 / 4.71 MB / 10.3 s / 121; mozzartbet 234 / 72.27 MB / 25.5 s (19.2 s on an earlier pass) / 215 → 233 / 71.95 MB / 37.0 s / 215; wwin 46 / 2.03 MB / 13.2 s / 459 → 46 / 2.03 MB / 12.1 s / 459. Cloudflare passed on all three including cross-origin admiralbet: zero `blocked`/`transport`, three `ok`; requests within one event, bytes within 0.5 %, parsed output identical modulo that event. Evidence and boundaries in `docs/evidence/2026-11-08-sr4-8a-inpage-fetch.md`. New `tests/test_page_fetch.py` (10 tests: request shape, JSON/string bodies, empty-body and non-ASCII round-trip, byte accounting, Python timeout, page error as `transport`, 403 one `blocked` attempt, 503 retry, challenge header, no `page.request` in `scrapers/`) and opt-in `tests/test_page_fetch_browser.py` (real Chromium: `context.route` sees the document and the in-page API call with its POST body). `docs/CI.md` lists the opt-in check; `docs/SCAN_COST.md` names the in-page fetch in the `requests` definition. `pytest`: 2252 passed, 9 skipped, 1 xfailed (17 snapshots) in 108.71 s; ruff clean; mypy 267 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. Traffic: three live prematch passes over the three books (two on the new transport, one control), ~848 API requests plus 9 navigations; no login, no bet. |
 | 2026-11-08 | SR4-8 | Done | The browser books' transport is committed and replayed. New `scrapers/har_fixtures.py` owns the rules: `REPLAY_PREFIXES` (each book's API), `MAX_REPLAY_OFFERS` (30 for mozzartbet), `trim()` (keeps the page document — `_resourceType: document` — plus the book's API calls; drops analytics/JS/images/fonts), `scrub()` (drops `cookie`/`set-cookie`/`authorization`/`proxy-authorization` headers from both sides and empties the HAR cookie jar; odds payloads stay), and gzip `loads`/`dumps`. New `scripts/capture_har.py` records a live HAR through the real adapter and pool (`browser_pool(record_har_path=...)`), trims and scrubs it, writes `tests/fixtures/har/<book>.har.gz` + `<book>.meta.json`, then replays the new file offline through the same adapter and records the measured counts in the sidecar (a zero-match replay fails the capture). Committed set 1.72 MB gzipped: admiralbet 492 KB (93 matches / 739 markets, 38 entries), wwin 341 KB (450 / 2,643, 56 entries), mozzartbet 892 KB (207 / 941, 54 entries — 30 offers kept, the rest abort into the adapter's list-odds fallback). Raw captures were 31.8 / 8.8 / 88.0 MB, hence gzip and the offer bound. Replay uses `browser_pool(har_path=...)` → `route_from_har(not_found="abort")`, so a missing entry aborts and nothing leaves the browser; the sidecar's `scan_time` is passed to `scrape()` because admiralbet and wwin build their date windows from it. New `tests/test_har_fixtures.py` (8, normal suite) proves every file is present, holds only its document plus API calls, carries no secret header, has an empty cookie jar, has a consistent sidecar, is idempotently trimmed and is under the size budget; `tests/test_har_seams.py` (4) proves a scan records nothing and routes nothing while the capture/replay seams pass their path. New opt-in `tests/test_browser_har_replay.py` (3) runs each book's real `scrape()` from its file and asserts the sidecar counts (measured: 3 passed). New `docs/HAR_REPLAY.md`; `docs/CI.md`, `README.md` and `AGENTS.md` point at it. New `.github/workflows/browser.yml` runs the Chromium checks (page-fetch route, HAR replay, accessibility, route leak) on `workflow_dispatch` only. `pytest`: 2264 passed, 12 skipped, 1 xfailed (17 snapshots) in 117.69 s; `BH_ARB_TEST_BROWSER=1` on the two new files: 4 passed; ruff clean; mypy 272 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. Traffic: six live prematch passes over the three browser books (three sizing probes plus one capture pass per book) with the shared transport policy; the replays run offline; no login, no bet. |
+| 2026-11-08 | M2-3 | Done | `/api/health` is split into a cached summary and live fields. `_health_summary()` builds and caches 31 blocks for `HEALTH_CACHE_SECONDS` (new setting, env of the same name, default 2.0 s, `0` disables): parser contracts, admissibility audit, retention, cache sizes, freshness, stale prices, feed integrity, cardinality, mapping coverage/trends, scan cost, pairing, candidate blockers/remediation/trends, the cached counters and the `unverified_links` walk. The endpoint adds the 18 live fields per request (scanning state, surebet/match counters, `book_health`, breaker snapshots, memory, alerts, `ai_available`, per-bookie errors, deep-link declaration source/audit). The payload gains `health_cache{ttl_seconds,generated_at,age_seconds}` and keeps every shipped key (pinned by a key-set test). `run_scan` resets the cache at start and in its `finally`; `tests/conftest.py` resets it per test. **Measured** (`health()` direct, same process): empty 2.241 → 0.337 ms (85 % less); 6,600 prematch + 2,000 live cached matches 20.32 → 0.33 ms (98 % less); through `TestClient` 5.74 → 3.80 ms. The three file-backed blocks were 1.7 ms of the empty-state call (`admissibility_health` 0.98, `retention_health` 0.46, `contract_health` 0.22). New `tests/test_health_cache.py` (6 tests). Two scan-emulating helpers drop the cache before reading (`tests/test_frontend_empty_state.py`) and the declaration-map test does too (`tests/test_candidates_api.py`). `README.md` and `.env.example` document the setting; health stays diagnostic, no gate or pricing path reads it. `pytest`: 2270 passed, 12 skipped, 1 xfailed (17 snapshots) in 120.60 s; ruff clean; mypy 273 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No live scan. |

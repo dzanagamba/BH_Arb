@@ -1172,6 +1172,9 @@ def _backend_state(matches: list[Match], mode: str = "prematch"):
         for surebet in ArbitrageEngine().find_surebets(groups, min_profit=DUST_PROFIT_PERCENT)
     ]
     status.last_scan_time = datetime.now(UTC).replace(tzinfo=None)
+    # M2-3: this is the state a completed scan leaves, and a scan drops the
+    # cached /api/health summary; do the same so the read sees this state.
+    api._reset_health_cache()
     try:
         yield client.get("/api/health").json(), client.get(f"/api/results?mode={mode}").json()
     finally:
@@ -1191,6 +1194,8 @@ def _cleared_backend_state(mode: str = "prematch"):
     report_cache.clear()
     surebets_cache.clear()
     status.last_scan_time = None
+    # M2-3: the "before any scan" state; drop the cached summary first.
+    api._reset_health_cache()
     try:
         yield client.get("/api/health").json(), client.get(f"/api/results?mode={mode}").json()
     finally:

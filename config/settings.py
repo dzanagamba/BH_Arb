@@ -474,6 +474,10 @@ CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "cache")
 # regressed, not that the feed grew, so `/api/health` and the cache writer both
 # report it.
 CACHE_SIZE_BUDGET_BYTES = int(os.getenv("CACHE_SIZE_BUDGET_BYTES", str(40 * 1024 * 1024)))
+# M2-3: /api/health recomputes its diagnostics on every poll; the summary is
+# cached for this many seconds (0 disables the cache). The live fields are
+# always computed per request.
+HEALTH_CACHE_SECONDS = float(os.getenv("HEALTH_CACHE_SECONDS", "2.0"))
 
 # SR3-4: a failed browser scrape keeps a trace and a screenshot under
 # cache/forensics/<book>/<scan_id>/; cookies and storage state are never

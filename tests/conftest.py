@@ -305,6 +305,10 @@ def _isolated_runtime_state(
         api, "_candidate_blocker_trend", {"prematch": [], "live": []}
     )
 
+    # M2-3: the cached /api/health summary is per-test; a previous test's scan
+    # data must not decide what this test's diagnostics say.
+    monkeypatch.setattr(api, "_health_cache", None)
+
     # A module that copied CACHE_DIR at import time keeps its own reference.
     verify_module = sys.modules.get("scripts.verify_deeplinks")
     if verify_module is not None:

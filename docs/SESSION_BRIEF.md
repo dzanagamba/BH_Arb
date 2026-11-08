@@ -2,7 +2,7 @@
 
 **Updated:** 2026-11-08
 **Goal:** keep `ROADMAP.md` current without weakening the trust model.
-**Current task:** none; SR0-1, SR0-2, SR1-1, SR1-2, SR1-3, SR1-4, SR2-1 …
+**Current task:** none; SR0-1, SR0-2, SR1-1, SR1-2, SR1-3, SR1-4, M2-3, SR2-1 …
 SR2-6, SR3-1, SR3-2, SR3-3, SR3-4, SR4-1, SR4-2, SR4-3, SR4-3b … SR4-3f,
 SR4-3h, SR4-3i, SR4-3j, SR4-4, SR4-5, SR4-6, SR4-7, SR4-7a, SR4-8, SR4-8a,
 SR4-9, SR4-10, SR4-11, SR4-12, SR4-13, SR5-1, SR5-2, SR6-1, SR6-2, SR6-3,
@@ -17,6 +17,18 @@ for browser books" (SR6-2, SR4-8a, SR4-8), pushed to `origin/main` on
 SR1-4, the gate decisions, SR4-9 … SR4-13, SR5-1, SR5-2 and SR6-1.
 
 ## Project state
+
+M2-3 (2026-11-08, working tree, operator-approved): `/api/health` now builds its
+measured summary once per `HEALTH_CACHE_SECONDS` (new setting, default 2.0 s, `0`
+disables) and its live fields every request. Cached: contracts, admissibility,
+retention, cache sizes, freshness, stale prices, feed integrity, cardinality,
+coverage/trends, scan cost, pairing, candidate queue/remediation and the
+`unverified_links` walk. Live: `scanning`, the surebet/match counters,
+`book_health`, breakers, memory, alerts, `ai_available`, per-bookie errors and
+the deep-link declaration fields. The payload gains
+`health_cache{ttl_seconds,generated_at,age_seconds}`; a scan resets the cache.
+Measured: empty 2.241 → 0.337 ms, and 20.32 → 0.33 ms with 6,600 + 2,000 cached
+matches. `tests/test_health_cache.py` (6 tests).
 
 SR4-8 (2026-11-08, working tree): the browser books' transport is now a
 committed, scrubbed fixture set. `tests/fixtures/har/<book>.har.gz` +
@@ -588,13 +600,13 @@ the seven-day opportunity baseline remains unmeasured and N2-4 owns it.
 
 ## Next action
 
-**No `Not started` row is ungated any more.** SR4-8 closed the last one. What is
+**No `Not started` row is ungated.** SR4-8 and M2-3 closed the last ones. What is
 left needs the operator: **SR4-3g** (blocked on a live EVLBet payload — do not
-start it), the **M1-1 … M6-1** rows (all `Gate: operator`, deliberately deferred
-from the old backlog; each needs explicit approval before any work), and the
-deferred N2-4 / waived P1-6 (leave both alone). Do not invent a task or reopen a
-done one. The working tree is clean at `8a1cb90`; a HAR refresh is an operator
-action, not a task: `python scripts/capture_har.py --books all`.
+start it), the remaining **M\*** rows (all `Gate: operator`, deliberately
+deferred from the old backlog; each needs explicit approval and written
+acceptance criteria before any work), and the deferred N2-4 / waived P1-6 (leave
+both alone). Do not invent a task or reopen a done one. A HAR refresh is an
+operator action, not a task: `python scripts/capture_har.py --books all`.
 
 ## Rules
 

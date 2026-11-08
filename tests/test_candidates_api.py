@@ -222,6 +222,11 @@ def test_health_counts_an_undeclared_books_link_as_a_blocker(monkeypatch):
 
     monkeypatch.setattr(common, "_deeplink_cache", {})
     assert not declares_no_event_id("mdshop"), "the premise: no book declares anything now"
+    # M2-3: /api/health caches its summary for HEALTH_CACHE_SECONDS because the
+    # walk over every cached match is not free (~16 ms at 6,600 matches). The
+    # next poll after the TTL sees the new count; the test drops the cache
+    # instead of waiting for it.
+    api._reset_health_cache()
     dark = client.get("/api/health").json()
     assert dark["unverified_links"] == 2, (
         "with no declaration anywhere the gate blocks both unproven matches, so the count "

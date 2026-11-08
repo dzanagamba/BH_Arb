@@ -367,6 +367,14 @@ python scripts/candidate_remediation.py --top 20
 
 See `docs/CANDIDATE_REMEDIATION.md` for the ranking and denominator rules.
 
+`GET /api/health` carries the same counts plus the feed, breaker and
+admissibility state. Its measured summary (parser contracts, admissibility,
+retention and the walks over cached matches and candidates) is reused for
+`HEALTH_CACHE_SECONDS` (default 2 s, `0` disables); the payload's
+`health_cache` block says when it was built, and a scan drops it so a finished
+scan is visible on the next poll. The live fields (scanning state, counters,
+breakers, book health) are computed every request.
+
 ### Language and accessibility
 
 The dashboard ships English and Bosnian. All UI chrome comes from

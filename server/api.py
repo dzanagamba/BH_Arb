@@ -48,6 +48,7 @@ from config.settings import (
     ENABLED_MARKETS,
     ENABLED_SPORTS,
     EXPERIMENTAL_MARKETS,
+    HEALTH_CACHE_SECONDS,
     LIVE_ODDS_TTL_SECONDS,
     MAPPING_COVERAGE_FLOOR,
     MAPPING_COVERAGE_MIN_ROWS,
@@ -2000,6 +2001,9 @@ async def run_scan(
     status.total_matches = 0
     status.surebets_found = 0
     status.recorded_opportunities = 0
+    # M2-3: the cached health summary describes the previous scan; drop it so
+    # the new scan's progress is visible on the next poll.
+    _reset_health_cache()
     status.run_mode = run_mode
     status.current_bookmaker = "Starting..."
     # Counts are rebuilt per scan; a book disabled since the last scan must not
@@ -2653,6 +2657,9 @@ async def run_scan(
     finally:
         status.is_scanning = False
         status.current_bookmaker = ""
+        # M2-3: the scan's results are in memory now; the next poll must see
+        # them rather than the pre-scan summary.
+        _reset_health_cache()
         reset_scan_id(scan_token)
 
 
@@ -3687,39 +3694,38 @@ async def get_metrics(_auth: None = Depends(_require_api_key)):
     )
 
 
-@router.get("/health")
-async def health():
-    """Health + per-bookie diagnostics (P1-6)."""
-    def age_sec(dt):
-        if not dt:
-            return None
-        try:
-            # Handle naive UTC stored
-            if dt.tzinfo is None:
-                return (datetime.now(UTC).replace(tzinfo=None) - dt).total_seconds()
-            return (datetime.now(UTC) - dt).total_seconds()
-        except Exception:
-            return None
+# M2-3: /api/health is polled every few seconds, and every call used to re-read
+# the parser contracts, the admissibility baseline and the retention store, then
+# walk every cached match, group and candidate. Those blocks are cached for
+# `HEALTH_CACHE_SECONDS`; the live fields (scanning state, counters, breakers,
+# book health, memory, alerts and the deep-link declaration source) are built per
+# request, so a scan in progress and a finished scan are never hidden. The build
+# is synchronous, so inside the event loop it cannot interleave with itself; a
+# deployment with several workers keeps one cache per worker.
+_health_cache: tuple[dict[str, Any], float, str] | None = None
+_health_clock = time.monotonic
 
-    rss_mb = current_rss_mb()
-    book_health = {
-        mode: build_book_health(
-            mode,
-            bookmakers=BOOKMAKERS,
-            enabled=_bookmaker_enabled,
-            breakers=_breaker_snapshots(mode),
-            scan_cost=_scan_cost.get(mode),
-            failure_rates=book_failure_rates(_scan_cost_history, mode),
-        )
-        for mode in ("prematch", "live")
-    }
-    return {
-        "status": "ok",
-        "scanning": scan_status.is_scanning or live_status.is_scanning,
-        "surebets_cached": len(cached_surebets),
-        "matches_cached": len(cached_matches),
-        "live_surebets_cached": len(cached_live_surebets),
-        "live_matches_cached": len(cached_live_matches),
+
+def _reset_health_cache() -> None:
+    """Drop the cached summary (a scan starts or finishes; tests)."""
+    global _health_cache
+    _health_cache = None
+
+
+def _health_summary() -> tuple[dict[str, Any], dict[str, Any]]:
+    """The expensive part of /api/health, cached for ``HEALTH_CACHE_SECONDS``."""
+    global _health_cache
+    now = _health_clock()
+    cached = _health_cache
+    if HEALTH_CACHE_SECONDS > 0 and cached is not None:
+        body, built_at, generated_at = cached
+        if now - built_at < HEALTH_CACHE_SECONDS:
+            return body, {
+                "ttl_seconds": HEALTH_CACHE_SECONDS,
+                "generated_at": generated_at,
+                "age_seconds": round(now - built_at, 3),
+            }
+    body = {
         "pairing": _pairing_summary.get("prematch") or {},
         "live_pairing": _pairing_summary.get("live") or {},
         # P0-6: a zero-surebet scan must be distinguishable from a broken feed.
@@ -3731,10 +3737,6 @@ async def health():
             "prematch": _feed_integrity_payload("prematch"),
             "live": _feed_integrity_payload("live"),
         },
-        # SR5-2: one state per book and feed, reduced from the SR2-1 kind, the
-        # SR2-6 breaker and the runtime toggle. It is a diagnostic: pricing
-        # still reads feed integrity and the certainty gate, never this field.
-        "book_health": book_health,
         # N0-2: rows refused because the book's feed shows a frozen price.
         # The full row list stays in /api/results; health keeps the counts.
         "stale_prices": {
@@ -3807,6 +3809,78 @@ async def health():
         # the live feed is counted separately rather than answered from this one.
         "unverified_links": _unverified_link_count(cached_matches),
         "live_unverified_links": _unverified_link_count(cached_live_matches),
+        # The same freshness policy the results payload serves. Health is where
+        # an operator checks whether a quiet scan is fresh data or a stale feed.
+        "freshness": {
+            "prematch": _freshness_block("prematch", scan_status, cached_matches),
+            "live": _freshness_block("live", live_status, cached_live_matches),
+        },
+        # P0-1 guard. A scan cache that outgrows the budget means the persisted
+        # evidence payload regressed to carrying data it does not need; the size
+        # is reported rather than hidden so the regression is visible without a
+        # filesystem check.
+        "cache": {
+            "prematch_bytes": _cache_size(_PREMATCH_CACHE_FILE),
+            "live_bytes": _cache_size(_LIVE_CACHE_FILE),
+            "budget_bytes": CACHE_SIZE_BUDGET_BYTES,
+            "over_budget": max(
+                _cache_size(_PREMATCH_CACHE_FILE), _cache_size(_LIVE_CACHE_FILE)
+            ) > CACHE_SIZE_BUDGET_BYTES,
+        },
+        # N1-1: every runtime store's size, its budget and the last bounded
+        # maintenance run. A crossed budget is a warning, never a scan stop.
+        "retention": retention_health()
+    }
+    generated_at = datetime.now(UTC).replace(tzinfo=None).isoformat(timespec="seconds")
+    if HEALTH_CACHE_SECONDS > 0:
+        _health_cache = (body, now, generated_at)
+    return body, {
+        "ttl_seconds": HEALTH_CACHE_SECONDS,
+        "generated_at": generated_at,
+        "age_seconds": 0.0,
+    }
+
+
+@router.get("/health")
+async def health() -> dict[str, Any]:
+    """Health + per-bookie diagnostics (P1-6)."""
+    def age_sec(dt):
+        if not dt:
+            return None
+        try:
+            # Handle naive UTC stored
+            if dt.tzinfo is None:
+                return (datetime.now(UTC).replace(tzinfo=None) - dt).total_seconds()
+            return (datetime.now(UTC) - dt).total_seconds()
+        except Exception:
+            return None
+
+    rss_mb = current_rss_mb()
+    book_health = {
+        mode: build_book_health(
+            mode,
+            bookmakers=BOOKMAKERS,
+            enabled=_bookmaker_enabled,
+            breakers=_breaker_snapshots(mode),
+            scan_cost=_scan_cost.get(mode),
+            failure_rates=book_failure_rates(_scan_cost_history, mode),
+        )
+        for mode in ("prematch", "live")
+    }
+    summary, cache_meta = _health_summary()
+    return {
+        **summary,
+        "health_cache": cache_meta,
+        "status": "ok",
+        "scanning": scan_status.is_scanning or live_status.is_scanning,
+        "surebets_cached": len(cached_surebets),
+        "matches_cached": len(cached_matches),
+        "live_surebets_cached": len(cached_live_surebets),
+        "live_matches_cached": len(cached_live_matches),
+        # SR5-2: one state per book and feed, reduced from the SR2-1 kind, the
+        # SR2-6 breaker and the runtime toggle. It is a diagnostic: pricing
+        # still reads feed integrity and the certainty gate, never this field.
+        "book_health": book_health,
         # The declaration map the gate is actually reading, not the one in the
         # file on disk. The map reloads when the file's mtime/size changes, and
         # `deep_link_declaration_source` carries loaded_at/source_mtime/stale so
@@ -3844,27 +3918,6 @@ async def health():
             "errors": list(live_status.errors),
         },
         "odds_ttl_sec": ODDS_TTL_SECONDS,
-        # The same freshness policy the results payload serves. Health is where
-        # an operator checks whether a quiet scan is fresh data or a stale feed.
-        "freshness": {
-            "prematch": _freshness_block("prematch", scan_status, cached_matches),
-            "live": _freshness_block("live", live_status, cached_live_matches),
-        },
-        # P0-1 guard. A scan cache that outgrows the budget means the persisted
-        # evidence payload regressed to carrying data it does not need; the size
-        # is reported rather than hidden so the regression is visible without a
-        # filesystem check.
-        "cache": {
-            "prematch_bytes": _cache_size(_PREMATCH_CACHE_FILE),
-            "live_bytes": _cache_size(_LIVE_CACHE_FILE),
-            "budget_bytes": CACHE_SIZE_BUDGET_BYTES,
-            "over_budget": max(
-                _cache_size(_PREMATCH_CACHE_FILE), _cache_size(_LIVE_CACHE_FILE)
-            ) > CACHE_SIZE_BUDGET_BYTES,
-        },
-        # N1-1: every runtime store's size, its budget and the last bounded
-        # maintenance run. A crossed budget is a warning, never a scan stop.
-        "retention": retention_health(),
         # P1-5/P1-6: delivery counters and the soft resource budget. The
         # snapshot names transports, never their URLs or tokens.
         "alerts": alert_manager.snapshot(),
