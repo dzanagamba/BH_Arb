@@ -182,11 +182,13 @@ def compute_feed_integrity(
     now: datetime,
     ttl_sec: int,
     stale_price_rows: dict[str, int] | None = None,
+    cardinality_flags: dict[str, list[str]] | None = None,
 ) -> dict[str, dict]:
     """Build one scan's integrity scorecard for every enabled book."""
     missing, expected = _missing_and_expected(groups)
     outlier_counts, comparable = _outlier_counts(groups)
     stale_rows = stale_price_rows or {}
+    cardinality = cardinality_flags or {}
     result: dict[str, dict] = {}
 
     for bookmaker, name in bookmakers.items():
@@ -221,6 +223,12 @@ def compute_feed_integrity(
             outlier_rate=outlier_rate,
             comparable_markets=comparable_count,
         )
+        # SR4-5: a book materially below its own event/market floor is not a
+        # usable price source this scan. It enters the same quarantine state
+        # machine (and recovery streak) as an empty or stale feed.
+        for reason in cardinality.get(bookmaker, []):
+            if reason not in critical:
+                critical.append(reason)
 
         was_quarantined = old.get("state") == "quarantined"
         healthy_scan = not critical and not warnings
@@ -261,6 +269,7 @@ def compute_feed_integrity(
                 "own_margin_violations": own_violations,
                 "outlier_rate": outlier_rate,
                 "missing_rate": missing_rate,
+                "cardinality_flags": len(cardinality.get(bookmaker, [])),
             }
         )
         history = history[-FEED_INTEGRITY_HISTORY:]
@@ -285,6 +294,7 @@ def compute_feed_integrity(
                 "outlier_markets": outlier_count,
                 "comparable_markets": comparable_count,
                 "outlier_rate": round(outlier_rate, 4) if outlier_rate is not None else None,
+                "cardinality_flags": len(cardinality.get(bookmaker, [])),
             },
             "consecutive_healthy_scans": healthy_streak,
             "consecutive_unhealthy_scans": unhealthy_streak,

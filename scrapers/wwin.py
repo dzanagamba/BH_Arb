@@ -31,11 +31,17 @@ import logging
 from datetime import UTC, datetime, timedelta
 
 from engine.market_registry import MARKET_REGISTRY, record_unmapped, registered_spec
+from engine.structural_drift import observe
 from models.schemas import Market, MarketType, Match, OddsValue
 from scrapers.base import goto, launch_browser, measured_api_get, settle
 from scrapers.common import betradar_id, qualify_league
+from scrapers.errors import ScrapeError, ScrapeKind
 from scrapers.retry import retry_call
 from scrapers.transport import policy_for
+from scrapers.wire_schemas import (
+    validate_wwin_events,
+    validate_wwin_header_bets,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -299,12 +305,17 @@ class WWINScraper:
                 )
                 try:
                     data = await resp.json()
-                    _remember_countries(data, countries)
-                    events = (data.get("events") or data.get("p") or []) if isinstance(data, dict) else []
-                    return day_offset, bets, events
-                except Exception:
-                    return day_offset, bets, []
-
+                except Exception as exc:
+                    raise ScrapeError(
+                        ScrapeKind.SCHEMA_DRIFT,
+                        f"{BOOKMAKER_ID} prematch response is not JSON: {exc}",
+                    ) from exc
+                # SR4-3i: the page key and every event's bets[] are validated
+                # before the parser reads them; a drifted feed drops the book.
+                observe(BOOKMAKER_ID, "prematch-events", data)
+                events = validate_wwin_events(data, book=BOOKMAKER_ID)
+                _remember_countries(data, countries)
+                return day_offset, bets, events
             tasks = [fetch_one(d, b) for d in range(15) for b in bet_groups]
             results = await asyncio.gather(*tasks)
 
@@ -383,12 +394,18 @@ class WWINScraper:
             )
             try:
                 data = await resp.json()
-            except Exception:
-                return []
+            except Exception as exc:
+                raise ScrapeError(
+                    ScrapeKind.SCHEMA_DRIFT,
+                    f"{BOOKMAKER_ID} live response is not JSON: {exc}",
+                ) from exc
             countries: dict[object, str] = {}
             _remember_countries(data, countries)
-            events = data.get("events", []) if isinstance(data, dict) else []
-            football = [e for e in events if isinstance(e, dict) and e.get("ids") == FOOTBALL_SPORT_ID]
+            observe(BOOKMAKER_ID, "live-events", data)
+            events = validate_wwin_events(
+                data, live=True, book=BOOKMAKER_ID
+            )
+            football = [e for e in events if e.get("ids") == FOOTBALL_SPORT_ID]
             if not football:
                 return []
 
@@ -415,14 +432,14 @@ class WWINScraper:
                 )
                 try:
                     d2 = await r2.json()
-                except Exception:
-                    continue
-                if not isinstance(d2, dict):
-                    continue
-                # headerBets returns one entry per (event, market) pair
-                for item in d2.get("bets", []) or []:
-                    if not isinstance(item, dict):
-                        continue
+                except Exception as exc:
+                    raise ScrapeError(
+                        ScrapeKind.SCHEMA_DRIFT,
+                        f"{BOOKMAKER_ID} headerBets response is not JSON: {exc}",
+                    ) from exc
+                # headerBets returns one entry per (event, market) pair.
+                observe(BOOKMAKER_ID, "live-header-bets", d2)
+                for item in validate_wwin_header_bets(d2, book=BOOKMAKER_ID):
                     for event_id, bet in item.items():
                         if isinstance(bet, dict):
                             bet_map.setdefault(str(event_id), []).append(bet)

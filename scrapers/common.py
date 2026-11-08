@@ -627,6 +627,7 @@ def parse_nsoft_bets(
             continue
         odds_values: list[OddsValue] = []
         outcome_ids: dict[str, str] = {}
+        seen_labels: set[str] = set()
         for outcome in outcomes:
             if not isinstance(outcome, dict) or not nsoft_offered(outcome):
                 continue
@@ -641,7 +642,11 @@ def parse_nsoft_bets(
             if odd_val < 1.01:
                 continue
             norm_label = normalize_outcome(lbl, market_type)
-            if norm_label in expected_labels:
+            # SR4-7a: the feed normally sends one row per outcome, but a
+            # duplicated row must not become two legs for this book. The first
+            # offered price wins; later duplicates are ignored.
+            if norm_label in expected_labels and norm_label not in seen_labels:
+                seen_labels.add(norm_label)
                 odds_values.append(OddsValue(label=norm_label, value=odd_val))
                 raw_outcome_id = outcome.get("id")
                 if raw_outcome_id is not None:

@@ -12,6 +12,7 @@ import logging
 from datetime import UTC, datetime
 
 from engine import sports
+from engine.structural_drift import observe
 from models.schemas import Market, Match
 from scrapers.common import (
     betradar_id,
@@ -130,6 +131,13 @@ class MDShopScraper:
                             ScrapeKind.SCHEMA_DRIFT,
                             f"{BOOKMAKER_ID} response is not JSON: {exc}",
                         ) from exc
+                    # SR4-4: alert if the raw shape moves outside the fields
+                    # the schema models. Alert only; never changes the payload.
+                    observe(
+                        BOOKMAKER_ID,
+                        f"{'live' if live else 'prematch'}:events:{sport_id}",
+                        data,
+                    )
                     validate_response(data, book=BOOKMAKER_ID)
                     events = data.get("events", [])
                     if not events:

@@ -11,6 +11,7 @@ import logging
 from datetime import UTC, datetime
 
 from engine.market_registry import record_unmapped, registered_spec
+from engine.structural_drift import observe
 from models.schemas import Market, MarketType, Match, OddsValue
 from scrapers.common import parse_dt
 from scrapers.errors import ScrapeError, ScrapeKind
@@ -231,6 +232,7 @@ async def _fetch_full_offers(client, events: list[dict], live: bool) -> dict[str
                         f"betole full-offer batch is not JSON: {exc}",
                     ) from exc
                 # SR4-3d: validate the raw rows before they can reach the parser.
+                observe(BOOKMAKER_ID, "offers", payload)
                 return validate_betole_offers(payload, book=BOOKMAKER_ID)
             except ScrapeError:
                 raise
@@ -295,6 +297,8 @@ class BetoleScraper:
                         ScrapeKind.SCHEMA_DRIFT,
                         f"betole desk page at offset {offset} is not JSON: {exc}",
                     ) from exc
+                # SR4-4: alert on a raw-shape change; alert only.
+                observe(BOOKMAKER_ID, "desk", data)
                 # SR4-3d: validate the envelope and every event's odds map
                 # before the parser reads them.
                 page_events = validate_betole_desk(

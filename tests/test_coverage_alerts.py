@@ -255,6 +255,7 @@ def test_coverage_metrics_publish_flags_and_unmapped_rows():
             "prematch",
             {"flag_count": 2},
             {"coverage": 0.9, "unmapped_total": 3},
+            {"flag_count": 1},
         )
         text = metrics.render()
     finally:
@@ -262,6 +263,8 @@ def test_coverage_metrics_publish_flags_and_unmapped_rows():
 
     assert 'bh_coverage_flags{mode="prematch"} 2' in text
     assert 'bh_coverage_flags_total{mode="prematch"} 2' in text
+    assert 'bh_cardinality_flags{mode="prematch"} 1' in text
+    assert 'bh_cardinality_flags_total{mode="prematch"} 1' in text
     assert 'bh_mapping_coverage_ratio{mode="prematch"} 0.9' in text
     assert 'bh_unmapped_market_rows_total{mode="prematch"} 3' in text
 

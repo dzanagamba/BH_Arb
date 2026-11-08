@@ -1,0 +1,1712 @@
+# serializer version: 1
+# name: test_the_normalised_parser_output_matches_its_snapshot[admiralbet_live]
+  list([
+    dict({
+      'market_type': 'over_under_1_5',
+      'odds': list([
+        dict({
+          'label': 'Over 1.5',
+          'value': 1.76,
+        }),
+        dict({
+          'label': 'Under 1.5',
+          'value': 2.08,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_2_5',
+      'odds': list([
+        dict({
+          'label': 'Over 2.5',
+          'value': 3.35,
+        }),
+        dict({
+          'label': 'Under 2.5',
+          'value': 1.33,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_3_5',
+      'odds': list([
+        dict({
+          'label': 'Over 3.5',
+          'value': 7.2,
+        }),
+        dict({
+          'label': 'Under 3.5',
+          'value': 1.1,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+  ])
+# ---
+# name: test_the_normalised_parser_output_matches_its_snapshot[admiralbet_prematch]
+  list([
+    dict({
+      'market_type': '1x2',
+      'odds': list([
+        dict({
+          'label': '1',
+          'value': 2.81,
+        }),
+        dict({
+          'label': 'X',
+          'value': 3.16,
+        }),
+        dict({
+          'label': '2',
+          'value': 2.51,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'double_chance',
+      'odds': list([
+        dict({
+          'label': '1X',
+          'value': 1.49,
+        }),
+        dict({
+          'label': '12',
+          'value': 1.33,
+        }),
+        dict({
+          'label': 'X2',
+          'value': 1.4,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'btts',
+      'odds': list([
+        dict({
+          'label': 'GG',
+          'value': 1.84,
+        }),
+        dict({
+          'label': 'NG',
+          'value': 1.92,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_1_5',
+      'odds': list([
+        dict({
+          'label': 'Under 1.5',
+          'value': 3.17,
+        }),
+        dict({
+          'label': 'Over 1.5',
+          'value': 1.35,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_2_5',
+      'odds': list([
+        dict({
+          'label': 'Under 2.5',
+          'value': 1.73,
+        }),
+        dict({
+          'label': 'Over 2.5',
+          'value': 2.07,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_3_5',
+      'odds': list([
+        dict({
+          'label': 'Under 3.5',
+          'value': 1.25,
+        }),
+        dict({
+          'label': 'Over 3.5',
+          'value': 3.78,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+  ])
+# ---
+# name: test_the_normalised_parser_output_matches_its_snapshot[betole_prematch]
+  list([
+    dict({
+      'market_type': '1x2',
+      'odds': list([
+        dict({
+          'label': '1',
+          'value': 1.47,
+        }),
+        dict({
+          'label': 'X',
+          'value': 4.1,
+        }),
+        dict({
+          'label': '2',
+          'value': 6.25,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'double_chance',
+      'odds': list([
+        dict({
+          'label': '1X',
+          'value': 1.08,
+        }),
+        dict({
+          'label': '12',
+          'value': 1.19,
+        }),
+        dict({
+          'label': 'X2',
+          'value': 2.47,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'btts',
+      'odds': list([
+        dict({
+          'label': 'GG',
+          'value': 1.9,
+        }),
+        dict({
+          'label': 'NG',
+          'value': 1.77,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'first_half_1x2',
+      'odds': list([
+        dict({
+          'label': '1',
+          'value': 1.97,
+        }),
+        dict({
+          'label': 'X',
+          'value': 2.27,
+        }),
+        dict({
+          'label': '2',
+          'value': 6.0,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_1_5',
+      'odds': list([
+        dict({
+          'label': 'Over 1.5',
+          'value': 1.19,
+        }),
+        dict({
+          'label': 'Under 1.5',
+          'value': 4.1,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_2_5',
+      'odds': list([
+        dict({
+          'label': 'Over 2.5',
+          'value': 1.67,
+        }),
+        dict({
+          'label': 'Under 2.5',
+          'value': 2.05,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_3_5',
+      'odds': list([
+        dict({
+          'label': 'Over 3.5',
+          'value': 2.8,
+        }),
+        dict({
+          'label': 'Under 3.5',
+          'value': 1.38,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_4_5',
+      'odds': list([
+        dict({
+          'label': 'Over 4.5',
+          'value': 5.35,
+        }),
+        dict({
+          'label': 'Under 4.5',
+          'value': 1.11,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_5_5',
+      'odds': list([
+        dict({
+          'label': 'Over 5.5',
+          'value': 11.25,
+        }),
+        dict({
+          'label': 'Under 5.5',
+          'value': 1.01,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+  ])
+# ---
+# name: test_the_normalised_parser_output_matches_its_snapshot[maxbet_live]
+  list([
+    dict({
+      'market_type': 'over_under_1_5',
+      'odds': list([
+        dict({
+          'label': 'Under 1.5',
+          'value': 8.0,
+        }),
+        dict({
+          'label': 'Over 1.5',
+          'value': 1.05,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_2_5',
+      'odds': list([
+        dict({
+          'label': 'Under 2.5',
+          'value': 3.0,
+        }),
+        dict({
+          'label': 'Over 2.5',
+          'value': 1.33333,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_3_5',
+      'odds': list([
+        dict({
+          'label': 'Under 3.5',
+          'value': 1.6,
+        }),
+        dict({
+          'label': 'Over 3.5',
+          'value': 2.2,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': '1x2',
+      'odds': list([
+        dict({
+          'label': '1',
+          'value': 1.13,
+        }),
+        dict({
+          'label': 'X',
+          'value': 7.25,
+        }),
+        dict({
+          'label': '2',
+          'value': 15.0,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'double_chance',
+      'odds': list([
+        dict({
+          'label': '1X',
+          'value': 1.02,
+        }),
+        dict({
+          'label': '12',
+          'value': 1.07,
+        }),
+        dict({
+          'label': 'X2',
+          'value': 5.4,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'btts',
+      'odds': list([
+        dict({
+          'label': 'GG',
+          'value': 1.76,
+        }),
+        dict({
+          'label': 'NG',
+          'value': 1.86,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_4_5',
+      'odds': list([
+        dict({
+          'label': 'Under 4.5',
+          'value': 1.2,
+        }),
+        dict({
+          'label': 'Over 4.5',
+          'value': 4.0,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+  ])
+# ---
+# name: test_the_normalised_parser_output_matches_its_snapshot[maxbet_prematch]
+  list([
+    dict({
+      'market_type': 'over_under_1_5',
+      'odds': list([
+        dict({
+          'label': 'Under 1.5',
+          'value': 4.0,
+        }),
+        dict({
+          'label': 'Over 1.5',
+          'value': 1.2,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_2_5',
+      'odds': list([
+        dict({
+          'label': 'Under 2.5',
+          'value': 2.1,
+        }),
+        dict({
+          'label': 'Over 2.5',
+          'value': 1.65,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_3_5',
+      'odds': list([
+        dict({
+          'label': 'Under 3.5',
+          'value': 1.4,
+        }),
+        dict({
+          'label': 'Over 3.5',
+          'value': 2.75,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': '1x2',
+      'odds': list([
+        dict({
+          'label': '1',
+          'value': 1.31,
+        }),
+        dict({
+          'label': 'X',
+          'value': 4.9,
+        }),
+        dict({
+          'label': '2',
+          'value': 8.25,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'double_chance',
+      'odds': list([
+        dict({
+          'label': '1X',
+          'value': 1.06,
+        }),
+        dict({
+          'label': '12',
+          'value': 1.15,
+        }),
+        dict({
+          'label': 'X2',
+          'value': 3.2,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'btts',
+      'odds': list([
+        dict({
+          'label': 'GG',
+          'value': 2.0,
+        }),
+        dict({
+          'label': 'NG',
+          'value': 1.7,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_4_5',
+      'odds': list([
+        dict({
+          'label': 'Under 4.5',
+          'value': 1.11111,
+        }),
+        dict({
+          'label': 'Over 4.5',
+          'value': 5.5,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+  ])
+# ---
+# name: test_the_normalised_parser_output_matches_its_snapshot[mbet_live]
+  list([
+    dict({
+      'market_type': '1x2',
+      'odds': list([
+        dict({
+          'label': '1',
+          'value': 4.9,
+        }),
+        dict({
+          'label': 'X',
+          'value': 2.9,
+        }),
+        dict({
+          'label': '2',
+          'value': 1.77,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'double_chance',
+      'odds': list([
+        dict({
+          'label': '1X',
+          'value': 1.93,
+        }),
+        dict({
+          'label': 'X2',
+          'value': 1.16,
+        }),
+        dict({
+          'label': '12',
+          'value': 1.36,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'btts',
+      'odds': list([
+        dict({
+          'label': 'GG',
+          'value': 2.7,
+        }),
+        dict({
+          'label': 'NG',
+          'value': 1.4,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_1_5',
+      'odds': list([
+        dict({
+          'label': 'Over 1.5',
+          'value': 1.65,
+        }),
+        dict({
+          'label': 'Under 1.5',
+          'value': 2.0,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_2_5',
+      'odds': list([
+        dict({
+          'label': 'Over 2.5',
+          'value': 3.0,
+        }),
+        dict({
+          'label': 'Under 2.5',
+          'value': 1.31,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_3_5',
+      'odds': list([
+        dict({
+          'label': 'Over 3.5',
+          'value': 6.5,
+        }),
+        dict({
+          'label': 'Under 3.5',
+          'value': 1.09,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+  ])
+# ---
+# name: test_the_normalised_parser_output_matches_its_snapshot[mbet_prematch]
+  list([
+    dict({
+      'market_type': '1x2',
+      'odds': list([
+        dict({
+          'label': '1',
+          'value': 5.0,
+        }),
+        dict({
+          'label': 'X',
+          'value': 5.0,
+        }),
+        dict({
+          'label': '2',
+          'value': 1.33,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'double_chance',
+      'odds': list([
+        dict({
+          'label': '1X',
+          'value': 2.8,
+        }),
+        dict({
+          'label': 'X2',
+          'value': 1.12,
+        }),
+        dict({
+          'label': '12',
+          'value': 1.16,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'btts',
+      'odds': list([
+        dict({
+          'label': 'GG',
+          'value': 1.45,
+        }),
+        dict({
+          'label': 'NG',
+          'value': 2.4,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_2_5',
+      'odds': list([
+        dict({
+          'label': 'Over 2.5',
+          'value': 1.31,
+        }),
+        dict({
+          'label': 'Under 2.5',
+          'value': 3.2,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_1_5',
+      'odds': list([
+        dict({
+          'label': 'Over 1.5',
+          'value': 1.07,
+        }),
+        dict({
+          'label': 'Under 1.5',
+          'value': 6.5,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_3_5',
+      'odds': list([
+        dict({
+          'label': 'Over 3.5',
+          'value': 1.77,
+        }),
+        dict({
+          'label': 'Under 3.5',
+          'value': 1.93,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+  ])
+# ---
+# name: test_the_normalised_parser_output_matches_its_snapshot[mdshop_live]
+  list([
+    dict({
+      'market_type': 'over_under_1_5',
+      'odds': list([
+        dict({
+          'label': 'Over 1.5',
+          'value': 1.78,
+        }),
+        dict({
+          'label': 'Under 1.5',
+          'value': 2.06,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_2_5',
+      'odds': list([
+        dict({
+          'label': 'Over 2.5',
+          'value': 3.4,
+        }),
+        dict({
+          'label': 'Under 2.5',
+          'value': 1.32,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_3_5',
+      'odds': list([
+        dict({
+          'label': 'Over 3.5',
+          'value': 7.2,
+        }),
+        dict({
+          'label': 'Under 3.5',
+          'value': 1.1,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+  ])
+# ---
+# name: test_the_normalised_parser_output_matches_its_snapshot[mdshop_prematch]
+  list([
+    dict({
+      'market_type': '1x2',
+      'odds': list([
+        dict({
+          'label': '1',
+          'value': 2.81,
+        }),
+        dict({
+          'label': 'X',
+          'value': 3.16,
+        }),
+        dict({
+          'label': '2',
+          'value': 2.51,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'double_chance',
+      'odds': list([
+        dict({
+          'label': '1X',
+          'value': 1.49,
+        }),
+        dict({
+          'label': '12',
+          'value': 1.33,
+        }),
+        dict({
+          'label': 'X2',
+          'value': 1.4,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'btts',
+      'odds': list([
+        dict({
+          'label': 'GG',
+          'value': 1.84,
+        }),
+        dict({
+          'label': 'NG',
+          'value': 1.92,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_1_5',
+      'odds': list([
+        dict({
+          'label': 'Under 1.5',
+          'value': 3.17,
+        }),
+        dict({
+          'label': 'Over 1.5',
+          'value': 1.35,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_2_5',
+      'odds': list([
+        dict({
+          'label': 'Under 2.5',
+          'value': 1.73,
+        }),
+        dict({
+          'label': 'Over 2.5',
+          'value': 2.07,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_3_5',
+      'odds': list([
+        dict({
+          'label': 'Under 3.5',
+          'value': 1.25,
+        }),
+        dict({
+          'label': 'Over 3.5',
+          'value': 3.78,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+  ])
+# ---
+# name: test_the_normalised_parser_output_matches_its_snapshot[mozzartbet_live]
+  list([
+    dict({
+      'market_type': '1x2',
+      'odds': list([
+        dict({
+          'label': '1',
+          'value': 1.57,
+        }),
+        dict({
+          'label': 'X',
+          'value': 4.5,
+        }),
+        dict({
+          'label': '2',
+          'value': 5.3,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'double_chance',
+      'odds': list([
+        dict({
+          'label': '1X',
+          'value': 1.16,
+        }),
+        dict({
+          'label': '12',
+          'value': 1.21,
+        }),
+        dict({
+          'label': 'X2',
+          'value': 2.43,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'btts',
+      'odds': list([
+        dict({
+          'label': 'GG',
+          'value': 1.52,
+        }),
+        dict({
+          'label': 'NG',
+          'value': 2.35,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_2_5',
+      'odds': list([
+        dict({
+          'label': 'Over 2.5',
+          'value': 1.45,
+        }),
+        dict({
+          'label': 'Under 2.5',
+          'value': 2.55,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+  ])
+# ---
+# name: test_the_normalised_parser_output_matches_its_snapshot[mozzartbet_prematch]
+  list([
+    dict({
+      'market_type': '1x2',
+      'odds': list([
+        dict({
+          'label': '1',
+          'value': 2.2,
+        }),
+        dict({
+          'label': 'X',
+          'value': 3.7,
+        }),
+        dict({
+          'label': '2',
+          'value': 3.1,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'double_chance',
+      'odds': list([
+        dict({
+          'label': '1X',
+          'value': 1.35,
+        }),
+        dict({
+          'label': '12',
+          'value': 1.3,
+        }),
+        dict({
+          'label': 'X2',
+          'value': 1.63,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'btts',
+      'odds': list([
+        dict({
+          'label': 'GG',
+          'value': 1.67,
+        }),
+        dict({
+          'label': 'NG',
+          'value': 2.05,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'first_half_1x2',
+      'odds': list([
+        dict({
+          'label': '1',
+          'value': 2.65,
+        }),
+        dict({
+          'label': 'X',
+          'value': 2.15,
+        }),
+        dict({
+          'label': '2',
+          'value': 3.45,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_1_5',
+      'odds': list([
+        dict({
+          'label': 'Over 1.5',
+          'value': 1.22,
+        }),
+        dict({
+          'label': 'Under 1.5',
+          'value': 3.6,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_2_5',
+      'odds': list([
+        dict({
+          'label': 'Over 2.5',
+          'value': 1.7,
+        }),
+        dict({
+          'label': 'Under 2.5',
+          'value': 2.0,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_3_5',
+      'odds': list([
+        dict({
+          'label': 'Over 3.5',
+          'value': 2.7,
+        }),
+        dict({
+          'label': 'Under 3.5',
+          'value': 1.38,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_4_5',
+      'odds': list([
+        dict({
+          'label': 'Over 4.5',
+          'value': 4.6,
+        }),
+        dict({
+          'label': 'Under 4.5',
+          'value': 1.1,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+  ])
+# ---
+# name: test_the_normalised_parser_output_matches_its_snapshot[premier_kladionica_live]
+  list([
+    dict({
+      'market_type': '1x2',
+      'odds': list([
+        dict({
+          'label': '1',
+          'value': 2.75,
+        }),
+        dict({
+          'label': 'X',
+          'value': 2.9,
+        }),
+        dict({
+          'label': '2',
+          'value': 2.7,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'double_chance',
+      'odds': list([
+        dict({
+          'label': '1X',
+          'value': 1.48,
+        }),
+        dict({
+          'label': 'X2',
+          'value': 1.45,
+        }),
+        dict({
+          'label': '12',
+          'value': 1.42,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'btts',
+      'odds': list([
+        dict({
+          'label': 'GG',
+          'value': 1.23,
+        }),
+        dict({
+          'label': 'NG',
+          'value': 3.75,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+  ])
+# ---
+# name: test_the_normalised_parser_output_matches_its_snapshot[premier_kladionica_prematch]
+  list([
+    dict({
+      'market_type': 'over_under_0_5',
+      'odds': list([
+        dict({
+          'label': 'Over 0.5',
+          'value': 1.03,
+        }),
+        dict({
+          'label': 'Under 0.5',
+          'value': 11.0,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_1_5',
+      'odds': list([
+        dict({
+          'label': 'Over 1.5',
+          'value': 1.18,
+        }),
+        dict({
+          'label': 'Under 1.5',
+          'value': 4.7,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_2_5',
+      'odds': list([
+        dict({
+          'label': 'Over 2.5',
+          'value': 1.6,
+        }),
+        dict({
+          'label': 'Under 2.5',
+          'value': 2.3,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_3_5',
+      'odds': list([
+        dict({
+          'label': 'Over 3.5',
+          'value': 2.45,
+        }),
+        dict({
+          'label': 'Under 3.5',
+          'value': 1.55,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_4_5',
+      'odds': list([
+        dict({
+          'label': 'Over 4.5',
+          'value': 4.2,
+        }),
+        dict({
+          'label': 'Under 4.5',
+          'value': 1.21,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_5_5',
+      'odds': list([
+        dict({
+          'label': 'Over 5.5',
+          'value': 7.6,
+        }),
+        dict({
+          'label': 'Under 5.5',
+          'value': 1.08,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'btts',
+      'odds': list([
+        dict({
+          'label': 'GG',
+          'value': 1.55,
+        }),
+        dict({
+          'label': 'NG',
+          'value': 2.45,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': '1x2',
+      'odds': list([
+        dict({
+          'label': '1',
+          'value': 2.05,
+        }),
+        dict({
+          'label': 'X',
+          'value': 3.8,
+        }),
+        dict({
+          'label': '2',
+          'value': 3.25,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'double_chance',
+      'odds': list([
+        dict({
+          'label': '1X',
+          'value': 1.35,
+        }),
+        dict({
+          'label': 'X2',
+          'value': 1.73,
+        }),
+        dict({
+          'label': '12',
+          'value': 1.28,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+  ])
+# ---
+# name: test_the_normalised_parser_output_matches_its_snapshot[sportplus_live]
+  list([
+    dict({
+      'market_type': '1x2',
+      'odds': list([
+        dict({
+          'label': '1',
+          'value': 5.5,
+        }),
+        dict({
+          'label': 'X',
+          'value': 3.1,
+        }),
+        dict({
+          'label': '2',
+          'value': 1.75,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'double_chance',
+      'odds': list([
+        dict({
+          'label': '1X',
+          'value': 2.0,
+        }),
+        dict({
+          'label': '12',
+          'value': 1.32,
+        }),
+        dict({
+          'label': 'X2',
+          'value': 1.12,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'btts',
+      'odds': list([
+        dict({
+          'label': 'GG',
+          'value': 2.75,
+        }),
+        dict({
+          'label': 'NG',
+          'value': 1.4,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_1_5',
+      'odds': list([
+        dict({
+          'label': 'Over 1.5',
+          'value': 1.65,
+        }),
+        dict({
+          'label': 'Under 1.5',
+          'value': 2.1,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_2_5',
+      'odds': list([
+        dict({
+          'label': 'Over 2.5',
+          'value': 3.0,
+        }),
+        dict({
+          'label': 'Under 2.5',
+          'value': 1.35,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_3_5',
+      'odds': list([
+        dict({
+          'label': 'Over 3.5',
+          'value': 6.0,
+        }),
+        dict({
+          'label': 'Under 3.5',
+          'value': 1.1,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+  ])
+# ---
+# name: test_the_normalised_parser_output_matches_its_snapshot[sportplus_prematch]
+  list([
+    dict({
+      'market_type': '1x2',
+      'odds': list([
+        dict({
+          'label': '1',
+          'value': 1.6,
+        }),
+        dict({
+          'label': 'X',
+          'value': 4.1,
+        }),
+        dict({
+          'label': '2',
+          'value': 5.0,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'double_chance',
+      'odds': list([
+        dict({
+          'label': '1X',
+          'value': 1.15,
+        }),
+        dict({
+          'label': 'X2',
+          'value': 2.05,
+        }),
+        dict({
+          'label': '12',
+          'value': 1.2,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'btts',
+      'odds': list([
+        dict({
+          'label': 'GG',
+          'value': 1.8,
+        }),
+        dict({
+          'label': 'NG',
+          'value': 1.9,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_2_5',
+      'odds': list([
+        dict({
+          'label': 'Over 2.5',
+          'value': 1.75,
+        }),
+        dict({
+          'label': 'Under 2.5',
+          'value': 1.95,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_1_5',
+      'odds': list([
+        dict({
+          'label': 'Over 1.5',
+          'value': 1.2,
+        }),
+        dict({
+          'label': 'Under 1.5',
+          'value': 3.5,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_3_5',
+      'odds': list([
+        dict({
+          'label': 'Over 3.5',
+          'value': 3.15,
+        }),
+        dict({
+          'label': 'Under 3.5',
+          'value': 1.3,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+  ])
+# ---
+# name: test_the_normalised_parser_output_matches_its_snapshot[wwin_live]
+  list([
+    dict({
+      'market_type': '1x2',
+      'odds': list([
+        dict({
+          'label': '1',
+          'value': 2.51,
+        }),
+        dict({
+          'label': 'X',
+          'value': 2.99,
+        }),
+        dict({
+          'label': '2',
+          'value': 2.65,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'double_chance',
+      'odds': list([
+        dict({
+          'label': '1X',
+          'value': 1.36,
+        }),
+        dict({
+          'label': '12',
+          'value': 1.29,
+        }),
+        dict({
+          'label': 'X2',
+          'value': 1.4,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'btts',
+      'odds': list([
+        dict({
+          'label': 'GG',
+          'value': 1.84,
+        }),
+        dict({
+          'label': 'NG',
+          'value': 1.76,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_1_5',
+      'odds': list([
+        dict({
+          'label': 'Over 1.5',
+          'value': 1.36,
+        }),
+        dict({
+          'label': 'Under 1.5',
+          'value': 2.69,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_2_5',
+      'odds': list([
+        dict({
+          'label': 'Over 2.5',
+          'value': 2.11,
+        }),
+        dict({
+          'label': 'Under 2.5',
+          'value': 1.57,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_3_5',
+      'odds': list([
+        dict({
+          'label': 'Over 3.5',
+          'value': 3.62,
+        }),
+        dict({
+          'label': 'Under 3.5',
+          'value': 1.2,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+  ])
+# ---
+# name: test_the_normalised_parser_output_matches_its_snapshot[wwin_prematch]
+  list([
+    dict({
+      'market_type': '1x2',
+      'odds': list([
+        dict({
+          'label': '1',
+          'value': 8.0,
+        }),
+        dict({
+          'label': 'X',
+          'value': 4.3,
+        }),
+        dict({
+          'label': '2',
+          'value': 1.33,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'double_chance',
+      'odds': list([
+        dict({
+          'label': '1X',
+          'value': 2.5,
+        }),
+        dict({
+          'label': '12',
+          'value': 1.15,
+        }),
+        dict({
+          'label': 'X2',
+          'value': 1.07,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'btts',
+      'odds': list([
+        dict({
+          'label': 'GG',
+          'value': 2.38,
+        }),
+        dict({
+          'label': 'NG',
+          'value': 1.51,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_1_5',
+      'odds': list([
+        dict({
+          'label': 'Over 1.5',
+          'value': 1.3,
+        }),
+        dict({
+          'label': 'Under 1.5',
+          'value': 2.96,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_2_5',
+      'odds': list([
+        dict({
+          'label': 'Over 2.5',
+          'value': 1.91,
+        }),
+        dict({
+          'label': 'Under 2.5',
+          'value': 1.71,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+    dict({
+      'market_type': 'over_under_3_5',
+      'odds': list([
+        dict({
+          'label': 'Over 3.5',
+          'value': 3.2,
+        }),
+        dict({
+          'label': 'Under 3.5',
+          'value': 1.25,
+        }),
+      ]),
+      'period': 'full_time',
+      'settlement': 'full_time',
+    }),
+  ])
+# ---

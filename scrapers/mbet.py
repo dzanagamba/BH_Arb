@@ -13,6 +13,7 @@ from datetime import UTC, datetime, timedelta
 
 from engine import sports
 from engine.market_registry import MARKET_REGISTRY, record_unmapped, registered_spec
+from engine.structural_drift import observe
 from models.schemas import Market, MarketType, Match, OddsValue
 from scrapers.base import fetch_pages
 from scrapers.common import ah_label, parse_dt
@@ -604,6 +605,7 @@ class MBetScraper:
                     ) from exc
                 # SR4-3e: validate the envelope and every event's odds map
                 # before the parser reads them.
+                observe(BOOKMAKER_ID, "events", payload)
                 return validate_mbet_response(payload, book=BOOKMAKER_ID).events
 
             raw_events = await fetch_pages(fetch_page, page_size=100, max_pages=200)

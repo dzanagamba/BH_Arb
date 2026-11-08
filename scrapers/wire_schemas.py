@@ -8,8 +8,10 @@ captures proved the same shape.  SR4-3d added Betole, whose "price row" is a
 ``{pick_code: price}`` map rather than a price field.  SR4-3e added MBet, whose
 odds map holds either a typed entry object or a bare number.  SR4-3f added
 SportPlus, whose fixtures freeze a match's ``markets[]`` array.  SR4-3h added
-Premier Kladionica, whose PrSync rows are positional arrays.  The pattern the
-remaining books follow, one per session:
+Premier Kladionica, whose PrSync rows are positional arrays.  SR4-3i added
+WWIN, whose fixtures freeze an event's ``bets[]`` rows.  SR4-3j added MaxBet,
+whose fixtures freeze a match's ``odds[]`` array.  The pattern the remaining
+books follow, one per session:
 
 1. Model the *raw* response (envelope, event and leaf price row) with pydantic
    ``strict=True`` and ``extra="allow"``.  Strict means a price served as a
@@ -26,9 +28,11 @@ The ``NSoft*`` models serve MDShop and Admiralbet (and later its sibling NSoft
 books), the ``Mozzart*`` models serve Mozzartbet, the ``Betole*`` models serve
 Betole's two ExeFeed envelopes, the ``Mbet*`` models serve MBet's
 ``events_cached`` envelope, the ``Sportplus*`` models serve SportPlus's
-prematch and live offers, and the ``Premier*`` models serve Premier
-Kladionica's positional PrSync tables.  Each follow-up row still needs its own
-fixture-backed test before it may reuse a model.
+prematch and live offers, the ``Premier*`` models serve Premier
+Kladionica's positional PrSync tables, and the ``Wwin*`` models serve WWIN's
+prematch and live ``bets[]`` rows, and the ``Maxbet*`` models serve MaxBet's
+match ``odds[]`` rows.  Each follow-up row still needs its own fixture-backed
+test before it may reuse a model.
 """
 
 from __future__ import annotations
@@ -912,6 +916,283 @@ def validate_premier_sync(
     return sections
 
 
+# ---- WWIN (SR4-3i) --------------------------------------------------------
+#
+# WWIN is a Playwright hybrid.  Its dated fixtures freeze the ``bets[]`` array
+# the parser reads (``idBt``, ``spec`` and ``odds``), not the event shell around
+# it, and the same bet row arrives in two envelopes: prematch events
+# (``{"p": [...]}`` / ``{"events": [...]}``) and live ``headerBets``
+# (``{"bets": [{"<eventId>": bet}]}``).  The event shell (teams, kickoff,
+# competition) has no dated capture and stays unmodelled, like Mozzartbet's
+# list item.
+
+
+class WwinOdd(BaseModel):
+    """One price row. ``va`` is required and must already be a number."""
+
+    model_config = MODEL_CONFIG
+
+    t: str
+    va: float
+    isv: int | None = None
+
+
+class WwinBet(BaseModel):
+    """One market block. ``idBt`` and ``spec`` identify the market and line."""
+
+    model_config = MODEL_CONFIG
+
+    idBt: int
+    spec: str
+    odds: list[WwinOdd] = Field(default_factory=list)
+
+
+class WwinEventsPage(BaseModel):
+    """A prematch or live events page; the event dicts are kept raw.
+
+    The parser accepts both ``p`` and ``events`` for prematch and only
+    ``events`` for live, so both keys are optional here and the validator
+    requires the right one per mode.
+    """
+
+    model_config = MODEL_CONFIG
+
+    p: list[dict[str, Any]] | None = None
+    events: list[dict[str, Any]] | None = None
+
+
+class WwinHeaderBetsPage(BaseModel):
+    """The live ``headerBets`` envelope: one bet per (event, market) pair."""
+
+    model_config = MODEL_CONFIG
+
+    bets: list[dict[str, WwinBet]]
+
+
+_WWIN_ODD_FIELDS = frozenset(WwinOdd.model_fields)
+_WWIN_BET_FIELDS = frozenset(WwinBet.model_fields)
+_WWIN_EVENTS_PAGE_FIELDS = frozenset({"p", "events", "categories"})
+_WWIN_LIVE_PAGE_FIELDS = frozenset({"events", "categories"})
+_WWIN_HEADER_BETS_FIELDS = frozenset(WwinHeaderBetsPage.model_fields)
+
+_WWIN_BETS_ADAPTER = TypeAdapter(list[WwinBet])
+_WWIN_BET_ADAPTER = TypeAdapter(WwinBet)
+
+
+def _count_wwin_bets(bets: Any, counts: Counter[str]) -> None:
+    """Count unknown keys in one ``bets`` array (levels ``bet`` and ``odd``)."""
+    if not isinstance(bets, list):
+        return
+    for bet in bets:
+        _count_unknown(bet, _WWIN_BET_FIELDS, "bet", counts)
+        odds = bet.get("odds") if isinstance(bet, dict) else None
+        if isinstance(odds, list):
+            for odd in odds:
+                _count_unknown(odd, _WWIN_ODD_FIELDS, "odd", counts)
+
+
+def validate_wwin_bets(bets: Any, *, book: str = "wwin") -> list[WwinBet]:
+    """Validate one event's ``bets[]`` array (the fixtures' ``bets``)."""
+    counts: Counter[str] = Counter()
+    _count_wwin_bets(bets, counts)
+    _record_unknown_keys(counts, book=book)
+    try:
+        return _WWIN_BETS_ADAPTER.validate_python(bets, strict=True)
+    except ValidationError as exc:
+        raise _drift(book, f"{book} bets", exc) from exc
+
+
+def validate_wwin_events(
+    payload: Any, *, live: bool = False, book: str = "wwin"
+) -> list[dict[str, Any]]:
+    """Validate an events page and every event's ``bets`` array.
+
+    Prematch answers ``{"p": [...]}`` (historically also ``{"events": [...]}``)
+    and live answers ``{"events": [...]}``.  A missing page key, a non-list
+    page, a non-dict event or a drifted bet row is schema drift, so the book
+    drops out instead of reading a renamed envelope as an empty page.
+    """
+    if not isinstance(payload, dict):
+        raise ScrapeError(
+            ScrapeKind.SCHEMA_DRIFT, f"{book} events response is not an object"
+        )
+    if live:
+        events = payload.get("events")
+        allowed = _WWIN_LIVE_PAGE_FIELDS
+    else:
+        events = payload["p"] if "p" in payload else payload.get("events")
+        allowed = _WWIN_EVENTS_PAGE_FIELDS
+    if not isinstance(events, list):
+        raise ScrapeError(
+            ScrapeKind.SCHEMA_DRIFT,
+            f"{book} events response has no {'events' if live else 'p/events'} list",
+        )
+    counts: Counter[str] = Counter()
+    _count_unknown(payload, allowed, "root", counts)
+    for event in events:
+        if not isinstance(event, dict):
+            raise ScrapeError(
+                ScrapeKind.SCHEMA_DRIFT,
+                f"{book} events response holds a non-object event",
+            )
+        _count_wwin_bets(event.get("bets"), counts)
+    _record_unknown_keys(counts, book=book)
+    try:
+        for event in events:
+            _WWIN_BETS_ADAPTER.validate_python(event.get("bets", []), strict=True)
+    except ValidationError as exc:
+        raise _drift(book, f"{book} events", exc) from exc
+    return events
+
+
+def validate_wwin_header_bets(
+    payload: Any, *, book: str = "wwin"
+) -> list[dict[str, Any]]:
+    """Validate the live ``headerBets`` envelope and every bet row.
+
+    Each item maps one event id to one bet.  The id is data, not a field name,
+    so only the bet row is typed and counted.  The raw rows are returned so the
+    adapter keeps reading the same dicts it always did.
+    """
+    if not isinstance(payload, dict):
+        raise ScrapeError(
+            ScrapeKind.SCHEMA_DRIFT, f"{book} headerBets response is not an object"
+        )
+    rows = payload.get("bets")
+    if not isinstance(rows, list):
+        raise ScrapeError(
+            ScrapeKind.SCHEMA_DRIFT, f"{book} headerBets response has no bets list"
+        )
+    counts: Counter[str] = Counter()
+    _count_unknown(payload, _WWIN_HEADER_BETS_FIELDS, "root", counts)
+    for item in rows:
+        if not isinstance(item, dict):
+            raise ScrapeError(
+                ScrapeKind.SCHEMA_DRIFT, f"{book} headerBets item is not an object"
+            )
+        for bet in item.values():
+            _count_wwin_bets([bet], counts)
+    _record_unknown_keys(counts, book=book)
+    try:
+        page = WwinHeaderBetsPage.model_validate(payload)
+        for item in page.bets:
+            for bet in item.values():
+                _WWIN_BET_ADAPTER.validate_python(bet, strict=True)
+        return rows
+    except ValidationError as exc:
+        raise _drift(book, f"{book} headerBets", exc) from exc
+
+
+# ---- MaxBet (SR4-3j) ------------------------------------------------------
+#
+# MaxBet (Singular sportsbook) is plain HTTP.  Its dated fixtures freeze one
+# match's ``odds[]`` array — a market block is ``id``/``name``/``specifiers``/
+# ``outcomes`` and an outcome is ``outcome``/``outcomeId``/``status``/
+# ``oddValue``/``marketAvailableForBetting``.  The event shell (teams, kickoff,
+# league, external ids) has no dated capture and stays unmodelled.
+
+
+class MaxbetSpecifiers(BaseModel):
+    """A market's line specifiers; ``total``/``hcp`` are strings in the feed."""
+
+    model_config = MODEL_CONFIG
+
+    total: str | None = None
+    hcp: str | None = None
+
+
+class MaxbetOutcome(BaseModel):
+    """One price row. ``oddValue`` is nullable but the key must be present."""
+
+    model_config = MODEL_CONFIG
+
+    outcome: str
+    outcomeId: str
+    status: int
+    oddValue: float | None
+    marketAvailableForBetting: bool | None
+
+
+class MaxbetMarket(BaseModel):
+    """One odd type of a match; ``specifiers`` is absent on line-less markets."""
+
+    model_config = MODEL_CONFIG
+
+    id: int
+    name: str
+    specifiers: MaxbetSpecifiers | None = None
+    outcomes: list[MaxbetOutcome] = Field(default_factory=list)
+
+
+_MAXBET_MARKET_FIELDS = frozenset(MaxbetMarket.model_fields)
+_MAXBET_SPECIFIER_FIELDS = frozenset(MaxbetSpecifiers.model_fields)
+_MAXBET_OUTCOME_FIELDS = frozenset(MaxbetOutcome.model_fields)
+
+_MAXBET_ODDS_ADAPTER = TypeAdapter(list[MaxbetMarket])
+
+
+def _count_maxbet_odds(rows: Any, counts: Counter[str]) -> None:
+    """Count unknown keys in one ``odds`` array (levels ``market``, ``outcome``)."""
+    if not isinstance(rows, list):
+        return
+    for row in rows:
+        _count_unknown(row, _MAXBET_MARKET_FIELDS, "market", counts)
+        if not isinstance(row, dict):
+            continue
+        specifiers = row.get("specifiers")
+        if isinstance(specifiers, dict):
+            _count_unknown(specifiers, _MAXBET_SPECIFIER_FIELDS, "specifiers", counts)
+        outcomes = row.get("outcomes")
+        if isinstance(outcomes, list):
+            for outcome in outcomes:
+                _count_unknown(outcome, _MAXBET_OUTCOME_FIELDS, "outcome", counts)
+
+
+def validate_maxbet_odds(
+    rows: Any, *, book: str = "maxbet"
+) -> list[MaxbetMarket]:
+    """Validate one match's ``odds[]`` array (the fixtures' ``bets``)."""
+    counts: Counter[str] = Counter()
+    _count_maxbet_odds(rows, counts)
+    _record_unknown_keys(counts, book=book)
+    try:
+        return _MAXBET_ODDS_ADAPTER.validate_python(rows, strict=True)
+    except ValidationError as exc:
+        raise _drift(book, f"{book} odds", exc) from exc
+
+
+def validate_maxbet_events(
+    payload: Any, *, book: str = "maxbet"
+) -> list[dict[str, Any]]:
+    """Validate the matches response and every event's ``odds`` array.
+
+    The feed answers with a bare list of events.  A non-list body, a non-dict
+    event or a drifted market/outcome row is schema drift, so the book drops
+    out instead of reading a renamed response as an empty list.
+    """
+    if not isinstance(payload, list):
+        raise ScrapeError(
+            ScrapeKind.SCHEMA_DRIFT, f"{book} matches response is not a list"
+        )
+    counts: Counter[str] = Counter()
+    for event in payload:
+        if not isinstance(event, dict):
+            raise ScrapeError(
+                ScrapeKind.SCHEMA_DRIFT,
+                f"{book} matches response holds a non-object event",
+            )
+        _count_maxbet_odds(event.get("odds"), counts)
+    _record_unknown_keys(counts, book=book)
+    try:
+        for event in payload:
+            odds = event.get("odds")
+            if odds is not None:
+                _MAXBET_ODDS_ADAPTER.validate_python(odds, strict=True)
+    except ValidationError as exc:
+        raise _drift(book, f"{book} matches", exc) from exc
+    return payload
+
+
 def validate_bets(bets: Any, *, book: str = "mdshop") -> list[NSoftBet]:
     """Validate just the ``events[*].bets`` array a captured fixture holds.
 
@@ -933,6 +1214,9 @@ __all__ = [
     "METRIC_UNKNOWN_KEYS",
     "BetoleDeskPage",
     "BetoleOfferRow",
+    "MaxbetMarket",
+    "MaxbetOutcome",
+    "MaxbetSpecifiers",
     "MbetOdd",
     "MbetResponse",
     "MozzartGame",
@@ -953,11 +1237,17 @@ __all__ = [
     "SportplusMarket",
     "SportplusOdd",
     "SportplusPrematchPage",
+    "WwinBet",
+    "WwinEventsPage",
+    "WwinHeaderBetsPage",
+    "WwinOdd",
     "unknown_key_counts",
     "validate_bets",
     "validate_betole_desk",
     "validate_betole_offer_map",
     "validate_betole_offers",
+    "validate_maxbet_events",
+    "validate_maxbet_odds",
     "validate_mbet_odds",
     "validate_mbet_response",
     "validate_mozzart_odds",
@@ -970,4 +1260,7 @@ __all__ = [
     "validate_sportplus_live",
     "validate_sportplus_markets",
     "validate_sportplus_prematch",
+    "validate_wwin_bets",
+    "validate_wwin_events",
+    "validate_wwin_header_bets",
 ]

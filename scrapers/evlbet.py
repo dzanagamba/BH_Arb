@@ -9,6 +9,7 @@ import logging
 from datetime import UTC, datetime
 
 from engine.market_registry import MARKET_REGISTRY, record_unmapped, registered_spec
+from engine.structural_drift import observe
 from models.schemas import Market, MarketType, Match, OddsValue
 from scrapers.base import fetch_pages
 from scrapers.common import parse_dt
@@ -76,6 +77,8 @@ class EvlbetScraper:
                 try:
                     r = await fetch_with_retry(client, url)
                     data = r.json()
+                    # SR4-4: alert on a raw-shape change; alert only.
+                    observe(BOOKMAKER_ID, "flat-offer", data)
                     # API sometimes returns dict with Response key, sometimes bare list (2026-08-20)
                     if isinstance(data, list):
                         return data

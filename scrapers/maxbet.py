@@ -27,10 +27,13 @@ from urllib.parse import urlencode
 
 from engine import sports
 from engine.market_registry import MARKET_REGISTRY, MarketSpec, record_unmapped
+from engine.structural_drift import observe
 from models.schemas import Market, Match, OddsValue
 from scrapers.common import betradar_id, build_event_url, parse_dt, qualify_league
+from scrapers.errors import ScrapeError, ScrapeKind
 from scrapers.retry import fetch_with_retry
 from scrapers.transport import transport_client
+from scrapers.wire_schemas import validate_maxbet_events
 
 logger = logging.getLogger(__name__)
 
@@ -374,11 +377,18 @@ class MaxBetScraper:
                 response = await fetch_with_retry(
                     client, f"{MATCHES_API}?{urlencode(params)}", headers=self.headers
                 )
-                events = response.json()
-                if not isinstance(events, list):
-                    if sport == sports.FOOTBALL:
-                        raise RuntimeError("MaxBet matches feed did not return a list")
-                    continue
+                try:
+                    events = response.json()
+                except ValueError as exc:
+                    raise ScrapeError(
+                        ScrapeKind.SCHEMA_DRIFT,
+                        f"{BOOKMAKER_ID} matches response is not JSON: {exc}",
+                    ) from exc
+                # SR4-3j: the bare event list and every match's odds[] are
+                # validated before the parser reads them; a drifted feed
+                # drops the book instead of reading as an empty list.
+                observe(BOOKMAKER_ID, f"matches:{sport}", events)
+                events = validate_maxbet_events(events, book=BOOKMAKER_ID)
                 all_matches.extend(self.parse_events(events, live=live, sport=sport))
 
         logger.info(f"[MaxBet] {'live' if live else 'prematch'}: {len(all_matches)} matches")

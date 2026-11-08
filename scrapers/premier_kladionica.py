@@ -42,6 +42,7 @@ from datetime import UTC, datetime
 import httpx
 
 from engine.market_registry import record_unmapped, registered_spec
+from engine.structural_drift import observe
 from models.schemas import Market, MarketType, Match, OddsValue
 from scrapers.errors import ScrapeError, ScrapeKind
 from scrapers.retry import fetch_with_retry
@@ -468,6 +469,7 @@ class PremierKladionicaScraper:
             ) from exc
         # SR4-3h: PrSync is positional, so the schema checks the envelope shape
         # and types the capture-backed tables before the parser reads them.
+        observe(BOOKMAKER_ID, f"sync:{kind}", data)
         return validate_premier_sync(data, kind=kind, book=BOOKMAKER_ID)
 
     async def scrape(self, live: bool = False, scan_time: datetime | None = None) -> list[Match]:

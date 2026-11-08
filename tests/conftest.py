@@ -250,7 +250,7 @@ def _isolated_runtime_state(
         return
 
     from config import settings
-    from engine import mapping_evidence, matcher
+    from engine import mapping_evidence, matcher, structural_drift
     from server import api
 
     runtime = tmp_path_factory.mktemp("runtime")
@@ -264,6 +264,9 @@ def _isolated_runtime_state(
 
     monkeypatch.setattr(matcher, "MAPPING_EVIDENCE_FILE", str(ledger_path))
     monkeypatch.setattr(mapping_evidence, "DEFAULT_PATH", ledger_path)
+    monkeypatch.setattr(
+        structural_drift, "DEFAULT_PATH", generated / "wire_fingerprints.json"
+    )
     monkeypatch.setattr(settings, "CACHE_DIR", str(cache))
     monkeypatch.setattr(api, "CACHE_DIR", str(cache))
     monkeypatch.setenv("STORAGE_PATH", str(cache / "bh_arb.sqlite3"))
@@ -282,6 +285,10 @@ def _isolated_runtime_state(
     # consecutive zero counter must not decide whether this test alerts.
     monkeypatch.setattr(api, "_coverage_budget", {"prematch": {}, "live": {}})
     monkeypatch.setattr(api, "_coverage_history", {"prematch": [], "live": []})
+    monkeypatch.setattr(api, "_cardinality", {"prematch": {}, "live": {}})
+    monkeypatch.setattr(
+        api, "_cardinality_history", {"prematch": [], "live": []}
+    )
     monkeypatch.setattr(api, "_mapping_coverage", {"prematch": {}, "live": {}})
     monkeypatch.setattr(api, "_coverage_trend", {"prematch": [], "live": []})
     monkeypatch.setattr(api, "_zero_result_streaks", {"prematch": {}, "live": {}})

@@ -10,6 +10,7 @@ import time
 from datetime import UTC, datetime
 
 from engine.market_registry import MARKET_REGISTRY, record_unmapped, registered_spec
+from engine.structural_drift import observe
 from models.schemas import Market, MarketType, Match, OddsValue
 from scrapers.base import (
     fetch_pages,
@@ -442,6 +443,10 @@ class MozzartbetScraper:
             )
             return None
         offer = validate_mozzart_offer(payload, book=BOOKMAKER_ID)
+        # SR4-4: only a real offer establishes/moves the baseline; a per-event
+        # error payload is a legitimate different shape and must not alarm.
+        if offer.match is not None:
+            observe(BOOKMAKER_ID, "offer", payload)
         odds = payload.get("match", {}).get("odds") if offer.match is not None else None
         return odds if isinstance(odds, list) and odds else None
 
@@ -558,6 +563,7 @@ class MozzartbetScraper:
                         ) from exc
                     # SR4-3b: the list envelope and every item's odds array are
                     # validated before the parser reads them.
+                    observe(BOOKMAKER_ID, "matches", data)
                     page_payload = validate_mozzart_page(data, book=BOOKMAKER_ID)
                     nonlocal max_pages
                     # Only totalPages is reliable for total; matchCount is per-page

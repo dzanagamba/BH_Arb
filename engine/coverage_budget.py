@@ -180,3 +180,172 @@ def push_history(
 ) -> list[dict[str, int]]:
     history.append(dict(current))
     return history[-max_scans:]
+
+
+# ---- SR4-5: event/market cardinality floors --------------------------------
+#
+# The row-level budget above asks "did a market family disappear?". This asks
+# "did the whole feed thin out?", per book and sport: how many events it
+# published and how many markets those events carried. The floor reuses the
+# same rolling-median history shape and, on a flag, the scan quarantines the
+# book through the existing feed-integrity state machine (not a second gate).
+
+CARDINALITY_HISTORY_SCANS = 20
+# A baseline thinner than this is too small to call a drop.
+CARDINALITY_MIN_BASELINE_EVENTS = 10
+CARDINALITY_DROP_RATIO = 0.50
+CARDINALITY_DROP_ABSOLUTE = 5
+# Markets per event is a ratio, so it needs its own absolute guard.
+CARDINALITY_MARKET_RATIO = 0.50
+CARDINALITY_MARKET_ABSOLUTE = 2.0
+
+
+def cardinality_snapshot(matches: list[Match]) -> dict[str, dict[str, int]]:
+    """Events and market rows per ``book|sport`` for one scan."""
+    counts: dict[str, dict[str, int]] = defaultdict(
+        lambda: {"events": 0, "markets": 0}
+    )
+    for match in matches:
+        key = f"{match.bookmaker}|{match.sport}"
+        counts[key]["events"] += 1
+        counts[key]["markets"] += len(match.markets)
+    return {key: dict(value) for key, value in counts.items()}
+
+
+def _cardinality_median(
+    history: list[dict[str, dict[str, int]]], key: str, field: str
+) -> float:
+    return _median([int(sample.get(key, {}).get(field, 0)) for sample in history])
+
+
+def evaluate_cardinality(
+    current: dict[str, dict[str, int]],
+    history: list[dict[str, dict[str, int]]],
+    *,
+    min_baseline_events: int = CARDINALITY_MIN_BASELINE_EVENTS,
+    drop_ratio: float = CARDINALITY_DROP_RATIO,
+    drop_absolute: int = CARDINALITY_DROP_ABSOLUTE,
+    market_ratio: float = CARDINALITY_MARKET_RATIO,
+    market_absolute: float = CARDINALITY_MARKET_ABSOLUTE,
+) -> dict[str, Any]:
+    """Compare one scan's event/market counts with the rolling median.
+
+    A drop is only called when a peer book still publishes that sport in the
+    same scan, so a shared calendar dip (or an off-season night) is not a
+    broken feed. A thin market set is flagged separately from a thin event
+    list, because losing half the markets per event still prices a feed.
+    """
+    keys = sorted({key for sample in history for key in sample} | set(current))
+    books_by_sport: dict[str, dict[str, int]] = defaultdict(dict)
+    for key in keys:
+        book, _, sport = key.partition("|")
+        books_by_sport[sport][book] = int(
+            current.get(key, {}).get("events", 0)
+        )
+
+    def peer_events_for(book: str, sport: str) -> int:
+        """Current events from peers that are themselves near their baseline.
+
+        A peer that dropped with the book is a shared calendar dip, not
+        evidence that the book alone is broken. A peer with no usable baseline
+        counts when it still returns events.
+        """
+        total = 0
+        for other, observed in books_by_sport.get(sport, {}).items():
+            if other == book or observed <= 0:
+                continue
+            peer_baseline = _cardinality_median(
+                history, f"{other}|{sport}", "events"
+            )
+            if peer_baseline >= min_baseline_events and observed < (
+                peer_baseline * drop_ratio
+            ):
+                continue
+            total += observed
+        return total
+
+    flags: list[dict[str, Any]] = []
+    for key in keys:
+        book, _, sport = key.partition("|")
+        baseline_events = _cardinality_median(history, key, "events")
+        baseline_markets = _cardinality_median(history, key, "markets")
+        observed_events = int(current.get(key, {}).get("events", 0))
+        observed_markets = int(current.get(key, {}).get("markets", 0))
+        if baseline_events < min_baseline_events:
+            continue
+        peer_events = peer_events_for(book, sport)
+        if not peer_events:
+            continue
+        if (
+            observed_events < baseline_events * drop_ratio
+            and baseline_events - observed_events >= drop_absolute
+        ):
+            flags.append(
+                {
+                    "bookmaker": book,
+                    "sport": sport,
+                    "kind": "event_drop",
+                    "observed": observed_events,
+                    "baseline": round(baseline_events, 1),
+                    "drop_ratio": round(
+                        1 - observed_events / baseline_events, 4
+                    ),
+                    "peer_events": peer_events,
+                }
+            )
+            continue
+        if observed_events == 0 or baseline_markets <= 0:
+            continue
+        baseline_per_event = baseline_markets / baseline_events
+        observed_per_event = observed_markets / observed_events
+        if (
+            observed_per_event < baseline_per_event * market_ratio
+            and baseline_per_event - observed_per_event >= market_absolute
+        ):
+            flags.append(
+                {
+                    "bookmaker": book,
+                    "sport": sport,
+                    "kind": "market_thin",
+                    "observed": observed_markets,
+                    "observed_per_event": round(observed_per_event, 2),
+                    "baseline_per_event": round(baseline_per_event, 2),
+                    "peer_events": peer_events,
+                }
+            )
+    return {
+        "flags": flags,
+        "flag_count": len(flags),
+        "baseline_scans": len(history),
+        "min_baseline_events": min_baseline_events,
+        "drop_ratio": drop_ratio,
+        "drop_absolute": drop_absolute,
+        "market_ratio": market_ratio,
+        "market_absolute": market_absolute,
+        "counts": current,
+    }
+
+
+def push_cardinality_history(
+    history: list[dict[str, dict[str, int]]],
+    current: dict[str, dict[str, int]],
+    *,
+    max_scans: int = CARDINALITY_HISTORY_SCANS,
+) -> list[dict[str, dict[str, int]]]:
+    history.append({key: dict(value) for key, value in current.items()})
+    return history[-max_scans:]
+
+
+def cardinality_book_reasons(report: dict[str, Any]) -> dict[str, list[str]]:
+    """The quarantine reason per flagged book, for feed integrity.
+
+    One reason covers both kinds: a book below its event or market floor is
+    not a usable price source this scan, and the existing recovery streak
+    decides when it may return.
+    """
+    reasons: dict[str, list[str]] = defaultdict(list)
+    for flag in report.get("flags") or []:
+        book = str(flag.get("bookmaker") or "")
+        if book and "cardinality_drop" not in reasons[book]:
+            reasons[book].append("cardinality_drop")
+    return dict(reasons)

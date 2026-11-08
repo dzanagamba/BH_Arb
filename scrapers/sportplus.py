@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 
 from engine import sports
 from engine.market_registry import record_unmapped, registered_spec
+from engine.structural_drift import observe
 from models.schemas import Market, MarketType, Match, OddsValue
 from scrapers.common import betradar_id, normalize_outcome, parse_local_dt, qualify_league
 from scrapers.errors import ScrapeError, ScrapeKind
@@ -260,6 +261,7 @@ class SportPlusScraper:
 
                 # SR4-3f: validate the envelope and every market block before
                 # the parser reads them.
+                observe(BOOKMAKER_ID, "prematch", data)
                 raw_matches = validate_sportplus_prematch(
                     data, book=BOOKMAKER_ID
                 ).matches
@@ -313,6 +315,7 @@ class SportPlusScraper:
                         ) from exc
 
                 # Live payload: { "date": ..., "sports": [{ id, name, matches: [...] }] }
+                observe(BOOKMAKER_ID, "live", data)
                 sports_raw = validate_sportplus_live(data, book=BOOKMAKER_ID).sports
                 for sport in sports_raw:
                     if not isinstance(sport, dict):

@@ -77,6 +77,14 @@ from engine.candidate_remediation import (
 )
 from engine.certainty import CertaintyGate
 from engine.coverage_budget import (
+    cardinality_book_reasons as cardinality_quarantine_reasons,
+)
+from engine.coverage_budget import (
+    cardinality_snapshot,
+    evaluate_cardinality,
+    push_cardinality_history,
+)
+from engine.coverage_budget import (
     evaluate as evaluate_coverage_budget,
 )
 from engine.coverage_budget import (
@@ -577,6 +585,14 @@ _coverage_history: dict[str, list[dict[str, int]]] = {
     "live": [],
 }
 _COVERAGE_HISTORY_MAX = 20
+# SR4-5: event/market cardinality per book+sport, with the same bounded
+# rolling history. A flag quarantines through feed integrity; never a second
+# trust gate.
+_cardinality: dict[str, dict[str, Any]] = {"prematch": {}, "live": {}}
+_cardinality_history: dict[str, list[dict[str, dict[str, int]]]] = {
+    "prematch": [],
+    "live": [],
+}
 # N1-2: per-scan mapping coverage, the bounded trend and the consecutive
 # zero-result counters. These are diagnostics, never trust inputs.
 _mapping_coverage: dict[str, dict[str, Any]] = {"prematch": {}, "live": {}}
@@ -1863,6 +1879,8 @@ def _init_metric_baseline() -> None:
         metrics.set_gauge("bh_candidate_queue_size", 0, mode=metric_mode)
         metrics.set_gauge("bh_coverage_flags", 0, mode=metric_mode)
         metrics.inc("bh_coverage_flags_total", 0, mode=metric_mode)
+        metrics.set_gauge("bh_cardinality_flags", 0, mode=metric_mode)
+        metrics.inc("bh_cardinality_flags_total", 0, mode=metric_mode)
         metrics.set_gauge("bh_mapping_coverage_ratio", 0, mode=metric_mode)
         metrics.inc("bh_unmapped_market_rows_total", 0, mode=metric_mode)
     metrics.set_gauge("bh_browser_slots_in_use", 0)
@@ -1876,11 +1894,15 @@ def _record_coverage_metrics(
     mode: str,
     coverage_report: dict[str, Any],
     mapping_report: dict[str, Any],
+    cardinality_report: dict[str, Any],
 ) -> None:
-    """Publish the coverage-budget and mapping-coverage series for one scan."""
+    """Publish the coverage-budget, mapping and cardinality series for one scan."""
     flags = int(coverage_report.get("flag_count") or 0)
     metrics.set_gauge("bh_coverage_flags", flags, mode=mode)
     metrics.inc("bh_coverage_flags_total", flags, mode=mode)
+    cardinality_flags = int(cardinality_report.get("flag_count") or 0)
+    metrics.set_gauge("bh_cardinality_flags", cardinality_flags, mode=mode)
+    metrics.inc("bh_cardinality_flags_total", cardinality_flags, mode=mode)
     ratio = mapping_report.get("coverage")
     metrics.set_gauge(
         "bh_mapping_coverage_ratio",
@@ -2250,6 +2272,17 @@ async def run_scan(
             _coverage_history[mode],
             coverage_counts,
         )
+        # SR4-5: a feed that keeps a few events but loses most of them (or most
+        # markets per event) is a silent drop. Compare with the book+sport
+        # rolling median and quarantine through feed integrity below.
+        cardinality_counts = cardinality_snapshot(all_matches)
+        cardinality_report = evaluate_cardinality(
+            cardinality_counts, _cardinality_history[mode]
+        )
+        _cardinality[mode] = cardinality_report
+        _cardinality_history[mode] = push_cardinality_history(
+            _cardinality_history[mode], cardinality_counts
+        )
         # N1-2: mapped rows / (mapped + newly unmapped rows) for this scan. The
         # counter delta is why a cumulative registry counter still yields a
         # per-scan numerator and denominator.
@@ -2273,8 +2306,16 @@ async def run_scan(
                 }
             ]
         )[-_COVERAGE_TREND_MAX:]
-        _record_coverage_metrics(mode, coverage_report, mapping_report)
+        _record_coverage_metrics(
+            mode, coverage_report, mapping_report, cardinality_report
+        )
         _save_coverage_budget()
+        if cardinality_report["flag_count"]:
+            logger.warning(
+                "Cardinality floor: %s book/sport feed(s) below baseline in %s",
+                cardinality_report["flag_count"],
+                mode,
+            )
         if coverage_report["flag_count"]:
             logger.warning(
                 "Coverage budget: %s material drop(s) in %s",
@@ -2397,6 +2438,9 @@ async def run_scan(
             now=integrity_now,
             ttl_sec=LIVE_ODDS_TTL_SECONDS if is_live else ODDS_TTL_SECONDS,
             stale_price_rows=stale_result.by_book,
+            cardinality_flags=cardinality_quarantine_reasons(
+                _cardinality.get(mode) or {}
+            ),
         )
         quarantined = quarantined_books(_feed_integrity[mode])
         pricing_groups = priceable_groups(groups, quarantined)
@@ -3075,6 +3119,7 @@ def _load_coverage_budget() -> None:
     """Restore the rolling coverage, mapping and zero-result state."""
     global _coverage_budget, _coverage_history, _mapping_coverage
     global _coverage_trend, _zero_result_streaks
+    global _cardinality, _cardinality_history
     try:
         with open(_COVERAGE_BUDGET_FILE, encoding="utf-8") as file:
             data = json.load(file)
@@ -3130,6 +3175,31 @@ def _load_coverage_budget() -> None:
             }
             for mode in ("prematch", "live")
         }
+    cardinality = data.get("cardinality")
+    if isinstance(cardinality, dict):
+        _cardinality = {
+            mode: cardinality[mode]
+            for mode in ("prematch", "live")
+            if isinstance(cardinality.get(mode), dict)
+        }
+    cardinality_history = data.get("cardinality_history")
+    if isinstance(cardinality_history, dict):
+        _cardinality_history = {
+            mode: [
+                {
+                    str(key): {
+                        str(field): int(value)
+                        for field, value in entry.items()
+                        if isinstance(value, int)
+                    }
+                    for key, entry in sample.items()
+                    if isinstance(entry, dict)
+                }
+                for sample in cardinality_history.get(mode, [])
+                if isinstance(sample, dict)
+            ][-_COVERAGE_HISTORY_MAX:]
+            for mode in ("prematch", "live")
+        }
 
 
 def _save_coverage_budget() -> None:
@@ -3142,6 +3212,8 @@ def _save_coverage_budget() -> None:
                 "mapping": _mapping_coverage,
                 "trend": _coverage_trend,
                 "streaks": _zero_result_streaks,
+                "cardinality": _cardinality,
+                "cardinality_history": _cardinality_history,
             },
             "coverage_budget",
             indent=None,
@@ -3659,6 +3731,9 @@ async def health():
         # scan did not reproduce. Low-sample pairs say insufficient_data.
         "skin_detection": _skin_detection,
         "coverage_budget": _coverage_budget,
+        # SR4-5: per book+sport event/market cardinality against the rolling
+        # median. A flag quarantines through feed integrity; it never prices.
+        "cardinality_floor": _cardinality,
         # N1-2: per-scan mapping coverage with its numerator/denominator, the
         # bounded trend the dashboard draws, and the repeated-zero counters.
         "mapping_coverage": _mapping_coverage,

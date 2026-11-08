@@ -11,6 +11,7 @@ import logging
 from datetime import UTC, datetime
 
 from engine import sports
+from engine.structural_drift import observe
 from models.schemas import Market, Match
 from scrapers.base import goto, launch_browser, measured_api_get, settle
 from scrapers.common import (
@@ -172,6 +173,13 @@ class AdmiralbetScraper:
                         ScrapeKind.SCHEMA_DRIFT,
                         f"{BOOKMAKER_ID} response is not JSON: {exc}",
                     ) from exc
+                # SR4-4: alert on a raw-shape change outside the modelled
+                # fields; alert only, the payload is untouched.
+                observe(
+                    BOOKMAKER_ID,
+                    f"{'live' if live else 'prematch'}:events:{sport_id}",
+                    data,
+                )
                 # SR4-3c: Admiralbet serves the same NSoft envelope as MDShop,
                 # so it reuses the NSoft models. The adapter's historical
                 # bare-list form is wrapped so the same schema applies; a
