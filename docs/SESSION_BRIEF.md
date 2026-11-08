@@ -5,13 +5,11 @@
 **Current task:** none; SR1-1, SR1-2, SR1-3, SR2-1 … SR2-6, SR4-1, SR4-2,
 SR4-3, SR4-3b … SR4-3f, SR4-3h, SR4-3i, SR4-3j, SR4-4, SR4-5, SR4-6, SR4-7,
 SR4-7a, SR7-1 and SR7-2 are done. **SR4-3g is blocked on SR6-3** (operator
-decision). SR4-3i, SR4-3j, SR4-4, SR4-5, SR4-6, SR4-7 and SR4-7a are in the
-working tree (not committed). The roadmap is the single task list in
-`ROADMAP.md`; N2-4 stays deferred and P1-6 stays waived until the operator says
-otherwise.
-**Last task commit:** `b45fc39` — the SR4-3g blocker and SR4-3h outcome docs;
-the SR4-3h code is `de02a63`, and SR4-1, SR4-2 and SR4-3 … SR4-3f are in
-`f4e97e9` … `e53560c`. SR4-3g is blocked on SR6-3.
+decision). The roadmap is the single task list in `ROADMAP.md`; N2-4 stays
+deferred and P1-6 stays waived until the operator says otherwise.
+**Last task commit:** `db88974` — docs for SR4-3i … SR4-7a; the code is
+`129c334`, and SR4-1, SR4-2, SR4-3 … SR4-3f and SR4-3h are in `2614206` …
+`b45fc39`. Pushed to `origin/main` on 2026-11-08. SR4-3g is blocked on SR6-3.
 
 ## Project state
 
@@ -393,9 +391,7 @@ dependency (SR2-6) is done; SR4-8 still waits on SR3-4/SR3-3 (blocked by the
 SR0-1 gate). SR4-3g stays **Blocked on SR6-3** (operator decision) — do not
 start it. The SR3 rows are still blocked on SR3-1 (gate SR0-1). The operator
 gates waiting for a decision are SR0-1, SR0-2, SR4-9 and SR6-3. N2-4 stays
-deferred and P1-6 stays waived. Do not invent a task or reopen a done one.
-SR4-3i, SR4-3j, SR4-4, SR4-5, SR4-6, SR4-7 and SR4-7a are in the working tree;
-commit them if the operator asks.
+deferred and P1-6 stays waived. Do not invent a task or reopen a done one. The working tree is clean.
 
 ## Rules
 
