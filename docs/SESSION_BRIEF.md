@@ -11,10 +11,10 @@ SR7-1 and SR7-2 are done.
 feed). Every other `Not started` row is `Gate: operator`; the roadmap is the
 single task list in `ROADMAP.md`, N2-4 stays deferred and P1-6 stays waived
 until the operator says otherwise.
-**Last task commit:** `8a1cb90` — "adapter protocol, in-page fetch and HAR replay
-for browser books" (SR6-2, SR4-8a, SR4-8), pushed to `origin/main` on
-2026-11-08. The working tree is clean; the commit before it, `e549267`, carries
-SR1-4, the gate decisions, SR4-9 … SR4-13, SR5-1, SR5-2 and SR6-1.
+**Last task commit:** `3f9a911` — "cache the /api/health summary (M2-3)", pushed
+to `origin/main` on 2026-11-08. Before it, `8a1cb90` carries SR6-2, SR4-8a and
+SR4-8, and `e549267` carries SR1-4, the gate decisions, SR4-9 … SR4-13, SR5-1,
+SR5-2 and SR6-1.
 
 ## Project state
 
