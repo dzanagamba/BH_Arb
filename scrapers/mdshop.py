@@ -12,11 +12,11 @@ import logging
 from datetime import UTC, datetime
 
 from engine import sports
+from engine.deeplinks import build_event_url
 from engine.structural_drift import observe
 from models.schemas import Market, Match
 from scrapers.common import (
     betradar_id,
-    build_event_url,
     nsoft_event_window,
     nsoft_offered,
     parse_dt,

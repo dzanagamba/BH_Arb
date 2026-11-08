@@ -26,10 +26,11 @@ from datetime import UTC, datetime
 from urllib.parse import urlencode
 
 from engine import sports
+from engine.deeplinks import build_event_url
 from engine.market_registry import MARKET_REGISTRY, MarketSpec, record_unmapped
 from engine.structural_drift import observe
 from models.schemas import Market, Match, OddsValue
-from scrapers.common import betradar_id, build_event_url, parse_dt, qualify_league
+from scrapers.common import betradar_id, parse_dt, qualify_league
 from scrapers.errors import ScrapeError, ScrapeKind
 from scrapers.retry import fetch_with_retry
 from scrapers.transport import transport_client

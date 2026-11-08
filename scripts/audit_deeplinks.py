@@ -15,7 +15,7 @@ import json
 import sys
 
 from config.settings import BOOKMAKERS, DEEPLINK_DECLARATION_MAX_AGE_DAYS
-from scrapers.common import declaration_audit
+from engine.deeplinks import declaration_audit
 
 
 def main(argv: list[str] | None = None) -> int:

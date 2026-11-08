@@ -40,12 +40,12 @@ from config.settings import (
     price_source,
 )
 from engine import name_identity, sports
+from engine.ah_labels import flip_ah_label
 from engine.certainty import CertaintyGate, GateResult
 from engine.league_names import GENERIC_LEAGUES
 from engine.mapping_evidence import MappingLedger, league_equivalence_key, team_alias_key
 from engine.normalizer import TeamNormalizer, canonical_team_name, canonicalize_fixture
 from models.schemas import MarketType, Match, MatchEvidence, MatchGroup, OddsValue
-from scrapers.common import flip_ah_label
 
 logger = logging.getLogger(__name__)
 

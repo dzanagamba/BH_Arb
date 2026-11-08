@@ -9,10 +9,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 from config.settings import BOOKMAKERS
+from engine import deeplinks
+from engine.deeplinks import declares_no_event_id, effective_deeplink_declarations
 from engine.matcher import MatchMatcher
 from models.schemas import CandidateReview, Match
-from scrapers import common
-from scrapers.common import declares_no_event_id, effective_deeplink_declarations
 from server import api, json_store
 from server.app import app
 
@@ -220,7 +220,7 @@ def test_health_counts_an_undeclared_books_link_as_a_blocker(monkeypatch):
         "wwin declares no route and the gate settles it from that declaration"
     )
 
-    monkeypatch.setattr(common, "_deeplink_cache", {})
+    monkeypatch.setattr(deeplinks, "_deeplink_cache", {})
     assert not declares_no_event_id("mdshop"), "the premise: no book declares anything now"
     # M2-3: /api/health caches its summary for HEALTH_CACHE_SECONDS because the
     # walk over every cached match is not free (~16 ms at 6,600 matches). The
@@ -238,7 +238,7 @@ def test_health_counts_an_undeclared_books_link_as_a_blocker(monkeypatch):
 def test_health_echoes_the_declaration_map_the_gate_is_using():
     """The operative configuration has to be observable, not just the file on disk.
 
-    `scrapers.common._deeplink_cache` is load-bearing for a safety gate, so the
+    `engine.deeplinks._deeplink_cache` is load-bearing for a safety gate, so the
     map the gate is using has to be observable. The declaration file now reloads
     when its mtime/size changes; the source fields say when the map was read and
     whether it still matches the file. The map below is built from the same cache

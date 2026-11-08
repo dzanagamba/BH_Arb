@@ -63,7 +63,7 @@ from urllib.parse import urlsplit
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config.settings import BOOKMAKERS, CACHE_DIR, NAVIGATION_TIMEOUT_MS  # noqa: E402
-from scrapers.common import build_event_url, supports_event_id  # noqa: E402
+from engine.deeplinks import build_event_url, supports_event_id  # noqa: E402
 
 CRITERION = (
     "event id resolved as a value under a key that names an event in a "

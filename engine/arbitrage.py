@@ -35,6 +35,7 @@ from config.settings import (
     PREMATCH_EXPIRY_BUFFER_MINUTES,
     price_source,
 )
+from engine.ah_labels import ah_label, parse_ah_label
 from engine.destinations import attach_destinations
 from engine.opportunity_metrics import BoardObservation, ScanMetrics, event_identity
 from engine.pricing_invariant import rounding_summary
@@ -47,7 +48,6 @@ from models.schemas import (
     Surebet,
     SurebetStake,
 )
-from scrapers.common import parse_ah_label
 
 
 def _rounding_block(
@@ -912,7 +912,6 @@ class ArbitrageEngine:
         if market_type in (MarketType.FIRST_HALF_OU, MarketType.TOTAL):
             return [f"Over {line_key}", f"Under {line_key}"]
         if market_type in (MarketType.ASIAN_HANDICAP, MarketType.HANDICAP):
-            from scrapers.common import ah_label
 
             line = float(line_key)
             return [ah_label("1", line), ah_label("2", -line)]

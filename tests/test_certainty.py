@@ -999,10 +999,10 @@ def test_a_malformed_declaration_does_not_grant_trust(monkeypatch):
     A missing key, a string, or a null must all fail safe. A typo in the JSON
     must never be able to grant a book the trust that ``false`` grants.
     """
-    from scrapers import common as scraper_common
+    from engine import deeplinks
 
     monkeypatch.setattr(
-        scraper_common,
+        deeplinks,
         "_deeplink_cache",
         {
             "missingkey": {"template": "https://example.test/"},
@@ -1034,11 +1034,11 @@ def test_a_malformed_declaration_does_not_grant_trust(monkeypatch):
 
 def test_an_unreadable_deep_link_config_fails_safe(monkeypatch):
     """An unreadable config is the worst case: it must refuse, not accept."""
-    from scrapers import common as scraper_common
+    from engine import deeplinks
 
-    monkeypatch.setattr(scraper_common, "_deeplink_cache", None)
-    monkeypatch.setattr(scraper_common, "open", _boom, raising=False)
-    assert scraper_common._load_deeplink_config() == {}
+    monkeypatch.setattr(deeplinks, "_deeplink_cache", None)
+    monkeypatch.setattr(deeplinks, "open", _boom, raising=False)
+    assert deeplinks._load_deeplink_config() == {}
     gate = CertaintyGate()
     a = _m("mbet", "Sarajevo", "Zeljeznicar", "BiH - Premier Liga", link_ok=False)
     b = _m("wwin", "Sarajevo", "Zeljeznicar", "Premijer Liga BiH", link_ok=False)

@@ -6,8 +6,8 @@ from urllib.parse import urlsplit, urlunsplit
 import pytest
 
 from config.settings import BOOKMAKERS
-from scrapers import common
-from scrapers.common import build_event_url
+from engine import deeplinks
+from engine.deeplinks import build_event_url
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -86,7 +86,7 @@ def test_event_id_is_url_encoded():
 
 def test_true_template_without_placeholder_is_rejected(monkeypatch):
     monkeypatch.setattr(
-        common,
+        deeplinks,
         "_deeplink_cache",
         {
             "broken": {
@@ -292,12 +292,12 @@ def test_the_declared_no_route_url_check_ignores_books_that_claim_a_route():
 
 def _point_at(monkeypatch, path: Path) -> None:
     """Point the loader at a temp file and clear the previous load's state."""
-    monkeypatch.setattr(common, "_DEEPLINK_CONFIG_PATH", str(path))
-    common._deeplink_cache = None
-    common._deeplink_cache_signature = None
-    common._deeplink_source_mtime = None
-    common._deeplink_loaded_at = None
-    common._deeplink_load_error = None
+    monkeypatch.setattr(deeplinks, "_DEEPLINK_CONFIG_PATH", str(path))
+    deeplinks._deeplink_cache = None
+    deeplinks._deeplink_cache_signature = None
+    deeplinks._deeplink_source_mtime = None
+    deeplinks._deeplink_loaded_at = None
+    deeplinks._deeplink_load_error = None
 
 
 def _write(path: Path, payload: dict) -> None:
@@ -309,8 +309,8 @@ def test_declaration_change_is_picked_up_without_restart(tmp_path, monkeypatch):
     _write(path, {"demo": {"supports_event_id": False, "template": "https://demo.test/"}})
     _point_at(monkeypatch, path)
 
-    assert common.supports_event_id("demo") is False
-    first = common.deeplink_declaration_source()
+    assert deeplinks.supports_event_id("demo") is False
+    first = deeplinks.deeplink_declaration_source()
     assert first["stale"] is False
     assert first["loaded_at"] is not None
     assert first["source_mtime"] is not None
@@ -326,8 +326,8 @@ def test_declaration_change_is_picked_up_without_restart(tmp_path, monkeypatch):
     )
 
     # No restart, no second loader instance: the next lookup sees the edit.
-    assert common.supports_event_id("demo") is True
-    effective = common.effective_deeplink_declarations(["demo"])["demo"]
+    assert deeplinks.supports_event_id("demo") is True
+    effective = deeplinks.effective_deeplink_declarations(["demo"])["demo"]
     assert effective["supports_event_id"] is True
     assert effective["declared_no_event_id"] is False
     assert effective["stale"] is False
@@ -339,22 +339,22 @@ def test_a_malformed_file_fails_safe_and_says_so(tmp_path, monkeypatch):
     path = tmp_path / "bookmaker_deeplinks.json"
     _write(path, {"demo": {"supports_event_id": False, "template": "https://demo.test/"}})
     _point_at(monkeypatch, path)
-    assert common.declares_no_event_id("demo") is True
+    assert deeplinks.declares_no_event_id("demo") is True
 
     path.write_text('{"demo": ', encoding="utf-8")
 
-    assert common._load_deeplink_config() == {}, (
+    assert deeplinks._load_deeplink_config() == {}, (
         "a malformed declaration file must not preserve trust from the old map"
     )
-    assert common.declares_no_event_id("demo") is False
-    source = common.deeplink_declaration_source()
+    assert deeplinks.declares_no_event_id("demo") is False
+    source = deeplinks.deeplink_declaration_source()
     assert source["stale"] is True
     assert source["error"]
 
     # Fixing the file is picked up on the next call, without a restart.
     _write(path, {"demo": {"supports_event_id": False, "template": "https://demo.test/"}})
-    assert common.declares_no_event_id("demo") is True
-    assert common.deeplink_declaration_source()["stale"] is False
+    assert deeplinks.declares_no_event_id("demo") is True
+    assert deeplinks.deeplink_declaration_source()["stale"] is False
 
 
 def test_health_reports_the_declaration_source_and_a_bad_file_safely(tmp_path, monkeypatch):
@@ -403,7 +403,7 @@ def test_declaration_audit_marks_missing_and_old_dates_stale(monkeypatch):
     from datetime import date
 
     monkeypatch.setattr(
-        common,
+        deeplinks,
         "_deeplink_cache",
         {
             "fresh": {"verified_at": "2026-11-04"},
@@ -411,9 +411,9 @@ def test_declaration_audit_marks_missing_and_old_dates_stale(monkeypatch):
             "missing": {},
         },
     )
-    monkeypatch.setattr(common, "_deeplink_loaded_at", None)
+    monkeypatch.setattr(deeplinks, "_deeplink_loaded_at", None)
 
-    rows = common.declaration_audit(
+    rows = deeplinks.declaration_audit(
         ["fresh", "old", "missing"],
         30,
         today=date(2026, 11, 4),

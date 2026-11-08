@@ -104,10 +104,11 @@ from config.settings import BOOKMAKERS, MAX_SUREBET_PROFIT_PERCENT, ODDS_TTL_SEC
 from engine import mapping_evidence as mapping_evidence_module
 from engine import matcher as matcher_module
 from engine.arbitrage import ArbitrageEngine
+from engine.deeplinks import build_event_url
 from engine.market_registry import MarketRegistry
 from engine.matcher import MatchMatcher
 from models.schemas import MarketType, Match, MatchGroup, Surebet
-from scrapers.common import BOOKMAKER_TZ, build_event_url, parse_nsoft_bets
+from scrapers.common import BOOKMAKER_TZ, parse_nsoft_bets
 from scrapers.mbet import MBetScraper
 from scrapers.sportplus import SportPlusScraper
 from scrapers.wwin import _build_markets_from_bets

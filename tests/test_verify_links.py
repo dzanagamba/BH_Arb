@@ -320,7 +320,7 @@ def test_a_skipped_book_never_gets_a_link_flag(monkeypatch):
 
 
 def test_every_book_that_declares_support_is_checkable():
-    from scrapers.common import supports_event_id
+    from engine.deeplinks import supports_event_id
 
     for bookmaker in ("mdshop", "admiralbet", "mozzartbet"):
         assert supports_event_id(bookmaker), bookmaker
@@ -758,7 +758,7 @@ def test_a_restored_group_keeps_a_leg_the_book_declares_no_link_for(
     THREE-book group for that reason: two books that declare a route and one that
     declares it does not.
     """
-    from scrapers.common import declares_no_event_id
+    from engine.deeplinks import declares_no_event_id
 
     assert declares_no_event_id("premier_kladionica"), (
         "the fixture book must declare no per-event route, or this test is about "

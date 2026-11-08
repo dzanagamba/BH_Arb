@@ -8,6 +8,7 @@ test process, which already imported scrapers while collecting.
 
 from __future__ import annotations
 
+import ast
 import json
 import subprocess
 import sys
@@ -73,6 +74,48 @@ def test_importing_scrapers_common_loads_no_book_and_no_playwright():
         "}))\n"
     )
     assert loaded == {"books": [], "playwright": False}
+
+
+def test_engine_does_not_import_the_scrapers_package():
+    """M3-2: the dependency runs one way, scrapers -> engine.
+
+    The deep-link declaration store and the AH label helpers used to make the
+    engine import ``scrapers.common``, while the scrapers import the market
+    registry and sports helpers: a package cycle. The store now lives in
+    ``engine.deeplinks`` and the labels in ``engine.ah_labels``.
+    """
+    loaded = _run(
+        "import json, sys\n"
+        "import engine.certainty, engine.matcher, engine.arbitrage\n"
+        "print(json.dumps(sorted(\n"
+        "    m for m in sys.modules if m == 'scrapers' or m.startswith('scrapers.')\n"
+        ")))\n"
+    )
+    assert loaded == []
+
+
+def test_no_engine_source_imports_scrapers_even_inside_a_function():
+    """A local import would reintroduce the cycle without loading it at import."""
+    offenders: list[str] = []
+    for path in sorted((REPO_ROOT / "engine").glob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            names: list[str] = []
+            if isinstance(node, ast.Import):
+                names = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                names = [node.module]
+            if any(name == "scrapers" or name.startswith("scrapers.") for name in names):
+                offenders.append(path.name)
+                break
+    assert offenders == []
+
+
+def test_the_declaration_store_left_scrapers_common():
+    from scrapers import common
+
+    for moved in ("build_event_url", "declares_no_event_id", "effective_deeplink_declarations"):
+        assert not hasattr(common, moved), moved
 
 
 def test_scraper_package_still_exports_its_public_classes_lazily():

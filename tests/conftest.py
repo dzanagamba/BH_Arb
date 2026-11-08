@@ -44,7 +44,8 @@ from pathlib import Path
 
 import pytest
 
-from scrapers import common, forensics
+from engine import deeplinks
+from scrapers import forensics
 from scripts.check_test_isolation import runtime_state_snapshot
 
 EXAMPLE_ROUTE_BOOKS = {
@@ -149,11 +150,11 @@ _API_RUNTIME_FILES = {
 
 def _reset_deeplink_state() -> None:
     """Clear the declaration cache and the provenance of its last file read."""
-    common._deeplink_cache = None
-    common._deeplink_cache_signature = None
-    common._deeplink_source_mtime = None
-    common._deeplink_loaded_at = None
-    common._deeplink_load_error = None
+    deeplinks._deeplink_cache = None
+    deeplinks._deeplink_cache_signature = None
+    deeplinks._deeplink_source_mtime = None
+    deeplinks._deeplink_loaded_at = None
+    deeplinks._deeplink_load_error = None
 
 
 def write_populated_ledger(path: Path) -> Path:
@@ -336,10 +337,10 @@ def _example_route_books(request, monkeypatch):
         yield
         _reset_deeplink_state()
         return
-    declared = dict(common._load_deeplink_config())
+    declared = dict(deeplinks._load_deeplink_config())
     declared.update(EXAMPLE_ROUTE_BOOKS)
     # Inject a synthetic map; with loaded_at left unset the file cannot replace
     # it, which is the seam these tests rely on.
-    monkeypatch.setattr(common, "_deeplink_cache", declared)
+    monkeypatch.setattr(deeplinks, "_deeplink_cache", declared)
     yield
     _reset_deeplink_state()

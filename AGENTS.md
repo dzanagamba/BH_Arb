@@ -93,6 +93,12 @@ them on every push.
   Operator scripts import it; do not reintroduce local market tables.
 - `engine.market_registry.registered_spec()` is the shared per-book resolver.
   It keeps the `has_source_id` seam used by test fakes.
+- `engine.deeplinks` owns the deep-link declaration store the certainty gate
+  reads (`config/bookmaker_deeplinks.json`, its cache and provenance, the
+  `supports_event_id: false` predicate and `build_event_url`).
+  `engine.ah_labels` owns the Asian-handicap label helpers; `scrapers.common`
+  re-exports them for the adapters. The dependency runs one way,
+  `scrapers` → `engine`: never import `scrapers` from `engine`.
 - `scrapers/protocol.BookAdapter` is the one adapter contract: no-arg
   construction and an async `scrape(live=, scan_time=, sports_wanted=)`, even
   when an adapter ignores a keyword. Read the class through

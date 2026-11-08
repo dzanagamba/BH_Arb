@@ -3,7 +3,7 @@
 **Updated:** 2026-11-08
 **Goal:** keep `ROADMAP.md` current without weakening the trust model.
 **Current task:** none; SR0-1, SR0-2, SR1-1, SR1-2, SR1-3, SR1-4, M1-1, M1-2,
-M1-3, M2-1, M2-2, M2-3, M2-4, M2-5, M3-1, SR2-1 …
+M1-3, M2-1, M2-2, M2-3, M2-4, M2-5, M3-1, M3-2, SR2-1 …
 SR2-6, SR3-1, SR3-2, SR3-3, SR3-4, SR4-1, SR4-2, SR4-3, SR4-3b … SR4-3f,
 SR4-3h, SR4-3i, SR4-3j, SR4-4, SR4-5, SR4-6, SR4-7, SR4-7a, SR4-8, SR4-8a,
 SR4-9, SR4-10, SR4-11, SR4-12, SR4-13, SR5-1, SR5-2, SR6-1, SR6-2, SR6-3,
@@ -25,6 +25,15 @@ loop (M2-1), `2eb5324` caches key verification and throttles failed attempts
 SR4-8a and SR4-8.
 
 ## Project state
+
+M3-2 (2026-11-09, working tree, operator: continue): the deep-link declaration
+store moved from `scrapers/common.py` to `engine/deeplinks.py` (317 lines), and
+the AH label helpers moved to `engine/ah_labels.py` (49 lines, re-exported by
+`scrapers.common` for the adapters). `scrapers/common.py` fell from 986 to 657
+lines. `engine` now imports no module under `scrapers`; `tests/test_layering.py`
+proves that by subprocess import and by AST (including function-level imports),
+so the package cycle is gone. Declaration semantics, config values and trust
+rules are unchanged.
 
 M3-1 (2026-11-08, working tree, operator: continue): `server/api.py` fell from
 5,903 to **5,714 lines** in three behaviour-preserving stages. Pure candidate
@@ -705,12 +714,12 @@ the seven-day opportunity baseline remains unmeasured and N2-4 owns it.
 ## Next action
 
 **No `Not started` row is ungated.** M1-1, M1-2, M1-3, M2-1, M2-2, M2-3, M2-4,
-M2-5, M3-1 and SR4-8 closed the last ones.
+M2-5, M3-1, M3-2 and SR4-8 closed the last ones.
 What is left needs the operator: **SR4-3g** (blocked on a live EVLBet payload —
 do not start it), the remaining **M\*** rows (all `Gate: operator`; each needs
 explicit approval and written acceptance criteria before any work), and the
 deferred N2-4 / waived P1-6 (leave both alone). Sensible next picks, in the
-order this session would take them: M3-2 … M3-6, then M4/M5. All are
+order this session would take them: M3-3 … M3-6, then M4/M5. All are
 `Gate: operator`. A HAR refresh is an operator action, not a task:
 `python scripts/capture_har.py --books all`.
 

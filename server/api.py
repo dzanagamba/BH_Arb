@@ -95,6 +95,13 @@ from engine.coverage_budget import (
 from engine.coverage_budget import (
     snapshot as coverage_snapshot,
 )
+from engine.deeplinks import (
+    declaration_audit,
+    declares_no_event_id,
+    declares_route_pattern_verified,
+    deeplink_declaration_source,
+    effective_deeplink_declarations,
+)
 from engine.feed_integrity import (
     compute_feed_integrity,
     priceable_groups,
@@ -140,13 +147,6 @@ from models.schemas import (
 )
 from scrapers.breaker import CLOSED, HALF_OPEN, OPEN, BookCircuitBreaker, breaker_for
 from scrapers.browser_pool import browser_pool
-from scrapers.common import (
-    declaration_audit,
-    declares_no_event_id,
-    declares_route_pattern_verified,
-    deeplink_declaration_source,
-    effective_deeplink_declarations,
-)
 from scrapers.cost import (
     begin_book,
     build_scan_report,

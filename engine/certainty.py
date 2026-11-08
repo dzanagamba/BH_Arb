@@ -21,6 +21,11 @@ from rapidfuzz import fuzz
 
 from config.settings import VERIFIED_KICKOFF_WINDOW_MINUTES
 from engine import name_identity, sports
+from engine.deeplinks import (
+    declares_no_event_id,
+    declares_route_pattern_verified,
+    supports_event_id,
+)
 from engine.league_resolver import LeagueResolver
 from engine.mapping_evidence import (
     MappingLedger,
@@ -30,11 +35,6 @@ from engine.mapping_evidence import (
 from engine.name_keys import raw_team_key
 from engine.normalizer import CLUB_DESIGNATORS, TeamNormalizer
 from models.schemas import Match, MatchEventStatus, MatchEvidence, MatchGroup
-from scrapers.common import (
-    declares_no_event_id,
-    declares_route_pattern_verified,
-    supports_event_id,
-)
 
 # Evidence note (not a reason) on a league accepted by `_league_settled_by_teams`.
 LEAGUE_UNMAPPED_TEAMS_EXACT = "league_unmapped_teams_exact"

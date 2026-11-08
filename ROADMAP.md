@@ -167,7 +167,7 @@ do not copy stale numbers here.
 | M2-4 | Decide the candidate queue cap | Done | — | operator |
 | M2-5 | Review compact cache/ledger representations | Done | — | operator |
 | M3-1 | Decompose `server/api.py` | Done | — | operator |
-| M3-2 | Move the deep-link store to `engine/` | Not started | — | operator |
+| M3-2 | Move the deep-link store to `engine/` | Done | — | operator |
 | M3-3 | One link-settled predicate | Not started | — | operator |
 | M3-4 | Unify datetime and SQLite helpers | Not started | — | operator |
 | M3-5 | Route registry lookups through `registered_spec()` | Not started | — | operator |
@@ -2731,16 +2731,67 @@ moved call sites. Full suite **2,320 passed, 12 skipped** (17 snapshots) in
 
 ### M3-2 Move the deep-link store to `engine/`
 
-Status: Not started
+Status: Done
 
 Gate: operator
+
+**Decision (2026-11-09, operator: continue after M3-1): move the whole
+declaration store, not a facade.** The store is a config reader with a cached
+map, mtime-based reload, provenance and fail-safe parsing; it belongs beside the
+gate that trusts it. Certainty currently imports it from `scrapers.common`,
+which also imports `engine.market_registry` lazily, so `engine` and `scrapers`
+depend on each other. Moving only certainty's import would leave `engine.matcher`
+and `engine.arbitrage` importing `scrapers.common` for the pure Asian-handicap
+label helpers, so the package cycle would remain. Those helpers are pricing
+vocabulary, not scraper I/O, so they move to `engine/` too; `scrapers.common`
+re-exports them for the adapters and tests that already import them there.
+
+So: `engine/deeplinks.py` owns the declaration store, predicates, audit,
+effective map and `build_event_url`; `engine/ah_labels.py` owns `ah_line_fmt`,
+`ah_label`, `parse_ah_label` and `flip_ah_label`. `engine` imports no module
+under `scrapers`; the reverse direction stays. Declaration semantics
+(path resolution, fail-safe parse, mtime reload, synthetic-cache seam, TTLs) do
+not change.
 
 Why / what: Move the deep-link declaration store out of `scrapers/common.py` into
 `engine/`, and remove the `engine` ↔ `scrapers` package cycle.
 
-Acceptance:
-- [x] Operator approval recorded here.
-- [x] Acceptance criteria written here before coding.
+**Outcome (2026-11-09).** `engine/deeplinks.py` (317 lines) now owns the whole
+declaration store: the path, cached map, mtime/size reload, provenance, the
+`supports_event_id` / `declares_no_event_id` / `declares_route_pattern_verified`
+predicates, `declaration_verified_at`, `declaration_audit`,
+`effective_deeplink_declarations`, `deeplink_declaration_source` and
+`build_event_url`, with the same fail-safe parse and injected-cache seam.
+`engine/ah_labels.py` (49 lines) owns the four AH label helpers and
+`scrapers.common` re-exports them for the adapters, so `scrapers/mbet.py` and
+`sportplus.py` did not change. `scrapers/common.py` fell from **986 to 657
+lines**. Certainty, the matcher and the arbitrage engine import from `engine`
+only; a subprocess test proves importing `engine.certainty`, `engine.matcher`
+and `engine.arbitrage` loads no `scrapers` module, and an AST test sees even a
+function-level import. `server/api.py`, both deep-link scripts, the four
+adapters and every test (including `conftest`'s cache-reset fixture) read the new
+modules; no test patches a dead `scrapers.common` cache. `AGENTS.md` records the
+new building blocks and the one-way dependency. Full suite **2,323 passed, 12
+skipped** (17 snapshots) in 149.41 s. No declaration value, template, TTL or
+trust rule changed.
+
+Acceptance (written before coding, 2026-11-09):
+- [x] `engine/deeplinks.py` owns the declaration file path, cache, reload and
+      provenance, `supports_event_id` / `declares_no_event_id` /
+      `declares_route_pattern_verified`, `declaration_verified_at`,
+      `declaration_audit`, `effective_deeplink_declarations`,
+      `deeplink_declaration_source` and `build_event_url`, with the same
+      behaviour (fail-safe malformed file, mtime reload, injected-cache seam).
+- [x] `engine/ah_labels.py` owns the four AH label helpers; `scrapers.common`
+      re-exports them unchanged for adapters/tests.
+- [x] No module under `engine/` imports any module under `scrapers/`, and a
+      test pins that; importing `engine.certainty`, `engine.matcher` and
+      `engine.arbitrage` loads no `scrapers` module.
+- [x] `server/api.py`, both deep-link scripts and every test read the new
+      modules; no test patches a dead `scrapers.common` cache.
+- [x] The declaration/config tests and full suite pass with identical verdicts;
+      no config file, declaration value or trust rule changes.
+
 
 ### M3-3 One link-settled predicate
 
@@ -3252,3 +3303,4 @@ Useful starting points:
 | 2026-11-08 | M2-5 | Done | Operator: continue. Decision: **keep every piece of evidence; compact the representation that has no human reader.** The operator's `config/generated/mapping_evidence.json` was 93,981,475 bytes / 16,649 claims written with `indent=2` — over the 67.1 MB `MAPPING_LEDGER_BUDGET_BYTES` — while every consumer loads it through `MappingLedger.load()` or `json.load`: the gate, learner, replay, league resolver (`detail["teams"]`), candidate remediation and mapping coverage (evidence types), `scripts/generate_market_registry.py` (last evidence detail), maintenance prune and `/api/health.retention` bytes. The scan caches and every diagnostics file were already compact; only the ledger (and the two small human-inspectable decision/link-sweep files) were indented. `MappingLedger.save()` now writes `separators=(",", ":")` with `sort_keys=True`; schema, claims, evidence, statuses, TTLs and the prune rule are unchanged, and `prune()` remains the only evidence-dropping step (maintenance only). Audit recorded in `docs/STORAGE.md`. Two tests: compact file (no newline, smaller than indented), and a nine-record claim round-trips intact above the prune cap. **Measured on a copy of the real ledger: 93,981,475 -> 50,054,456 bytes (-46.7 %), under budget without pruning; load 1.83 -> 1.73 s, save 4.45 -> 4.01 s.** `pytest`: 2312 passed, 12 skipped (17 snapshots) in 116.23 s; ruff clean; mypy 275 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No live scan, no runtime state rewritten. |
 | 2026-11-08 | M3-1 (stages 1–2) | In progress | Operator: continue. Stage 1: the pure candidate scoring moved to **`server/candidate_scoring.py`** (198 lines) — `TeamTokens`, `FoundPair`, kickoff keys/bucketing, `match_event_ref`/`match_side_key`, `bigrams`, `shares_any_signal`, `team_similarity`, `token_run_shared`, `canonical_pair_key`, `candidate_id`, `pair_priority` — with one definition; `server/api.py` imports it (5,903 → 5,782 lines), no private copy remains, and the module imports no `server.api`. `tests/test_scan_candidates.py` and `scripts/audit_league_pairs.py` read the new module; `tests/test_candidate_scoring.py` pins the import rule and object identity. Stage 2: `_state_for` now returns a **`FeedState`** NamedTuple (`status`, `surebets`, `matches`, `report`, `per_bookie`); api route call sites read named fields, while the existing tuple unpacking in `scripts/record_scan.py` and tests keeps working; `server.mapping_coverage` takes a `Sequence` so the typed list stays assignable. `tests/test_ci_hardening.py` follows the `usedforsecurity=False` call site to the new module. Stage 3 (JSON-store layer) remains. `pytest`: 2314 passed, 12 skipped (17 snapshots) in 112.49 s; ruff clean; mypy 277 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No live scan; scores, ids, ordering and deep-link verdicts unchanged. |
 | 2026-11-08 | M3-1 (stage 3) | Done | Operator: continue. New **`server/json_store.py`** (70 lines) owns the JSON-store layer: `atomic_write_json` (temp file + `os.replace`, the writer moved out of api) and `read_json` (missing/unreadable/malformed → `None`). Every JSON reader and writer in `server/api.py` now uses it: market/bookmaker toggles, allowlist, suppressed decisions and premises, both deep-link stores, the history export, opportunity metrics, feed integrity, stale price state, coverage budget, scan cost, the scan cache loaders and link sweeps. Shape validation, locks, TTL filtering and merge rules stay with each store's owner, so scan and deep-link semantics are unchanged. `server/api.py` **5,782 → 5,714 lines** (5,903 → 5,714 across M3-1) and no longer imports `json` or `tempfile`. New `tests/test_json_store.py`: compact output, readable default, whole replacement with no temp file, a failed write keeping the previous document, and the forgiving read; `tests/test_cache_serialization.py` and `tests/test_candidates_api.py` follow the moved writer. `pytest`: 2320 passed, 12 skipped (17 snapshots) in 117.95 s; ruff clean; mypy 279 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No live scan. |
+| 2026-11-09 | M3-2 | Done | Operator: continue with M3-2. The declaration store moved from `scrapers/common.py` to **`engine/deeplinks.py`** (317 lines): path, cache, mtime/size reload, provenance, `supports_event_id`/`declares_no_event_id`/`declares_route_pattern_verified`, `declaration_verified_at`, `declaration_audit`, `effective_deeplink_declarations`, `deeplink_declaration_source` and `build_event_url`; semantics (fail-safe parse, synthetic-cache seam, TTLs) unchanged. The other engine→scrapers edges were the AH label helpers, so **`engine/ah_labels.py`** (49 lines) now owns them and `scrapers.common` re-exports them for `mbet`/`sportplus` and the tests. `scrapers/common.py`: **986 → 657 lines**. Certainty, matcher and arbitrage import from engine only; `tests/test_layering.py` proves by subprocess that importing those three loads no `scrapers` module and by AST that no engine source imports scrapers even inside a function, and that `scrapers.common` no longer exposes the store. `server/api.py`, `scripts/verify_deeplinks.py`, `scripts/audit_deeplinks.py`, `mdshop`/`maxbet`/`admiralbet`, tests and `conftest`'s cache-reset fixture all read the new modules. `AGENTS.md` documents the one-way dependency. `pytest`: 2323 passed, 12 skipped (17 snapshots) in 149.41 s; ruff clean; mypy 281 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No live scan; no declaration value or trust rule changed. |

@@ -12,12 +12,12 @@ from contextlib import AsyncExitStack
 from datetime import UTC, datetime
 
 from engine import sports
+from engine.deeplinks import build_event_url
 from engine.structural_drift import observe
 from models.schemas import Market, Match
 from scrapers.base import browser_session, goto, measured_api_get, settle
 from scrapers.common import (
     betradar_id,
-    build_event_url,
     nsoft_event_window,
     nsoft_offered,
     parse_dt,
