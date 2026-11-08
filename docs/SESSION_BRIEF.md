@@ -8,8 +8,9 @@ SR7-2 are done. SR4-1, SR4-2, SR4-3, SR4-3b, SR4-3c, SR4-3d, SR4-3e and SR4-3f
 are in the working tree (not yet committed). The roadmap is the single task list
 in `ROADMAP.md`; N2-4 stays deferred and P1-6 stays waived until the operator
 says otherwise.
-**Last task commit:** `d963625` — full per-match offers for Mozzartbet and
-Betole, and the per-book request rate (SR7-1, SR7-2).
+**Last task commit:** `57666c6` — strict wire schemas for six books
+(SR4-3, SR4-3b … SR4-3f); SR4-1 and SR4-2 are in `f4e97e9` and `2614206`.
+Pushed to `origin/main` on 2026-11-08.
 
 ## Project state
 
