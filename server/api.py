@@ -1552,23 +1552,22 @@ async def _rank_candidates_with_ai(ai: MatchAI, found: list[_FoundPair]) -> None
         pair.candidate.ai_reason = proposal.reason
 
 
-async def _collect_candidates(
+def _build_candidates(
     all_matches: list[Match],
     matcher: MatchMatcher,
     groups: list[MatchGroup] | None = None,
-    *,
-    rank_with_ai: bool = True,
-) -> dict[str, CandidateReview]:
-    """Find plausible same-event pairs the matcher could not verify and queue
-    them for review.
+) -> tuple[dict[str, CandidateReview], list[_FoundPair]]:
+    """Find plausible same-event pairs the matcher could not verify (M2-1).
+
+    Pure CPU over the scan's matches, so `_collect_candidates` runs it in a
+    worker thread: the pair walk and the gate calls were part of the ~100 s
+    block that used to hold the event loop. Returns the queue and the ordered
+    `_FoundPair`s, because only the top of that order is worth an AI call.
 
     Pairs are discovered with a kickoff-bucket index (not an O(n^2) sweep) and a
     cheap team-token prefilter before the full gate runs. AI only ranks; it never
     approves. A pair a human already decided on is not re-queued while the state
     that decision was taken on still holds.
-
-    ``rank_with_ai=False`` lets an offline report build the same queue without a
-    network call; it changes nothing about the verdicts or the proposals.
     """
     gate = CertaintyGate(
         kickoff_window_minutes=CANDIDATE_KICKOFF_WINDOW_MIN,
@@ -1733,7 +1732,25 @@ async def _collect_candidates(
         f"{sum(1 for pair in found if pair.closeable)} closeable by a proposed mapping, "
         f"{len(decided)} suppressed by earlier decisions)"
     )
+    return candidates, found
 
+
+async def _collect_candidates(
+    all_matches: list[Match],
+    matcher: MatchMatcher,
+    groups: list[MatchGroup] | None = None,
+    *,
+    rank_with_ai: bool = True,
+) -> dict[str, CandidateReview]:
+    """Build the review queue off the event loop, then rank it with AI (M2-1).
+
+    The pair walk is CPU; the AI ranking is the only network step and is already
+    async. ``rank_with_ai=False`` lets an offline report build the same queue
+    without a network call; it changes nothing about the verdicts or proposals.
+    """
+    candidates, found = await asyncio.to_thread(
+        _build_candidates, all_matches, matcher, groups
+    )
     ai = _shared_client_ai() if (found and rank_with_ai) else None
     if ai is None:
         return candidates
@@ -1964,6 +1981,122 @@ def learn_scan_mappings(
     ledger.prune()
     ledger.save()
     return report.to_dict()
+
+
+def _finish_scan_cost(
+    mode: str, scan_started_at: datetime, scan_costs: dict[str, dict[str, Any]]
+) -> dict[str, Any]:
+    """Build, remember and persist the per-book cost record (M2-1 worker)."""
+    report = build_scan_report(mode, scan_started_at, scan_costs)
+    _scan_cost[mode] = report
+    _scan_cost_history.insert(0, report)
+    del _scan_cost_history[_SCAN_COST_HISTORY_MAX:]
+    _save_scan_cost()
+    return report
+
+
+def _evaluate_feed_diagnostics(
+    mode: str,
+    all_matches: list[Match],
+    unmapped_before: dict[str, int],
+    unmapped_now: dict[str, int],
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    """Coverage, cardinality and mapping diagnostics for one scan (M2-1 worker).
+
+    P2-9: compare with the rolling median before the matcher runs; a
+    peer-populated zero is a flag, not a quiet day. SR4-5: a feed that keeps a
+    few events but loses most of them is a silent drop, quarantined through feed
+    integrity below. N1-2: mapped rows / (mapped + newly unmapped rows) is why
+    the cumulative counter's delta is passed in. Each walks every match's
+    markets, so this is the kind of CPU that must not run on the event loop
+    while the dashboard polls.
+    """
+    coverage_counts = coverage_snapshot(all_matches)
+    coverage_report = evaluate_coverage_budget(
+        coverage_counts, _coverage_history[mode]
+    )
+    _coverage_budget[mode] = coverage_report
+    _coverage_history[mode] = push_coverage_history(
+        _coverage_history[mode], coverage_counts
+    )
+    cardinality_counts = cardinality_snapshot(all_matches)
+    cardinality_report = evaluate_cardinality(
+        cardinality_counts, _cardinality_history[mode]
+    )
+    _cardinality[mode] = cardinality_report
+    _cardinality_history[mode] = push_cardinality_history(
+        _cardinality_history[mode], cardinality_counts
+    )
+    mapping_report = evaluate_mapping_coverage(
+        all_matches,
+        unmapped_before,
+        unmapped_now,
+        floor=MAPPING_COVERAGE_FLOOR,
+        min_rows=MAPPING_COVERAGE_MIN_ROWS,
+    )
+    _mapping_coverage[mode] = mapping_report
+    return coverage_report, cardinality_report, mapping_report
+
+
+def _summarize_pricing(
+    scan_metrics: ScanMetrics,
+    surebets: list[Any],
+    price_dropped: list[dict[str, Any]],
+    mode: str,
+    scan_finished_at: datetime,
+) -> dict[str, Any]:
+    """Aggregate the priced boards and their lifetime crossings (M2-1 worker)."""
+    summary = summarize_scan(
+        scan_metrics,
+        surebets,
+        price_dropped,
+        mode=mode,
+        scan_time=scan_finished_at,
+        floor_profit_percent=DUST_PROFIT_PERCENT,
+    )
+    tracked = _crossing_lifetimes.setdefault(mode, {})
+    update_lifetimes(tracked, scan_metrics.boards, scan_finished_at)
+    summary["lifetime"] = lifetime_distribution(tracked, scan_finished_at)
+    summary["tracked_crossings"] = len(tracked)
+    return summary
+
+
+def _serialise_scan_caches(
+    live_surebets: list[Any], all_matches: list[Match]
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Dump the served payloads once, off the loop (M2-1 worker).
+
+    A real scan's matches dump to a ~27 MB JSON document; doing that per model on
+    the event loop was part of the block.
+    """
+    return (
+        [surebet.model_dump(mode="json") for surebet in live_surebets],
+        [match.model_dump(mode="json") for match in all_matches],
+    )
+
+
+def _persist_scan_state(
+    mode: str,
+    group_count: int,
+    scan_finished_at: datetime,
+    matches_cache: list[dict[str, Any]],
+    report_cache: list[dict[str, Any]],
+) -> None:
+    """Write the scan's caches and diagnostics (M2-1 worker).
+
+    The cache write is tens of megabytes plus several sibling JSON files. A
+    cancelled scan can leave an in-flight worker finishing after the await is
+    cancelled; every write here re-reads the shared state at call time and is
+    idempotent, so it cannot publish an older result than the state already
+    holds.
+    """
+    _save_cache(mode)
+    _save_opportunity_metrics()
+    _save_feed_integrity()
+    _save_stale_price_state()
+    _append_history(group_count, mode)
+    _record_candidate_trend(mode, scan_finished_at)
+    _refresh_pairing_summary(mode, matches_cache, report_cache, scan_finished_at)
 
 
 async def run_scan(
@@ -2230,13 +2363,9 @@ async def run_scan(
         # N1-3: one bounded per-book cost record for this scan. The history is
         # newest-first so the CLI and the failure-rate window can read it
         # without scanning the whole file.
-        scan_cost_report = build_scan_report(
-            mode, scan_started_at, scan_costs
+        scan_cost_report = await asyncio.to_thread(
+            _finish_scan_cost, mode, scan_started_at, scan_costs
         )
-        _scan_cost[mode] = scan_cost_report
-        _scan_cost_history.insert(0, scan_cost_report)
-        del _scan_cost_history[_SCAN_COST_HISTORY_MAX:]
-        _save_scan_cost()
         _record_scan_cost_metrics(scan_cost_report)
         _record_breaker_metrics(mode)
 
@@ -2266,39 +2395,15 @@ async def run_scan(
                     status.errors.append(f"Odds age spread {spread:.0f}s — verify before betting")
 
         # P2-9: a whole feed can disappear while the remaining books still
-        # price a clean-looking scan. Compare with the rolling median before
-        # the matcher runs; a peer-populated zero is a flag, not a quiet day.
-        coverage_counts = coverage_snapshot(all_matches)
-        coverage_report = evaluate_coverage_budget(
-            coverage_counts, _coverage_history[mode]
-        )
-        _coverage_budget[mode] = coverage_report
-        _coverage_history[mode] = push_coverage_history(
-            _coverage_history[mode],
-            coverage_counts,
-        )
-        # SR4-5: a feed that keeps a few events but loses most of them (or most
-        # markets per event) is a silent drop. Compare with the book+sport
-        # rolling median and quarantine through feed integrity below.
-        cardinality_counts = cardinality_snapshot(all_matches)
-        cardinality_report = evaluate_cardinality(
-            cardinality_counts, _cardinality_history[mode]
-        )
-        _cardinality[mode] = cardinality_report
-        _cardinality_history[mode] = push_cardinality_history(
-            _cardinality_history[mode], cardinality_counts
-        )
-        # N1-2: mapped rows / (mapped + newly unmapped rows) for this scan. The
-        # counter delta is why a cumulative registry counter still yields a
-        # per-scan numerator and denominator.
-        mapping_report = evaluate_mapping_coverage(
+        # price a clean-looking scan. These are the CPU diagnostics, so they run
+        # in a worker: a real scan spent its analysis half here (M2-1).
+        coverage_report, cardinality_report, mapping_report = await asyncio.to_thread(
+            _evaluate_feed_diagnostics,
+            mode,
             all_matches,
             unmapped_before,
             dict(unmapped_markets),
-            floor=MAPPING_COVERAGE_FLOOR,
-            min_rows=MAPPING_COVERAGE_MIN_ROWS,
         )
-        _mapping_coverage[mode] = mapping_report
         _coverage_trend[mode] = (
             _coverage_trend[mode]
             + [
@@ -2355,8 +2460,10 @@ async def run_scan(
         if AUTO_LEARN_MAPPINGS and len(all_matches) >= MIN_LEARN_MATCHES:
             global last_learning_report
             try:
-                learned = learn_scan_mappings(
-                    all_matches, scan_started_at.isoformat(timespec="seconds")
+                learned = await asyncio.to_thread(
+                    learn_scan_mappings,
+                    all_matches,
+                    scan_started_at.isoformat(timespec="seconds"),
                 )
                 diff = learned.get("diff", {})
                 last_learning_report = {
@@ -2379,13 +2486,15 @@ async def run_scan(
                 logger.error("Mapping learning failed: %s", exc, exc_info=True)
                 status.errors.append(f"Mapping learning failed: {str(exc)[:200]}")
 
-        matcher = MatchMatcher()
-        groups = matcher.group_matches(all_matches)
+        # M2-1: the matcher loads the evidence ledger and groups every match;
+        # both are CPU/I/O, so they run in the worker.
+        matcher = await asyncio.to_thread(MatchMatcher)
+        groups = await asyncio.to_thread(matcher.group_matches, all_matches)
         # P2-7: measure which books are actually one price source before the
         # engine prices anything. The registration is intentionally after the
         # grouping pass: a measured twin changes pricing, not event identity.
-        skin_matrix = measure_price_agreement(groups)
-        new_twins = apply_measured_twins(skin_matrix)
+        skin_matrix = await asyncio.to_thread(measure_price_agreement, groups)
+        new_twins = await asyncio.to_thread(apply_measured_twins, skin_matrix)
         _skin_detection[mode] = {
             "matrix": skin_matrix,
             "summary": skin_summary(skin_matrix),
@@ -2398,7 +2507,7 @@ async def run_scan(
                 ", ".join(f"{left}+{right}" for left, right in new_twins),
             )
         report_cache.clear()
-        report_cache.extend(matcher.get_match_report(groups))
+        report_cache.extend(await asyncio.to_thread(matcher.get_match_report, groups))
 
         # P0-7: score every enabled book before pricing. A quarantined book is
         # removed from the copies used by the engine and price guard; the full
@@ -2407,7 +2516,8 @@ async def run_scan(
         integrity_now = datetime.now(UTC).replace(tzinfo=None)
         # N0-2: update the per-book price observations and refuse frozen rows
         # before the integrity scorecard and the pricing pass read the groups.
-        stale_result = evaluate_stale_prices(
+        stale_result = await asyncio.to_thread(
+            evaluate_stale_prices,
             groups,
             _stale_price_store.get(mode) or {},
             mode=mode,
@@ -2431,7 +2541,8 @@ async def run_scan(
             for bookmaker, config in BOOKMAKERS.items()
             if _is_enabled(bookmaker)
         }
-        _feed_integrity[mode] = compute_feed_integrity(
+        _feed_integrity[mode] = await asyncio.to_thread(
+            compute_feed_integrity,
             mode=mode,
             bookmakers=enabled_bookmakers,
             matches=all_matches,
@@ -2473,7 +2584,8 @@ async def run_scan(
         # evaluates is observed before the display filters run.
         scan_metrics = ScanMetrics()
         # P1-6: include dust (0.2%) — frontend filters/highlights by tier
-        surebets = engine.find_surebets(
+        surebets = await asyncio.to_thread(
+            engine.find_surebets,
             pricing_groups,
             min_profit=DUST_PROFIT_PERCENT,
             investment=DEFAULT_INVESTMENT,
@@ -2484,7 +2596,9 @@ async def run_scan(
         )
         price_dropped = []
         if PRICE_GUARD_ENABLED:
-            surebets, price_dropped = filter_price_outliers(surebets, pricing_groups)
+            surebets, price_dropped = await asyncio.to_thread(
+                filter_price_outliers, surebets, pricing_groups
+            )
         if price_dropped:
             detail = ", ".join(
                 f"{item['surebet'].home_team}-{item['surebet'].away_team} "
@@ -2504,7 +2618,8 @@ async def run_scan(
         # This is a measurement, never a settlement; a failure must not stop the
         # scan or change what is priced.
         try:
-            _closing_capture[mode] = _bet_store_or_init().capture_closing(
+            _closing_capture[mode] = await asyncio.to_thread(
+                _bet_store_or_init().capture_closing,
                 groups,
                 now=scan_finished_at,
                 mode=mode,
@@ -2528,15 +2643,18 @@ async def run_scan(
             _recorded_counts[mode] = 0
         else:
             store = _paper_store_or_init()
-            recorded = store.record_opportunities(
+            recorded = await asyncio.to_thread(
+                store.record_opportunities,
                 surebets,
                 feed_mode=mode,
                 run_mode=run_mode,
                 scan_time=scan_finished_at,
             )
             if run_mode == "paper":
-                paper_marks = store.open_positions_from_scan(
-                    recorded, scan_time=scan_finished_at
+                paper_marks = await asyncio.to_thread(
+                    store.open_positions_from_scan,
+                    recorded,
+                    scan_time=scan_finished_at,
                 )
             live_surebets = []
             status.surebets_found = 0
@@ -2553,18 +2671,14 @@ async def run_scan(
 
         # P0-6: aggregates from the boards this scan actually priced, and the
         # bounded lifetime store keyed by event+market+line+period+settlement.
-        summary = summarize_scan(
+        summary = await asyncio.to_thread(
+            _summarize_pricing,
             scan_metrics,
             surebets,
             price_dropped,
-            mode=mode,
-            scan_time=scan_finished_at,
-            floor_profit_percent=DUST_PROFIT_PERCENT,
+            mode,
+            scan_finished_at,
         )
-        tracked = _crossing_lifetimes.setdefault(mode, {})
-        update_lifetimes(tracked, scan_metrics.boards, scan_finished_at)
-        summary["lifetime"] = lifetime_distribution(tracked, scan_finished_at)
-        summary["tracked_crossings"] = len(tracked)
         summary["zero_result_streak"] = _track_zero_result(
             mode, str(summary.get("zero_result_reason") or "")
         )
@@ -2577,18 +2691,22 @@ async def run_scan(
         # Serialize to dict for JSON responses. A non-advisory run deliberately
         # writes an empty live list, so the dashboard cannot present a recorded
         # opportunity as current.
-        surebets_cache[:] = [s.model_dump(mode="json") for s in live_surebets]
-        matches_cache[:] = [m.model_dump(mode="json") for m in all_matches]
+        surebets_payload, matches_payload = await asyncio.to_thread(
+            _serialise_scan_caches, live_surebets, all_matches
+        )
+        surebets_cache[:] = surebets_payload
+        matches_cache[:] = matches_payload
 
-        # Persist to cache file
-        _save_cache(mode)
-        _save_opportunity_metrics()
-        _save_feed_integrity()
-        _save_stale_price_state()
-        _append_history(len(groups), mode)
-        _record_candidate_trend(mode, scan_finished_at)
-
-        _refresh_pairing_summary(mode, matches_cache, report_cache, scan_finished_at)
+        # Persist to cache file and the sibling diagnostics (worker thread:
+        # the cache alone is tens of megabytes).
+        await asyncio.to_thread(
+            _persist_scan_state,
+            mode,
+            len(groups),
+            scan_finished_at,
+            matches_cache,
+            report_cache,
+        )
 
         duration_seconds = round(time.perf_counter() - scan_started_monotonic, 3)
         cache_file = _LIVE_CACHE_FILE if is_live else _PREMATCH_CACHE_FILE

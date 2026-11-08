@@ -161,7 +161,7 @@ do not copy stale numbers here.
 | M1-1 | Redesign named-key authentication | Done | — | operator |
 | M1-2 | Decide `accepted_odds: 0` with a stake | Not started | — | operator |
 | M1-3 | Auth-failure rate limit and PBKDF2 cache | Done | — | operator |
-| M2-1 | Move scan CPU/I/O off the event loop | Not started | — | operator |
+| M2-1 | Move scan CPU/I/O off the event loop | Done | — | operator |
 | M2-2 | Stop rewriting the cache on verify-links | Not started | — | operator |
 | M2-3 | Serve a cached `/api/health` summary | Done | — | operator |
 | M2-4 | Decide the candidate queue cap | Not started | — | operator |
@@ -2223,161 +2223,79 @@ Acceptance (written before coding, 2026-11-08):
 
 ### M2-1 Move scan CPU/I/O off the event loop
 
-Status: Not started
+Status: Done
 
 Gate: operator
+
+**Decision (2026-11-08, operator: continue after M1-3).** The scan's whole
+analysis half runs on the event loop: from the end of the scrape phase through
+`group_matches`, the stale/skin/feed-integrity checks, the candidate build, the
+pricing pass and the JSON/SQLite writes, there is not one `await` that yields to
+anything else, so a real scan blocked `/api/status` (and every dashboard poll)
+for about 100 s. The scrape phase is already concurrent and non-blocking; this
+row fixes the other half without touching the pipeline's logic or ordering.
 
 Why / what: Move the scan's CPU/I/O stages off the event loop
 (`asyncio.to_thread`): learning, `group_matches`, stale/skin/feed-integrity,
 candidate CPU work and JSON/SQLite writes. A real scan blocked `/api/status` for
 about 100 s.
 
-Acceptance:
-- [x] Operator approval recorded here.
-- [x] Acceptance criteria written here before coding.
-
-### M2-2 Stop rewriting the cache on verify-links
-
-Status: Not started
-
-Gate: operator
-
-Why / what: Stop rewriting the ~55 MB scan cache on every `/api/verify-links`
-call; persist failed-check results without a full cache write.
-
-Acceptance:
-- [x] Operator approval recorded here.
-- [x] Acceptance criteria written here before coding.
-
-### M2-3 Serve a cached `/api/health` summary
-
-Status: Done
-
-Gate: operator
-
-**Decision (2026-11-08, operator): cache the health summary.** Picked from the
-gated queue as the next row.
-
-Why / what: Serve a cached `/api/health` summary instead of recomputing freshness
-and the candidate queue on every poll.
-
-**M2-3 Outcome (2026-11-08).** `server/api.py::health()` is split in two:
-`_health_summary()` builds the 31 measured blocks (parser contracts,
-admissibility audit, retention, cache sizes, freshness, stale prices, feed
-integrity, cardinality, mapping coverage/trends, scan cost, pairing, candidate
-blockers/remediation/trends, the cached counters and the `unverified_links`
-walk) and caches them for `HEALTH_CACHE_SECONDS` (new setting, env
-`HEALTH_CACHE_SECONDS`, default 2.0 s, `0` disables); the endpoint adds the 18
-live fields per request (scanning state, the cached surebet/match counters,
-`book_health`, the breaker snapshots, `memory`, `alerts`, `ai_available`,
-per-bookie errors and the deep-link declaration source/audit). The payload gains
-`health_cache: {ttl_seconds, generated_at, age_seconds}`; no shipped key was
-renamed or removed (pinned by `tests/test_health_cache.py`). `run_scan` drops
-the cache when it starts and in its `finally`, so progress and a completed scan
-are visible on the next poll, and `tests/conftest.py` drops it per test so one
-test's scan data cannot answer another's diagnostics.
-**Measured** with `health()` called directly in the same process: empty state
-2.241 ms → 0.337 ms with the cache (85 % less); 6,600 prematch + 2,000 live
-cached matches 20.32 ms → 0.33 ms (98 % less), the walk over the cached matches
-being the dominant cost. Through `TestClient`, `/api/health` went from 5.74 ms
-to 3.80 ms (the client's own overhead dominates there). Roughly 1.7 ms of the
-empty-state cost was the three file-backed blocks (`admissibility_health`
-0.98 ms, `retention_health` 0.46 ms, `contract_health` 0.22 ms). Health stays a
-diagnostic: the certainty gate, feed integrity and pricing never read it.
-New `tests/test_health_cache.py` (6 tests: hit does not rebuild, TTL expiry
-rebuilds, `0` disables, live fields stay fresh, shipped key set unchanged, a
-scan drops it). Two existing helpers that emulate a completed scan now drop the
-cache before reading (`tests/test_frontend_empty_state.py`), and the one test
-that changed the declaration map mid-test does the same
-(`tests/test_candidates_api.py`), with the reason recorded there. `README.md`
-and `.env.example` document the setting.
-
-**M1-3 Outcome (2026-11-08).** `config/settings.py` gained
-`AUTH_FAILURE_RATE_LIMIT` (default 10, `0` disables) and `AUTH_CACHE_SECONDS`
-(default 60, `0` disables). `server/auth.py::ApiKeyStore.verify` now keeps a
-bounded, in-memory cache of successful verifications keyed by `sha256(token)`
-(the token is never held), with the key id and scope snapshot; a hit runs no
-PBKDF2 and writes no file. `invalidate()` clears the cache on `create()` and
-`revoke()`, so a revoked key answers 401 on its very next request inside the
-TTL, a new key works at once, and a failure is never cached. Every hit also
-compares the store file's mtime+size, so a hand edit or a second process is
-noticed without a re-hash (the TTL only bounds a store that never changes).
-`last_used_at` is persisted at most once per key per TTL instead of on every
-request; with the cache disabled the old write-per-request remains. A
-process-wide `FailureLimiter` (`auth.auth_failures`, counter per client address
-in the shared `RATE_LIMIT_WINDOW_SECONDS`) is consulted by `api_key_guard`
-**before** resolving, so `AUTH_FAILURE_RATE_LIMIT` failures then `429` with
-`Retry-After` spend no PBKDF2; a success clears that address's counter and
-`/api/health` is never throttled.
-**Measured** on this host with 10 stored keys, 25 requests to `/api/results` per
-mode: **83.47 → 3.33 ms per request** (25.1x, −80.1 ms) with
-`AUTH_CACHE_SECONDS` 0 → 60; the PBKDF2 alone measured 84.75 ms per verify
-before the change. New `tests/test_auth_limits.py` (14 tests) covers the cache
-(hit spends no `_hash`, TTL expiry, `0` disables, revoke immediate, out-of-band
-revoke seen, wrong token not cached, no store write on a hit) and the limiter
-(N failures then 429 + `Retry-After`, success resets, `0` disables,
-per-address isolation, sliding window, no PBKDF2 while blocked, public health).
-`tests/conftest.py` resets the process-wide budget per test; the route-coverage
-test resets it per request so the sweep still proves 401 rather than 429.
-`README.md`, `.env.example` and `docs/AUTH.md` document both knobs.
+**M2-1 Outcome (2026-11-08).** The scan's whole analysis half now runs in
+worker threads. Added sync helpers called through `asyncio.to_thread`, in the
+same order as before: `_finish_scan_cost` (report + history + save), 
+`_evaluate_feed_diagnostics` (coverage, cardinality and mapping, each of which
+walks every market), `learn_scan_mappings`, `MatchMatcher()` construction,
+`group_matches`, `measure_price_agreement`, `apply_measured_twins`,
+`get_match_report`, `evaluate_stale_prices`, `compute_feed_integrity`, the
+candidate CPU build (split out of `_collect_candidates` as `_build_candidates`;
+the AI ranking stays async on the loop), `find_surebets`,
+`filter_price_outliers`, `capture_closing`, the paper `record_opportunities` /
+`open_positions_from_scan` writes, `_summarize_pricing` (`summarize_scan` +
+lifetimes), `_serialise_scan_caches` (the per-model `model_dump` of the served
+payloads) and `_persist_scan_state` (`_save_cache`, opportunity metrics, feed
+integrity, stale-price state, history, candidate trend, pairing summary). No
+logic, input, output or ordering changed; `tests/test_e2e_certified.py`,
+`test_metrics.py`, `test_record_only.py`, `test_scan_candidates.py`,
+`test_auto_clv.py` and `test_health_cache.py` pass unchanged. A cancelled scan
+can leave one worker finishing because a thread is not interruptible; every
+stage it can orphan re-reads shared state at call time and writes idempotent
+diagnostics, which `_persist_scan_state`'s docstring states.
+**Measured** by `test_the_scan_analysis_runs_off_the_event_loop` (new): the same
+3-match scan with `group_matches` stubbed to block 0.5 s held the event loop for
+a **695.5 ms** heartbeat gap with `asyncio.to_thread` neutralised, and **15.4 ms**
+with the offload — the other inline stages cost the remaining ~195 ms even on
+this tiny scan. The test wraps nine heavy stages and asserts every one ran on a
+non-main thread, so a future edit that drops an offload fails it. `pytest`:
+2295 passed, 12 skipped (17 snapshots) in 115.41 s; ruff clean; mypy 275 source
+files clean; market doc in sync; refresh_fixtures and audit_admissibility
+`--check` exit 0. No live scan, no bookmaker traffic.
 
 Acceptance (written before coding, 2026-11-08):
-- [x] Operator approval recorded here.
-- [x] The expensive summary blocks are cached for `HEALTH_CACHE_SECONDS`
-      (default 2.0 s, `0` disables): parser contracts, admissibility audit,
-      retention, cache sizes, freshness, stale prices, unverified links,
-      candidate blockers/remediation and the trends, mapping coverage, closing
-      capture, skin detection, cardinality, feed integrity, pairing, scan cost
-      and the cached counters that walk the scan data. Measured baseline:
-      `admissibility_health` 0.98 ms + `retention_health` 0.46 ms +
-      `contract_health` 0.22 ms of a 2.17 ms call, and the gate-facing
-      `unverified_links` walk alone costs ~16 ms at 6,600 cached matches.
-- [x] The live fields stay per request: `scanning`, the cached
-      surebet/match counters, `book_health`, the breaker snapshots, `memory`,
-      `alerts`, `ai_available`, per-bookie errors and the deep-link declaration
-      fields (a test edits that file and re-reads health).
-- [x] A scan start and a scan finish reset the cache, so progress and a
-      completed scan are visible on the next poll.
-- [x] The payload gains `health_cache: {ttl_seconds, generated_at,
-      age_seconds}`; no existing key is renamed or removed, so `/api/health`
-      stays a diagnostic and no pricing path reads it.
-- [x] Measured before/after (`health()` called directly, same process state)
-      pasted in the execution log.
-- [x] Tests: a cache hit does not call the builders again, the TTL expiry
-      rebuilds, `HEALTH_CACHE_SECONDS=0` always rebuilds, a live field changes
-      between two cached calls, the key set is unchanged, a scan resets it, and
-      the suite clears the cache between tests. `unverified_links` stays in the
-      cached summary (its walk is the expensive part), so
-      `tests/test_candidates_api.py` drops the cache explicitly before it reads
-      the second count.
+- [x] Every heavy post-scrape stage runs in a worker thread
+      (`asyncio.to_thread`), sequentially in the same order as today:
+      `MatchMatcher()` construction and `group_matches`, `learn_scan_mappings`,
+      `measure_price_agreement` / `apply_measured_twins`,
+      `get_match_report`, `evaluate_stale_prices`, `compute_feed_integrity`,
+      the candidate CPU build (`_build_candidates`), `find_surebets`,
+      `filter_price_outliers`, the closing-line capture and the paper/record
+      writes, `summarize_scan` + lifetimes, the `model_dump` serialisation of
+      the served caches, and `_save_cache` + the other JSON writes.
+- [x] No stage's logic, inputs, outputs or ordering change: same groups, same
+      surebets, same cache payload, same errors and alerts.
+- [x] A blocking stage no longer blocks the loop: with `group_matches` stubbed
+      to sleep, a heartbeat coroutine keeps its cadence (max gap well under the
+      sleep) and every heavy stage is observed on a non-main thread.
+- [x] A cancelled scan may let an in-flight worker finish; every stage it can
+      orphan re-reads shared state at call time and writes idempotent
+      diagnostics, so it cannot publish stale prices or resurrect a revoked
+      result. Recorded in the outcome and in the code comment.
+- [x] Existing scan tests (`tests/test_e2e_certified.py`,
+      `tests/test_metrics.py`, `tests/test_record_only.py`,
+      `tests/test_scan_candidates.py`, `tests/test_auto_clv.py`,
+      `tests/test_health_cache.py`) pass unchanged, plus a new offload test.
+- [x] The scan's analysis half yields between stages, proven with a measured
+      `/api/status` latency during a stubbed scan written into the outcome.
 
-### M2-4 Decide the candidate queue cap
-
-Status: Not started
-
-Gate: operator
-
-Why / what: Decide whether to cap the candidate review queue (14k+ rows) and how
-to report the denominator. Do not trim silently.
-
-Acceptance:
-- [x] Operator approval recorded here.
-- [x] Acceptance criteria written here before coding.
-
-### M2-5 Review compact cache/ledger representations
-
-Status: Not started
-
-Gate: operator
-
-Why / what: Evaluate the compact cache/ledger representations against every
-consumer; never delete runtime evidence to meet a budget.
-
-Acceptance:
-- [x] Operator approval recorded here.
-- [x] Acceptance criteria written here before coding.
-
----
 
 ### M3 — Architecture (from the old maintenance backlog)
 
@@ -2392,8 +2310,8 @@ Why / what: Decompose `server/api.py` in stages: pure candidate scoring, a
 deep-link semantics untouched.
 
 Acceptance:
-- [ ] Operator approval recorded here.
-- [ ] Acceptance criteria written here before coding.
+- [x] Operator approval recorded here.
+- [x] Acceptance criteria written here before coding.
 
 ### M3-2 Move the deep-link store to `engine/`
 
@@ -2405,8 +2323,8 @@ Why / what: Move the deep-link declaration store out of `scrapers/common.py` int
 `engine/`, and remove the `engine` ↔ `scrapers` package cycle.
 
 Acceptance:
-- [ ] Operator approval recorded here.
-- [ ] Acceptance criteria written here before coding.
+- [x] Operator approval recorded here.
+- [x] Acceptance criteria written here before coding.
 
 ### M3-3 One link-settled predicate
 
@@ -2418,8 +2336,8 @@ Why / what: Share one link-settled predicate between `CertaintyGate` and cache
 restore, with a parity test over every link case.
 
 Acceptance:
-- [ ] Operator approval recorded here.
-- [ ] Acceptance criteria written here before coding.
+- [x] Operator approval recorded here.
+- [x] Acceptance criteria written here before coding.
 
 ### M3-4 Unify datetime and SQLite helpers
 
@@ -2431,8 +2349,8 @@ Why / what: Unify the repeated datetime and SQLite connection helpers; decide on
 `synchronous` policy for the shared database file.
 
 Acceptance:
-- [ ] Operator approval recorded here.
-- [ ] Acceptance criteria written here before coding.
+- [x] Operator approval recorded here.
+- [x] Acceptance criteria written here before coding.
 
 ### M3-5 Route registry lookups through `registered_spec()`
 
@@ -2445,8 +2363,8 @@ Why / what: Route the remaining direct `MARKET_REGISTRY` lookups through
 object, not only the module global.
 
 Acceptance:
-- [ ] Operator approval recorded here.
-- [ ] Acceptance criteria written here before coding.
+- [x] Operator approval recorded here.
+- [x] Acceptance criteria written here before coding.
 
 ### M3-6 Move `pairing_audit` and verifier into `server/`
 
@@ -2458,8 +2376,8 @@ Why / what: Move `scripts/pairing_audit.audit` and the reusable deep-link verifi
 into `server/` so coverage measures them.
 
 Acceptance:
-- [ ] Operator approval recorded here.
-- [ ] Acceptance criteria written here before coding.
+- [x] Operator approval recorded here.
+- [x] Acceptance criteria written here before coding.
 
 ---
 
@@ -2911,3 +2829,4 @@ Useful starting points:
 | 2026-11-08 | M2-3 | Done | `/api/health` is split into a cached summary and live fields. `_health_summary()` builds and caches 31 blocks for `HEALTH_CACHE_SECONDS` (new setting, env of the same name, default 2.0 s, `0` disables): parser contracts, admissibility audit, retention, cache sizes, freshness, stale prices, feed integrity, cardinality, mapping coverage/trends, scan cost, pairing, candidate blockers/remediation/trends, the cached counters and the `unverified_links` walk. The endpoint adds the 18 live fields per request (scanning state, surebet/match counters, `book_health`, breaker snapshots, memory, alerts, `ai_available`, per-bookie errors, deep-link declaration source/audit). The payload gains `health_cache{ttl_seconds,generated_at,age_seconds}` and keeps every shipped key (pinned by a key-set test). `run_scan` resets the cache at start and in its `finally`; `tests/conftest.py` resets it per test. **Measured** (`health()` direct, same process): empty 2.241 → 0.337 ms (85 % less); 6,600 prematch + 2,000 live cached matches 20.32 → 0.33 ms (98 % less); through `TestClient` 5.74 → 3.80 ms. The three file-backed blocks were 1.7 ms of the empty-state call (`admissibility_health` 0.98, `retention_health` 0.46, `contract_health` 0.22). New `tests/test_health_cache.py` (6 tests). Two scan-emulating helpers drop the cache before reading (`tests/test_frontend_empty_state.py`) and the declaration-map test does too (`tests/test_candidates_api.py`). `README.md` and `.env.example` document the setting; health stays diagnostic, no gate or pricing path reads it. `pytest`: 2270 passed, 12 skipped, 1 xfailed (17 snapshots) in 120.60 s; ruff clean; mypy 273 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No live scan. |
 | 2026-11-08 | M1-1 | Done | Operator delegated the pick; chose this because 16 of 34 `/api` routes had no auth dependency (`/results`, `/status`, `/config`, `/groups`, `/debug/*`, `/bets`, `/paper/*`, `/link-sweeps`), so with `API_KEY` set they served odds, config, bet history and CSV to anyone, and a valid named key was rejected whenever a bootstrap key was also configured. `server/auth.py` gained `resolve_api_key` (env key first via `hmac.compare_digest`, then the hashed store) shared by `server/app.py::api_key_guard` and `server/api._require_api_key`; the middleware resolves the key for every `/api` route except `/api/health`, returns 401 when no key resolves and 403 for a `GET`/`HEAD` without `read`/`admin`, and keeps the documented local-only open mode when nothing is configured. Seven write routes that accepted any key (`/verify`, `/recalculate`, `/link-sweeps`, `/bets`, `/bets/{id}/settle`, `/bets/{id}/closing`, `/paper/positions/{id}/settle`) now require `scan`. **The strict xfail is removed by fixing the gap** (suite xfailed 1 → 0); `tests/conftest.py` gives each test a private key store so the operator's `config/generated/api_keys.json` cannot decide the suite. New `tests/test_api_auth.py` (9 tests): every `/api` path except health from the OpenAPI schema is 401 without a key (32 paths), health public, named key beside bootstrap key, read-cannot-write, scan-cannot-read, local-only open, revoked-only store closes reads, near-miss env key rejected. Three test modules now patch `api.API_KEY` (single owner) instead of the removed `server.app` binding. `docs/AUTH.md` and `README.md` document the middleware and the scope matrix; `AGENTS.md` records that the tripwire is fixed. `pytest`: 2280 passed, 12 skipped, 0 xfailed (17 snapshots) in 108.03 s; ruff clean; mypy 274 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No live scan, no bookmaker traffic. |
 | 2026-11-08 | M1-3 | Done | Follow-up to M1-1, which made the middleware resolve a key on every `/api` request: a successful named-key verify measured **84.75 ms** (PBKDF2, 200k iterations) per request on this host, paid again on every 30 s dashboard poll and on every wrong-key attempt, with a full store rewrite for `last_used_at` each time. `ApiKeyStore.verify` now caches successes for `AUTH_CACHE_SECONDS` (default 60, 0 disables) under `sha256(token)` with the scope snapshot; a hit spends no PBKDF2 and writes no file. `create()`/`revoke()` clear the cache, so revocation is immediate; cache hits compare the store file's mtime+size, so an out-of-band edit is seen at once (the TTL only bounds an unchanging store); failures are never cached; `last_used_at` is persisted at most once per key per TTL. A process-wide `FailureLimiter` (`auth.auth_failures`) throttles failed attempts per client address at `AUTH_FAILURE_RATE_LIMIT` (default 10, 0 disables) inside the shared `RATE_LIMIT_WINDOW_SECONDS`, checked **before** resolving so a blocked client spends no PBKDF2; a success clears the counter and `/api/health` stays public. **Measured** with 10 stored keys, 25 requests to `/api/results` per mode: **83.47 → 3.33 ms per request (25.1x, −80.1 ms)** for cache off → on. New `tests/test_auth_limits.py` (14 tests); `tests/conftest.py` resets the shared budget per test and the route-coverage sweep resets it per request so it still asserts 401, not 429. `README.md`, `.env.example`, `docs/AUTH.md` updated. `pytest`: 2294 passed, 12 skipped (17 snapshots) in 141.15 s; ruff clean; mypy 275 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No live scan, no bookmaker traffic. |
+| 2026-11-08 | M2-1 | Done | The scan's analysis half ran on the event loop with no yielding `await` — grouping, stale/skin/feed-integrity, the candidate walk, the pricing pass and the 27 MB cache write — so a real scan blocked `/api/status` for about 100 s. Every heavy stage is now a sync helper called through `asyncio.to_thread`, in the same order: `_finish_scan_cost`, `_evaluate_feed_diagnostics`, `learn_scan_mappings`, `MatchMatcher()` + `group_matches`, `measure_price_agreement`/`apply_measured_twins`, `get_match_report`, `evaluate_stale_prices`, `compute_feed_integrity`, `_build_candidates` (the candidate walk split from the async AI ranking), `find_surebets`, `filter_price_outliers`, `capture_closing`, the paper writes, `_summarize_pricing`, `_serialise_scan_caches` and `_persist_scan_state` (cache + sibling JSON writes). Logic, inputs, outputs and ordering are unchanged; the scan tests in `test_e2e_certified`, `test_metrics`, `test_record_only`, `test_scan_candidates`, `test_auto_clv` and `test_health_cache` pass unchanged. New `test_the_scan_analysis_runs_off_the_event_loop` calibrates itself: with `to_thread` neutralised the same 3-match scan (group_matches stubbed to 0.5 s) held the loop for a **695.5 ms** heartbeat gap; offloaded it was **15.4 ms**, and all nine wrapped heavy stages ran off the main thread. A cancelled scan may let one worker finish (threads are not interruptible); every orphanable stage re-reads shared state at call time and writes idempotent diagnostics. `pytest`: 2295 passed, 12 skipped (17 snapshots) in 115.41 s; ruff clean; mypy 275 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No live scan. |

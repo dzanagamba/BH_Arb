@@ -91,6 +91,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import threading
+import time
+from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -893,7 +896,7 @@ def test_scan_applies_stored_link_proofs_and_serves_the_surebet(
 ):
     """The whole chain, through the server, ending at the served payload.
 
-    This is the only place ``run_scan`` itself runs, so it is the only test here
+    These are the places ``run_scan`` itself runs, so they are the only tests here
     that can catch a wiring regression between the stages the other tests drive
     by hand: a scan that stops applying stored link proofs, stops serialising
     the matches, stops grouping, or serves a cache the matcher never filled.
@@ -1104,3 +1107,117 @@ def test_scan_refuses_a_link_proof_that_aged_out(
         # The AI ranks a queue entry; it can never decide one.
         assert candidate.ai_same_event is None
         assert candidate.ai_confidence == 0.0
+
+
+def test_the_scan_analysis_runs_off_the_event_loop(
+    monkeypatch, isolated_server_state, stubbed_scrapers
+):
+    """M2-1: the post-scrape half yields, so a poll is answered during a scan.
+
+    Before the offload the whole analysis ran on the loop with no yielding
+    ``await``: grouping, the stale/skin/feed-integrity checks, the pricing pass
+    and the 27 MB cache write. A real scan blocked ``/api/status`` for about
+    100 s. Here ``group_matches`` is made to block for 0.5 s -- the stand-in for
+    those stages -- and a 10 ms heartbeat measures how long the loop was held.
+
+    The test calibrates itself: the same scan first runs with ``to_thread``
+    neutralised, which must produce a heartbeat gap of at least the block, and
+    then normally, which must keep every gap far below it. So a future edit that
+    drops an offload cannot pass by accident.
+    """
+    block = 0.5
+    seen: dict[str, bool] = {}
+    real_group = MatchMatcher.group_matches
+
+    def slow_group(self, matches):
+        seen["group_matches"] = threading.current_thread() is threading.main_thread()
+        time.sleep(block)
+        return real_group(self, matches)
+
+    def wrap(name, function):
+        def wrapper(*args, **kwargs):
+            seen[name] = threading.current_thread() is threading.main_thread()
+            return function(*args, **kwargs)
+
+        return wrapper
+
+    monkeypatch.setattr(api.MatchMatcher, "group_matches", slow_group)
+    for name, target, attribute in (
+        ("get_match_report", api.MatchMatcher, "get_match_report"),
+        ("find_surebets", api.ArbitrageEngine, "find_surebets"),
+        ("evaluate_stale_prices", api, "evaluate_stale_prices"),
+        ("compute_feed_integrity", api, "compute_feed_integrity"),
+        ("measure_price_agreement", api, "measure_price_agreement"),
+        ("summarize_scan", api, "summarize_scan"),
+        ("_save_cache", api, "_save_cache"),
+        ("_append_history", api, "_append_history"),
+    ):
+        monkeypatch.setattr(target, attribute, wrap(name, getattr(target, attribute)))
+
+    def heartbeat_gaps() -> list[float]:
+        gaps: list[float] = []
+
+        async def main() -> None:
+            async def beat() -> None:
+                last = time.perf_counter()
+                while True:
+                    await asyncio.sleep(0.01)
+                    now = time.perf_counter()
+                    gaps.append(now - last)
+                    last = now
+
+            task = asyncio.create_task(beat())
+            await asyncio.sleep(0.02)
+            try:
+                await api.run_scan("prematch")
+            finally:
+                # Let an overdue timer run: a loop-blocking stage leaves the
+                # beat's next tick pending, and cancelling first would hide the
+                # very gap this test measures.
+                await asyncio.sleep(0.03)
+                task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await task
+
+        asyncio.run(main())
+        return gaps
+
+    async def inline(function, *args, **kwargs):
+        return function(*args, **kwargs)
+
+    # Control: with the offload neutralised this scan must hold the loop. A
+    # nested context so undoing only this patch leaves the fixtures' stubs in
+    # place -- a plain `monkeypatch.undo()` would re-enable the real scrapers.
+    with pytest.MonkeyPatch.context() as control:
+        control.setattr(asyncio, "to_thread", inline)
+        inline_gaps = heartbeat_gaps()
+    assert api.scan_status.errors == []
+    assert max(inline_gaps) >= block * 0.8, (
+        "the blocking stand-in did not hold the loop, so this control cannot "
+        f"prove anything: {max(inline_gaps):.3f}s"
+    )
+    assert any(seen.values()), "the control must run the stages on the loop thread"
+    seen.clear()
+
+    # The real path: none of those stages may run on the loop's thread.
+    offloaded_gaps = heartbeat_gaps()
+    assert api.scan_status.errors == []
+    assert set(seen) == {
+        "group_matches",
+        "get_match_report",
+        "find_surebets",
+        "evaluate_stale_prices",
+        "compute_feed_integrity",
+        "measure_price_agreement",
+        "summarize_scan",
+        "_save_cache",
+        "_append_history",
+    }, "a stage did not run at all, so this test would miss its offload"
+    assert not any(seen.values()), (
+        "these stages ran on the event loop: "
+        f"{sorted(name for name, main in seen.items() if main)}"
+    )
+    assert max(offloaded_gaps) < block / 2, (
+        "the loop was held for "
+        f"{max(offloaded_gaps):.3f}s while group_matches blocked for {block:g}s"
+    )

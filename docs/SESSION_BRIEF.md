@@ -3,7 +3,7 @@
 **Updated:** 2026-11-08
 **Goal:** keep `ROADMAP.md` current without weakening the trust model.
 **Current task:** none; SR0-1, SR0-2, SR1-1, SR1-2, SR1-3, SR1-4, M1-1, M1-3,
-M2-3, SR2-1 …
+M2-1, M2-3, SR2-1 …
 SR2-6, SR3-1, SR3-2, SR3-3, SR3-4, SR4-1, SR4-2, SR4-3, SR4-3b … SR4-3f,
 SR4-3h, SR4-3i, SR4-3j, SR4-4, SR4-5, SR4-6, SR4-7, SR4-7a, SR4-8, SR4-8a,
 SR4-9, SR4-10, SR4-11, SR4-12, SR4-13, SR5-1, SR5-2, SR6-1, SR6-2, SR6-3,
@@ -12,12 +12,29 @@ SR7-1 and SR7-2 are done.
 feed). Every other `Not started` row is `Gate: operator`; the roadmap is the
 single task list in `ROADMAP.md`, N2-4 stays deferred and P1-6 stays waived
 until the operator says otherwise.
-**Last task commit:** `2eb5324` — "cache key verification and throttle failed
-attempts (M1-3)", pushed to `origin/main` on 2026-11-08. Before it, `e82a0f1`
-closes every `/api` route with one key guard (M1-1), `3f9a911` carries the
-health-summary cache (M2-3), and `8a1cb90` carries SR6-2, SR4-8a and SR4-8.
+**Last task commit:** M2-1 "move the scan analysis off the event loop",
+committed on 2026-11-08. Before it, `2eb5324` caches key verification and
+throttles failed attempts (M1-3), `e82a0f1` closes every `/api` route with one
+key guard (M1-1), `3f9a911` carries the health-summary cache (M2-3), and
+`8a1cb90` carries SR6-2, SR4-8a and SR4-8.
 
 ## Project state
+
+M2-1 (2026-11-08, working tree, continuing the delegated pick): the scan's
+analysis half now runs in worker threads. `asyncio.to_thread` wraps every heavy
+post-scrape stage in the same order — scan-cost build/save, coverage/cardinality/
+mapping, learning, `MatchMatcher()` + `group_matches`, skin detection,
+`get_match_report`, stale prices, feed integrity, the candidate walk
+(`_build_candidates`, split from the async AI ranking), `find_surebets`, the
+price guard, closing capture, the paper writes, `summarize_scan` + lifetimes,
+the payload `model_dump`, and `_persist_scan_state` (the 27 MB cache and sibling
+JSON writes). Nothing about the logic or ordering changed, and the existing scan
+tests pass unchanged. New `test_the_scan_analysis_runs_off_the_event_loop`
+calibrates itself against a neutralised `to_thread`: a 3-match scan with
+`group_matches` stubbed to 0.5 s held the loop **695.5 ms** neutralised and
+**15.4 ms** offloaded, with nine heavy stages observed off the main thread. A
+cancelled scan may let one worker finish; the orphanable stages re-read shared
+state at call time and are idempotent.
 
 M1-3 (2026-11-08, working tree, continuing the delegated pick): one named-key
 verification cost 84.75 ms of PBKDF2, paid per request by the M1-1 middleware.
@@ -625,14 +642,14 @@ the seven-day opportunity baseline remains unmeasured and N2-4 owns it.
 
 ## Next action
 
-**No `Not started` row is ungated.** M1-1, M1-3, M2-3 and SR4-8 closed the last
-ones.
+**No `Not started` row is ungated.** M1-1, M1-3, M2-1, M2-3 and SR4-8 closed the
+last ones.
 What is left needs the operator: **SR4-3g** (blocked on a live EVLBet payload —
 do not start it), the remaining **M\*** rows (all `Gate: operator`; each needs
 explicit approval and written acceptance criteria before any work), and the
 deferred N2-4 / waived P1-6 (leave both alone). Sensible next picks, in the
-order this session would take them: **M2-1** (move the scan's CPU/I/O off the
-event loop), **M2-2** (stop rewriting the cache on verify-links). A HAR refresh is an operator action, not a task:
+order this session would take them: **M2-2** (stop rewriting the ~55 MB cache on
+verify-links), then the M2 cache/queue rows and the M1 rows (M1-2). A HAR refresh is an operator action, not a task:
 `python scripts/capture_har.py --books all`.
 
 ## Rules
