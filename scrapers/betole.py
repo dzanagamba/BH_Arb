@@ -334,6 +334,13 @@ class BetoleScraper:
         logger.info(f"[Betole] {len(matches)} {'live' if live else 'prematch'} matches parsed")
         return matches
 
-    async def scrape(self, live: bool = False, scan_time: datetime | None = None) -> list[Match]:
+    async def scrape(
+        self,
+        live: bool = False,
+        scan_time: datetime | None = None,
+        sports_wanted: tuple[str, ...] | list[str] | None = None,
+    ) -> list[Match]:
+        # SR6-2: part of the shared adapter contract; this desk serves one sport
+        # per request, so the filter is accepted and unused.
         return await self.fetch_and_parse(live=live, scan_time=scan_time)
 

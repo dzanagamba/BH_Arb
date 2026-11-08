@@ -13,7 +13,7 @@ the active book through a context variable:
 |---|---|
 | `wall_seconds` | Wall time from the wrapper's start to its finish. |
 | `browser_seconds` | Playwright start + Chromium launch + context setup, or `null` with a "book does not use a browser" reason. |
-| `requests` | HTTP requests made through `fetch_with_retry`, `page.goto`, `page.request.get/post`, or the Premier JSON-RPC call. |
+| `requests` | HTTP requests made through `fetch_with_retry`, `page.goto`, the in-page `fetch` of the browser books (`measured_api_get/post`, SR4-8a), or the Premier JSON-RPC call. |
 | `bytes` | Sum of readable response bodies, or `null` when the size is unavailable. |
 | `outcome` | Historical label: `success`, `empty`, `parse_error`, `blocked` or `skipped`. |
 | `kind` | SR2-1 taxonomy: `ok`, `empty`, `blocked`, `rate_limited`, `timeout`, `transport`, `upstream_5xx`, `parse_error`, `schema_drift` or `skipped`. |

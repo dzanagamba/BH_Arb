@@ -1,13 +1,17 @@
 """
-Shared scraper plumbing: the stealth Playwright launcher and the pagination
-helper.
+Shared scraper plumbing: the stealth Playwright launcher, the in-page fetch
+the browser books call their APIs with (SR4-8a) and the pagination helper.
 """
 
 import asyncio
+import base64
+import json
 import logging
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from typing import Any
+from urllib.parse import urlencode
 
 from playwright.async_api import Browser, BrowserContext, Playwright, async_playwright
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
@@ -19,12 +23,18 @@ from scrapers.errors import ScrapeKind
 logger = logging.getLogger(__name__)
 
 
-async def new_context(browser: Browser) -> BrowserContext:
+async def new_context(
+    browser: Browser, *, record_har_path: str | None = None
+) -> BrowserContext:
     """A fresh stealth context on an existing browser (one per book).
 
     Every context gets its own cookies and cache; a book cannot see another
     book's session. The route and init script are the same ones the one-shot
     launcher uses.
+
+    SR4-8: ``record_har_path`` turns on Playwright's HAR recording for the
+    context (bodies embedded), which is how the scrubbed browser-book fixtures
+    are captured. It is used by the capture script only; a scan never sets it.
     """
     context = await browser.new_context(
         user_agent=USER_AGENT,
@@ -36,6 +46,8 @@ async def new_context(browser: Browser) -> BrowserContext:
             "Accept-Language": "bs-BA,bs;q=0.9,hr;q=0.8,en-US;q=0.7,en;q=0.6",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         },
+        record_har_path=record_har_path,
+        record_har_content="embed" if record_har_path else None,
     )
     await context.add_init_script("""
         Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
@@ -54,11 +66,15 @@ async def new_context(browser: Browser) -> BrowserContext:
     return context
 
 
-async def launch_browser() -> tuple[Playwright, Browser, BrowserContext]:
+async def launch_browser(
+    *, record_har_path: str | None = None
+) -> tuple[Playwright, Browser, BrowserContext]:
     """
     Launch a stealth-configured Chromium browser + context (anti-bot flags,
     Bosnian locale/timezone, custom UA). Used by standalone scripts; a scan
     shares one browser through ``browser_session()`` instead.
+    ``record_har_path`` is the SR4-8 capture seam (HAR recording, bodies
+    embedded); a scan never passes it.
     Caller is responsible for closing the browser and stopping Playwright.
     """
     started = time.perf_counter()
@@ -74,7 +90,7 @@ async def launch_browser() -> tuple[Playwright, Browser, BrowserContext]:
             "--start-maximized",
         ],
     )
-    context = await new_context(browser)
+    context = await new_context(browser, record_har_path=record_har_path)
     record_browser_seconds(time.perf_counter() - started)
     return playwright, browser, context
 
@@ -134,26 +150,146 @@ async def goto(page, url: str, **kwargs):
     return response
 
 
-async def _record_api_response(response) -> None:
-    try:
-        body = await response.body()
-    except Exception:  # noqa: BLE001 - size is best effort
-        body = None
-    record_request(len(body) if body is not None else None)
+#: Default wall-clock cap for one in-page fetch. It mirrors the 30 s default
+#: Playwright's ``APIRequestContext`` used for ``page.request``; the adapter
+#: deadline (SR2-5) still bounds a whole scrape.
+PAGE_FETCH_TIMEOUT_SECONDS = 30.0
+
+#: Body sizes go through ``btoa`` so the reply is JSON-serialisable.
+_PAGE_FETCH_SCRIPT = """
+async (request) => {
+  const response = await fetch(request.url, {
+    method: request.method,
+    headers: request.headers,
+    credentials: request.credentials,
+    redirect: "follow",
+    body: request.body,
+  });
+  const buffer = await response.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  const chunk = 0x8000;
+  for (let index = 0; index < bytes.length; index += chunk) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(index, index + chunk));
+  }
+  const headers = {};
+  response.headers.forEach((value, key) => { headers[key] = value; });
+  return {status: response.status, url: response.url, headers: headers, body: btoa(binary)};
+}
+"""
 
 
-async def measured_api_get(page, url: str, **kwargs):
-    """Playwright ``page.request.get`` with request/byte accounting."""
-    response = await page.request.get(url, **kwargs)
-    await _record_api_response(response)
-    return response
+class PageResponse:
+    """The adapters' view of one in-page ``fetch`` reply.
+
+    It is deliberately the subset of ``httpx.Response`` / Playwright
+    ``APIResponse`` the adapters already used: ``status``, ``headers``,
+    ``body()``, ``json()`` and ``content`` (for byte accounting). ``json()``
+    raises ``ValueError`` on a body that is not JSON, exactly like the two
+    libraries it replaces.
+    """
+
+    def __init__(
+        self, url: str, status: int, headers: dict[str, str], content: bytes
+    ) -> None:
+        self.url = url
+        self.status = status
+        self.status_code = status
+        self.headers = headers
+        self.content = content
+
+    async def body(self) -> bytes:
+        return self.content
+
+    async def text(self) -> str:
+        return self.content.decode("utf-8", errors="replace")
+
+    async def json(self) -> Any:
+        return json.loads(self.content)
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging aid
+        return f"<PageResponse {self.status} {self.url} {len(self.content)}B>"
 
 
-async def measured_api_post(page, url: str, **kwargs):
-    """Playwright ``page.request.post`` with request/byte accounting."""
-    response = await page.request.post(url, **kwargs)
-    await _record_api_response(response)
-    return response
+def _fetch_url(url: str, params: dict[str, Any] | str | None) -> str:
+    if not params:
+        return url
+    query = params if isinstance(params, str) else urlencode(params, doseq=True)
+    separator = "&" if "?" in url else "?"
+    return f"{url}{separator}{query}"
+
+
+def _fetch_body(
+    data: Any, headers: dict[str, str]
+) -> tuple[str | None, dict[str, str]]:
+    """The request body and headers, mirroring Playwright's ``data`` rules.
+
+    A dict or list is JSON-serialised and gets ``application/json`` when the
+    caller did not set a content type; a string is sent unchanged. That is what
+    ``page.request.post(data=...)`` did, so the endpoints keep the same request
+    shape.
+    """
+    if data is None:
+        return None, headers
+    if isinstance(data, str):
+        return data, headers
+    if isinstance(data, bytes):
+        return data.decode("utf-8"), headers
+    body = json.dumps(data, allow_nan=False)
+    if not any(key.lower() == "content-type" for key in headers):
+        headers = {**headers, "Content-Type": "application/json"}
+    return body, headers
+
+
+async def _page_fetch(
+    page,
+    method: str,
+    url: str,
+    *,
+    headers: dict[str, str] | None = None,
+    params: dict[str, Any] | str | None = None,
+    data: Any = None,
+    timeout_seconds: float | None = None,
+) -> PageResponse:
+    """One request issued by the page itself, then measured.
+
+    SR4-8a route A: the call runs as ``fetch`` inside the loaded document, so
+    ``context.route`` and HAR record/replay cover it (``page.request`` bypassed
+    both). Cookies, the page's UA and its Cloudflare clearance are the browser's
+    own, and the request counts against the book's rate limiter because
+    ``retry_call`` wraps this call. The timeout is enforced in Python, so an
+    overrun is the shared ``timeout`` kind and not a text-matched JS error.
+    """
+    body, request_headers = _fetch_body(data, dict(headers or {}))
+    payload = {
+        "url": _fetch_url(url, params),
+        "method": method,
+        "headers": request_headers,
+        "body": body,
+        "credentials": "include",
+    }
+    limit = PAGE_FETCH_TIMEOUT_SECONDS if timeout_seconds is None else timeout_seconds
+    async with asyncio.timeout(limit):
+        raw = await page.evaluate(_PAGE_FETCH_SCRIPT, payload)
+
+    content = base64.b64decode(raw.get("body") or "")
+    record_request(len(content))
+    return PageResponse(
+        url=str(raw.get("url") or payload["url"]),
+        status=int(raw["status"]),
+        headers={str(k).lower(): str(v) for k, v in (raw.get("headers") or {}).items()},
+        content=content,
+    )
+
+
+async def measured_api_get(page, url: str, **kwargs) -> PageResponse:
+    """A page-issued GET with request/byte accounting."""
+    return await _page_fetch(page, "GET", url, **kwargs)
+
+
+async def measured_api_post(page, url: str, **kwargs) -> PageResponse:
+    """A page-issued POST with request/byte accounting."""
+    return await _page_fetch(page, "POST", url, **kwargs)
 
 
 async def settle(page, max_ms: int) -> ScrapeKind:

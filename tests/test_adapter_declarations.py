@@ -37,15 +37,25 @@ MARKET_REGISTRY = REPO_ROOT / "config" / "bookmaker_markets.json"
 
 
 def _adapter_modules() -> set[str]:
-    """Modules under ``scrapers/`` that define an async ``scrape`` entry point."""
+    """Modules under ``scrapers/`` that define a concrete class with ``scrape()``.
+
+    A ``Protocol`` is a contract, not an adapter (SR6-2's ``BookAdapter`` is
+    skipped), and a module-level function is not what the registry resolves.
+    """
     found: set[str] = set()
     for path in sorted(SCRAPERS_DIR.glob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        if any(
-            isinstance(node, ast.AsyncFunctionDef) and node.name == "scrape"
-            for node in ast.walk(tree)
-        ):
-            found.add(f"scrapers.{path.stem}")
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ClassDef) or any(
+                isinstance(base, ast.Name) and base.id == "Protocol" for base in node.bases
+            ):
+                continue
+            if any(
+                isinstance(child, ast.AsyncFunctionDef) and child.name == "scrape"
+                for child in node.body
+            ):
+                found.add(f"scrapers.{path.stem}")
+                break
     return found
 
 

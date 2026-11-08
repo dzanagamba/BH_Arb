@@ -472,5 +472,12 @@ class PremierKladionicaScraper:
         observe(BOOKMAKER_ID, f"sync:{kind}", data)
         return validate_premier_sync(data, kind=kind, book=BOOKMAKER_ID)
 
-    async def scrape(self, live: bool = False, scan_time: datetime | None = None) -> list[Match]:
+    async def scrape(
+        self,
+        live: bool = False,
+        scan_time: datetime | None = None,
+        sports_wanted: tuple[str, ...] | list[str] | None = None,
+    ) -> list[Match]:
+        # SR6-2: part of the shared adapter contract; the PrSync call fetches the
+        # whole offer, so the filter is accepted and unused.
         return await self.fetch_and_parse(live=live, scan_time=scan_time)

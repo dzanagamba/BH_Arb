@@ -395,7 +395,7 @@ class MozzartbetScraper:
     Uses Playwright to:
     1. Open the betting page (Cloudflare session)
     2. Intercept the initial JSON payloads
-    3. Paginate through all pages via page.request (POST)
+    3. Paginate through all pages with an in-page fetch (POST, SR4-8a)
     4. Parse all collected items into Match objects
     """
 
@@ -520,7 +520,7 @@ class MozzartbetScraper:
             await goto(page, f"{BASE_URL}/sr/kladjenje", wait_until="domcontentloaded", timeout=60000)
             await settle(page, 3000)
 
-            # 2. Paginate via page.request (with correct headers from the page)
+            # 2. Paginate with an in-page fetch (correct headers from the page)
             # Site uses currentPage 0-based and pageSize 15. The API returns
             # matchCount per page (not total) and nextStepPath, so we paginate
             # until a short page is returned. Vision 2026-08-20 showed 88 Fudbal
@@ -610,5 +610,13 @@ class MozzartbetScraper:
         logger.info(f"[Mozzartbet] {len(matches)} {'live' if live else 'prematch'} matches from {len(all_raw_items)} raw items")
         return matches
 
-    async def scrape(self, live: bool = False, scan_time: datetime | None = None) -> list[Match]:
+    async def scrape(
+        self,
+        live: bool = False,
+        scan_time: datetime | None = None,
+        sports_wanted: tuple[str, ...] | list[str] | None = None,
+    ) -> list[Match]:
+        # SR6-2: the shared adapter contract carries `sports_wanted`; this feed
+        # walks every soccer list it is given, so the filter is accepted and
+        # unused (the scan passed it nowhere before, with the same result).
         return await self.fetch_and_parse(live=live, scan_time=scan_time)

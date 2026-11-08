@@ -34,7 +34,7 @@ from config.settings import (
 )
 
 # SR6-1: the per-book timeouts are declared once in config/bookmakers.py. The
-# browser books make their API calls through ``page.request`` but keep a policy
+# browser books make their API calls from inside the page but keep a policy
 # too, so their rate limit and deadline are the same as every other book.
 _BOOK_TIMEOUTS: dict[str, dict[str, float]] = {
     book: dict(spec.timeouts) for book, spec in DECLARATIONS.items()

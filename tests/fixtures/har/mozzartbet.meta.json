@@ -1,0 +1,15 @@
+{
+  "bookmaker": "mozzartbet",
+  "capture_tool_version": "1",
+  "entries": 54,
+  "max_offers": 30,
+  "mode": "prematch",
+  "payload_kind": "har",
+  "provenance": "Playwright HAR recorded through the real adapter; scrubbed of cookie/authorization headers and trimmed to the page document plus the book's API calls",
+  "recorded_at": "2026-11-08T17:46:36",
+  "replay": {
+    "markets": 941,
+    "matches": 207
+  },
+  "scan_time": "2026-11-08T18:30:00+00:00"
+}

@@ -93,6 +93,17 @@ them on every push.
   Operator scripts import it; do not reintroduce local market tables.
 - `engine.market_registry.registered_spec()` is the shared per-book resolver.
   It keeps the `has_source_id` seam used by test fakes.
+- `scrapers/protocol.BookAdapter` is the one adapter contract: no-arg
+  construction and an async `scrape(live=, scan_time=, sports_wanted=)`, even
+  when an adapter ignores a keyword. Read the class through
+  `SCRAPERS.adapter(book)` so mypy checks it; `SCRAPERS.get()` is `Any`.
+- Browser books call their JSON APIs through `scrapers.base.measured_api_get/post`
+  (an in-page `fetch`, SR4-8a). Never use `page.request`: it bypasses
+  `context.route` and HAR, which SR4-8's replay depends on.
+- `scrapers/har_fixtures.py` owns the committed HAR rules and
+  `scripts/capture_har.py` regenerates them; never hand-edit a `.har.gz`. A
+  replay must run with `route_from_har(not_found="abort")` so it cannot reach
+  the network. See `docs/HAR_REPLAY.md`.
 - `server/csv_export.csv_cell()` neutralises formula-leading cells in every CSV
   export. Use it rather than a local copy.
 - Keep `engine/__init__.py` and `scrapers/__init__.py` lazy. Import submodules

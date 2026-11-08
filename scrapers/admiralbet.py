@@ -2,7 +2,7 @@
 Admiralbet Scraper — admiralbet.ba
 
 Playwright hybrid: navigate to establish Cloudflare session, then
-paginate through the API via page.request.
+paginate through the API with an in-page ``fetch`` (SR4-8a).
 
 API: getEventsStartingSoonFilterSelections?topN=25&skipN={skip}
 """

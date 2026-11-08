@@ -15,9 +15,10 @@ from __future__ import annotations
 
 import importlib
 from collections.abc import Iterator, MutableMapping
-from typing import Any
+from typing import Any, cast
 
 from config.bookmakers import DECLARATIONS, AdapterDeclaration
+from scrapers.protocol import AdapterClass
 
 
 class ScraperRegistry(MutableMapping[str, Any]):
@@ -30,11 +31,11 @@ class ScraperRegistry(MutableMapping[str, Any]):
         # test explicitly sets it.
         self._overrides: dict[str, Any] = {}
 
-    def __getitem__(self, bookmaker: str) -> Any:
+    def __getitem__(self, bookmaker: str) -> AdapterClass:
         if bookmaker in self._overrides:
-            return self._overrides[bookmaker]
+            return cast("AdapterClass", self._overrides[bookmaker])
         if bookmaker in self._loaded:
-            return self._loaded[bookmaker]
+            return cast("AdapterClass", self._loaded[bookmaker])
         try:
             spec = self._declarations[bookmaker]
         except KeyError:
@@ -42,7 +43,7 @@ class ScraperRegistry(MutableMapping[str, Any]):
         module = importlib.import_module(spec.module)
         adapter = getattr(module, spec.class_name)
         self._loaded[bookmaker] = adapter
-        return adapter
+        return cast("AdapterClass", adapter)
 
     def __setitem__(self, bookmaker: str, adapter: Any) -> None:
         self._overrides[bookmaker] = adapter
@@ -71,6 +72,18 @@ class ScraperRegistry(MutableMapping[str, Any]):
     def declaration(self, bookmaker: str) -> AdapterDeclaration:
         """The declaration for a book; ``KeyError`` when it is unknown."""
         return self._declarations[bookmaker]
+
+    def adapter(self, bookmaker: str) -> AdapterClass | None:
+        """The declared adapter class, typed against ``BookAdapter`` (SR6-2).
+
+        ``None`` for an unknown book, exactly like ``dict.get``; a known book
+        resolves (and caches) its class on first read. Production call sites use
+        this rather than ``get()`` so mypy checks ``scrape()`` against the
+        protocol instead of ``Any``.
+        """
+        if bookmaker not in self:
+            return None
+        return self[bookmaker]
 
     @property
     def declared(self) -> frozenset[str]:

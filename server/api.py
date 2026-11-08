@@ -2061,7 +2061,7 @@ async def run_scan(
                 await sem.acquire()
                 _metric_browser_opened(1)
             try:
-                scraper_class = SCRAPERS.get(bookie_id)
+                scraper_class = SCRAPERS.adapter(bookie_id)
                 if not scraper_class:
                     note = "no scraper registered"
                     kind = ScrapeKind.PARSE_ERROR
@@ -4716,7 +4716,7 @@ async def verify_surebet(
         fresh_matches: list[Match] = []
         errors: list[str] = []
         for bookie_id in bookie_ids:
-            scraper_class = SCRAPERS.get(bookie_id)
+            scraper_class = SCRAPERS.adapter(bookie_id)
             if not scraper_class:
                 continue
             # Same browser budget as a scan: a verify must not open a third

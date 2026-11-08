@@ -4,20 +4,66 @@
 **Goal:** keep `ROADMAP.md` current without weakening the trust model.
 **Current task:** none; SR0-1, SR0-2, SR1-1, SR1-2, SR1-3, SR1-4, SR2-1 …
 SR2-6, SR3-1, SR3-2, SR3-3, SR3-4, SR4-1, SR4-2, SR4-3, SR4-3b … SR4-3f,
-SR4-3h, SR4-3i, SR4-3j, SR4-4, SR4-5, SR4-6, SR4-7, SR4-7a, SR4-9, SR4-10,
-SR4-11, SR4-12, SR4-13, SR5-1, SR5-2, SR6-1, SR6-3, SR7-1 and SR7-2 are done.
+SR4-3h, SR4-3i, SR4-3j, SR4-4, SR4-5, SR4-6, SR4-7, SR4-7a, SR4-8, SR4-8a,
+SR4-9, SR4-10, SR4-11, SR4-12, SR4-13, SR5-1, SR5-2, SR6-1, SR6-2, SR6-3,
+SR7-1 and SR7-2 are done.
 **SR4-3g is blocked on a live EVLBet payload** (the SR6-3 capture was an empty
-feed) and **SR4-8 is blocked on SR4-8a** (operator choice). The roadmap is the
-single task list in `ROADMAP.md`; N2-4 stays deferred and P1-6 stays waived
+feed). Every other `Not started` row is `Gate: operator`; the roadmap is the
+single task list in `ROADMAP.md`, N2-4 stays deferred and P1-6 stays waived
 until the operator says otherwise.
-**Last task commit:** `db88974` — docs for SR4-3i … SR4-7a; the code is
-`129c334`, and SR4-1, SR4-2, SR4-3 … SR4-3f and SR4-3h are in `2614206` …
-`b45fc39`. Pushed to `origin/main` on 2026-11-08. `3df4fd7` is the pushed
-session-brief head; SR1-4, the gate decisions, SR4-9, SR3-1 … SR3-4, SR4-10,
-SR4-11, SR4-12, SR4-13, SR5-1, SR5-2 and SR6-1 are uncommitted in the working
-tree.
+**Last task commit:** `e549267` — "reliability, browser lifecycle and
+observability chain", the pushed `origin/main` head that carries SR1-4, the gate
+decisions, SR4-9 … SR4-13, SR5-1, SR5-2 and SR6-1. **SR6-2, SR4-8a and SR4-8 are
+uncommitted** (adapter protocol; in-page fetch; scrubbed HAR fixtures and their
+replay).
 
 ## Project state
+
+SR4-8 (2026-11-08, working tree): the browser books' transport is now a
+committed, scrubbed fixture set. `tests/fixtures/har/<book>.har.gz` +
+`<book>.meta.json` (1.72 MB total) hold the page document and that book's API
+calls, with every cookie/authorization header removed and the cookie jar
+emptied; `mozzartbet` keeps 30 per-event offers (its full offer is one request
+per event) and the rest abort into its list-odds fallback. Replay:
+`browser_pool(har_path=...)` → `route_from_har(not_found="abort")` with the
+sidecar's `scan_time`, so nothing can reach the network. Measured replays:
+admiralbet 93 matches/739 markets, wwin 450/2,643, mozzartbet 207/941. Refresh
+with `python scripts/capture_har.py --books all` (it re-replays and records the
+verified counts). Tests: `tests/test_har_fixtures.py` (8, normal suite),
+`tests/test_har_seams.py` (4), opt-in `tests/test_browser_har_replay.py` (3).
+Docs: `docs/HAR_REPLAY.md`; optional CI job `.github/workflows/browser.yml`
+(`workflow_dispatch`).
+
+SR4-8a (2026-11-08, working tree, operator choice **A**): the browser books'
+API calls are now issued by the page itself. `scrapers/base.py`'s
+`measured_api_get/post` run `fetch` in the loaded document with the same
+arguments and the same response surface (`PageResponse`: `status`, `headers`,
+`body()`, `json()`, `content`), `credentials: "include"`, request/byte
+accounting unchanged, and a Python-side 30 s cap that reports the shared
+`timeout` kind. No adapter calls `page.request`; rate limit and retry are
+untouched. Live A/B on the same offer: admiralbet 3 req/4.71 MB/13.2 s/121
+matches → `page.request` 3/4.71 MB/10.3 s/121; mozzartbet 234/72.27 MB/25.5 s/215
+→ 233/71.95 MB/37.0 s/215; wwin 46/2.03 MB/13.2 s/459 → 46/2.03 MB/12.1 s/459,
+all `ok` (Cloudflare passed, cross-origin admiralbet included). Evidence:
+`docs/evidence/2026-11-08-sr4-8a-inpage-fetch.md`. Tests:
+`tests/test_page_fetch.py` (10) plus opt-in `tests/test_page_fetch_browser.py`,
+which proves with real Chromium that `context.route` sees the in-page API call.
+**This unblocks SR4-8** (HAR capture + replay per browser book).
+
+SR6-2 (2026-11-08, working tree): `scrapers/protocol.py` defines `BookAdapter`,
+the one adapter `Protocol` (no-arg construction, async `scrape()` with `live`,
+`scan_time`, `sports_wanted`), and `AdapterClass = type[BookAdapter]`. The five
+adapters that lacked `sports_wanted` (mozzartbet, betole, evlbet,
+premier_kladionica, wwin) take it and ignore it, replacing the `TypeError`
+signature fallback for them; the fetched offer is unchanged.
+`scrapers.registry.__getitem__` is typed `AdapterClass`, a new
+`adapter(book) -> AdapterClass | None` is used at the two scan call sites, and
+mypy now checks `scraper.scrape(...)` instead of `Any`. New
+`tests/test_adapter_protocol.py` (5 tests) pins the contract at runtime and
+proves with mypy that all ten declared classes type-check while three broken
+adapters (missing entry point, sync entry point, wrong return) do not; the
+declaration AST guard counts a concrete class, not a `Protocol`. Suite: 2,242
+passed, 8 skipped, 1 xfailed in 100.8 s; mypy 265 files clean.
 
 SR6-1 (2026-11-08, working tree): one `AdapterDeclaration` per book in
 `config/bookmakers.py` (name, adapter module/class strings, transport, enabled,
@@ -543,14 +589,14 @@ the seven-day opportunity baseline remains unmeasured and N2-4 owns it.
 
 ## Next action
 
-Start **SR6-2** (adapter `Protocol` and mypy enforcement): SR6-1 is done, so the
-declaration now has a class to type. **SR4-8 is blocked on SR4-8a**, an operator
-choice between in-page fetch and a boundary-recorded HAR shim; record that
-decision before touching SR4-8. SR4-3g remains **Blocked on a live EVLBet
-payload** — do not start it. N2-4 stays deferred and P1-6 stays waived. Do not
-invent a task or reopen a done one. The working tree holds SR1-4, the gate
-decisions, SR4-9, SR3-1 … SR3-4, SR4-10, SR4-11, SR4-12, SR4-13, SR5-1, SR5-2
-and SR6-1 (uncommitted).
+**No `Not started` row is ungated any more.** SR4-8 closed the last one. What is
+left needs the operator: **SR4-3g** (blocked on a live EVLBet payload — do not
+start it), the **M1-1 … M6-1** rows (all `Gate: operator`, deliberately deferred
+from the old backlog; each needs explicit approval before any work), and the
+deferred N2-4 / waived P1-6 (leave both alone). Do not invent a task or reopen a
+done one. The working tree holds SR6-2, SR4-8a and SR4-8 (uncommitted); HEAD
+`e549267` carries the rest. A HAR refresh is an operator action, not a task:
+`python scripts/capture_har.py --books all`.
 
 ## Rules
 

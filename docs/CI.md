@@ -165,7 +165,8 @@ The opt-in Chromium checks use the same switch:
 
 ```bash
 BH_ARB_TEST_BROWSER=1 python -m pytest \
-    tests/test_accessibility_axe.py tests/test_browser_route_leak.py
+    tests/test_accessibility_axe.py tests/test_browser_route_leak.py \
+    tests/test_page_fetch_browser.py tests/test_browser_har_replay.py
 ```
 
 `tests/test_browser_route_leak.py` (SR3-2) loads six image-heavy pages through
@@ -173,6 +174,17 @@ the real `launch_browser()` route and fails if completed asyncio tasks accumulat
 per intercepted request. On 2026-11-08 the measured growth was 0 (baseline 1,
 after 1); playwright-python#3121 was a CPython 3.14 asyncio bug fixed upstream,
 and this project supports 3.11/3.12.
+
+`tests/test_page_fetch_browser.py` (SR4-8a) proves the browser books' JSON calls
+are page-initiated: a route serves the document and then sees the in-page
+`fetch` (with its POST body) that `measured_api_get/post` issue, which is what
+makes HAR record/replay possible for them.
+
+`tests/test_browser_har_replay.py` (SR4-8) replays each committed HAR through
+the real `scrape()` with `route_from_har(not_found="abort")`. See
+`docs/HAR_REPLAY.md` for the fixture format, the scrubbing rules and the refresh
+command. The CI job is `.github/workflows/browser.yml`, on `workflow_dispatch`
+only, because the push CI does not run Chromium.
 
 ## Coverage
 

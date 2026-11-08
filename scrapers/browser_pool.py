@@ -29,6 +29,7 @@ import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
+from functools import partial
 from typing import Any
 
 from config.settings import BROWSER_MAX_AGE_SECONDS, BROWSER_MAX_PAGES
@@ -57,6 +58,8 @@ class BrowserPool:
         max_age_seconds: float | None = None,
         launch: Launch | None = None,
         clock: Callable[[], float] = time.monotonic,
+        record_har_path: str | None = None,
+        har_path: str | None = None,
     ) -> None:
         self._max_pages = BROWSER_MAX_PAGES if max_pages is None else max_pages
         self._max_age = (
@@ -64,6 +67,10 @@ class BrowserPool:
         )
         self._launch = launch
         self._clock = clock
+        # SR4-8: the capture script records one book's HAR through the pool; a
+        # replay test serves one from a committed HAR. A scan leaves both None.
+        self._record_har_path = record_har_path
+        self._har_path = har_path
         self._playwright: Any | None = None
         self._browser: Any | None = None
         self._first_context: Any | None = None
@@ -75,7 +82,13 @@ class BrowserPool:
         if self._launch is None:
             from scrapers.base import launch_browser
 
-            launch = launch_browser
+            # A scan calls the launcher exactly as before; only a capture run
+            # passes the recording path (SR4-8).
+            launch = (
+                launch_browser
+                if self._record_har_path is None
+                else partial(launch_browser, record_har_path=self._record_har_path)
+            )
         else:
             launch = self._launch
         self._playwright, self._browser, self._first_context = await launch()
@@ -131,7 +144,13 @@ class BrowserPool:
         else:
             from scrapers.base import new_context
 
-            context = await new_context(self._browser)
+            context = await new_context(
+                self._browser, record_har_path=self._record_har_path
+            )
+        if self._har_path is not None:
+            # SR4-8: every request comes from the HAR; anything missing is
+            # aborted, so a replay can never touch the network.
+            await context.route_from_har(self._har_path, not_found="abort")
         self._pages += 1
         try:
             yield context
@@ -157,9 +176,16 @@ async def browser_pool(
     *,
     max_pages: int | None = None,
     max_age_seconds: float | None = None,
+    record_har_path: str | None = None,
+    har_path: str | None = None,
 ) -> AsyncIterator[BrowserPool]:
     """Own one browser for the duration of a scan (or a sweep)."""
-    pool = BrowserPool(max_pages=max_pages, max_age_seconds=max_age_seconds)
+    pool = BrowserPool(
+        max_pages=max_pages,
+        max_age_seconds=max_age_seconds,
+        record_har_path=record_har_path,
+        har_path=har_path,
+    )
     token = _ACTIVE.set(pool)
     try:
         yield pool

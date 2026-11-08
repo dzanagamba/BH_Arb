@@ -1,7 +1,8 @@
 """
 WWIN Scraper — wwin.ba
 
-Playwright hybrid (browser session for Cloudflare) + REST API via page.request.
+Playwright hybrid (browser session for Cloudflare) + REST API called from
+inside the page with ``fetch`` (SR4-8a), so route/HAR sees every request.
 
 Verified against the live feed (2026-08-15):
 
@@ -502,5 +503,12 @@ class WWINScraper:
         logger.info(f"[WWIN] Live total: {len(all_matches)} matches")
         return all_matches
 
-    async def scrape(self, live: bool = False, scan_time: datetime | None = None) -> list[Match]:
+    async def scrape(
+        self,
+        live: bool = False,
+        scan_time: datetime | None = None,
+        sports_wanted: tuple[str, ...] | list[str] | None = None,
+    ) -> list[Match]:
+        # SR6-2: part of the shared adapter contract; the page walk covers every
+        # listed sport, so the filter is accepted and unused.
         return await self.fetch_and_parse(live=live, scan_time=scan_time)

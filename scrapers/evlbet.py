@@ -186,5 +186,11 @@ class EvlbetScraper:
             fetched_at=datetime.now(UTC).replace(tzinfo=None),
         )
 
-    async def scrape(self, live: bool = False, scan_time: datetime | None = None) -> list[Match]:
+    async def scrape(
+        self,
+        live: bool = False,
+        scan_time: datetime | None = None,
+        sports_wanted: tuple[str, ...] | list[str] | None = None,
+    ) -> list[Match]:
+        # SR6-2: part of the shared adapter contract; accepted and unused.
         return await self.fetch_and_parse(live=live, scan_time=scan_time)

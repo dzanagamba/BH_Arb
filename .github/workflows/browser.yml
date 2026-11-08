@@ -1,0 +1,41 @@
+name: Browser checks
+
+# SR4-8: the Chromium layer is opt-in, so the push CI stays fast. Run this
+# workflow by hand after a Playwright bump, a browser-adapter change or a HAR
+# fixture refresh. It never contacts a bookmaker: the HAR replays abort every
+# request that is not in the committed file.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  chromium:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Install Chromium
+        run: python -m playwright install --with-deps chromium
+
+      - name: Browser tests
+        env:
+          BH_ARB_TEST_BROWSER: "1"
+        run: |
+          python -m pytest \
+            tests/test_page_fetch_browser.py \
+            tests/test_browser_har_replay.py \
+            tests/test_accessibility_axe.py \
+            tests/test_browser_route_leak.py

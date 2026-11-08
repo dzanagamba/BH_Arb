@@ -1,0 +1,15 @@
+{
+  "bookmaker": "admiralbet",
+  "capture_tool_version": "1",
+  "entries": 38,
+  "max_offers": null,
+  "mode": "prematch",
+  "payload_kind": "har",
+  "provenance": "Playwright HAR recorded through the real adapter; scrubbed of cookie/authorization headers and trimmed to the page document plus the book's API calls",
+  "recorded_at": "2026-11-08T17:45:34",
+  "replay": {
+    "markets": 739,
+    "matches": 93
+  },
+  "scan_time": "2026-11-08T18:30:00+00:00"
+}
