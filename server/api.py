@@ -97,10 +97,9 @@ from engine.coverage_budget import (
 )
 from engine.deeplinks import (
     declaration_audit,
-    declares_no_event_id,
-    declares_route_pattern_verified,
     deeplink_declaration_source,
     effective_deeplink_declarations,
+    settle_link,
 )
 from engine.feed_integrity import (
     compute_feed_integrity,
@@ -3357,27 +3356,27 @@ def _restorable_match_groups(report: object, mode: str) -> list[dict]:
     instead of the store. So a `verified` row survives only while EVERY one of
     its legs is still settled.
 
-    "Settled" is the gate's own two settled cases and no others, which is why this
-    is a per-leg test and not a plain store lookup:
+    "Settled" is `engine.deeplinks.settle_link` — the gate's own predicate, so the
+    two cannot disagree — and this restore supplies one input differently: the
+    proof is a FRESH store entry keyed `bookmaker|event_id`, never the cached
+    match's flag. `_apply_deep_link_verifications` only ever sets a flag, so a
+    restored `deep_link_verified=True` is a scan's snapshot that outlives its
+    proof and would make this a copy of the very staleness it is here to catch.
 
-    * a FRESH proof in the store, keyed `bookmaker|event_id` (case 1 of
-      `CertaintyGate._link_evidence`, and why `get_match_report` emits the id); or
-    * a book that DECLARES no per-event route (case 2, where the declaration is
-      itself the proof and there is no link for a check to have stored one for).
-      Six of the nine books are in that case, so demanding a proof of their legs
-      would drop every group they belong to, which is the opposite of what the
-      restore is for.
-    * anything else is case 3 or 4, `link_unverified` and `no_event_link`, which
-      both block, so the row is dropped.
+    The predicate's settled cases therefore keep a row:
 
-    Cases 3 and 4 are also why a leg carrying no `event_id`, or a book with no
-    declaration at all, drops the row: silence is not proof of absence, and a
-    restore must not be the one place that treats it as one.
+    * a fresh proof in the store (the gate's case 1, and why `get_match_report`
+      emits the id);
+    * a dated route-pattern proof plus an event id; and
+    * a book that DECLARES no per-event route, where the declaration is itself
+      the proof. Six of the nine books are in that case, so demanding a proof of
+      their legs would drop every group they belong to, which is the opposite of
+      what the restore is for.
 
-    The test is the store's, never the cached match's own flag:
-    `_apply_deep_link_verifications` only ever sets a flag, so a restored
-    `deep_link_verified=True` is a scan's snapshot that outlives its proof and
-    would make this a copy of the very staleness it is here to catch.
+    Everything else is `link_unverified` or `no_event_link`, which both block, so
+    the row is dropped. That is also why a leg carrying no `event_id`, or a book
+    with no declaration at all, drops the row: silence is not proof of absence,
+    and a restore must not be the one place that treats it as one.
 
     A row that fails is DROPPED rather than demoted, and that is the only honest
     option: `group_matches` returns only accepted groups, so a group whose links
@@ -3408,13 +3407,16 @@ def _restorable_match_groups(report: object, mode: str) -> list[dict]:
             if not bookmaker:
                 proven = False
                 break
-            if declares_no_event_id(bookmaker):
-                continue  # the declaration IS the proof; no link exists to store
             event_id = str(leg.get("event_id") or "")
-            if declares_route_pattern_verified(bookmaker) and event_id:
-                continue  # the dated pattern proof settles this route
             record = entries.get(_deep_link_key(bookmaker, event_id)) if event_id else None
-            if not _deep_link_record_is_fresh(record, reference):
+            settlement = settle_link(
+                bookmaker,
+                event_id=event_id,
+                # The store, never the cached flag: a restored flag is a
+                # snapshot that outlives its proof.
+                proof=_deep_link_record_is_fresh(record, reference),
+            )
+            if not settlement.settled:
                 proven = False
                 break
         if proven:
@@ -3691,15 +3693,16 @@ async def trigger_scan(
 def _unverified_link_count(matches: list[dict]) -> int:
     """Matches whose per-event link is unproven AND can still block.
 
-    The predicate is the gate's own, `not declares_no_event_id(book)`, and not
-    `supports_event_id(book)`: those two disagree exactly on a book with no
-    declaration at all, which is the one case where the gate blocks everything
-    and this diagnostic is the reason an operator needs. Under
-    `supports_event_id` a removed declaration would report 0 unverified links
-    while the gate refused every group. A book that declares
-    `supports_event_id: false` is excluded either way: the gate settles its link
-    from that declaration, so counting it would report thousands of blockers
-    that block nothing.
+    The predicate is `engine.deeplinks.settle_link`, the same one the gate and
+    the cache restore use, with the match's `deep_link_verified` flag as the
+    proof. It cannot be reduced to `supports_event_id(book)`: that disagrees with
+    the gate exactly on a book with no declaration at all, which is the one case
+    where the gate blocks everything and this diagnostic is the reason an
+    operator needs. Under it a removed declaration would report 0 unverified
+    links while the gate refused every group. A book that declares
+    `supports_event_id: false` is excluded by the shared predicate either way:
+    the gate settles its link from that declaration, so counting it would report
+    thousands of blockers that block nothing.
 
     One function for both feeds, because the live counter exists only so the
     dashboard can answer for the feed it is showing: a live empty state that
@@ -3710,9 +3713,12 @@ def _unverified_link_count(matches: list[dict]) -> int:
         1
         for match in matches
         if match.get("event_id")
-        and not match.get("deep_link_verified")
-        and not declares_no_event_id(str(match.get("bookmaker", "")))
-        and not declares_route_pattern_verified(str(match.get("bookmaker", "")))
+        and not settle_link(
+            str(match.get("bookmaker", "")),
+            event_id=str(match.get("event_id") or ""),
+            url=str(match.get("url") or ""),
+            proof=bool(match.get("deep_link_verified")),
+        ).settled
     )
 
 

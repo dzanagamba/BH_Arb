@@ -20,6 +20,7 @@ import logging
 import os
 from collections.abc import Iterable
 from datetime import UTC, date, datetime
+from typing import NamedTuple
 from urllib.parse import quote
 
 logger = logging.getLogger(__name__)
@@ -158,6 +159,59 @@ def declares_no_event_id(bookmaker: str) -> bool:
     tell apart.
     """
     return _declared_config(bookmaker).get("supports_event_id") is False
+
+
+class LinkSettlement(NamedTuple):
+    """Whether one listing's per-event link is settled, and the reason.
+
+    ``reason`` is the gate's evidence vocabulary: ``verified_link``,
+    ``route_pattern_verified`` and ``no_event_link`` settle a link, while
+    ``link_unverified`` and ``no_event_link`` (the silent case) block it.
+    """
+
+    settled: bool
+    reason: str
+
+
+def settle_link(
+    bookmaker: str,
+    *,
+    event_id: str | None = None,
+    url: str = "",
+    proof: bool = False,
+) -> LinkSettlement:
+    """Decide whether a listing's per-event link is settled, and why.
+
+    One answer for the gate, the cache restore and the dashboard counter: they
+    used to each spell out the same four cases and could drift apart, which is
+    exactly how a restore resurrects a `verified` group the gate would refuse.
+
+    ``proof`` is the caller's evidence that this exact link was browser-checked.
+    The gate passes the match's ``deep_link_verified`` flag, which
+    `_apply_deep_link_verifications` set from the store during the scan; a cache
+    restore passes a FRESH entry it read from the store itself, never the cached
+    flag, because a stored flag is a snapshot that outlives its proof.
+
+    The rest, in the gate's order:
+
+    1. A proof settles the link, whatever the declarations say.
+    2. A dated route-pattern proof plus an event id settles a path-based route.
+    3. ``supports_event_id: false`` settles it: the book declares there is no
+       per-event link to prove, so the declaration is the proof.
+    4. Anything else is open. A declared route, a captured id or a captured URL
+       is ``link_unverified``; complete silence is ``no_event_link``. Both
+       block: silence is not proof of absence.
+    """
+    normalized_event_id = "" if event_id is None else str(event_id)
+    if proof:
+        return LinkSettlement(True, "verified_link")
+    if declares_route_pattern_verified(bookmaker) and normalized_event_id:
+        return LinkSettlement(True, "route_pattern_verified")
+    if declares_no_event_id(bookmaker):
+        return LinkSettlement(True, "no_event_link")
+    if supports_event_id(bookmaker) or normalized_event_id or url:
+        return LinkSettlement(False, "link_unverified")
+    return LinkSettlement(False, "no_event_link")
 
 
 def declaration_verified_at(bookmaker: str) -> str:

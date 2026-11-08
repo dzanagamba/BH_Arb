@@ -96,6 +96,9 @@ them on every push.
 - `engine.deeplinks` owns the deep-link declaration store the certainty gate
   reads (`config/bookmaker_deeplinks.json`, its cache and provenance, the
   `supports_event_id: false` predicate and `build_event_url`).
+  `engine.deeplinks.settle_link()` is the one link-settled predicate: the gate,
+  the cache restore and the dashboard counter all call it rather than restating
+  the four cases.
   `engine.ah_labels` owns the Asian-handicap label helpers; `scrapers.common`
   re-exports them for the adapters. The dependency runs one way,
   `scrapers` → `engine`: never import `scrapers` from `engine`.

@@ -21,11 +21,7 @@ from rapidfuzz import fuzz
 
 from config.settings import VERIFIED_KICKOFF_WINDOW_MINUTES
 from engine import name_identity, sports
-from engine.deeplinks import (
-    declares_no_event_id,
-    declares_route_pattern_verified,
-    supports_event_id,
-)
+from engine.deeplinks import settle_link
 from engine.league_resolver import LeagueResolver
 from engine.mapping_evidence import (
     MappingLedger,
@@ -588,84 +584,43 @@ class CertaintyGate:
     def _link_evidence(m: Match) -> tuple[MatchEvidence, bool]:
         """Return this match's link evidence record and whether it settles the link.
 
-        One method, so the record and the decision cannot drift apart: every
-        branch states its own record *and* whether that record is a settled fact
-        (the second element is True) or an open one (False, and therefore a
-        reason).
+        ``engine.deeplinks.settle_link`` owns the decision, so this method cannot
+        disagree with the cache restore or the dashboard counter about whether a
+        leg's link is settled. Here the proof input is the match's
+        ``deep_link_verified`` flag, which `_apply_deep_link_verifications` set
+        from the deep-link store; every other branch is the declaration store's.
 
-        Four cases, in this order:
+        The four cases, in the predicate's order:
 
         1. ``deep_link_verified`` — a browser check proved the URL opens the
            intended event. Settled; nothing here can pre-empt it.
-        2. The book declares ``supports_event_id: false`` in
+        2. A dated ``route_pattern_verified`` plus an event id — a path-based
+           route the browser proved for sampled events. The feed supplies the id
+           for every listing, so the route is deterministic; a book with no
+           event id still fails.
+        3. The book declares ``supports_event_id: false`` in
            ``config/bookmaker_deeplinks.json`` — it has no per-event route, so
-           there is no link to prove. The declaration IS the proof, and the
-           absence is recorded as evidence rather than raised as a reason. This
-           is the spec's accepted case, and it is why a feed id or a site URL on
-           such a book is not read as an unproven link: neither is a route, and
-           the book has said so.
-        3. The book declares a route it has not proven — whether it captured a
-           URL or not. ``link_unverified``, and it blocks. An empty URL for such a
-           book is a capture gap, not an absence: reporting it as
-           ``no_event_link`` would claim the book has no per-event page when its
-           own declaration says it has one, and it would tell the next engineer
-           that emptying the URL is a way to unblock a group. It is not.
-        4. The book has said nothing at all. A captured URL or id is
-           ``link_unverified``; with nothing captured it is ``no_event_link``. Both
-           block: an absent declaration is silence, and silence is not proof of
-           absence.
+           there is no link to prove. The declaration IS the proof.
+        4. The book declares a route it has not proven, or captured a URL or id
+           — ``link_unverified``, and it blocks. An empty URL for such a book is
+           a capture gap, not an absence. Complete silence is
+           ``no_event_link`` and also blocks: an absent declaration is silence,
+           and silence is not proof of absence.
         """
-        if m.deep_link_verified:
-            return (
-                MatchEvidence(
-                    rule="link_evidence",
-                    source="rule",
-                    confidence=1.0,
-                    reason="verified_link",
-                ),
-                True,
-            )
-        if declares_route_pattern_verified(m.bookmaker) and m.event_id:
-            # A path-based route whose pattern was browser-proven for sampled
-            # events. The feed supplies the same id for every listing, so the
-            # route is deterministic; a book with no event id still fails.
-            return (
-                MatchEvidence(
-                    rule="link_evidence",
-                    source="rule",
-                    confidence=1.0,
-                    reason="route_pattern_verified",
-                ),
-                True,
-            )
-        if declares_no_event_id(m.bookmaker):
-            return (
-                MatchEvidence(
-                    rule="link_evidence",
-                    source="rule",
-                    confidence=1.0,
-                    reason="no_event_link",
-                ),
-                True,
-            )
-        if supports_event_id(m.bookmaker) or m.event_id or m.url:
-            return (
-                MatchEvidence(
-                    rule="link_evidence",
-                    source="rule",
-                    confidence=0.0,
-                    reason="link_unverified",
-                ),
-                False,
-            )
+        settlement = settle_link(
+            m.bookmaker,
+            event_id=m.event_id,
+            url=m.url,
+            proof=m.deep_link_verified,
+        )
         return (
             MatchEvidence(
                 rule="link_evidence",
                 source="rule",
-                confidence=0.0,
-                reason="no_event_link",
+                confidence=1.0 if settlement.settled else 0.0,
+                reason=settlement.reason,
             ),
-            False,
+            settlement.settled,
         )
 
     def evaluate_pair(self, a: Match, b: Match) -> GateResult:

@@ -168,7 +168,7 @@ do not copy stale numbers here.
 | M2-5 | Review compact cache/ledger representations | Done | — | operator |
 | M3-1 | Decompose `server/api.py` | Done | — | operator |
 | M3-2 | Move the deep-link store to `engine/` | Done | — | operator |
-| M3-3 | One link-settled predicate | Not started | — | operator |
+| M3-3 | One link-settled predicate | Done | — | operator |
 | M3-4 | Unify datetime and SQLite helpers | Not started | — | operator |
 | M3-5 | Route registry lookups through `registered_spec()` | Not started | — | operator |
 | M3-6 | Move `pairing_audit` and verifier into `server/` | Not started | — | operator |
@@ -2795,16 +2795,61 @@ Acceptance (written before coding, 2026-11-09):
 
 ### M3-3 One link-settled predicate
 
-Status: Not started
+Status: Done
 
 Gate: operator
+
+**Decision (2026-11-09, operator: continue after M3-2).** The gate and the
+cache restore answer the same question — is this leg's per-event link settled?
+— with two hand-written copies of the four cases. They can drift, and a drift
+either restores a `verified` group whose link is not proven or refuses one the
+gate would accept. `engine.deeplinks.settle_link()` becomes the one answer.
+
+The predicate takes the case-1 proof as an explicit input, because the two
+callers get it from different places and must not be papered over: during a scan
+the gate reads the match's `deep_link_verified` flag (set from the store by
+`_apply_deep_link_verifications`), while a cache restore reads the store itself
+(by design — a cached flag is a snapshot that outlives its proof). Everything
+else — the route-pattern proof, the declares-no-event-route case, and the two
+open cases — is shared verbatim.
+
+`_unverified_link_count` is the third copy of the same test; it moves too, so a
+future edit to settlement cannot leave the dashboard counter behind.
 
 Why / what: Share one link-settled predicate between `CertaintyGate` and cache
 restore, with a parity test over every link case.
 
-Acceptance:
-- [x] Operator approval recorded here.
-- [x] Acceptance criteria written here before coding.
+**Outcome (2026-11-09).** `engine.deeplinks.settle_link()` is now the one
+link-settled predicate, returning `LinkSettlement(settled, reason)` and taking
+the per-caller proof as an argument. `CertaintyGate._link_evidence` passes the
+match's `deep_link_verified` flag; `_restorable_match_groups` passes a fresh store
+record keyed `bookmaker|event_id` (never the cached flag); `_unverified_link_count`
+passes the flag and keeps its existing scope (rows carrying an event id).
+`engine/certainty.py` lost 99 hand-written branch lines and `server/api.py` no
+longer imports the individual declaration predicates. `tests/test_link_settlement.py`
+(31 tests) runs ten cases — proof, route pattern, declares-no-route (with and
+without an id), declared-but-unproven (with and without a capture), silence with
+an id, a URL and nothing, and a stale store proof — through the predicate, the
+gate, the restore and the counter, and asserts all four agree; a named test pins
+that a stale store proof cannot restore a `verified` group. Full suite **2,354
+passed, 12 skipped** (17 snapshots) in 115.83 s; ruff and mypy (282 files) clean;
+market doc, fixtures and admissibility checks green. No trust rule, declaration,
+TTL or cache format changed.
+
+Acceptance (written before coding, 2026-11-09):
+- [x] `engine.deeplinks.settle_link()` returns `(settled, reason)` for the four
+      gate cases, taking the per-caller proof as an argument.
+- [x] `CertaintyGate._link_evidence` builds its `MatchEvidence` from the
+      predicate with the same confidence and reason it used before.
+- [x] `_restorable_match_groups` and `_unverified_link_count` call the predicate
+      instead of repeating its cases.
+- [x] A parity test covers every case (cached flag, fresh store proof, route
+      pattern, declares-no-route, declared-unproven, silence with an id/url,
+      silence with nothing) and asserts the gate's settled verdict, the restored
+      row's fate and the counter agree.
+- [x] No trust rule, declaration, TTL or cache format changes; the full suite
+      passes with identical verdicts.
+
 
 ### M3-4 Unify datetime and SQLite helpers
 
@@ -3304,3 +3349,4 @@ Useful starting points:
 | 2026-11-08 | M3-1 (stages 1–2) | In progress | Operator: continue. Stage 1: the pure candidate scoring moved to **`server/candidate_scoring.py`** (198 lines) — `TeamTokens`, `FoundPair`, kickoff keys/bucketing, `match_event_ref`/`match_side_key`, `bigrams`, `shares_any_signal`, `team_similarity`, `token_run_shared`, `canonical_pair_key`, `candidate_id`, `pair_priority` — with one definition; `server/api.py` imports it (5,903 → 5,782 lines), no private copy remains, and the module imports no `server.api`. `tests/test_scan_candidates.py` and `scripts/audit_league_pairs.py` read the new module; `tests/test_candidate_scoring.py` pins the import rule and object identity. Stage 2: `_state_for` now returns a **`FeedState`** NamedTuple (`status`, `surebets`, `matches`, `report`, `per_bookie`); api route call sites read named fields, while the existing tuple unpacking in `scripts/record_scan.py` and tests keeps working; `server.mapping_coverage` takes a `Sequence` so the typed list stays assignable. `tests/test_ci_hardening.py` follows the `usedforsecurity=False` call site to the new module. Stage 3 (JSON-store layer) remains. `pytest`: 2314 passed, 12 skipped (17 snapshots) in 112.49 s; ruff clean; mypy 277 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No live scan; scores, ids, ordering and deep-link verdicts unchanged. |
 | 2026-11-08 | M3-1 (stage 3) | Done | Operator: continue. New **`server/json_store.py`** (70 lines) owns the JSON-store layer: `atomic_write_json` (temp file + `os.replace`, the writer moved out of api) and `read_json` (missing/unreadable/malformed → `None`). Every JSON reader and writer in `server/api.py` now uses it: market/bookmaker toggles, allowlist, suppressed decisions and premises, both deep-link stores, the history export, opportunity metrics, feed integrity, stale price state, coverage budget, scan cost, the scan cache loaders and link sweeps. Shape validation, locks, TTL filtering and merge rules stay with each store's owner, so scan and deep-link semantics are unchanged. `server/api.py` **5,782 → 5,714 lines** (5,903 → 5,714 across M3-1) and no longer imports `json` or `tempfile`. New `tests/test_json_store.py`: compact output, readable default, whole replacement with no temp file, a failed write keeping the previous document, and the forgiving read; `tests/test_cache_serialization.py` and `tests/test_candidates_api.py` follow the moved writer. `pytest`: 2320 passed, 12 skipped (17 snapshots) in 117.95 s; ruff clean; mypy 279 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No live scan. |
 | 2026-11-09 | M3-2 | Done | Operator: continue with M3-2. The declaration store moved from `scrapers/common.py` to **`engine/deeplinks.py`** (317 lines): path, cache, mtime/size reload, provenance, `supports_event_id`/`declares_no_event_id`/`declares_route_pattern_verified`, `declaration_verified_at`, `declaration_audit`, `effective_deeplink_declarations`, `deeplink_declaration_source` and `build_event_url`; semantics (fail-safe parse, synthetic-cache seam, TTLs) unchanged. The other engine→scrapers edges were the AH label helpers, so **`engine/ah_labels.py`** (49 lines) now owns them and `scrapers.common` re-exports them for `mbet`/`sportplus` and the tests. `scrapers/common.py`: **986 → 657 lines**. Certainty, matcher and arbitrage import from engine only; `tests/test_layering.py` proves by subprocess that importing those three loads no `scrapers` module and by AST that no engine source imports scrapers even inside a function, and that `scrapers.common` no longer exposes the store. `server/api.py`, `scripts/verify_deeplinks.py`, `scripts/audit_deeplinks.py`, `mdshop`/`maxbet`/`admiralbet`, tests and `conftest`'s cache-reset fixture all read the new modules. `AGENTS.md` documents the one-way dependency. `pytest`: 2323 passed, 12 skipped (17 snapshots) in 149.41 s; ruff clean; mypy 281 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No live scan; no declaration value or trust rule changed. |
+| 2026-11-09 | M3-3 | Done | Operator: continue with M3-3. `engine.deeplinks.settle_link()` now answers "is this leg's per-event link settled?" once for all three callers, returning `LinkSettlement(settled, reason)`. The gate passes the match's `deep_link_verified` flag; the cache restore passes a fresh store record keyed `bookmaker|event_id` (never the cached flag, which outlives its proof); `_unverified_link_count` passes the flag and keeps its event-id scope. Removed the duplicated four-case branches from `engine/certainty.py::_link_evidence` and `server/api.py::_restorable_match_groups`/`_unverified_link_count`. New `tests/test_link_settlement.py` runs ten cases (proof, route pattern, declares-no-route ±id, declared-unproven ±capture, silence with id/url/nothing, stale store proof) through the predicate, gate, restore and counter and asserts agreement, plus a stale-proof restore rejection. `pytest`: 2354 passed, 12 skipped (17 snapshots) in 115.83 s; ruff clean; mypy 282 files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No trust rule, declaration, TTL or cache format changed. |
