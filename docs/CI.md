@@ -87,6 +87,37 @@ drops out; unknown keys are counted in `bh_wire_unknown_keys_total` and logged,
 not fatal. The pattern for the remaining books, and their `SR4-3b`…`SR4-3j`
 follow-up rows, are in `docs/WIRE_SCHEMAS.md`.
 
+## Parser snapshots
+
+`tests/test_parser_snapshots.py` runs every fixture that declares
+`expected_markets` through its real parser and snapshots the **normalised**
+result: market type, settlement, period and price rows (source ids, context,
+outcome ids and timestamps are left out). The snapshot file is
+`tests/__snapshots__/test_parser_snapshots.ambr`, generated with the dev-only
+`syrupy` pin. `pytest --snapshot-update` is a human action; the commit that
+updates a snapshot must say why the normalised output changed, and CI never
+updates one.
+
+## Structural drift alarm
+
+Every adapter also feeds its raw JSON boundary to `engine/structural_drift.py`
+(SR4-4). The first informative response per `(book, endpoint)` is stored as a
+fingerprint baseline; a later payload whose key paths or JSON types change
+increments `bh_wire_structure_drift_total{book,endpoint}` and logs the
+added/removed paths. It is alert-only — it never rejects a payload — and the
+last good baseline is kept until an operator reviews the change.
+
+## Cardinality floor
+
+The coverage budget already flags a missing market family. SR4-5 extends the
+same rolling-median report with an event/market count per `book|sport`. A book
+below 50 % of its median (with an absolute guard) while a peer book still
+publishes that sport is quarantined through the existing feed-integrity state
+machine as `cardinality_drop`; a peer-wide dip is a calendar effect and is not
+flagged. The report and its bounded history live in
+`cache/coverage_budget.json`, the counters are `bh_cardinality_flags` /
+`bh_cardinality_flags_total`, and `/api/health` exposes `cardinality_floor`.
+
 ## Admissibility audit
 
 The `quality` job runs `python scripts/audit_admissibility.py --check` (N3-2).
@@ -100,8 +131,14 @@ bookmaker probe (`scripts/measure_sports.py`) stays out of CI; see
 ## Property tests and load budgets
 
 The fast suite includes the property-based pricing and identity tests
-(`tests/test_properties_pricing.py`, `tests/test_properties_identity.py`). A
-separate 3.11 step runs the opt-in load budgets:
+(`tests/test_properties_pricing.py`, `tests/test_properties_identity.py`).
+`tests/test_properties_parsers.py` (SR4-7) mutates every captured parser
+payload after the wire schema accepts it and checks the parser's safety
+invariants: no unhandled exception, finite positive prices, no duplicate leg
+label, and no sport/settlement outside the clean capture. The duplicate-label
+defect it found was fixed in SR4-7a and is now enforced by the property and a
+direct regression test.
+A separate 3.11 step runs the opt-in load budgets:
 
 ```bash
 BH_ARB_TEST_SLOW=1 python -m pytest tests/test_perf_budgets.py

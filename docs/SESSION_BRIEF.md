@@ -3,17 +3,121 @@
 **Updated:** 2026-11-08
 **Goal:** keep `ROADMAP.md` current without weakening the trust model.
 **Current task:** none; SR1-1, SR1-2, SR1-3, SR2-1 … SR2-6, SR4-1, SR4-2,
-SR4-3, SR4-3b … SR4-3f, SR4-3h, SR7-1 and SR7-2 are done. **SR4-3g is blocked on
-SR6-3** (operator decision). SR4-3h is in the working tree (not committed). The
-roadmap is the single task list in `ROADMAP.md`; N2-4 stays deferred and P1-6
-stays waived until the operator says otherwise.
-**Last task commit:** `de02a63` — strict wire schema for Premier Kladionica
-(SR4-3h); SR4-1, SR4-2 and SR4-3 … SR4-3f are in `f4e97e9` … `e53560c`.
-SR4-3g is blocked on SR6-3.
+SR4-3, SR4-3b … SR4-3f, SR4-3h, SR4-3i, SR4-3j, SR4-4, SR4-5, SR4-6, SR4-7,
+SR4-7a, SR7-1 and SR7-2 are done. **SR4-3g is blocked on SR6-3** (operator
+decision). SR4-3i, SR4-3j, SR4-4, SR4-5, SR4-6, SR4-7 and SR4-7a are in the
+working tree (not committed). The roadmap is the single task list in
+`ROADMAP.md`; N2-4 stays deferred and P1-6 stays waived until the operator says
+otherwise.
+**Last task commit:** `b45fc39` — the SR4-3g blocker and SR4-3h outcome docs;
+the SR4-3h code is `de02a63`, and SR4-1, SR4-2 and SR4-3 … SR4-3f are in
+`f4e97e9` … `e53560c`. SR4-3g is blocked on SR6-3.
 
 ## Project state
 
-SR4-3h (2026-11-08, working tree): Premier Kladionica's PrSync is positional, so
+SR4-7a (2026-11-08, working tree): `parse_nsoft_bets` now keeps the first
+offered price per normalized outcome label and ignores a later duplicate row
+(and its outcome id), so a duplicated NSoft `betOutcome` can no longer become
+two legs for one book. The market acceptance logic is unchanged. The strict
+xfail was removed; the regression test duplicates the first outcome of the real
+MDShop prematch capture with a different price and asserts one label with the
+first price, and the mutation property enforces label uniqueness again for
+every parser. No live scan.
+
+SR4-7 (2026-11-08, working tree): `hypothesis==6.150.0` was already a dev pin.
+New `tests/test_properties_parsers.py` mutates all 17 fixtures that declare
+`expected_markets` (nine parser dispatch paths) with 1-3 bounded operations
+(drop key, null, scalar type swap, shuffle/duplicate/drop/truncate array, add
+unknown key). A mutation the book's wire schema rejects is skipped because
+production never passes it to a parser; accepted mutations must return a list
+without an unhandled exception, emit only finite positive prices, never repeat
+a label for one `(market_type, settlement, period)`, and never emit a
+sport/settlement identity outside the clean capture's set. The clean capture
+and two filter tests prove the property is not vacuous; the run is ~2 s.
+It found one production-reachable defect — `parse_nsoft_bets` appends the same
+normalized outcome twice — recorded as **SR4-7a** with a strict xfail, not fixed
+in SR4-7. No live scan.
+
+SR4-6 (2026-11-08, working tree): the dev-only `syrupy==5.0.0` pin is in
+`requirements-dev.txt`. `tests/test_parser_snapshots.py` runs every fixture that
+declares `expected_markets` (17 captures) through the real parser entry point
+`tests/test_market_fixtures.py::_run_parser` dispatches to and snapshots only the
+normalised `market_type`/`settlement`/`period` and `label`/`value` rows — source
+ids, context, outcome ids and timestamps are excluded, and raw payloads are not
+snapshotted. Snapshots live in `tests/__snapshots__/test_parser_snapshots.ambr`
+and run in the normal suite; a coverage guard keeps the case set equal to the
+fixtures declaring `expected_markets`. `--snapshot-update` stays a human action
+(documented in `docs/CI.md`, never run by CI). No live scan.
+
+SR4-5 (2026-11-08, working tree): `engine/coverage_budget.py` gained
+`cardinality_snapshot` (events and market rows per `book|sport`),
+`evaluate_cardinality` (rolling-median `event_drop`/`market_thin` flags,
+peer-gated), `push_cardinality_history` and `cardinality_book_reasons`. The
+floor is relative and absolute (below 50 % with ≥5 events missing, or
+markets-per-event below 50 % with ≥2 rows missing; baselines under 10 events
+are not judged), and a drop is only flagged when a peer book still publishes
+that sport *and* is itself near its baseline — a shared calendar dip is not a
+feed failure. `compute_feed_integrity` maps a flag to the critical reason
+`cardinality_drop`, so the book enters the existing quarantine/recovery state
+machine and the unchanged `priceable_groups` path; there is no second gate.
+`server/api.py` computes/persists the report and bounded history in
+`cache/coverage_budget.json`, publishes `bh_cardinality_flags`(/_total), logs
+the flag count and exposes `cardinality_floor` in `/api/health`. New
+`tests/test_cardinality_floor.py` (9 tests). No live scan.
+
+SR4-4 (2026-11-08, working tree): `engine/structural_drift.py` fingerprints a
+raw payload by its sorted key paths and JSON types (values ignored, array
+indices collapsed, numeric id map keys collapsed to `<id>`) and stores the first
+informative baseline per `(book, endpoint)` in
+`config/generated/wire_fingerprints.json`. A later change increments
+`bh_wire_structure_drift_total{book,endpoint}` and logs the added/removed paths;
+the last good baseline is kept, empty pages do not establish one, and an I/O
+failure only logs. Alert-only — it never rejects a payload or touches pricing.
+It is wired at every adapter's raw-JSON boundary (MDShop/Admiralbet per
+sport+mode, Mozzartbet matches/offer, Betole desk/offers, MBet events,
+SportPlus prematch/live, Premier full/delta sync, WWin prematch/live/headerBets,
+MaxBet per sport, EVLBet flat offer). `tests/conftest.py` redirects the baseline
+into the per-test runtime tree. New `tests/test_structural_drift.py` (12 tests),
+including the real MDShop scrape being silent on a price change and alerting on
+an unmodelled key, and `/api/metrics` rendering the counter. No live scan.
+
+SR4-3j (2026-11-08, working tree): MaxBet's matches response is a bare
+`[event, ...]` list and its fixtures freeze one match's `odds[]` array, so
+`wire_schemas.py` gained `MaxbetSpecifiers` (`total`/`hcp`), `MaxbetOutcome`
+(`outcome`, `outcomeId`, `status`, `oddValue` and `marketAvailableForBetting`
+required but nullable) and `MaxbetMarket` (`id`, `name`, `specifiers` optional
+because line-less markets omit it, `outcomes`), plus
+`validate_maxbet_odds`/`validate_maxbet_events`. `fetch_and_parse` validates the
+list and every event's `odds` immediately after `response.json()`. A non-JSON
+body, a non-list response, a non-object event or a drifted market/outcome row is
+`ScrapeError(SCHEMA_DRIFT)` and drops the book with zero legs. Unknown keys
+count at `market`/`specifiers`/`outcome` in
+`bh_wire_unknown_keys_total{book="maxbet",...}`. The event shell (teams,
+kickoff, league, status, external ids) has no dated capture and stays unmodelled
+(a renamed team field still drops that event silently; SR4-4/SR5-1 close it),
+and a renamed specifier on a totals market degrades to "no line" rather than
+drift. New `tests/test_wire_schemas_maxbet.py` (22 tests) drives the real
+`scrape()` in both modes through respx. No live scan was run.
+
+SR4-3i (2026-11-08, working tree): WWIN's fixtures freeze the `bets[]` array the
+parser reads, so `wire_schemas.py` gained `WwinOdd` (`t` and `va` required, `isv`
+optional because the documented live row is `{va, t}`), `WwinBet` (`idBt`,
+`spec`, `odds`), `WwinEventsPage` (raw `p`/`events`), `WwinHeaderBetsPage`
+(`{"bets": [{"<eventId>": bet}]}`) and
+`validate_wwin_bets`/`validate_wwin_events`/`validate_wwin_header_bets`.
+`scrapers/wwin.py` validates the prematch page (`p` or the historical `events`)
+and every event's `bets`, the live `events` page and the live `headerBets` rows
+immediately after `response.json()`. A non-JSON body, a missing page key, a
+non-object event/header item or a drifted bet row is
+`ScrapeError(SCHEMA_DRIFT)` and drops the book with zero legs. Unknown keys
+count at `root` for the envelopes and `bet`/`odd` for the rows in
+`bh_wire_unknown_keys_total{book="wwin",...}`. The event shell (teams, kickoff,
+competition) has no dated capture and stays unmodelled (a renamed team field
+still drops that event silently; SR4-4/SR5-1 close it). New
+`tests/test_wire_schemas_wwin.py` (25 tests) drives the real `scrape()` in both
+modes through a fake browser. No live scan was run.
+
+SR4-3h (2026-11-08): Premier Kladionica's PrSync is positional, so
 `wire_schemas.py` gained `PremierOddRow` (price at column 5), `PremierSetTip`
 (name at 2), `PremierSetTipVar` (line at 9) and `PremierSetTipTip` (code at 4),
 mapped from positional lists through `model_validator(mode="before")`, plus
@@ -128,9 +232,8 @@ Renamed price fields, string/boolean prices and non-JSON bodies raise
 instead of returning zero legs as an empty feed. Unknown keys are kept, counted
 in `bh_wire_unknown_keys_total{book,level,field}` and logged, never fatal.
 `validate_bets` proves each dated fixture; `tests/test_wire_schemas.py` has 13
-tests including the real `scrape()` drift path. The pattern and the remaining
-`SR4-3i` … `SR4-3j` follow-up rows (one per book) are in
-`docs/WIRE_SCHEMAS.md`.
+tests including the real `scrape()` drift path. The pattern and the finished
+`SR4-3b` … `SR4-3j` follow-up rows are in `docs/WIRE_SCHEMAS.md`.
 
 SR4-2 (2026-11-08, working tree): every fixture in
 `tests/fixtures/markets/` now carries a metadata header (`recorded_at` with its
@@ -230,8 +333,9 @@ On 2026-11-07 the old roadmaps and the maintenance backlog were folded into
 `ROADMAP.md` and deleted; the research briefs moved to `research/`. The
 `P*`/`N*` IDs are now historical labels with a glossary in the `ROADMAP.md`
 History section. P1-6 is waived and excluded. The suite runs
-**2,043 passed, 6 skipped, 1 xfailed, 1 warning** in both ledger modes, with
-**89.26%** coverage (floor 80%; 12,767 statements). The six skips are the two
+**2,166 passed, 6 skipped, 1 xfailed, 1 warning** in both ledger modes (17
+snapshots passed), with **90.53%** coverage (floor 80%; 13,142 statements). The
+six skips are the two
 opt-in runtime-state checks, the two Chromium tests unless
 `BH_ARB_TEST_BROWSER=1`, and the two load budgets unless `BH_ARB_TEST_SLOW=1`.
 Ruff, MyPy (236 source files), Node syntax checks and the generated market doc
@@ -284,14 +388,14 @@ latter and is deferred.
 
 ## Next action
 
-Start **SR4-3i** (strict wire schema for WWin), the next follow-up row after
-SR4-3h. It and `SR4-3j` follow the same pattern, one book per session;
-`docs/WIRE_SCHEMAS.md` records it. SR4-3g stays **Blocked on SR6-3** (operator
-decision) — do not start it. SR4-5 is also ungated, but the SR4-3 follow-ups are
-earlier rows. The SR3 rows are still blocked on SR3-1 (gate SR0-1). The operator
+Start **SR5-1** (per-book reliability metrics), the next ungated row whose
+dependency (SR2-6) is done; SR4-8 still waits on SR3-4/SR3-3 (blocked by the
+SR0-1 gate). SR4-3g stays **Blocked on SR6-3** (operator decision) — do not
+start it. The SR3 rows are still blocked on SR3-1 (gate SR0-1). The operator
 gates waiting for a decision are SR0-1, SR0-2, SR4-9 and SR6-3. N2-4 stays
 deferred and P1-6 stays waived. Do not invent a task or reopen a done one.
-SR4-3h is in the working tree; commit it if the operator asks.
+SR4-3i, SR4-3j, SR4-4, SR4-5, SR4-6, SR4-7 and SR4-7a are in the working tree;
+commit them if the operator asks.
 
 ## Rules
 

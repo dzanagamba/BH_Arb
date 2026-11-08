@@ -15,8 +15,10 @@ after its own dated captures proved the same shape. SR4-3d added Betole, whose
 price rows are `{pick_code: price}` maps. SR4-3e added MBet, whose odds map
 holds either a typed entry or a bare number. SR4-3f added SportPlus, whose
 fixtures freeze a match's `markets[]` array. SR4-3h added Premier Kladionica,
-whose PrSync rows are positional arrays (SR4-3g, EVLBet, is blocked on the
-SR6-3 operator decision).
+whose PrSync rows are positional arrays. SR4-3i added WWin, whose fixtures
+freeze an event's `bets[]` rows. SR4-3j added MaxBet, whose fixtures freeze a
+match's `odds[]` array (SR4-3g, EVLBet, is blocked on the SR6-3 operator
+decision).
 
 ## The pattern for the next book
 
@@ -41,6 +43,12 @@ SR6-3 operator decision).
 6. Add fixture-backed tests: the dated capture passes, a renamed price field
    and a string price are `schema_drift`, and an unknown key still scrapes.
 
+SR4-4 adds a second, alert-only layer at the same boundary:
+`engine/structural_drift.py` fingerprints the whole raw payload (sorted key
+paths plus JSON types, values ignored) and counts
+`bh_wire_structure_drift_total{book,endpoint}` when the shape moves outside the
+modelled fields. It never rejects a payload; the schemas still own fail-closed.
+
 ## Metrics
 
 ```text
@@ -51,10 +59,11 @@ bh_wire_unknown_keys_total{book="mdshop",level="outcome",field="newPriceField"} 
 
 `level` is `root`, `event`, `bet` or `outcome` for the NSoft books, `root`,
 `match`, `odd`, `game` or `subgame` for Mozzartbet, `root`/`row` for Betole,
-`root`/`odd` for MBet, `root`/`market`/`odd` for SportPlus, and `section` for
-Premier Kladionica (whose rows are positional, not keyed). The counter is
-rendered by the existing `/api/metrics` endpoint; no dashboard change is needed
-to see it.
+`root`/`odd` for MBet, `root`/`market`/`odd` for SportPlus, `section` for
+Premier Kladionica (whose rows are positional, not keyed), and
+`root`/`bet`/`odd` for WWin, and `market`/`specifiers`/`outcome` for MaxBet. The
+counter is rendered by the existing `/api/metrics` endpoint; no dashboard change
+is needed to see it.
 
 ## Books
 
@@ -220,6 +229,55 @@ execRes sections have no dated capture and stay unmodelled.
 
 Tests: `tests/test_wire_schemas_premier.py`.
 
+### WWin (SR4-3i)
+
+WWIN is a Playwright hybrid. The dated fixtures freeze the `bets[]` array the
+parser reads — `idBt`, `spec`, and `odds[]` with `t`/`va`/`isv` — not the event
+shell around it. The same row arrives in three envelopes:
+
+- `WwinOdd` — `t` and `va` are required (`va` must already be a number),
+  `isv` is optional because the documented live `headerBets` row is `{va, t}`.
+- `WwinBet` — `idBt` (int), `spec` (the line specifier), `odds`.
+- `WwinEventsPage` — prematch `{"p": [...]}` (historically also
+  `{"events": [...]}`) or live `{"events": [...]}`; the event dicts stay raw.
+- `WwinHeaderBetsPage` — `{"bets": [{"<eventId>": bet}]}`; the event id is data,
+  not a field name.
+
+`validate_wwin_bets` is the fixture entry point. `validate_wwin_events` runs on
+each events page (it requires the mode's page key and validates every event's
+`bets`) and `validate_wwin_header_bets` on each live `headerBets` page, all
+immediately after `response.json()`. A non-JSON body, a missing page key, a
+non-object event/header item or a drifted bet row raises `SCRAPE_DRIFT` and the
+book drops out. Unknown keys are counted at `level="root"` for the envelopes and
+`level="bet"`/`"odd"` for the rows. The event shell (teams, kickoff,
+competition) has no dated capture and stays unmodelled.
+
+Tests: `tests/test_wire_schemas_wwin.py`.
+
+### MaxBet (SR4-3j)
+
+MaxBet is plain HTTP and its matches response is one bare `[event, ...]` list.
+The dated fixtures freeze one match's `odds[]` array, so that array is the
+typed part; the event shell stays unmodelled.
+
+- `MaxbetSpecifiers` — `total` and `hcp`; the feed spells lines as strings.
+- `MaxbetOutcome` — `outcome`, `outcomeId`, `status`, `oddValue` (required but
+  nullable) and `marketAvailableForBetting` (required but nullable). A renamed
+  price field or a string price is drift; a null price is kept because the
+  parser already drops it.
+- `MaxbetMarket` — `id`, `name`, `specifiers` (optional: line-less markets omit
+  the key) and `outcomes`.
+
+`validate_maxbet_odds` is the fixture entry point; `validate_maxbet_events` runs
+in `fetch_and_parse` immediately after `response.json()` and validates the bare
+list and every event's `odds`. A non-JSON body, a non-list response, a
+non-object event or a drifted market/outcome row raises `SCRAPE_DRIFT` and the
+book drops out. Unknown keys are counted at `level="market"`, `"specifiers"`
+and `"outcome"`. A renamed specifier on a totals market degrades to "no line"
+rather than drift, because line-less markets legitimately omit `specifiers`.
+
+Tests: `tests/test_wire_schemas_maxbet.py`.
+
 ## Follow-up rows
 
 One book per session, each with its own capture and allow-list:
@@ -227,4 +285,5 @@ One book per session, each with its own capture and allow-list:
 `SR4-3d` Betole (done 2026-11-08), `SR4-3e` MBet (done 2026-11-08),
 `SR4-3f` SportPlus (done 2026-11-08), `SR4-3g` EVLBet (**blocked on SR6-3**:
 disabled book, empty capture, operator decision pending), `SR4-3h` Premier
-Kladionica (done 2026-11-08), `SR4-3i` WWin, `SR4-3j` MaxBet.
+Kladionica (done 2026-11-08), `SR4-3i` WWin (done 2026-11-08), `SR4-3j` MaxBet
+(done 2026-11-08).

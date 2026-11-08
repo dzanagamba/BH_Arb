@@ -130,12 +130,13 @@ do not copy stale numbers here.
 | SR4-3f | Strict wire schema: SportPlus | Done | SR4-3 | — |
 | SR4-3g | Strict wire schema: EVLBet | Blocked on SR6-3 | SR4-3 | — |
 | SR4-3h | Strict wire schema: Premier Kladionica | Done | SR4-3 | — |
-| SR4-3i | Strict wire schema: WWin | Not started | SR4-3 | — |
-| SR4-3j | Strict wire schema: MaxBet | Not started | SR4-3 | — |
-| SR4-4 | Structural fingerprint and drift alarm | Not started | SR4-3 | — |
-| SR4-5 | Cardinality floors against a baseline | Not started | SR2-1 | — |
-| SR4-6 | Snapshot tests of normalised parser output | Not started | SR4-2 | — |
-| SR4-7 | Property-based mutation tests for parsers | Not started | SR4-6 | — |
+| SR4-3i | Strict wire schema: WWin | Done | SR4-3 | — |
+| SR4-3j | Strict wire schema: MaxBet | Done | SR4-3 | — |
+| SR4-4 | Structural fingerprint and drift alarm | Done | SR4-3 | — |
+| SR4-5 | Cardinality floors against a baseline | Done | SR2-1 | — |
+| SR4-6 | Snapshot tests of normalised parser output | Done | SR4-2 | — |
+| SR4-7 | Property-based mutation tests for parsers | Done | SR4-6 | — |
+| SR4-7a | Drop a duplicated NSoft outcome label | Done | SR4-7 | — |
 | SR4-8 | HAR fixtures for browser books | Not started | SR3-4, SR4-2 | — |
 | SR4-9 | Scheduled live canary | Not started | SR4-4, SR4-5 | operator |
 | SR5-1 | Per-book reliability metrics | Not started | SR2-6 | — |
@@ -659,9 +660,9 @@ refresh-fixtures and audit-admissibility checks pass.
 
 ### SR4-3b … SR4-3j Strict wire schemas, remaining books
 
-Status: SR4-3b … SR4-3f and SR4-3h Done (2026-11-08); SR4-3g is Blocked on
-SR6-3; SR4-3i and SR4-3j not started. One row per remaining book, one book per
-session, picked in table order (Mozzartbet first).
+Status: SR4-3b … SR4-3f and SR4-3h … SR4-3j Done (2026-11-08); SR4-3g is
+Blocked on SR6-3. One row per remaining book, one book per session, picked in
+table order (Mozzartbet first).
 
 Why: SR4-3 proved the pattern on MDShop (direct HTTP, NSoft envelope); every
 other adapter still trusts the raw payload and validates only the parsed result.
@@ -901,9 +902,78 @@ Acceptance (SR4-3h):
 - [x] Unknown-section counts appear in `bh_wire_unknown_keys_total` for
       `book="premier_kladionica"` (positional data has no field names).
 
+**SR4-3i Outcome (2026-11-08).** WWIN is a Playwright hybrid whose dated
+fixtures freeze the `bets[]` array the parser reads (`idBt`, `spec`, `odds[]`
+with `t`/`va`/`isv`). `scrapers/wire_schemas.py` gained `WwinOdd` (`va`
+required, `isv` optional — the documented live `headerBets` row is `{va, t}`),
+`WwinBet` (`idBt`, `spec`, `odds`), `WwinEventsPage` (`p`/`events` kept raw),
+`WwinHeaderBetsPage` (`{"bets": [{"<eventId>": bet}]}`) and
+`validate_wwin_bets`/`validate_wwin_events`/`validate_wwin_header_bets`.
+`scrapers/wwin.py` validates the prematch page (`p` or the historical
+`events`) and every event's `bets`, the live `events` page, and the live
+`headerBets` rows immediately after `response.json()`. A non-JSON body, a
+missing page key, a non-object event/header item, or a drifted bet row raises
+`ScrapeError(SCHEMA_DRIFT)`, so the book drops out with zero legs instead of
+reading a renamed envelope as an empty page. Unknown keys are counted at `root`
+for the envelopes and at `bet`/`odd` for the rows
+(`bh_wire_unknown_keys_total{book="wwin",...}`), and still scraped. The event
+shell (teams, kickoff, competition) has no dated capture and stays unmodelled —
+its keys are neither rejected nor counted, so a renamed team field still drops
+that event silently (the gap SR4-4/SR5-1 close). `docs/WIRE_SCHEMAS.md` gained
+the WWIN section and levels. New `tests/test_wire_schemas_wwin.py` (25 tests):
+both fixtures' bet rows and all three envelopes pass, string/renamed prices, a
+missing `spec`, a string `idBt`, a missing/renamed page key and non-object
+events/header items and non-JSON bodies raise (schema and real `scrape()` in
+both modes, zero legs), an integer price is accepted, unknown root/bet/odd keys
+are kept/counted/logged, and the real scrape emits each capture's declared
+families.
+
+Acceptance (SR4-3i):
+- [x] Both dated fixtures (prematch and live) pass the strict schema with no
+      unknown keys.
+- [x] A renamed price field and a string price yield `schema_drift` through the
+      real adapter, with zero legs returned.
+- [x] Unknown-key counts appear in `bh_wire_unknown_keys_total` for
+      `book="wwin"`.
+
+**SR4-3j Outcome (2026-11-08).** MaxBet (Singular sportsbook) is plain HTTP and
+its matches response is a bare `[event, ...]` list; the dated fixtures freeze
+one match's `odds[]` array. `scrapers/wire_schemas.py` gained `MaxbetSpecifiers`
+(`total`/`hcp`), `MaxbetOutcome` (`outcome`, `outcomeId`, `status`, `oddValue`
+required but nullable, `marketAvailableForBetting` required but nullable) and
+`MaxbetMarket` (`id`, `name`, `specifiers` optional because line-less markets
+omit it, `outcomes`), plus `validate_maxbet_odds`/`validate_maxbet_events`.
+`scrapers/maxbet.py::fetch_and_parse` validates the list and every event's
+`odds` immediately after `response.json()`. A non-JSON body, a non-list
+response, a non-object event or a drifted market/outcome row raises
+`ScrapeError(SCHEMA_DRIFT)`, so the book drops out with zero legs instead of
+reading a renamed response as an empty list. Unknown keys are counted at
+`market`, `specifiers` and `outcome` in
+`bh_wire_unknown_keys_total{book="maxbet",...}` and still scraped. The event
+shell (teams, kickoff, league, status, external ids) has no dated capture and
+stays unmodelled — its keys are neither rejected nor counted, so a renamed team
+field still drops that event silently (the gap SR4-4/SR5-1 close); a renamed
+specifier on a totals market degrades to "no line" rather than drift.
+`docs/WIRE_SCHEMAS.md` gained the MaxBet section and levels. New
+`tests/test_wire_schemas_maxbet.py` (22 tests): both fixtures and the bare-list
+envelope pass, a renamed/string price, a missing outcome id, a string
+status/market id, a non-list response, non-object events and non-JSON bodies
+raise (schema and real `scrape()` in both modes, zero legs), a null price is
+accepted, an integer price is accepted, unknown market/specifier/outcome keys
+are kept/counted/logged, and the real scrape emits each capture's declared
+families.
+
+Acceptance (SR4-3j):
+- [x] Both dated fixtures (prematch and live) pass the strict schema with no
+      unknown keys.
+- [x] A renamed price field and a string price yield `schema_drift` through the
+      real adapter, with zero legs returned.
+- [x] Unknown-key counts appear in `bh_wire_unknown_keys_total` for
+      `book="maxbet"`.
+
 ### SR4-4 Structural fingerprint and drift alarm
 
-Status: Not started
+Status: Done
 
 Why: `research/06_parser_contract_testing_research.md` §6. Shape changes are
 visible before parsing fails.
@@ -912,14 +982,42 @@ Steps: compute a stable fingerprint (sorted key paths and value types, arrays
 collapsed) of each raw response per endpoint; store the last good one per book;
 alert (log + metric) when it changes. Alert only; do not change pricing.
 
+**SR4-4 Outcome (2026-11-08).** New `engine/structural_drift.py` computes a
+structural signature from sorted key paths plus JSON types: array indices are
+collapsed (`events[].bets[].odds[].va:number`), numeric map keys are collapsed
+to `<id>` (so ``headerBets``' per-event ids never look like renames), and the
+signature is SHA-256-truncated. Values are ignored, so the same shape with new
+prices has the same fingerprint. `observe(book, endpoint, payload)` stores the
+first informative baseline per `(book, endpoint)` in
+`config/generated/wire_fingerprints.json`; later responses either match or
+increment `bh_wire_structure_drift_total{book,endpoint}` and log the added/
+removed paths. The last good baseline is deliberately kept on drift, so the
+alarm repeats until an operator reviews the change; empty pages never establish
+a baseline. The check is alert-only and cannot raise into a scrape (I/O errors
+are logged and skipped). It is wired at every adapter's raw-JSON boundary with
+an endpoint label (MDShop/Admiralbet `mode:events:sportId`, Mozzartbet
+`matches`/`offer`, Betole `desk`/`offers`, MBet `events`, SportPlus
+`prematch`/`live`, Premier `sync:full`/`sync:delta`, WWin
+`prematch-events`/`live-events`/`live-header-bets`, MaxBet `matches:<sport>`,
+EVLBet `flat-offer`); a per-event Mozzartbet error payload is not observed.
+`tests/conftest.py` redirects the baseline file into the per-test runtime tree,
+and `scripts/check_test_isolation.py` still passes in both ledger modes. New
+`tests/test_structural_drift.py` (12 tests): values do not change the
+fingerprint, a renamed key/type change/removed level do, numeric map keys
+collapse, the first informative response records a baseline, a value change
+matches silently, a rename increments the counter and logs the diff while the
+last good baseline is kept, empty pages do not establish one, an unreadable
+store recovers, the real MDShop scrape ignores a price change and alerts on an
+unmodelled key, and `/api/metrics` renders the counter.
+
 Acceptance:
-- [ ] Test: same shape different values → same fingerprint; renamed key →
+- [x] Test: same shape different values → same fingerprint; renamed key →
       different.
-- [ ] Drift counter in `/api/metrics`.
+- [x] Drift counter in `/api/metrics`.
 
 ### SR4-5 Cardinality floors against a baseline
 
-Status: Not started
+Status: Done
 
 Why: an emptied or half-emptied feed (EVLBet empty feed,
 `research/03_fixtures_and_pain_points.md` §B) can pass parsing. Coverage-budget
@@ -929,13 +1027,38 @@ Steps: per book and sport, rolling baseline of events and markets per event;
 below a floor (absolute and relative) the book is `empty` or quarantined via the
 existing feed-integrity quarantine.
 
+**SR4-5 Outcome (2026-11-08).** `engine/coverage_budget.py` gained
+`cardinality_snapshot` (events and market rows per `book|sport`),
+`evaluate_cardinality` (rolling-median baselines, `event_drop` and
+`market_thin` flags, peer-gated), `push_cardinality_history` (bounded to 20
+scans) and `cardinality_book_reasons` (one `cardinality_drop` reason per
+flagged book). The floors are relative **and** absolute: a drop below 50 % of
+the median with at least 5 missing events, or markets-per-event below 50 % of
+the median with at least 2 missing rows; a baseline thinner than 10 events is
+not judged. A drop is only flagged when a peer book still publishes that sport
+*and is itself near its own baseline*, so a shared calendar dip is not a feed
+failure. `engine/feed_integrity.compute_feed_integrity` takes
+`cardinality_flags`, adds the critical reason `cardinality_drop` and records
+`cardinality_flags` in the scorecard/history, so the book enters the existing
+quarantine state machine and recovery streak and is removed from pricing by the
+unchanged `quarantined_books`/`priceable_groups` path — no second gate.
+`server/api.py` computes the report per scan, persists the last report and the
+bounded history in `cache/coverage_budget.json` (loaded per mode), publishes
+`bh_cardinality_flags`/`bh_cardinality_flags_total`, logs the flag count and
+exposes `cardinality_floor` in `/api/health`. `tests/conftest.py` resets and
+redirects the new state per test. New `tests/test_cardinality_floor.py`
+(9 tests): the snapshot, a 10 % feed flagged and quarantined with
+`cardinality_drop`, a 75 % dip healthy, a peer-wide dip not flagged, a
+markets-per-event drop flagged, a short baseline not judged, the bounded
+history, the coverage-budget file round-trip and the `/api/health` block.
+
 Acceptance:
-- [ ] Test: a feed at 10 % of baseline is quarantined; a normal dip is not.
-- [ ] Reuses the existing quarantine and coverage code paths (named in the log).
+- [x] Test: a feed at 10 % of baseline is quarantined; a normal dip is not.
+- [x] Reuses the existing quarantine and coverage code paths (named in the log).
 
 ### SR4-6 Snapshot tests of normalised parser output
 
-Status: Not started
+Status: Done
 
 Why: `research/06_parser_contract_testing_research.md` recommendation 2.
 
@@ -943,13 +1066,30 @@ Steps: add `syrupy` (dev). For each fixture, snapshot the normalised output
 (events, markets, settlement, prices), with IDs/timestamps blanked by a matcher.
 Do not snapshot raw payloads. A snapshot update requires a reason in the commit.
 
+**SR4-6 Outcome (2026-11-08).** Added the dev-only pin `syrupy==5.0.0`. New
+`tests/test_parser_snapshots.py` runs every fixture that declares
+`expected_markets` (17 captures) through the real parser entry point that
+`tests/test_market_fixtures.py::_run_parser` dispatches to, and snapshots the
+**normalised** output only: `market_type`, `settlement`, `period` and each
+`label`/`value` price row. Source ids, source context, outcome ids and update
+timestamps are deliberately left out, so book-specific identity data and the
+scan clock cannot churn the snapshot. Raw payloads are not snapshotted; SR4-2/
+SR4-3 already pin the raw shape and `tests/fixtures/markets/contracts.json` pins
+the ids/labels. Snapshots live in
+`tests/__snapshots__/test_parser_snapshots.ambr` and run in the normal `pytest`
+run (17 snapshots + one coverage guard). `pytest --snapshot-update` stays a
+human action: `docs/CI.md` records that a commit updating a snapshot must say
+why the normalised output changed and that CI never updates one. A second test
+asserts the snapshot case set equals the set of fixtures declaring
+`expected_markets`, so a new capture cannot silently skip the snapshot layer.
+
 Acceptance:
-- [ ] Snapshots for every fixture that has `expected_markets`.
-- [ ] Snapshot tests run in the normal `pytest` run.
+- [x] Snapshots for every fixture that has `expected_markets`.
+- [x] Snapshot tests run in the normal `pytest` run.
 
 ### SR4-7 Property-based mutation tests for parsers
 
-Status: Not started
+Status: Done
 
 Why: `research/06_parser_contract_testing_research.md` recommendation 4.
 
@@ -959,9 +1099,65 @@ never raises an unhandled exception; never emits a leg with a missing or
 non-positive price; never emits two legs for one book in a group; never changes
 sport or settlement.
 
+**SR4-7 Outcome (2026-11-08).** `hypothesis==6.150.0` was already a dev pin. New
+`tests/test_properties_parsers.py` runs all 17 fixtures that declare
+`expected_markets` (the nine parser dispatch paths; EVLBet has no capture,
+SR6-3). Each Hypothesis example keeps the payload container and applies 1-3
+bounded mutations inside it: drop a key, null a value, swap a scalar type,
+shuffle/duplicate/drop/truncate an array, add an unknown key. A mutation the
+book's wire schema (SR4-3) rejects is skipped, because in production the raw
+payload never reaches a parser in that shape; this keeps the property about the
+parser rather than a second schema implementation. Accepted mutations must
+return a list without an unhandled exception, every emitted price must be
+finite and positive, no label may repeat for one
+`(market_type, settlement, period)`, and no emitted identity may fall outside
+the clean capture's sport/settlement set (mutations may drop markets, never
+cross sport or settlement). The clean capture is checked against the same
+invariants, plus two filter tests (an unknown key is accepted, a short Premier
+row is rejected), so the property is not vacuous. Runtime is ~2 s for 17×40
+examples. The mutation run found one production-reachable defect (a duplicated
+NSoft `betOutcome` becomes two legs for one book); it is recorded as `SR4-7a`
+and pinned by a strict xfail, not fixed in this row. The schema-guarded
+robustness gaps it also exposed (short Premier rows, a non-object MaxBet
+`specifiers`) cannot reach a parser in production and need no code change.
+
 Acceptance:
-- [ ] Property tests for every parser, bounded run time in CI.
-- [ ] Any bug found is fixed in a separate task row, not silently in this one.
+- [x] Property tests for every parser, bounded run time in CI.
+- [x] Any bug found is fixed in a separate task row, not silently in this one.
+
+### SR4-7a Drop a duplicated NSoft outcome label
+
+Status: Done
+
+Why: SR4-7's mutation run showed that `parse_nsoft_bets` appends one
+`OddsValue` per raw `betOutcomes` row without deduplicating by normalized
+label. A payload with the same outcome twice (the schema accepts it: the
+`betOutcomes` list has no uniqueness rule) yields a market whose odds list
+carries label `1` twice. That is two legs for one book in a group, against
+trust invariant 8. `tests/test_properties_parsers.py` pins the defect with a
+strict xfail (`test_nsoft_duplicate_outcome_is_not_emitted_twice`), which turns
+red when the fix lands and forces the marker's removal.
+
+Steps: in `scrapers/common.py::parse_nsoft_bets`, keep the first (or the latest
+offered) price per normalized label instead of appending a duplicate; keep the
+existing `actual`/`min_legs` acceptance logic. Add a fixture-free regression
+test and remove the strict xfail; update the SR4-7 docstring's known-defect
+paragraph.
+
+**SR4-7a Outcome (2026-11-08).** `parse_nsoft_bets` now tracks the normalized
+labels it has already emitted and keeps the **first offered** price per label;
+a later duplicate row is ignored, including its outcome id. The existing
+`actual`/`min_legs`/`issubset` acceptance logic is unchanged, so a market still
+needs its full label set. In `tests/test_properties_parsers.py` the strict
+xfail was removed, the regression test now duplicates the first outcome of the
+real MDShop prematch capture (with a different price) and asserts one label with
+the first price, and the mutation property enforces label uniqueness again for
+every parser. A duplicated outcome can no longer become two legs for one book.
+
+Acceptance:
+- [x] A duplicated normalized label yields one `OddsValue`, and the strict
+      xfail is removed.
+- [x] `python -m pytest` and `python scripts/check_test_isolation.py` stay green.
 
 ### SR4-8 HAR fixtures for browser books
 
@@ -1838,3 +2034,10 @@ Useful starting points:
 | 2026-11-08 | SR4-3f | Done | SportPlus's dated fixtures freeze one match's `markets[]` array, so `scrapers/wire_schemas.py` gained `SportplusMarket` (`id`/`name`/`odds` required but nullable) and `SportplusOdd` (`alias`/`value` required but nullable), plus `SportplusPrematchPage` (`{"matches": [...]}`), `SportplusLivePage` (`{"sports": [...]}`, with a declared-but-unread `date` key kept out of the telemetry) and `validate_sportplus_markets`/`validate_sportplus_prematch`/`validate_sportplus_live`. `scrapers/sportplus.py` validates the prematch body after the optional double-serialised decode (`resp.json()` returning a JSON string) and the live body before any match is parsed; a non-JSON body or drifted block/price raises `ScrapeError(SCHEMA_DRIFT)`, re-raised by the existing `except ScrapeError: raise`, so the book drops with zero legs. `matches`/`sports` are required so a renamed envelope key cannot read as an empty offer; a renamed `value`/`alias` or a string price is drift, an integer price is accepted, and a block with `odds: null` is kept (the parser already treats it as empty). Unknown keys count at `root`/`market`/`odd` in `bh_wire_unknown_keys_total{book="sportplus",...}` and are logged once per payload. The match shell (sport name, competitors, kickoff, league) has no dated capture and stays unmodelled, so a renamed team field still drops that match silently (the gap SR4-4/SR5-1 close). `docs/WIRE_SCHEMAS.md` gained the SportPlus section and levels. New `tests/test_wire_schemas_sportplus.py` (19 tests): both fixtures pass, both envelopes pass, renamed/string prices raise through the schema and the real `scrape()` in both modes with zero legs, integer prices and a null odds block are accepted, the double-serialised prematch body still scrapes, renamed `matches`/`sports` and non-JSON bodies are drift, and unknown root/market/odd keys are kept/counted/logged. No live scan was run and no bookmaker traffic was generated. `pytest`: 2024 passed, 6 skipped, 1 xfailed; `check_test_isolation.py`: both ledger modes 2024 passed, 6 skipped, 1 xfailed; `pytest --cov`: 89.18% (12,666 statements, floor 80%); ruff clean; mypy 241 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. |
 | 2026-11-08 | SR4-3g | Blocked | EVLBet is disabled, its recorded flat-offer response is an empty list and it has no market capture (`tests/test_market_fixtures.py::BOOKS_WITHOUT_FIXTURES`). The strict-schema acceptance cannot be met: there is no odds row to model, no renamed price field to reject, and no price to type. SR4-1 already pinned the recorded empty response at the transport boundary. SR6-3 (`Gate: operator`) owns the choice — capture a fixture and keep the adapter, or remove it and its config. No code was changed; the row is marked `Blocked on SR6-3` and work resumes only after that written decision. |
 | 2026-11-08 | SR4-3h | Done | Premier Kladionica's PrSync is positional: the response is `[sections]`, each section a list of rows, and a column's meaning is its index. `scrapers/wire_schemas.py` gained `PremierOddRow` (price at column 5), `PremierSetTip` (name at column 2), `PremierSetTipVar` (line at column 9) and `PremierSetTipTip` (outcome code at column 4), each mapping its positional list through `model_validator(mode="before")` so the strict field types apply by position, plus `validate_premier_odds`/`validate_premier_lookup`/`validate_premier_sync`. `scrapers/premier_kladionica.py::_sync_call` gained the sync `kind`: a full sync validates the `[sections]` envelope (at least ten slots, each a list) and sections 7/8/9; a delta sync validates every non-empty section as odds rows. A non-JSON body, a wrong envelope, a short row/table or a string price raises `ScrapeError(SCHEMA_DRIFT)` and drops the book with zero legs. Positional data has no field names, so the counter reports unknown **section slots** past the documented fifteen at `level="section"`. The event/sports/competition-group/execRes sections have no dated capture and stay unmodelled, so a renamed team column still drops that event silently (the gap SR4-4/SR5-1 close). `docs/WIRE_SCHEMAS.md` gained the Premier section and levels. New `tests/test_wire_schemas_premier.py` (19 tests): both fixtures' odds/lookup rows and envelopes pass, string/truncated prices, non-string line/code columns and short rows raise (schema and real `scrape()` in both modes, zero legs), an integer price is accepted, an unknown section slot is counted/logged, short and non-`[sections]` envelopes and non-JSON bodies are drift, and the real scrape emits each capture's declared families. `pytest`: 2043 passed, 6 skipped, 1 xfailed; `check_test_isolation.py`: both ledger modes 2043 passed, 6 skipped, 1 xfailed; `pytest --cov`: 89.26% (12,767 statements, floor 80%); ruff clean; mypy 242 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. |
+| 2026-11-08 | SR4-3i | Done | WWIN is a Playwright hybrid whose dated fixtures freeze the `bets[]` array (`idBt`, `spec`, `odds[]` with `t`/`va`/`isv`). `scrapers/wire_schemas.py` gained `WwinOdd` (`va` required, `isv` optional because the documented live `headerBets` row is `{va, t}`), `WwinBet`, `WwinEventsPage` (raw `p`/`events`), `WwinHeaderBetsPage` and `validate_wwin_bets`/`validate_wwin_events`/`validate_wwin_header_bets`. `scrapers/wwin.py` validates the prematch page (`p` or the historical `events`) and every event's `bets`, the live `events` page and the live `headerBets` rows immediately after `response.json()`. A non-JSON body, a missing page key, a non-object event/header item or a drifted bet row raises `ScrapeError(SCHEMA_DRIFT)` and drops the book with zero legs. Unknown keys are counted at `root` for envelopes and at `bet`/`odd` for rows and still scraped; the event shell (teams, kickoff, competition) has no dated capture and stays unmodelled (a renamed team field still drops that event silently; SR4-4/SR5-1 close it). `docs/WIRE_SCHEMAS.md` gained the WWIN section and levels. New `tests/test_wire_schemas_wwin.py` (25 tests): both fixtures and all three envelopes pass, string/renamed prices, a missing `spec`, a string `idBt`, missing/renamed page keys, non-object events/header items and non-JSON bodies raise (schema and real `scrape()` in both modes, zero legs), an integer price is accepted, unknown root/bet/odd keys are kept/counted/logged, and the real scrape emits each capture's declared families. `pytest`: 2068 passed, 6 skipped, 1 xfailed; `check_test_isolation.py`: both ledger modes 2068 passed, 6 skipped, 1 xfailed; `pytest --cov`: 90.20% (12,851 statements, floor 80%); ruff clean; mypy 243 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. |
+| 2026-11-08 | SR4-3j | Done | MaxBet (Singular sportsbook) is plain HTTP and its matches response is a bare `[event, ...]` list; the dated fixtures freeze one match's `odds[]` array. `scrapers/wire_schemas.py` gained `MaxbetSpecifiers` (`total`/`hcp`), `MaxbetOutcome` (`outcome`, `outcomeId`, `status` and `oddValue`/`marketAvailableForBetting` required but nullable) and `MaxbetMarket` (`id`, `name`, `specifiers` optional because line-less markets omit it, `outcomes`), plus `validate_maxbet_odds`/`validate_maxbet_events`. `scrapers/maxbet.py::fetch_and_parse` validates the list and every event's `odds` immediately after `response.json()`. A non-JSON body, a non-list response, a non-object event or a drifted market/outcome row raises `ScrapeError(SCHEMA_DRIFT)` and drops the book with zero legs. Unknown keys are counted at `market`/`specifiers`/`outcome` and still scraped; the event shell (teams, kickoff, league, status, external ids) has no dated capture and stays unmodelled (a renamed team field still drops that event silently; SR4-4/SR5-1 close it), and a renamed specifier on a totals market degrades to "no line" rather than drift. `docs/WIRE_SCHEMAS.md` gained the MaxBet section and levels. New `tests/test_wire_schemas_maxbet.py` (22 tests): both fixtures and the bare-list envelope pass, renamed/string prices, a missing outcome id, string status/market ids, non-list responses, non-object events and non-JSON bodies raise (schema and real `scrape()` in both modes, zero legs), a null price and an integer price are accepted, unknown market/specifier/outcome keys are kept/counted/logged, and the real scrape emits each capture's declared families. `pytest`: 2090 passed, 6 skipped, 1 xfailed; `check_test_isolation.py`: both ledger modes 2090 passed, 6 skipped, 1 xfailed; `pytest --cov`: 90.27% (12,913 statements, floor 80%); ruff clean; mypy 244 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. |
+| 2026-11-08 | SR4-4 | Done | New `engine/structural_drift.py` computes a structural signature from sorted key paths plus JSON types: array indices are collapsed, numeric map keys (e.g. `headerBets` per-event ids) collapse to `<id>`, values are ignored and the signature is SHA-256-truncated. `observe(book, endpoint, payload)` stores the first informative baseline per `(book, endpoint)` in `config/generated/wire_fingerprints.json`; a later response either matches or increments `bh_wire_structure_drift_total{book,endpoint}` and logs the added/removed paths. The last good baseline is kept on drift so the alarm repeats until an operator reviews the change; empty pages never establish one; I/O errors are logged and skipped so the alert can never raise into a scrape. It is wired at every adapter's raw-JSON boundary with an endpoint label (MDShop/Admiralbet `mode:events:sportId`, Mozzartbet `matches`/`offer` (success only), Betole `desk`/`offers`, MBet `events`, SportPlus `prematch`/`live`, Premier `sync:full`/`sync:delta`, WWin `prematch-events`/`live-events`/`live-header-bets`, MaxBet `matches:<sport>`, EVLBet `flat-offer`). `tests/conftest.py` redirects the baseline into the per-test runtime tree. New `tests/test_structural_drift.py` (12 tests): values do not change the fingerprint, a renamed key/type change/removed level do, numeric map keys collapse, the first informative response records a baseline, a value change matches silently, a rename increments the counter and logs the diff while the last good baseline is kept, empty pages do not establish one, an unreadable store recovers, the real MDShop scrape ignores a price change and alerts on an unmodelled key, and `/api/metrics` renders the counter. `pytest`: 2102 passed, 6 skipped, 1 xfailed; `check_test_isolation.py`: both ledger modes 2102 passed, 6 skipped, 1 xfailed; `pytest --cov`: 90.34% (13,052 statements, floor 80%); ruff clean; mypy 246 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. |
+| 2026-11-08 | SR4-5 | Done | `engine/coverage_budget.py` gained `cardinality_snapshot` (events and market rows per `book|sport`), `evaluate_cardinality` (rolling-median baselines, `event_drop` and `market_thin` flags, peer-gated), `push_cardinality_history` (20 scans) and `cardinality_book_reasons`. The floors are relative and absolute: below 50 % of the median with at least 5 missing events, or markets-per-event below 50 % with at least 2 missing rows; a baseline below 10 events is not judged. A drop is only flagged when a peer book still publishes that sport and is itself near its own baseline, so a shared calendar dip is not a feed failure. `compute_feed_integrity` takes `cardinality_flags`, adds the critical reason `cardinality_drop` and records `cardinality_flags` in the scorecard/history, so the book enters the existing quarantine state machine and recovery streak and is removed from pricing by the unchanged `quarantined_books`/`priceable_groups` path — no second gate. `server/api.py` computes the report per scan, persists the last report and bounded history in `cache/coverage_budget.json`, publishes `bh_cardinality_flags`/`bh_cardinality_flags_total`, logs the flag count and exposes `cardinality_floor` in `/api/health`. `tests/conftest.py` resets and redirects the new state. New `tests/test_cardinality_floor.py` (9 tests): the snapshot, a 10 % feed flagged and quarantined with `cardinality_drop`, a 75 % dip healthy, a peer-wide dip not flagged, a markets-per-event drop flagged, a short baseline not judged, the bounded history, the coverage-budget file round-trip and the `/api/health` block. `pytest`: 2111 passed, 6 skipped, 1 xfailed; `check_test_isolation.py`: both ledger modes 2111 passed, 6 skipped, 1 xfailed; `pytest --cov`: 90.40% (13,140 statements, floor 80%); ruff clean; mypy 247 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. |
+| 2026-11-08 | SR4-6 | Done | Added the dev-only pin `syrupy==5.0.0`. New `tests/test_parser_snapshots.py` runs every fixture that declares `expected_markets` (17 captures) through the real parser entry point that `tests/test_market_fixtures.py::_run_parser` dispatches to, and snapshots the normalised output only: `market_type`, `settlement`, `period` and each `label`/`value` price row. Source ids, source context, outcome ids and update timestamps are deliberately left out so book identity data and the scan clock cannot churn the snapshot; raw payloads are not snapshotted (SR4-2/SR4-3 pin the raw shape and `contracts.json` pins ids/labels). Snapshots live in `tests/__snapshots__/test_parser_snapshots.ambr` and run in the normal `pytest` run (17 snapshots + one coverage guard). `pytest --snapshot-update` stays a human action: `docs/CI.md` records that a commit updating a snapshot must say why the normalised output changed and that CI never updates one. The guard asserts the snapshot case set equals the fixtures declaring `expected_markets` so a new capture cannot silently skip the layer. `pytest`: 2129 passed, 6 skipped, 1 xfailed (17 snapshots passed); `check_test_isolation.py`: both ledger modes 2129 passed, 6 skipped, 1 xfailed; `pytest --cov`: 90.40% (13,140 statements, floor 80%); ruff clean; mypy 248 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. |
+| 2026-11-08 | SR4-7 | Done | New `tests/test_properties_parsers.py` runs all 17 fixtures that declare `expected_markets` (nine parser dispatch paths; EVLBet has no capture (SR6-3)) under Hypothesis with 40 examples each. Each example keeps the payload container and applies 1-3 bounded mutations inside it: drop a key, null a value, swap a scalar type, shuffle/duplicate/drop/truncate an array, add an unknown key. A mutation the book's wire schema (SR4-3) rejects is skipped, because production never passes that shape to a parser. Accepted mutations must return a list without an unhandled exception, every emitted price must be finite and positive, no label may repeat for one `(market_type, settlement, period)`, and no emitted identity may fall outside the clean capture's sport/settlement set. The clean capture is checked against the same invariants, plus two filter tests, so the property is not vacuous. Runtime ~2 s. The run found one production-reachable defect: `parse_nsoft_bets` appends one OddsValue per raw `betOutcomes` row without deduplicating by normalized label, so a duplicated outcome (accepted by the schema) gives two legs for one book. Recorded as `SR4-7a` and pinned with a strict xfail in the same file; not fixed in this row. The schema-guarded gaps it also exposed (short Premier rows, a non-object MaxBet `specifiers`) cannot reach a parser in production and need no code change. `pytest`: 2165 passed, 6 skipped, 2 xfailed (17 snapshots passed); `check_test_isolation.py`: both ledger modes pass; `pytest --cov`: 90.53% (13,140 statements, floor 80%); ruff clean; mypy 249 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. |
+| 2026-11-08 | SR4-7a | Done | `scrapers/common.py::parse_nsoft_bets` now tracks the normalized labels it has already emitted and keeps the first offered price per label; a later duplicate raw `betOutcomes` row (and its outcome id) is ignored. The existing `actual`/`min_legs`/`issubset` acceptance logic is unchanged, so a market still needs its full label set. In `tests/test_properties_parsers.py` the strict xfail was removed, the regression test now duplicates the first outcome of the real MDShop prematch capture with a different price and asserts one label with the first price, and the mutation property enforces label uniqueness again for every parser. A duplicated outcome can no longer become two legs for one book. `pytest`: 2166 passed, 6 skipped, 1 xfailed (17 snapshots passed); `check_test_isolation.py`: both ledger modes 2166 passed, 6 skipped, 1 xfailed; `pytest --cov`: 90.53% (13,142 statements, floor 80%); ruff clean; mypy 249 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. |
