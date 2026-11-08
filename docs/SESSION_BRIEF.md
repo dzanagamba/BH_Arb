@@ -12,14 +12,15 @@ SR7-1 and SR7-2 are done.
 feed). Every other `Not started` row is `Gate: operator`; the roadmap is the
 single task list in `ROADMAP.md`, N2-4 stays deferred and P1-6 stays waived
 until the operator says otherwise.
-**Last task commit:** M2-5 "write the mapping ledger compact", committed on
-2026-11-08. Before it, `e616ac8` rejects a positive accepted stake at zero odds
-(M1-2), `276b6f4` caps the candidate review queue and reports the denominator
-(M2-4), `fbdd5cc` stops rewriting the scan cache on verify-links (M2-2),
-`33a695f` runs the scan analysis off the event loop (M2-1), `2eb5324` caches
-key verification and throttles failed attempts (M1-3), `e82a0f1` closes every
-`/api` route with one key guard (M1-1), `3f9a911` carries the health-summary
-cache (M2-3), and `8a1cb90` carries SR6-2, SR4-8a and SR4-8.
+**Last task commit:** `e0448d2` — "write the mapping evidence ledger compact
+(M2-5)", pushed to `origin/main` on 2026-11-08. Before it, `e616ac8` rejects a
+positive accepted stake at zero odds (M1-2), `276b6f4` caps the candidate review
+queue and reports the denominator (M2-4), `fbdd5cc` stops rewriting the scan
+cache on verify-links (M2-2), `33a695f` runs the scan analysis off the event
+loop (M2-1), `2eb5324` caches key verification and throttles failed attempts
+(M1-3), `e82a0f1` closes every `/api` route with one key guard (M1-1),
+`3f9a911` carries the health-summary cache (M2-3), and `8a1cb90` carries SR6-2,
+SR4-8a and SR4-8.
 
 ## Project state
 
