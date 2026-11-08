@@ -12,11 +12,11 @@ SR7-1 and SR7-2 are done.
 feed). Every other `Not started` row is `Gate: operator`; the roadmap is the
 single task list in `ROADMAP.md`, N2-4 stays deferred and P1-6 stays waived
 until the operator says otherwise.
-**Last task commit:** M2-1 "move the scan analysis off the event loop",
-committed on 2026-11-08. Before it, `2eb5324` caches key verification and
-throttles failed attempts (M1-3), `e82a0f1` closes every `/api` route with one
-key guard (M1-1), `3f9a911` carries the health-summary cache (M2-3), and
-`8a1cb90` carries SR6-2, SR4-8a and SR4-8.
+**Last task commit:** `33a695f` — "run the scan analysis off the event loop
+(M2-1)", pushed to `origin/main` on 2026-11-08. Before it, `2eb5324` caches key
+verification and throttles failed attempts (M1-3), `e82a0f1` closes every `/api`
+route with one key guard (M1-1), `3f9a911` carries the health-summary cache
+(M2-3), and `8a1cb90` carries SR6-2, SR4-8a and SR4-8.
 
 ## Project state
 
