@@ -33,6 +33,21 @@ fills those fields from the cached surebet when an older client omits them.
 - `profit = payout - staked`; `roi = profit / settled stake`.
 - `bankroll = bankroll_start + profit` (`BANKROLL_START`, default 1000).
 
+### Accepted odds and stake are a pair
+
+The accepted fields are what P/L uses, so their zero has one meaning: the leg
+was **not placed**. `accepted_odds: 0` and `accepted_stake: 0` together are that
+sentinel — a rejected leg, or a stake the book did not take. `null` means "not
+typed" and falls back to the planned odds or stake.
+
+A **positive** accepted stake with `accepted_odds: 0` is an impossible claim: a
+stake cannot be accepted at a price that does not exist. `POST /api/bets`
+refuses it with `422` and writes no row, because the old leniency silently
+treated it as not placed and dropped the operator's money from P/L without a
+warning. The guard is create-time only: a row already stored with that pair still
+settles as not placed, and nothing is rewritten. A zero accepted stake with a
+real price stays accepted — the price is known, no money is at stake.
+
 ## CLV
 
 `clv = accepted_odds / closing_odds - 1`, weighted by accepted stake, over legs

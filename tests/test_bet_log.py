@@ -301,6 +301,90 @@ def test_a_zero_accepted_odds_is_the_not_placed_sentinel(tmp_path, monkeypatch):
     assert store.list_bets()[0]["legs"][0]["accepted_odds"] == 0.0
 
 
+def test_a_positive_stake_at_zero_odds_is_rejected(tmp_path, monkeypatch):
+    """M1-2: a stake the book accepted at no price is an impossible claim.
+
+    It used to be silently neutralised at settle, so money the operator said the
+    book took vanished from P/L with no warning. The "not placed" sentinel is a
+    pair: both fields zero, or a real price with the stake.
+    """
+    client, store = _api_client(tmp_path, monkeypatch)
+
+    response = client.post(
+        "/api/bets",
+        json=_payload(legs=[_bad_leg(accepted_stake=50.0, accepted_odds=0.0)]),
+    )
+
+    assert response.status_code == 422, response.text
+    detail = response.text
+    assert "accepted_stake" in detail and "accepted_odds" in detail, detail
+    assert "not placed" in detail, detail
+    assert store.list_bets() == [], "the refused row must not be written"
+
+
+def test_missing_accepted_odds_still_falls_back_to_the_planned_price(
+    tmp_path, monkeypatch
+):
+    """Only the zero-with-stake pair is refused; `null` still means "not typed"."""
+    client, store = _api_client(tmp_path, monkeypatch)
+
+    response = client.post(
+        "/api/bets", json=_payload(legs=[_bad_leg(accepted_stake=50.0)])
+    )
+
+    assert response.status_code == 200, response.text
+    assert store.list_bets()[0]["legs"][0]["accepted_odds"] is None
+
+
+def test_a_zero_stake_with_a_real_price_is_still_accepted(tmp_path, monkeypatch):
+    """The mirror case is coherent: the price is known, nothing was staked, so
+    the leg is not placed and no money is at stake."""
+    client, store = _api_client(tmp_path, monkeypatch)
+
+    response = client.post(
+        "/api/bets",
+        json=_payload(legs=[_bad_leg(accepted_stake=0.0, accepted_odds=2.2)]),
+    )
+
+    assert response.status_code == 200, response.text
+    created = store.list_bets()[0]
+    settled = store.settle(created["id"], [{"outcome_label": "GG", "result": "won"}])
+    assert settled["staked"] == 0.0
+    assert settled["payout"] == 0.0
+
+
+def test_a_stored_row_with_a_stake_at_zero_odds_still_settles_as_not_placed(
+    tmp_path,
+):
+    """Existing data is never rejected or rewritten: settle keeps its leniency.
+
+    The 422 is a create-time guard; a row written before it (or by hand) must
+    still not book a phantom payout or a phantom stake.
+    """
+    store = BetStore(str(tmp_path / "bets.sqlite3"))
+    store.initialize()
+    created = store.create(
+        _payload(
+            legs=[
+                {
+                    "bookmaker": "mbet",
+                    "outcome_label": "GG",
+                    "odds": 2.10,
+                    "stake": 51.0,
+                    "accepted_odds": 0.0,
+                    "accepted_stake": 50.0,
+                }
+            ]
+        )
+    )
+
+    settled = store.settle(created["id"], [{"outcome_label": "GG", "result": "won"}])
+
+    assert settled["staked"] == 0.0
+    assert settled["payout"] == 0.0
+    assert settled["profit"] == 0.0
+
+
 def test_a_zero_accepted_odds_is_not_placed_when_settled(tmp_path):
     store = BetStore(str(tmp_path / "bets.sqlite3"))
     store.initialize()

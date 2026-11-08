@@ -159,7 +159,7 @@ do not copy stale numbers here.
 | SR7-1 | Full per-match market offers (Mozzartbet, Betole) | Done | — | operator |
 | SR7-2 | Raise the Mozzartbet request rate | Done | SR7-1 | operator |
 | M1-1 | Redesign named-key authentication | Done | — | operator |
-| M1-2 | Decide `accepted_odds: 0` with a stake | Not started | — | operator |
+| M1-2 | Decide `accepted_odds: 0` with a stake | Done | — | operator |
 | M1-3 | Auth-failure rate limit and PBKDF2 cache | Done | — | operator |
 | M2-1 | Move scan CPU/I/O off the event loop | Done | — | operator |
 | M2-2 | Stop rewriting the cache on verify-links | Done | — | operator |
@@ -2132,17 +2132,60 @@ Acceptance (written before coding, 2026-11-08):
 
 ### M1-2 Decide `accepted_odds: 0` with a stake
 
-Status: Not started
+Status: Done
 
 Gate: operator
+
+**Decision (2026-11-08, operator: continue after M2-4; the pick announced after
+M2-4 was this row): reject it with 422.** Measured from the code: the payload
+validator documents `accepted_odds: 0` as the explicit "this leg was not placed"
+sentinel "matching a zero accepted stake"; `BetStore.settle` treats *either*
+zero as not placed, so bankroll, staked and profit stay correct; CLV already
+skips a falsy accepted odds, so the pair cannot fake a -100 % CLV either. The
+dashboard cannot produce the pair — "Mark placed" refuses odds below 1.01 and
+sends both accepted fields from the same `placed` flag — so it can only arrive
+from a hand-written client, where today a positive stake at a price that cannot
+exist is silently neutralised: money the operator says the book accepted
+disappears from P/L with no warning.
+
+So: `accepted_stake > 0` with `accepted_odds == 0` is an impossible claim and is
+refused at create with 422. The sentinel stays: both zero means not placed,
+`null` still falls back to the planned value, and a row already stored with the
+pair still settles as not placed (history is never rewritten).
 
 Why / what: Decide whether `accepted_odds: 0` with a non-zero accepted stake
 should be rejected (422) instead of treated as "not placed". The current settle
 path treats either zero as not placed, so bankroll stays correct.
 
-Acceptance:
-- [ ] Operator approval recorded here.
-- [ ] Acceptance criteria written here before coding.
+**M1-2 Outcome (2026-11-08).** `server/api.py::BetLegPayload` gained a
+`model_validator(mode="after")` `_a_stake_needs_a_price`: a positive
+`accepted_stake` with `accepted_odds == 0` is refused with 422, the detail names
+both fields and says to record 0 for both when the leg was not placed, and no
+row is written. The sentinel is unchanged: both zero still means "not placed",
+`accepted_odds: null` still falls back to the planned price, and a zero stake
+with a real price stays accepted (the price is known, no money is at stake).
+`BetStore.settle` is untouched, so an already-stored inconsistent row still
+settles as not placed — verified: the stored-row case yields `staked 0.0`,
+`payout 0.0`, `profit 0.0` (nothing rejected, nothing rewritten). Four new tests
+in `tests/test_bet_log.py`: the 422 and the empty store, the null-price fallback
+still accepted, the zero-stake mirror still accepted and settling flat, and the
+stored-row leniency. `docs/BET_LOG.md` documents the pair rule next to the P/L
+formulas. `pytest`: 2310 passed, 12 skipped (17 snapshots) in 117.63 s; ruff
+clean; mypy 275 source files clean; market doc in sync; refresh_fixtures and
+audit_admissibility `--check` exit 0. No live scan, no bookmaker traffic.
+
+Acceptance (written before coding, 2026-11-08):
+- [x] `POST /api/bets` answers 422 for a leg with `accepted_stake > 0` and
+      `accepted_odds == 0`, the message names both fields and says to use 0 for
+      both when the leg was not placed, and no row is written.
+- [x] The sentinel and the fallbacks still work: both zero is accepted as "not
+      placed"; `accepted_odds: null` with a stake keeps the planned-odds
+      fallback; `accepted_stake: 0` with a real odds is still accepted.
+- [x] `BetStore.settle` still treats an already-stored inconsistent row as not
+      placed, so existing data is neither rejected nor rewritten.
+- [x] Tests pin each case through the API and through the store.
+- [x] `docs/BET_LOG.md` documents the rule next to the P/L formulas.
+
 
 ### M1-3 Auth-failure rate limit and PBKDF2 cache
 
@@ -3103,3 +3146,4 @@ Useful starting points:
 | 2026-11-08 | M2-1 | Done | The scan's analysis half ran on the event loop with no yielding `await` — grouping, stale/skin/feed-integrity, the candidate walk, the pricing pass and the 27 MB cache write — so a real scan blocked `/api/status` for about 100 s. Every heavy stage is now a sync helper called through `asyncio.to_thread`, in the same order: `_finish_scan_cost`, `_evaluate_feed_diagnostics`, `learn_scan_mappings`, `MatchMatcher()` + `group_matches`, `measure_price_agreement`/`apply_measured_twins`, `get_match_report`, `evaluate_stale_prices`, `compute_feed_integrity`, `_build_candidates` (the candidate walk split from the async AI ranking), `find_surebets`, `filter_price_outliers`, `capture_closing`, the paper writes, `_summarize_pricing`, `_serialise_scan_caches` and `_persist_scan_state` (cache + sibling JSON writes). Logic, inputs, outputs and ordering are unchanged; the scan tests in `test_e2e_certified`, `test_metrics`, `test_record_only`, `test_scan_candidates`, `test_auto_clv` and `test_health_cache` pass unchanged. New `test_the_scan_analysis_runs_off_the_event_loop` calibrates itself: with `to_thread` neutralised the same 3-match scan (group_matches stubbed to 0.5 s) held the loop for a **695.5 ms** heartbeat gap; offloaded it was **15.4 ms**, and all nine wrapped heavy stages ran off the main thread. A cancelled scan may let one worker finish (threads are not interruptible); every orphanable stage re-reads shared state at call time and writes idempotent diagnostics. `pytest`: 2295 passed, 12 skipped (17 snapshots) in 115.41 s; ruff clean; mypy 275 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No live scan. |
 | 2026-11-08 | M2-2 | Done | Each `/api/verify-links` call ended in `_save_cache(mode)`, rewriting the whole scan cache to persist at most a handful of `deep_link_verified` flags, once per checked event. The write is gone: `apply_report` + `_apply_deep_link_verifications` still update the in-memory cache, and the verdict stays durable in `deep_link_verifications.json` (proof written or removed) and `deep_link_decisions.json` (the event is decided). Because the cache file can now predate a failed check, `_load_cache` re-derives the flag: new `_clear_stale_deep_link_flags` clears a cached True that no fresh store record backs, then `_apply_deep_link_verifications` re-applies the fresh ones; a book the gate settles by declaration is unaffected. The one test pinning the old asymmetry (match list kept a stale True while the report was filtered) now asserts the flag is re-derived as well. **Measured** on the operator's real files: `_save_cache` 71.4 ms at 1.2 MB/384 matches (today's prematch), 201.2 ms at 3.7 MB/942 matches (live), 1230.3 ms at 21.6 MB/6,610 matches (the SR5-2 baseline shape, the row's size); a check now does zero cache writes and its two store writes take 0.325 ms. New tests: normal check writes no cache but persists the proof and updates memory; failed check removes the proof, records the decision, clears the flag; restart with an emptied store clears the cached flag. `pytest`: 2298 passed, 12 skipped (17 snapshots) in 116.27 s; ruff clean; mypy 275 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No live scan. |
 | 2026-11-08 | M2-4 | Done | Operator: "Continue with M2-4, the candidate queue cap." The operator's scan history (`cache/bh_arb.sqlite3`, 25 scans) shows a prematch queue peaking at **14,249** pairs (11,657 matches), median 5,855, of which at most **473** were actionable; live peaked at 766. Keeping all of them cost 8.9 ms per `/api/candidates` poll, ~22.7 ms per health summary rebuild and ~19.8 MB of candidate JSON. New `CANDIDATE_QUEUE_MAX` (env, default 2000, 0 disables) keeps the top N in the existing priority order (closeable, alias-actionable, fewest blockers, tightest kickoff, closest names, id), with `_pair_priority` shared by a mid-walk trim at 4×N so the transient list stays bounded and the retained set is identical. Nothing is silent: `/api/candidates` gains `found`/`retained`/`dropped`/`cap` and found-side `actionable_found`/`closeable_found`; health gains `candidate_queue.{prematch,live}`; history keeps `candidate_queue` = found (comparable with old rows) plus `candidate_retained`; the blocker trend point gains `retained`/`dropped`/`cap`; `bh_candidate_queue_size` is retained and new `bh_candidates_found` is the denominator; the Review tab shows the cap note (Bosnian string added). **Measured at the 14,249 peak: `/api/candidates` 7.8 → 2.8 ms, health candidate blocks 22.7 → 2.7 ms, retained JSON ~19.8 → ~2.8 MB.** New tests: cap keeps the actionable pair, 0 disables, trim is exact, endpoint/health/history/trend denominator, frontend note. `README.md`, `.env.example`, `docs/METRICS.md`, `docs/CANDIDATE_REMEDIATION.md` updated. `pytest`: 2306 passed, 12 skipped (17 snapshots) in 118.23 s; ruff clean; mypy 275 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No live scan. |
+| 2026-11-08 | M1-2 | Done | Operator: continue. Decision: **reject with 422**. `accepted_odds: 0` is the explicit "not placed" sentinel, but it is a sentinel on both fields: `BetStore.settle` already treats either zero as not placed (bankroll, staked and profit stay correct) and CLV skips a falsy accepted odds, so the old behaviour was safe for money but silent — a positive stake at a price that cannot exist was neutralised and the operator's claimed stake vanished from P/L with no warning. The dashboard cannot produce it ("Mark placed" refuses odds < 1.01 and sends both accepted fields from the same `placed` flag), so only a hand-written client could. New `BetLegPayload` model validator `_a_stake_needs_a_price` refuses `accepted_stake > 0` with `accepted_odds == 0` with a 422 that names both fields, and writes no row. The sentinel stays: both zero = not placed, `accepted_odds: null` still falls back to the planned price, a zero stake with a real price is still accepted. `BetStore.settle` unchanged, so an already-stored inconsistent row still settles as not placed (verified: staked 0.0, payout 0.0, profit 0.0). Four new tests in `tests/test_bet_log.py`; `docs/BET_LOG.md` documents the pair rule. `pytest`: 2310 passed, 12 skipped (17 snapshots) in 117.63 s; ruff clean; mypy 275 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No live scan. |

@@ -22,7 +22,7 @@ from typing import Any, Literal, NamedTuple
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import PlainTextResponse
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 from rapidfuzz import fuzz
 
 from config.bookmakers import BROWSER_BOOKMAKERS
@@ -4626,6 +4626,24 @@ class BetLegPayload(BaseModel):
         if value > 1_000_000_000:
             raise ValueError("stake must be at most 1000000000")
         return value
+
+    @model_validator(mode="after")
+    def _a_stake_needs_a_price(self) -> "BetLegPayload":
+        """Refuse a positive accepted stake at accepted odds 0 (M1-2).
+
+        Zero is the explicit "not placed" sentinel, but it is a sentinel on
+        BOTH fields: a stake the book accepted at no price is an impossible
+        claim, and the settle path would silently neutralise it, dropping the
+        operator's money from P/L with no warning. ``accepted_odds=None`` still
+        means "price not typed" and keeps the planned-odds fallback, so only the
+        zero-with-stake pair is refused.
+        """
+        if self.accepted_stake and self.accepted_odds == 0:
+            raise ValueError(
+                "accepted_stake cannot be positive when accepted_odds is 0: "
+                "0 means the leg was not placed, so record 0 for both"
+            )
+        return self
 
 
 class BetCreateRequest(BaseModel):
