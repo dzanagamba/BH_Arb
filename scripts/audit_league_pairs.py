@@ -33,10 +33,12 @@ from models.schemas import Match  # noqa: E402
 from server.api import (  # noqa: E402
     CANDIDATE_KICKOFF_WINDOW_MIN,
     CANDIDATE_TEAM_SIM_MIN,
-    _canonical_pair_key,
-    _kickoff_bucket,
-    _team_similarity,
-    _TeamTokens,
+)
+from server.candidate_scoring import (  # noqa: E402
+    TeamTokens,
+    canonical_pair_key,
+    kickoff_bucket,
+    team_similarity,
 )
 
 CACHE_FILE = REPO_ROOT / "cache" / "last_scan.json"
@@ -74,22 +76,22 @@ def candidate_pairs(matches: list[Match]) -> list[tuple[Match, Match]]:
     """
     buckets: dict[int, list[Match]] = {}
     for match in matches:
-        bucket = _kickoff_bucket(match)
+        bucket = kickoff_bucket(match)
         if bucket is not None:
             buckets.setdefault(bucket, []).append(match)
 
     pairs: list[tuple[Match, Match]] = []
     seen: set[str] = set()
     for index in sorted(buckets):
-        here = [(m, _TeamTokens.of(m)) for m in buckets[index]]
-        following = [(m, _TeamTokens.of(m)) for m in buckets.get(index + 1, [])]
+        here = [(m, TeamTokens.of(m)) for m in buckets[index]]
+        following = [(m, TeamTokens.of(m)) for m in buckets.get(index + 1, [])]
         for position, (left, left_teams) in enumerate(here):
             for right, right_teams in here[position + 1:] + following:
                 if left.bookmaker == right.bookmaker:
                     continue
-                if _team_similarity(left_teams, right_teams) < CANDIDATE_TEAM_SIM_MIN:
+                if team_similarity(left_teams, right_teams) < CANDIDATE_TEAM_SIM_MIN:
                     continue
-                pair_key = _canonical_pair_key(left, right)
+                pair_key = canonical_pair_key(left, right)
                 if pair_key in seen:
                     continue
                 seen.add(pair_key)

@@ -11,6 +11,7 @@ CI = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8"
 DOC = (REPO_ROOT / "docs" / "CI.md").read_text(encoding="utf-8")
 GITIGNORE = (REPO_ROOT / ".gitignore").read_text(encoding="utf-8")
 API = (REPO_ROOT / "server" / "api.py").read_text(encoding="utf-8")
+SCORING = (REPO_ROOT / "server" / "candidate_scoring.py").read_text(encoding="utf-8")
 WORKFLOWS = sorted((REPO_ROOT / ".github" / "workflows").glob("*.yml"))
 
 
@@ -78,7 +79,7 @@ def test_allowlisted_findings_are_documented_at_the_call_site_and_in_the_doc():
     assert soak.count("# nosec B310") == 2
     for rule in ("B501", "B310"):
         assert rule in DOC, rule
-    assert "usedforsecurity=False" in API
+    assert "usedforsecurity=False" in SCORING
     assert "PYSEC-2026-1845" in DOC
 
 

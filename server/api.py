@@ -8,7 +8,6 @@ diagnostics include ``/api/health``, ``/api/results``, ``/api/groups``,
 """
 
 import asyncio
-import hashlib
 import json
 import logging
 import math
@@ -181,6 +180,18 @@ from server.alerts import (
 from server.auth import SCOPES, api_key_store, resolve_api_key
 from server.bets import BetStore
 from server.book_health import build_book_health
+from server.candidate_scoring import (
+    FoundPair,
+    TeamTokens,
+    candidate_id,
+    canonical_pair_key,
+    kickoff_bucket,
+    kickoff_delta_minutes,
+    match_event_ref,
+    match_side_key,
+    pair_priority,
+    team_similarity,
+)
 from server.maintenance import maintenance_running, retention_health
 from server.mapping_coverage import build_coverage, load_ledger
 from server.observability import (
@@ -614,13 +625,39 @@ _OPPORTUNITY_HISTORY_MAX = 2_000
 _opportunity_history: list[dict] = []
 
 
-def _state_for(mode: str) -> tuple[ScanStatus, list, list, list, dict]:
-    """Return (status, surebets, matches, report, per_bookie) for a mode."""
+class FeedState(NamedTuple):
+    """Everything one feed's last scan left in memory (M3-1 stage 2).
+
+    The five values always travel together and every route answers for exactly
+    one feed, so they are one named object rather than an anonymous tuple. A
+    NamedTuple keeps tuple unpacking working for the scripts and tests written
+    before this type existed, while new code reads `state.matches` directly.
+    """
+
+    status: ScanStatus
+    surebets: list[dict]
+    matches: list[dict]
+    report: list[dict]
+    per_bookie: dict[str, int]
+
+
+def _state_for(mode: str) -> FeedState:
+    """Return the state of one feed: status, results and per-book counts."""
     if mode == "live":
-        return (live_status, cached_live_surebets, cached_live_matches,
-                cached_live_match_groups_report, cached_live_per_bookie)
-    return (scan_status, cached_surebets, cached_matches,
-            cached_match_groups_report, cached_per_bookie)
+        return FeedState(
+            live_status,
+            cached_live_surebets,
+            cached_live_matches,
+            cached_live_match_groups_report,
+            cached_live_per_bookie,
+        )
+    return FeedState(
+        scan_status,
+        cached_surebets,
+        cached_matches,
+        cached_match_groups_report,
+        cached_per_bookie,
+    )
 
 
 def _paper_store_or_init() -> PaperStore:
@@ -1022,15 +1059,15 @@ def _save_history() -> None:
 
 def _append_history(num_groups: int, mode: str) -> None:
     """Record the completed scan in history (newest first)."""
-    status, _, _, _, per_bookie = _state_for(mode)
+    state = _state_for(mode)
     entry = {
         "mode": mode,
-        "scan_time": status.last_scan_time.isoformat() if status.last_scan_time else datetime.now(UTC).replace(tzinfo=None).isoformat(),
-        "total_matches": status.total_matches,
+        "scan_time": state.status.last_scan_time.isoformat() if state.status.last_scan_time else datetime.now(UTC).replace(tzinfo=None).isoformat(),
+        "total_matches": state.status.total_matches,
         "match_groups": num_groups,
-        "surebets_found": status.surebets_found,
-        "per_bookie": dict(per_bookie),
-        "errors": list(status.errors),
+        "surebets_found": state.status.surebets_found,
+        "per_bookie": dict(state.per_bookie),
+        "errors": list(state.status.errors),
         # M2-4: `candidate_queue` keeps its old meaning — every pair the walk
         # found, not the capped queue — so old and new rows stay comparable. The
         # retained split lives in `candidate_retained` (JSON export; the SQLite
@@ -1068,7 +1105,6 @@ def _append_history(num_groups: int, mode: str) -> None:
 
 CANDIDATE_KICKOFF_WINDOW_MIN = 30   # wider than verified (15) so near-misses become review items
 CANDIDATE_TEAM_SIM_MIN = 70
-CANDIDATE_BUCKET_SECONDS = 1800
 # The AI is one network call per candidate with a 10s timeout, so a busy scan
 # must not fan out without bound: 20 sequential calls is the ceiling, and the
 # most *actionable* candidates are ranked first so a cap drops the ones a human
@@ -1129,169 +1165,12 @@ def _decision_still_stands(candidate_id: str, link_blocked: bool) -> bool:
     return recorded is None or recorded == _decision_premise(link_blocked)
 
 
-class _TeamTokens(NamedTuple):
-    """Pre-computed team strings and their token sets for the cheap prefilter."""
-
-    home: str
-    away: str
-    home_tokens: frozenset[str]
-    away_tokens: frozenset[str]
-    all_tokens: frozenset[str]
-    home_bigrams: frozenset[str]
-    away_bigrams: frozenset[str]
-    all_bigrams: frozenset[str]
-
-    @classmethod
-    def of(cls, match: Match) -> "_TeamTokens":
-        home = match.home_team_normalized or match.home_team
-        away = match.away_team_normalized or match.away_team
-        home_tokens, away_tokens = frozenset(home.split()), frozenset(away.split())
-        home_bigrams, away_bigrams = _bigrams(home), _bigrams(away)
-        return cls(
-            home, away, home_tokens, away_tokens, home_tokens | away_tokens,
-            home_bigrams, away_bigrams, home_bigrams | away_bigrams,
-        )
-
-
-class _FoundPair(NamedTuple):
-    """A queued candidate plus the evidence used to rank it."""
-
-    candidate: CandidateReview
-    alias_actionable: bool
-    closeable: bool
-    human_blockers: int
-    kickoff_delta_minutes: float
-    team_similarity: float
-    left: Match
-    right: Match
-
-
-def _kickoff_bucket(match: Match) -> int | None:
-    """Return the kickoff bucket a match belongs to, or None when it has no kickoff."""
-    kickoff = match.kickoff
-    if not kickoff:
-        return None
-    if kickoff.tzinfo is None:  # naive kickoffs are UTC wall-clock
-        kickoff = kickoff.replace(tzinfo=UTC)
-    return int(kickoff.timestamp() // CANDIDATE_BUCKET_SECONDS)
-
-
-def _match_event_ref(match: Match) -> str:
-    """Return the book's own identifier for a fixture."""
-    return match.match_code or match.event_id
-
-
-def _match_side_key(match: Match) -> str:
-    """Identify one book's fixture inside a pair or a match group."""
-    return f"{match.bookmaker}|{_match_event_ref(match)}"
-
-
-def _kickoff_delta_minutes(left: Match, right: Match) -> float:
-    """Return the absolute kickoff gap used to rank candidates."""
-    if not left.kickoff or not right.kickoff:
-        return float("inf")
-    first = left.kickoff if left.kickoff.tzinfo else left.kickoff.replace(tzinfo=UTC)
-    second = right.kickoff if right.kickoff.tzinfo else right.kickoff.replace(tzinfo=UTC)
-    return abs((first - second).total_seconds()) / 60.0
-
-
-def _bigrams(text: str) -> frozenset[str]:
-    """Return the character bigrams of a team string."""
-    padded = f" {text} "
-    return frozenset(padded[index:index + 2] for index in range(len(padded) - 1))
-
-
-def _shares_any_signal(left: _TeamTokens, right: _TeamTokens) -> bool:
-    """Cheap "this pair is not hopeless" test, run before the fuzzy scorer.
-
-    True when the two fixtures share a token, one team name contains the other,
-    or they share a character bigram. It exists only to skip the ~730k fuzzy
-    calls of a 7k-match scan; the decision itself is still the fuzzy rule in
-    `_team_similarity`, so this test must never admit-or-veto on its own. The
-    bigram clause is what keeps a pure typo ("Millonarios" vs "Millionarios")
-    in the queue — it shares no token at all, and a token-only gate drops it.
-    """
-    return bool(
-        left.all_tokens & right.all_tokens
-        or left.all_bigrams & right.all_bigrams
-        or _token_run_shared(left, right)
-    )
-
-
-def _team_similarity(left: _TeamTokens, right: _TeamTokens) -> float:
-    """The brief's plausibility rule: best token-set overlap over both orders.
-
-    The inner gate applies the *same* test as `_shares_any_signal`, per team
-    slot, so it can only skip a slot the outer gate already ruled hopeless. The
-    two therefore agree exactly, and the returned score is the plain
-    ``max(token_set_ratio(...))`` over the four combinations whenever the pair
-    is not hopeless at all.
-    """
-    if not _shares_any_signal(left, right):
-        return 0.0
-    best = 0.0
-    for first, second, first_tokens, second_tokens, first_bigrams, second_bigrams in (
-        (left.home, right.home, left.home_tokens, right.home_tokens,
-         left.home_bigrams, right.home_bigrams),
-        (left.home, right.away, left.home_tokens, right.away_tokens,
-         left.home_bigrams, right.away_bigrams),
-        (left.away, right.home, left.away_tokens, right.home_tokens,
-         left.away_bigrams, right.home_bigrams),
-        (left.away, right.away, left.away_tokens, right.away_tokens,
-         left.away_bigrams, right.away_bigrams),
-    ):
-        if not (
-            first_tokens & second_tokens
-            or first_bigrams & second_bigrams
-            or first in second
-            or second in first
-        ):
-            continue
-        score = fuzz.token_set_ratio(first, second)
-        if score > best:
-            best = score
-            if best == 100.0:  # the scorer cannot return more
-                break
-    return best
-
-
-def _token_run_shared(left: _TeamTokens, right: _TeamTokens) -> bool:
-    """Return whether one team string is a prefix/substring of the other's."""
-    return (
-        left.home in right.home or right.home in left.home
-        or left.home in right.away or right.away in left.home
-        or left.away in right.home or right.home in left.away
-        or left.away in right.away or right.away in left.away
-    )
-
-
-def _canonical_pair_key(left: Match, right: Match) -> str:
-    """Return the order-independent identity of a pair from both raw claims."""
-    def side(match: Match) -> str:
-        return f"{_match_side_key(match)}|{match.home_team}|{match.away_team}"
-
-    return "||".join(sorted((side(left), side(right))))
-
-
-def _candidate_id(canonical_key: str) -> str:
-    """Return a stable id for a pair so a re-scan does not churn the queue.
-
-    The queue is keyed by this id and the review UI approves by it, so it has to
-    be reproducible from the pair itself and free of truncation collisions.
-    """
-    # Not used for security: the id only needs to be stable and collision-free
-    # for a bounded review queue, so the cheaper digest is deliberate.
-    return hashlib.sha1(
-        canonical_key.encode("utf-8"), usedforsecurity=False
-    ).hexdigest()[:16]
-
-
 def _verified_group_index(groups: list[MatchGroup]) -> dict[str, int]:
     """Map each match the matcher verified to the group that verified it."""
     index: dict[str, int] = {}
     for number, group in enumerate(groups):
         for match in group.matches:
-            index.setdefault(_match_side_key(match), number)
+            index.setdefault(match_side_key(match), number)
     return index
 
 
@@ -1542,7 +1421,7 @@ def _proposal_for_submitted_pair(
     return None
 
 
-async def _rank_candidates_with_ai(ai: MatchAI, found: list[_FoundPair]) -> None:
+async def _rank_candidates_with_ai(ai: MatchAI, found: list[FoundPair]) -> None:
     """Attach AI opinions to the most plausible candidates. It never approves."""
     if not found:
         return
@@ -1562,7 +1441,7 @@ async def _rank_candidates_with_ai(ai: MatchAI, found: list[_FoundPair]) -> None
         left, right = pair.left, pair.right
         proposals = await ai.suggest_pairs([{
             "a": left.bookmaker, "b": right.bookmaker,
-            "a_event": _match_event_ref(left), "b_event": _match_event_ref(right),
+            "a_event": match_event_ref(left), "b_event": match_event_ref(right),
             "a_home": left.home_team, "a_away": left.away_team, "a_league": left.league,
             "b_home": right.home_team, "b_away": right.away_team, "b_league": right.league,
         }])
@@ -1579,33 +1458,17 @@ async def _rank_candidates_with_ai(ai: MatchAI, found: list[_FoundPair]) -> None
         pair.candidate.ai_reason = proposal.reason
 
 
-def _pair_priority(pair: _FoundPair) -> tuple:
-    """The review order: what a human can act on first, then the closest pair.
-
-    One definition for the transient trim and the final cut (M2-4), so the two
-    cannot disagree about which pairs survive the cap.
-    """
-    return (
-        not pair.closeable,
-        not pair.alias_actionable,
-        pair.human_blockers,
-        pair.kickoff_delta_minutes,
-        -pair.team_similarity,
-        pair.candidate.id,
-    )
-
-
 def _build_candidates(
     all_matches: list[Match],
     matcher: MatchMatcher,
     groups: list[MatchGroup] | None = None,
-) -> tuple[dict[str, CandidateReview], list[_FoundPair], dict[str, int]]:
+) -> tuple[dict[str, CandidateReview], list[FoundPair], dict[str, int]]:
     """Find plausible same-event pairs the matcher could not verify (M2-1).
 
     Pure CPU over the scan's matches, so `_collect_candidates` runs it in a
     worker thread: the pair walk and the gate calls were part of the ~100 s
     block that used to hold the event loop. Returns the retained queue, the
-    ordered `_FoundPair`s it was cut from (only the top is worth an AI call),
+    ordered `FoundPair`s it was cut from (only the top is worth an AI call),
     and the found/retained/dropped numbers the cap must report (M2-4).
 
     Pairs are discovered with a kickoff-bucket index (not an O(n^2) sweep) and a
@@ -1628,7 +1491,7 @@ def _build_candidates(
 
     buckets: dict[int, list[Match]] = {}
     for match in all_matches:
-        bucket = _kickoff_bucket(match)
+        bucket = kickoff_bucket(match)
         if bucket is not None:
             buckets.setdefault(bucket, []).append(match)
 
@@ -1637,7 +1500,7 @@ def _build_candidates(
     verified_in_group = _verified_group_index(groups or [])
     decided = set(_suppressed_candidates)
     seen_pairs: set[str] = set()
-    found: list[_FoundPair] = []
+    found: list[FoundPair] = []
     # M2-4: how many pairs the walk produced versus how many survive the cap.
     # Counted as pairs are found, because the transient list may be trimmed.
     found_count = 0
@@ -1646,26 +1509,26 @@ def _build_candidates(
     cap = CANDIDATE_QUEUE_MAX
 
     for index in sorted(buckets):
-        here = [(match, _TeamTokens.of(match)) for match in buckets[index]]
+        here = [(match, TeamTokens.of(match)) for match in buckets[index]]
         # Same and next bucket only: every pair inside the 30-minute candidate
         # window lands in the same or an adjacent bucket, and this compares each
         # adjacent pair exactly once.
-        following = [(match, _TeamTokens.of(match)) for match in buckets.get(index + 1, [])]
+        following = [(match, TeamTokens.of(match)) for match in buckets.get(index + 1, [])]
         for position, (left, left_teams) in enumerate(here):
             for right, right_teams in here[position + 1:] + following:
                 if left.bookmaker == right.bookmaker:
                     continue
-                similarity = _team_similarity(left_teams, right_teams)
+                similarity = team_similarity(left_teams, right_teams)
                 if similarity < CANDIDATE_TEAM_SIM_MIN:
                     continue
-                pair_key = _canonical_pair_key(left, right)
+                pair_key = canonical_pair_key(left, right)
                 if pair_key in seen_pairs:
                     continue
                 seen_pairs.add(pair_key)
-                candidate_id = _candidate_id(pair_key)
-                left_group = verified_in_group.get(_match_side_key(left))
+                review_id = candidate_id(pair_key)
+                left_group = verified_in_group.get(match_side_key(left))
                 if left_group is not None and left_group == verified_in_group.get(
-                    _match_side_key(right)
+                    match_side_key(right)
                 ):
                     continue  # the matcher already proved this pairing
                 result = gate.evaluate_pair(left, right)
@@ -1674,8 +1537,8 @@ def _build_candidates(
                 # Read the premise off the verdict rather than off the card, so a
                 # decided pair is judged on the same facts the card showed.
                 link_blocked = bool(set(result.reasons) & LINK_REJECTION_REASONS)
-                if candidate_id in decided and _decision_still_stands(
-                    candidate_id, link_blocked
+                if review_id in decided and _decision_still_stands(
+                    review_id, link_blocked
                 ):
                     continue  # a human already decided this exact pair
                 positions = _team_positions(left, right)
@@ -1718,9 +1581,9 @@ def _build_candidates(
                     ledger=ledger,
                     confidence=similarity / 100.0,
                 )
-                found.append(_FoundPair(
+                found.append(FoundPair(
                     candidate=CandidateReview(
-                        id=candidate_id,
+                        id=review_id,
                         home_team=left.home_team,
                         away_team=left.away_team,
                         league=left.league,
@@ -1728,7 +1591,7 @@ def _build_candidates(
                         bookmakers=sorted([left.bookmaker, right.bookmaker]),
                         side_a=PairSide(
                             bookmaker=left.bookmaker,
-                            event_ref=_match_event_ref(left),
+                            event_ref=match_event_ref(left),
                             home_team=left.home_team,
                             away_team=left.away_team,
                             league=left.league,
@@ -1737,7 +1600,7 @@ def _build_candidates(
                         ),
                         side_b=PairSide(
                             bookmaker=right.bookmaker,
-                            event_ref=_match_event_ref(right),
+                            event_ref=match_event_ref(right),
                             home_team=right.home_team,
                             away_team=right.away_team,
                             league=right.league,
@@ -1758,7 +1621,7 @@ def _build_candidates(
                     human_blockers=len(
                         [r for r in result.reasons if r not in LINK_REJECTION_REASONS]
                     ),
-                    kickoff_delta_minutes=_kickoff_delta_minutes(left, right),
+                    kickoff_delta_minutes=kickoff_delta_minutes(left, right),
                     team_similarity=similarity,
                     left=left,
                     right=right,
@@ -1773,13 +1636,13 @@ def _build_candidates(
                 # hold every pair at once. A total order makes the trim exact:
                 # an entry dropped here can never be in the final top N.
                 if cap > 0 and len(found) > cap * CANDIDATE_TRIM_FACTOR:
-                    found.sort(key=_pair_priority)
+                    found.sort(key=pair_priority)
                     del found[cap:]
 
     # What a reviewer can act on first, then the fewest remaining blockers, then
     # the tightest kickoff and closest names. The AI cap is taken from the top of
     # this order, so the hosted calls land on pairs a human could actually close.
-    found.sort(key=_pair_priority)
+    found.sort(key=pair_priority)
     kept = found[:cap] if cap > 0 else found
     candidates = {pair.candidate.id: pair.candidate for pair in kept}
     logger.info(
@@ -2190,7 +2053,12 @@ async def run_scan(
     if run_mode not in RUN_MODES:
         run_mode = "advisory"
     is_live = mode == "live"
-    status, surebets_cache, matches_cache, report_cache, per_bookie = _state_for(mode)
+    state = _state_for(mode)
+    status = state.status
+    surebets_cache = state.surebets
+    matches_cache = state.matches
+    report_cache = state.report
+    per_bookie = state.per_bookie
     scan_started_at = datetime.now(UTC).replace(tzinfo=None)
     scan_started_monotonic = time.perf_counter()
     scan_id = new_request_id()
@@ -3509,7 +3377,11 @@ def _save_cache(mode: str = "prematch"):
     surebets and the odds while dropping it left the operator reading 0 verified
     groups for as long as the cache file stayed inside its own 30-minute TTL.
     """
-    status, surebets_cache, matches_cache, report_cache, _ = _state_for(mode)
+    state = _state_for(mode)
+    status = state.status
+    surebets_cache = state.surebets
+    matches_cache = state.matches
+    report_cache = state.report
     cache_file = _LIVE_CACHE_FILE if mode == "live" else _PREMATCH_CACHE_FILE
     try:
         scan_time = status.last_scan_time.isoformat() if status.last_scan_time else None
@@ -3827,7 +3699,7 @@ async def start_scan_if_idle(mode: str) -> bool:
     set under the per-mode lock, so a manual trigger and a scheduler tick cannot
     both claim the same feed.
     """
-    status, _, _, _, _ = _state_for(mode)
+    status = _state_for(mode).status
     mode_lock = _lock_for(mode)
     if maintenance_running() or mode_lock.locked() or status.is_scanning:
         return False
@@ -3855,7 +3727,7 @@ async def trigger_scan(
             detail="run_mode must be 'advisory', 'record_only' or 'paper'",
         )
 
-    status, _, _, _, _ = _state_for(mode)
+    status = _state_for(mode).status
     mode_lock = _lock_for(mode)
 
     if maintenance_running():
@@ -4223,8 +4095,7 @@ async def shutdown_server(request: Request, _auth: None = Depends(_require_scope
 @router.get("/status")
 async def get_status(mode: str = "prematch"):
     """Get the current scan status (mode=prematch|live)."""
-    status, _, _, _, _ = _state_for(mode)
-    return status.model_dump(mode="json")
+    return _state_for(mode).status.model_dump(mode="json")
 
 
 GROUP_PAGE_SIZE = 50
@@ -4275,7 +4146,7 @@ def _group_page(
     offset: int,
 ) -> dict:
     """Filter and page the cached report, never returning the whole list by default."""
-    _, _, _, report_cache, _ = _state_for(mode)
+    report_cache = _state_for(mode).report
     rows = list(report_cache)
     if status:
         rows = [row for row in rows if str(row.get("status", "")) == status]
@@ -4337,7 +4208,11 @@ def _sport_summary(
 @router.get("/results")
 async def get_results(mode: str = "prematch"):
     """Get the cached results from the last scan (mode=prematch|live)."""
-    status, surebets_cache, matches_cache, report_cache, _ = _state_for(mode)
+    state = _state_for(mode)
+    status = state.status
+    surebets_cache = state.surebets
+    matches_cache = state.matches
+    report_cache = state.report
     group_statuses: dict[str, int] = {}
     for report in report_cache:
         group_status = str(report.get("status", "unknown"))
@@ -4380,7 +4255,9 @@ async def get_results(mode: str = "prematch"):
 @router.get("/mapping/coverage")
 async def get_mapping_coverage(mode: str = "prematch"):
     """Read-only mapping coverage and quarantined claims for Diagnostics."""
-    _, _, matches_cache, report_cache, _ = _state_for(mode)
+    state = _state_for(mode)
+    matches_cache = state.matches
+    report_cache = state.report
     ledger = load_ledger()
     return build_coverage(
         ledger,
@@ -4470,7 +4347,7 @@ async def toggle_bookmaker(
 async def get_matches_breakdown(mode: str = "prematch"):
     """Debug endpoint: show match counts per bookmaker and all raw match data."""
     from collections import defaultdict
-    _, _, matches_cache, _, _ = _state_for(mode)
+    matches_cache = _state_for(mode).matches
     by_bookie = defaultdict(list)
     for m in matches_cache:
         by_bookie[m.get("bookmaker", "unknown")].append(
@@ -4507,7 +4384,7 @@ async def get_groups(
 @router.get("/groups/{group_id}")
 async def get_group(group_id: int, mode: ScanMode = "prematch"):
     """Return exactly one group's full evidence trail, or 404."""
-    _, _, _, report_cache, _ = _state_for(mode)
+    report_cache = _state_for(mode).report
     for row in report_cache:
         try:
             if int(row.get("group_id", -1)) == group_id:
@@ -5044,7 +4921,7 @@ async def verify_surebet(
     if req.mode not in ("prematch", "live"):
         raise HTTPException(status_code=400, detail="mode must be 'prematch' or 'live'")
     is_live = req.mode == "live"
-    surebets_cache, _, _, _ = _state_for(req.mode)[1:]
+    surebets_cache = _state_for(req.mode).surebets
     target = next((s for s in surebets_cache if s.get("id") == req.surebet_id), None)
     if not target:
         raise HTTPException(status_code=404, detail="Surebet not found")
@@ -5056,7 +4933,7 @@ async def verify_surebet(
     )
 
     mode_lock = _lock_for(req.mode)
-    status_for_mode, _, _, _, _ = _state_for(req.mode)
+    status_for_mode = _state_for(req.mode).status
     async with mode_lock:
         if status_for_mode.is_scanning:
             raise HTTPException(
@@ -5222,7 +5099,7 @@ async def recalculate_stakes(
         raise HTTPException(status_code=400, detail="Investment too large")
 
     # Find the surebet in the mode-specific cache
-    surebets_cache, _, _, _ = _state_for(req.mode)[1:]
+    surebets_cache = _state_for(req.mode).surebets
     target = next(
         (s for s in surebets_cache if s.get("id") == req.surebet_id),
         None,
@@ -5348,7 +5225,9 @@ async def verify_links(
         raise HTTPException(status_code=400, detail="offset must be at least 0")
     limit = min(limit, DEEP_LINK_VERIFY_MAX_LIMIT)
 
-    status, _, matches_cache, _, _ = _state_for(mode)
+    state = _state_for(mode)
+    status = state.status
+    matches_cache = state.matches
     if _lock_for(mode).locked() or status.is_scanning:
         raise HTTPException(
             status_code=409,
@@ -5494,7 +5373,7 @@ async def verify_links(
     # Re-check AFTER the multi-minute await. The 409 above is a snapshot taken
     # minutes before the writes below, and overwriting a running scan's cache
     # would publish a half-written snapshot of a different feed.
-    status_after, _, _, _, _ = _state_for(mode)
+    status_after = _state_for(mode).status
     scan_underway = _lock_for(mode).locked() or status_after.is_scanning
     applied = not scan_underway
     applied_note = ""

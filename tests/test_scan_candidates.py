@@ -34,6 +34,13 @@ from models.schemas import (
     TeamPositionPair,
 )
 from server import api
+from server.candidate_scoring import (
+    TeamTokens,
+    canonical_pair_key,
+    shares_any_signal,
+    team_similarity,
+)
+from server.candidate_scoring import candidate_id as make_candidate_id
 
 
 @pytest.fixture(autouse=True)
@@ -746,7 +753,7 @@ def test_alias_actionable_is_false_when_the_gate_would_refuse_the_alias(monkeypa
 def _band_pair(minutes: int) -> tuple[Match, Match]:
     """A distinct fixture whose two books' kickoffs are `minutes` apart.
 
-    Distinct teams and event ids on purpose: `_canonical_pair_key` covers
+    Distinct teams and event ids on purpose: `canonical_pair_key` covers
     bookmakers, event refs and team names but not the kickoff, so a shifted copy
     of another fixture's two books would collapse into the same candidate and one
     of the two would be swallowed by `seen_pairs`.
@@ -825,7 +832,7 @@ def test_every_actionable_candidate_is_one_an_approval_actually_verifies(monkeyp
     out = _collect([*league_blocked, *tight, *band])
 
     verified = {
-        api._candidate_id(api._canonical_pair_key(left, right))
+        make_candidate_id(canonical_pair_key(left, right))
         for left, right in (league_blocked, tight, band)
         if _verdict_after_approval(left, right)[0] == "verified"
     }
@@ -858,7 +865,7 @@ def test_a_candidate_never_inherits_another_candidate_s_approved_aliases(monkeyp
     out = _collect([*_ambiguous_pair(), *republished])
 
     by_id = {c.id: c for c in out.values()}
-    republished_id = api._candidate_id(api._canonical_pair_key(*republished))
+    republished_id = make_candidate_id(canonical_pair_key(*republished))
     assert republished_id in by_id  # reached a human
     assert by_id[republished_id].rule_rejections == ["team_unresolved"]
     assert by_id[republished_id].alias_actionable is True
@@ -1017,12 +1024,12 @@ def test_cheap_prefilter_never_vetoes_the_fuzzy_rule(
     left = _match("mdshop", left_home, left_away, "Liga Evrope", "1")
     right = _match("mbet", right_home, right_away, "Liga Konferencija", "2")
     CertaintyGate(league_equivalences=MatchMatcher()._equivalences).normalize([left, right])
-    left_tokens, right_tokens = api._TeamTokens.of(left), api._TeamTokens.of(right)
+    left_tokens, right_tokens = TeamTokens.of(left), TeamTokens.of(right)
 
     pure = _pure_similarity(left, right)
-    shipped = api._team_similarity(left_tokens, right_tokens)
+    shipped = team_similarity(left_tokens, right_tokens)
 
-    if api._shares_any_signal(left_tokens, right_tokens):
+    if shares_any_signal(left_tokens, right_tokens):
         # Admitted by the cheap gate: the fuzzy rule decides, unaltered.
         assert shipped == pytest.approx(pure, abs=1e-9)
     else:

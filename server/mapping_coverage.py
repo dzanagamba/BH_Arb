@@ -9,6 +9,7 @@ changes a claim.
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -49,7 +50,7 @@ def _field(row: Match | dict[str, Any], name: str) -> Any:
 
 def build_coverage(
     ledger: MappingLedger,
-    matches: list[Match | dict[str, Any]],
+    matches: Sequence[Match | dict[str, Any]],
     groups: list[dict[str, Any]],
     *,
     mode: str,
