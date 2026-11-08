@@ -4,13 +4,20 @@ Mozzartbet Scraper — mozzartbet.ba
 Playwright browser for Cloudflare session, then API interception + pagination.
 """
 
+import asyncio
 import logging
 import time
 from datetime import UTC, datetime
 
 from engine.market_registry import MARKET_REGISTRY, record_unmapped, registered_spec
 from models.schemas import Market, MarketType, Match, OddsValue
-from scrapers.base import fetch_pages, goto, launch_browser, measured_api_post, settle
+from scrapers.base import (
+    fetch_pages,
+    goto,
+    launch_browser,
+    measured_api_post,
+    settle,
+)
 from scrapers.common import parse_dt
 from scrapers.errors import ScrapeError
 from scrapers.retry import retry_call
@@ -20,6 +27,14 @@ logger = logging.getLogger(__name__)
 
 BOOKMAKER_ID = "mozzartbet"
 BASE_URL = "https://www.mozzartbet.ba"
+# SR7-1: one request per event for the full offer (the list endpoint carries
+# four complete families; the match endpoint carries 518 odds, including the
+# first-half 1X2 and the 1.5/3.5/4.5/5.5 totals). SR7-2: the operator raised the
+# per-book ceiling to 60 requests/second. 32 requests are kept in flight, but the
+# measured ceiling is the browser's per-host connection pool: two scans reached
+# ~16 requests/second (a 40.8 s and a 43.8 s walk), so the browser transport —
+# not the limiter — is the limit.
+FULL_OFFER_CONCURRENCY = 32
 
 # ---- Standalone helpers (no class dependency) ----
 
@@ -159,6 +174,7 @@ def _parse_markets(
     mr_odds: list[OddsValue] = []
     dc_odds: list[OddsValue] = []
     btts_dict: dict[str, float] = {}
+    ht_odds: list[OddsValue] = []
     ou_dict: dict[str, dict[str, float]] = {
         "1.5": {}, "2.5": {}, "3.5": {}, "4.5": {}, "5.5": {}
     }
@@ -256,6 +272,13 @@ def _parse_markets(
                     label = f"Under {line_name}"
                 if label in spec.labels:
                     ou_dict[line_name][label] = val
+
+        # First-half 1X2 (game id=4 / 1pp). Experimental, like Betole's: the
+        # family has no registry row and the labels are the plain 1/X/2.
+        elif gid == 4 or gshort == "1pp":
+            label = _map_outcome_label(sname, MarketType.MATCH_RESULT)
+            if label in ("1", "X", "2"):
+                ht_odds.append(OddsValue(label=label, value=val))
         else:
             if gid is not None:
                 record_unmapped(bookmaker, gid, context=f"{gshort} {gname}")
@@ -295,6 +318,15 @@ def _parse_markets(
     ):
         markets.append(
             Market(market_type=MarketType.BTTS, odds=btts_odds, source_id="130")
+        )
+
+    if len({o.label for o in ht_odds}) == 3:
+        markets.append(
+            Market(
+                market_type=MarketType.FIRST_HALF_1X2,
+                odds=ht_odds,
+                source_id="4",
+            )
         )
 
     mt_map = {
@@ -363,6 +395,73 @@ class MozzartbetScraper:
     3. Paginate through all pages via page.request (POST)
     4. Parse all collected items into Match objects
     """
+
+    async def _complete_offer(self, page, event_id, mode: str) -> list | None:
+        """One event's full offer, or ``None`` when it cannot be read.
+
+        The endpoint is a POST (an empty JSON body is enough); a GET answers
+        ``{"error": "Not found. Sorry."}``. A failed offer keeps the list odds
+        for that event (the events that were read still price); the failure is
+        logged so it is not silent.
+        """
+        try:
+            response = await retry_call(
+                lambda: measured_api_post(
+                    page,
+                    f"{BASE_URL}/betting/match/{event_id}",
+                    data="{}",
+                    headers={
+                        "Content-Type": "application/json",
+                        "Accept": "application/json, text/plain, */*",
+                        "medium": "WEB",
+                        "Referer": f"{BASE_URL}/sr/kladjenje/sport/1/match/{event_id}",
+                    },
+                ),
+                policy=policy_for(BOOKMAKER_ID, mode),
+                label=f"mozzartbet offer {event_id}",
+                account=False,
+            )
+            payload = await response.json()
+        except Exception as exc:  # noqa: BLE001 - this event keeps its list odds
+            logger.warning(
+                "[Mozzartbet] full offer for %s failed: %s", event_id, exc
+            )
+            return None
+        odds = (
+            (payload or {}).get("match", {}).get("odds")
+            if isinstance(payload, dict)
+            else None
+        )
+        return odds if isinstance(odds, list) and odds else None
+
+    async def _build_matches(
+        self, page, items: list[dict], live: bool, mode: str
+    ) -> list[Match]:
+        """Fetch every event's full offer, then parse in the list's order."""
+        now_ms = _now_ms()
+        seen: set[str] = set()
+        matches: list[Match] = []
+        semaphore = asyncio.Semaphore(FULL_OFFER_CONCURRENCY)
+        lock = asyncio.Lock()
+
+        async def one(event: dict) -> None:
+            if live and not _is_in_play(event, now_ms):
+                return
+            event_id = event.get("id")
+            offer = None
+            if event_id is not None:
+                async with semaphore:
+                    offer = await self._complete_offer(page, event_id, mode)
+            enriched = dict(event)
+            if offer:
+                enriched["odds"] = offer
+            async with lock:
+                match = _event_to_match(enriched, seen, live=live)
+                if match is not None:
+                    matches.append(match)
+
+        await asyncio.gather(*(one(event) for event in items), return_exceptions=True)
+        return matches
 
     async def fetch_and_parse(self, live: bool = False, scan_time: datetime | None = None) -> list[Match]:
         p, browser, context = await launch_browser()
@@ -448,21 +547,25 @@ class MozzartbetScraper:
                     all_raw_items.extend(
                         await fetch_pages(fetch_page, page_size, max_pages - 1, first_page=1)
                     )
+
+            # SR7-1: one full-offer request per unique event, fetched while the
+            # browser session is still open. Duplicates (the page listener and
+            # our pagination both see items) are collapsed first so no event is
+            # requested twice.
+            unique: dict[str, dict] = {}
+            for event in all_raw_items:
+                event_id = event.get("id")
+                if event_id is not None:
+                    unique.setdefault(str(event_id), event)
+            matches = await self._build_matches(
+                page,
+                list(unique.values()),
+                live,
+                "live" if live else "prematch",
+            )
         finally:
             await browser.close()
             await p.stop()
-
-        # Deduplicate and parse. The "live" date filter also returns upcoming
-        # fixtures, so keep only events that have actually started.
-        seen: set[str] = set()
-        matches: list[Match] = []
-        now_ms = _now_ms()
-        for ev in all_raw_items:
-            if live and not _is_in_play(ev, now_ms):
-                continue
-            m = _event_to_match(ev, seen, live=live)
-            if m:
-                matches.append(m)
 
         logger.info(f"[Mozzartbet] {len(matches)} {'live' if live else 'prematch'} matches from {len(all_raw_items)} raw items")
         return matches

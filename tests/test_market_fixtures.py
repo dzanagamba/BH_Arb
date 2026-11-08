@@ -90,11 +90,6 @@ UNCOVERED_ROWS: dict[tuple[str, str, str], str] = {
         "across 1,500 events of the live catalog. What is unverified here is only that "
         "the parser still reads it off a real feed today."
     ),
-    ("mozzartbet", "prematch", "over_under_1_5"): (
-        "game 3 serves subgames 2+/3+/0-2 only; there is no 0-1 leg, and the "
-        "registry's min_legs of 2 means a one-legged total cannot be emitted."
-    ),
-    ("mozzartbet", "prematch", "over_under_3_5"): "same: no 4+/0-3 pair on the feed.",
     ("mozzartbet", "live", "over_under_1_5"): "same as prematch on the live feed.",
     ("mozzartbet", "live", "over_under_3_5"): "same as prematch on the live feed.",
     **{
@@ -107,19 +102,6 @@ UNCOVERED_ROWS: dict[tuple[str, str, str], str] = {
         )
         for line in ("1_5", "2_5", "3_5")
     },
-    ("betole", "prematch", "double_chance"): (
-        "the live prematch desk feed serves picks 1/2/3, 272/273 and 24/22, but no "
-        "7/8/9 double-chance group. The capture proves the absence; the row stays "
-        "declared and uncovered."
-    ),
-    ("betole", "prematch", "over_under_1_5"): (
-        "the prematch desk feed serves only the 2.5 total (24/22), not 242/21. The "
-        "capture proves the absence."
-    ),
-    ("betole", "prematch", "over_under_3_5"): (
-        "the prematch desk feed serves only the 2.5 total (24/22), not 25/219. The "
-        "capture proves the absence."
-    ),
 }
 
 # Books that must have at least one captured payload, so a book cannot quietly

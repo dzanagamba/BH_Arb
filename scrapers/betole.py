@@ -6,6 +6,7 @@ Strategy: page through the direct `restapi/offer/ba/sport/S/desk` JSON feed with
 httpx and map its numeric pick codes to markets.
 """
 
+import asyncio
 import logging
 from datetime import UTC, datetime
 
@@ -20,6 +21,16 @@ logger = logging.getLogger(__name__)
 BOOKMAKER_ID = "betole"
 OFFER_URL = "https://www.betole.ba/ba/sport/S"
 API_URL = "https://www.betole.ba/restapi/offer/ba/sport/S/desk"
+# SR7-1: the full offer for a batch of event ids. The desk feed above carries
+# only four complete supported families; this endpoint carries the whole offer
+# (763 picks against 30 on the 2026-11-08 probe) at roughly 3 KB per event, so
+# batching keeps the scan at ~21 extra requests for ~820 events instead of one
+# request per event.
+BULK_URL = "https://www.betole.ba/restapi/offer/ba/matches/by-ids"
+BULK_BATCH = 40
+# Batches in flight. The batches are independent; the per-book limiter still
+# spaces every request at the configured ceiling, so this only hides latency.
+BULK_CONCURRENCY = 8
 API_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -94,6 +105,8 @@ def _parse_betole_markets(raw_odds: dict, mode: str = "prematch") -> list[Market
         (MarketType.OVER_UNDER_1_5, {"242": "Over 1.5", "21": "Under 1.5"}, 1.5),
         (MarketType.OVER_UNDER_2_5, {"24": "Over 2.5", "22": "Under 2.5"}, 2.5),
         (MarketType.OVER_UNDER_3_5, {"25": "Over 3.5", "219": "Under 3.5"}, 3.5),
+        (MarketType.OVER_UNDER_4_5, {"27": "Over 4.5", "453": "Under 4.5"}, 4.5),
+        (MarketType.OVER_UNDER_5_5, {"223": "Over 5.5", "266": "Under 5.5"}, 5.5),
     ]
     for market_type, code_to_label, line in mappings:
         if market_type == MarketType.FIRST_HALF_1X2 and mode == "prematch":
@@ -115,6 +128,7 @@ def _parse_betole_markets(raw_odds: dict, mode: str = "prematch") -> list[Market
     known_codes = {
         "1", "2", "3", "4", "5", "6", "7", "8", "9",
         "21", "22", "24", "25", "219", "242", "272", "273",
+        "27", "453", "223", "266",
     }
     for code in raw_odds:
         if str(code) not in known_codes:
@@ -157,18 +171,91 @@ def _event_to_match(event: dict, live: bool) -> Match | None:
     )
 
 
+def _desk_candidate(event: dict, live: bool) -> bool:
+    """Whether this desk event can become a match in the requested mode.
+
+    Used before the full-offer fetch so a live or blocked event does not cost a
+    batch slot (the desk feed mixes prematch and in-play events).
+    """
+    if not isinstance(event, dict):
+        return False
+    if bool(event.get("live")) != live or event.get("blocked"):
+        return False
+    return bool(
+        str(event.get("home") or "").strip()
+        and str(event.get("away") or "").strip()
+    )
+
+
+async def _fetch_full_offers(client, events: list[dict], live: bool) -> dict[str, dict]:
+    """Fetch complete offers for these events, in batches.
+
+    The desk listing carries four complete supported families per event; this
+    endpoint carries the whole offer (double chance, the 1.5/3.5/4.5/5.5
+    totals and the first-half 1X2 already served by the desk). A failed batch is
+    logged and its events keep the desk odds, the same way a failed page in
+    `fetch_pages` stops the walk with what it has.
+    """
+    offers: dict[str, dict] = {}
+    ids = [str(event.get("id")) for event in events if event.get("id") is not None]
+    if not ids:
+        return offers
+    mode = "live" if live else "prematch"
+    chunks = [ids[start:start + BULK_BATCH] for start in range(0, len(ids), BULK_BATCH)]
+    semaphore = asyncio.Semaphore(BULK_CONCURRENCY)
+
+    async def one(chunk: list[str]) -> list | None:
+        async with semaphore:
+            try:
+                response = await fetch_with_retry(
+                    client,
+                    BULK_URL,
+                    headers=API_HEADERS,
+                    params={
+                        "annex": "0",
+                        "desktopVersion": "2.47.6.10",
+                        "locale": "ba",
+                        "matchIdsToken": ",".join(chunk),
+                    },
+                )
+                return response.json()
+            except Exception as exc:  # noqa: BLE001 - a batch failure keeps the desk odds
+                logger.warning(
+                    "[Betole] full-offer batch for %d events failed, keeping "
+                    "desk odds: %s",
+                    len(chunk),
+                    exc,
+                )
+                return None
+
+    for payload in await asyncio.gather(*(one(chunk) for chunk in chunks)):
+        if not isinstance(payload, list):
+            continue
+        for row in payload:
+            if not isinstance(row, dict) or row.get("id") is None:
+                continue
+            odds = row.get("odds")
+            if isinstance(odds, dict) and odds:
+                offers[str(row["id"])] = odds
+    logger.debug("[Betole] %s: %d full offers", mode, len(offers))
+    return offers
+
+
 class BetoleScraper:
     """Scraper for betole.ba — ExeFeed platform."""
 
     async def fetch_and_parse(self, live: bool = False, scan_time: datetime | None = None) -> list[Match]:
-        """Fetch Betole's direct prematch feed and parse its pick-code odds.
+        """Fetch Betole's desk listing, then each event's full offer.
 
         The desk feed mixes prematch and in-play events (`live` flag per
-        event); in live mode only the in-play ones are kept.
+        event); in live mode only the in-play ones are kept. The desk listing
+        itself carries only four complete supported families, so each event's
+        full offer is fetched in batches before parsing (SR7-1).
         `scan_time` is accepted for uniform window API compatibility (not used — desk feed is unwindowed).
         """
         matches: list[Match] = []
         seen_ids: set[str] = set()
+        events: list[dict] = []
 
         async with transport_client(
             BOOKMAKER_ID, "live" if live else "prematch"
@@ -187,14 +274,16 @@ class BetoleScraper:
 
                 try:
                     data = response.json()
-                    events = data.get("esMatches", []) if isinstance(data, dict) else []
+                    page_events = (
+                        data.get("esMatches", []) if isinstance(data, dict) else []
+                    )
                 except (ValueError, TypeError):
                     break
-                if not isinstance(events, list) or not events:
+                if not isinstance(page_events, list) or not page_events:
                     break
 
                 new_events = 0
-                for event in events:
+                for event in page_events:
                     if not isinstance(event, dict):
                         continue
                     event_id = str(event.get("id") or event.get("matchCode") or "")
@@ -202,12 +291,20 @@ class BetoleScraper:
                         continue
                     seen_ids.add(event_id)
                     new_events += 1
-                    match = _event_to_match(event, live)
-                    if match is not None:
-                        matches.append(match)
+                    if _desk_candidate(event, live):
+                        events.append(event)
 
-                if len(events) < PAGE_SIZE or new_events == 0:
+                if len(page_events) < PAGE_SIZE or new_events == 0:
                     break
+
+            offers = await _fetch_full_offers(client, events, live)
+
+        for event in events:
+            event_id = str(event.get("id") or event.get("matchCode") or "")
+            odds = offers.get(event_id) or event.get("odds") or {}
+            match = _event_to_match({**event, "odds": odds}, live)
+            if match is not None:
+                matches.append(match)
 
         logger.info(f"[Betole] {len(matches)} {'live' if live else 'prematch'} matches parsed")
         return matches

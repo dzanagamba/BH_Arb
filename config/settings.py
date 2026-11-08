@@ -375,6 +375,31 @@ USER_AGENT = (
 # at least as fast as it was measured. Tune it down on 429s; raising it is an
 # operator decision.
 SCRAPER_REQUESTS_PER_SECOND = float(os.getenv("SCRAPER_REQUESTS_PER_SECOND", "5"))
+
+
+def _parse_book_rates(raw: str) -> dict[str, float]:
+    """Parse ``"book=rate,book=rate"`` into a per-book ceiling map."""
+    rates: dict[str, float] = {}
+    for pair in raw.split(","):
+        name, separator, value = pair.partition("=")
+        if not separator or not name.strip():
+            continue
+        try:
+            rates[name.strip()] = float(value)
+        except ValueError:
+            continue
+    return rates
+
+
+# Per-book overrides of that ceiling. The operator asked (2026-11-08) for
+# Mozzartbet at 60 requests/second so its per-event full offer (678 requests in
+# the measured scan) does not dominate the scan; every other book keeps the 5/s
+# default. Same requests, shorter burst: if the book starts answering 429/403
+# its breaker opens and this is too fast.
+# Format: SCRAPER_BOOK_RATES="mozzartbet=60,betole=20".
+SCRAPER_BOOK_RATES = _parse_book_rates(
+    os.getenv("SCRAPER_BOOK_RATES", "mozzartbet=60")
+)
 # One adapter must finish within this budget; a book that does not is reported
 # `timeout` and missing from the scan, while the others still price. The slowest
 # book in the recorded 2026-11-06 scans took 72.6 s prematch and 100.7 s live,

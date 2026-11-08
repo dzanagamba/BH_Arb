@@ -5,7 +5,7 @@ scanner into a multi-sport, multi-market scanner. Every number below came from a
 live feed or a reproducible script; nothing was chosen by preference.
 
 N3-2 now re-audits this record against
-`docs/evidence/2026-11-05-admissibility-baseline.json` on every push
+`docs/evidence/2026-11-08-admissibility-baseline.json` on every push
 (`scripts/audit_admissibility.py --check`). A disappeared family, a settlement
 change or a lowered threshold fails; a new family is only a warning and is never
 admitted automatically. See `docs/ADMISSIBILITY_AUDIT.md`.

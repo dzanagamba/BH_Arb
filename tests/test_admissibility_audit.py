@@ -288,5 +288,5 @@ def test_health_summary_is_bounded() -> None:
 
 
 def test_the_default_baseline_is_the_dated_snapshot() -> None:
-    assert DEFAULT_BASELINE.endswith("2026-11-05-admissibility-baseline.json")
+    assert DEFAULT_BASELINE.endswith("2026-11-08-admissibility-baseline.json")
     assert (REPO / DEFAULT_BASELINE).is_file()

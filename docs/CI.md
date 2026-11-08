@@ -63,7 +63,7 @@ is reported separately and never treated as a feed change. See
 
 The `quality` job runs `python scripts/audit_admissibility.py --check` (N3-2).
 It compares a fresh offline report with
-`docs/evidence/2026-11-05-admissibility-baseline.json` and fails when an admitted
+`docs/evidence/2026-11-08-admissibility-baseline.json` and fails when an admitted
 sport/market/family disappears, a settlement changes or the three-book rule was
 lowered. New families are warnings and are never auto-admitted. The live
 bookmaker probe (`scripts/measure_sports.py`) stays out of CI; see

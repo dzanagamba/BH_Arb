@@ -7,6 +7,7 @@ from dataclasses import replace
 
 import httpx
 
+from config.settings import SCRAPER_BOOK_RATES, SCRAPER_REQUESTS_PER_SECOND
 from scrapers.errors import ScrapeError, ScrapeKind
 from scrapers.ratelimit import BookRateLimiter, limiter_for, reset_limiters
 from scrapers.retry import fetch_with_retry
@@ -110,11 +111,15 @@ def test_a_missing_or_zero_rate_disables_the_limiter():
     asyncio.run(scenario())
 
 
-def test_every_book_carries_the_shared_rate_and_a_book_name():
+def test_every_book_carries_its_rate_and_a_book_name():
     assert {book for book, _mode in POLICIES} == ALL_BOOKS
     for (book, _mode), policy in POLICIES.items():
         assert policy.bookmaker == book
-        assert policy.requests_per_second == 5.0
+        expected = SCRAPER_BOOK_RATES.get(book, SCRAPER_REQUESTS_PER_SECOND)
+        assert policy.requests_per_second == expected
+    # SR7-2: the operator raised Mozzartbet to 60/s; other books keep 5/s.
+    assert POLICIES[("mozzartbet", "prematch")].requests_per_second == 60.0
+    assert POLICIES[("mbet", "prematch")].requests_per_second == 5.0
     # The fallback policy is for code that is not a book: no limiter.
     assert DEFAULT_POLICY.bookmaker == ""
     assert DEFAULT_POLICY.requests_per_second is None

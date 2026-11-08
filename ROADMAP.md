@@ -134,6 +134,8 @@ do not copy stale numbers here.
 | SR6-1 | Single adapter declaration | Not started | SR2-2 | — |
 | SR6-2 | Adapter `Protocol` and mypy enforcement | Not started | SR6-1 | — |
 | SR6-3 | Decide EVLBet's future | Not started | — | operator |
+| SR7-1 | Full per-match market offers (Mozzartbet, Betole) | Done | — | operator |
+| SR7-2 | Raise the Mozzartbet request rate | Done | SR7-1 | operator |
 | M1-1 | Redesign named-key authentication | Not started | — | operator |
 | M1-2 | Decide `accepted_odds: 0` with a stake | Not started | — | operator |
 | M1-3 | Auth-failure rate limit and PBKDF2 cache | Not started | — | operator |
@@ -749,6 +751,140 @@ Acceptance:
 
 ---
 
+### SR7 — Market coverage
+
+### SR7-1 Full per-match market offers (Mozzartbet, Betole) — Gate: operator
+
+Status: Not started
+
+Why: both books are flagged `degraded — missing markets`, and the operator
+asked (2026-11-08) whether they should carry more markets. The 2026-11-08 live
+probe in `docs/evidence/2026-11-08-market-coverage-probe.md` measured it: their
+list endpoints (Betole's `/restapi/offer/ba/sport/S/desk`, Mozzartbet's
+`POST /betting/matches`) carry only four complete supported families each
+(1X2, double chance, BTTS, over/under 2.5; Betole adds the experimental
+first-half 1X2). The extra codes Betole serves are combination/special/advance
+markets decoded from its own `ttg_lang` catalog, not families this project
+prices; Mozzartbet's feed carries no other supported family. Both report
+`totalOddsCount`/`oddsCount` in the hundreds against the ~14/30 they list: the
+full offer exists only on the per-match page.
+
+Consequence: more markets means one request per event — 652 + 820 events in the
+2026-11-07 scan — taking a scan from 124 requests to roughly 1,470 (+12.9x) and
+adding ~130 s per book at the current 5 requests/second ceiling, which exceeds
+the 240 s per-adapter deadline. That is why this is gated.
+
+Options to put to the operator:
+- A. Targeted fetch: request the full offer only for events that sit in a
+  verified cross-book group and lack a family at least two peers publish, capped
+  per scan (a new setting), with the cap and result reported in health. Bounded
+  traffic; still adds markets where they can change pricing.
+- B. Full fetch: every event of both books, which needs the adapter deadline,
+  the scan deadline and the schedule re-tuned together.
+- C. No change: keep the list-level offer; the degraded badges stay and document
+  the coverage gap rather than a fault.
+
+Recommended: A, after capturing one full-offer response per book as a fixture.
+Whatever is chosen, `SR4-3`'s wire-schema pattern and a captured fixture are
+required before a market is added, and the affected registry rows must state the
+settlement.
+
+**Decision (2026-11-08, operator): B — full fetch.** Every event of both books
+gets its full offer, accepting ~1,470 requests per scan (+12.9x over the 124 of
+2026-11-07) and the per-book wall time that follows. Budget: the per-adapter
+deadline stays 240 s; at the 5 requests/second ceiling a full Betole walk
+(~820 events) is ~165 s and a full Mozzartbet walk (~652) is ~130 s on top of
+the list pass, so both must fit under it or the scan must report `timeout`
+rather than overrun. Where the full-offer endpoint or its mapping turns out to
+carry none of the families this project prices, that book keeps its list offer
+and the reason is recorded here.
+
+Status: Done
+
+**Outcome (2026-11-08).** Betole's full offer is a **batched** request:
+`GET /restapi/offer/ba/matches/by-ids?matchIdsToken=…&annex=0` returns the whole
+offer for 40 events at once (763 picks per event against 30 on the desk), so 809
+prematch matches cost 21 requests on top of the desk listing. Mozzartbet has no
+bulk variant (the list flags `loadAllTemplateGames`/`loadExtendedOffer` change
+nothing, measured), so it needs one `POST /betting/match/{id}` per event: 678
+requests in the measured scan, 159.9 s, under the 240 s adapter deadline. Both
+parsers now emit, from the full offer: the 1.5/2.5/3.5/4.5/5.5 totals (Betole
+4.5/5.5 were added to the registry), Betole's double chance, and the
+experimental first-half 1X2 for both books. Mozzartbet's unsupported games
+(HT/FT, team totals, exact score, per-half goals, …) are declared in
+`_excluded` instead of flooding the unmapped diagnostic.
+
+Measured, 2026-11-08 01:05–01:09, same machine and market:
+
+| metric | before (2026-11-07 22:18) | after |
+|---|---|---|
+| requests / scan | 124 | 777 |
+| response bytes | 234.7 MB | 433.0 MB |
+| scan wall | 105 s | 237 s |
+| mozzartbet adapter | 57 s | 159.9 s |
+| betole markets | 3,275 (4.0/event) | 6,628 (8.2/event) |
+| mozzartbet markets | 2,598 (4.1/event) | 4,976 (7.9/event) |
+| mozzartbet missing rate | 0.558 (degraded) | 0.170 (healthy) |
+| betole missing rate | 0.028 | 0.028 (healthy) |
+
+Fixtures re-captured on 2026-11-08 (desk → full offer for Betole, list → match
+offer for Mozzartbet), contracts refreshed, `MARKET_MAPPING.md` regenerated, and
+a new admissibility baseline (`docs/evidence/2026-11-08-admissibility-baseline.json`)
+recorded because Betole gained two measured families. Handicap/Asian handicap
+remain out: the full offer carries them (Betole 201-203/421-426, Mozzartbet on
+some matches) but the line value is not in the payload, so mapping them needs a
+separate capture.
+
+Acceptance (decision):
+- [x] Decision recorded here with the traffic budget.
+- [x] If A or B: fixture captured for both books, parser mappings added with
+      settlement, `MARKET_MAPPING.md` regenerated, and the measured request
+      count/scan time before/after in the execution log.
+- [ ] If C: this row is closed with the dated probe cited. (not taken)
+
+---
+
+### SR7-2 Raise the Mozzartbet request rate — Gate: operator
+
+Status: Done
+
+**Outcome (2026-11-08).** `SCRAPER_BOOK_RATES` (default `mozzartbet=60`) is a
+per-book override of `SCRAPER_REQUESTS_PER_SECOND`; every other book stays at
+5/s. Betole's full-offer batches also run 8-in-flight now. Measured on two live
+prematch scans the same evening:
+
+| metric | before | after |
+|---|---|---|
+| scan wall | 237 s | 124 s / 121 s |
+| mozzartbet wall | 159.9 s | 43.8 s / 40.8 s |
+| betole wall | 31.3 s | 13.3 s |
+| requests | 777 | 777 / 779 |
+
+The limiter is no longer the binding constraint: 675 Mozzartbet requests in
+40.8 s is ~16.5 requests/second, well under the 60/s ceiling, because
+`page.request` shares the browser's per-host connection pool. The remaining
+~80 s of the scan is local matching/pricing, which is M2-1 (operator-gated);
+pushing Mozzartbet further would mean leaving the browser transport, which the
+Cloudflare session (and the no-TLS-impersonation rule) makes a separate
+decision.
+
+Why: after SR7-1 a scan spent 159.9 s on Mozzartbet's 678 requests because the
+5 requests/second per-book ceiling is a hard floor (678/5 ≈ 136 s). The operator
+asked (2026-11-08) to increase it to 60 requests/second. Same requests, shorter
+burst; the only change is how fast the book is hit.
+
+Steps: a per-book rate override on `TransportPolicy` (`SCRAPER_BOOK_RATES`,
+default `mozzartbet=60`), leaving every other book at
+`SCRAPER_REQUESTS_PER_SECOND` (5/s). Measure one prematch scan; if the book
+starts answering 429/403 the breaker will open it and the rate is too high.
+
+Acceptance:
+- [x] Per-book override applies (test) and other books keep 5/s.
+- [x] One live scan measured before/after, with the per-book kind and wall time
+      pasted into the execution log.
+
+---
+
 ### M1 — Security and authentication (from the old maintenance backlog)
 
 ### M1-1 Redesign named-key authentication
@@ -1361,3 +1497,6 @@ Useful starting points:
 | 2026-11-07 | SR2-4 | Done | Kept it hand-rolled (`scrapers/ratelimit.BookRateLimiter`) rather than adding `aiolimiter` (recorded under the task): the acceptance test needs a clock/sleep seam, and a reservation model (one slot per attempt, no burst) satisfies "N attempts take at least N/R s" where a leaky bucket's initial burst of R does not. One limiter per (book, event loop), so a scan shares it per book and politeness does not reset at a scan boundary. `retry_call` acquires one slot per attempt, the first included, so retries are spaced too; `TransportPolicy` gained `bookmaker` and `requests_per_second` (`SCRAPER_REQUESTS_PER_SECOND`, default 5/s, 0 disables), and the three browser books got explicit policies with their previous httpx defaults (30/30/30) so only the rate applies to their `page.request` calls. No dependency was added; `aiolimiter` was installed only to inspect it and removed again. New `tests/test_ratelimit.py` (fake clock: 5 attempts at 4/s span 1.25 s; 6 concurrent at 10/s span >= 0.6 s; per-book/per-loop registry; disabled rates; one slot per attempt including retries; 403 takes one slot), `tests/test_transport.py` updated. **Measured no slow-down:** `cache/scan_cost.json` prematch 2026-11-06 (187 requests, wall 256.197 s) gives floor = requests/5 s per book, e.g. mozzartbet 101 req → 20.2 s floor vs 57.12 s recorded wall, wwin 46 → 9.2 vs 34.20, mbet 16 → 3.2 vs 33.15, premier 10 → 2.0 vs 17.23, admiralbet 5 → 1.0 vs 72.64, mdshop/maxbet 3 → 0.6 vs 9.46/10.85, betole 2 → 0.4 vs 2.56, sportplus 1 → 0.2 vs 18.99; delta 0.00 s for every book in that scan and in the 2026-11-05 live scan. Limiter benchmark: 10 attempts take 0.000 s unlimited, 2.006 s at 5/s, 0.504 s at 20/s. No live scan was run (no bookmaker traffic in this session); the before/after is the recorded ledger against the modelled floor. `pytest`: 1834 passed, 6 skipped, 1 xfailed; `check_test_isolation.py`: both ledger modes 1834 passed, 6 skipped, 1 xfailed; ruff clean; mypy 228 files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed; `pytest --cov`: 86.19% (11,935 statements, floor 80%). |
 | 2026-11-07 | SR2-5 | Done | Per-adapter deadline from `TransportPolicy.adapter_deadline` (`SCRAPER_BOOK_TIMEOUT_SECONDS`, default 240 s) via `asyncio.timeout` around the scrape call, and one scraping-phase deadline (`SCRAPER_SCAN_TIMEOUT_SECONDS`, default 600 s) around the gather. The scan deadline deliberately wraps the scrape phase, not all of `run_scan` (recorded under the task): aborting the pricing pass would discard the books that already returned. Each book stores its matches in `book_matches` as it finishes and the list is rebuilt from that after the gather, so a cancelled gather keeps completed books; stragglers are cancelled and awaited (browser closed, semaphore released) before the transport pool closes its clients. Books are now `asyncio.create_task` inside `transport_pool()`: creating them before the pool lost the shared-client context (caught by `test_a_scan_shares_one_transport_client_and_closes_it`). A scan-deadline cancellation is `timeout` in cost/health but is not charged to the scheduled-scan backoff. New `tests/test_scan_deadlines.py`: a hung book is cut at the adapter deadline while the other book prices and is served; a hung book is cancelled at the scan deadline while the finished book is still served and the scan is not marked failed; a fake browser book's `finally` close runs and the `BROWSER_CONCURRENCY` slot is returned. Defaults are 2.4× the slowest recorded book (admiralbet 72.6 s prematch, betole 100.7 s live). `pytest`: 1837 passed, 6 skipped, 1 xfailed; `check_test_isolation.py`: both ledger modes 1837 passed, 6 skipped, 1 xfailed; ruff clean; mypy 229 files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed; `pytest --cov`: 86.23% (11,974 statements, floor 80%). |
 | 2026-11-07 | SR2-6 | Done | New `scrapers/breaker.py`: one `BookCircuitBreaker` per `(mode, book)` in a process-wide registry, states `closed`/`open`/`half_open` with exactly one probe, injected clock. `blocked` and `rate_limited` open on the first occurrence with twice a soft failure's cooldown; `empty`/`timeout`/`transport`/`upstream_5xx` open after `BOOK_BACKOFF_AFTER_FAILURES` consecutive ones; `parse_error`/`schema_drift`/`skipped` are neutral and cannot open or reset it (a neutral probe releases the slot); any `ok` closes it and resets the escalation. Base cooldown is the mode's scan interval (5 min when that feed's schedule is off, so the live breaker cannot get a zero cooldown), doubled per consecutive open and capped by `BOOK_BACKOFF_MAX_MINUTES`. The old dict/lock/`_book_is_backed_off` are removed; `_record_book_result` now takes the `ScrapeKind`, manual scans still ignore an open breaker, scheduled scans skip the book with note `circuit breaker open`. Health serves `scheduler.breakers.<mode>/<book>` with state, consecutive failures, opens, cooldown remaining and last kind; metrics publish `bh_book_breaker_state{mode,book,state}` (1/0 per state), `bh_book_breaker_failures` and `bh_book_breaker_cooldown_seconds`. Alerts still fire at the same threshold, fed by consecutive failures. New `tests/test_breaker.py` (every transition with a fake clock: soft threshold, hard opening immediately with a longer cooldown, neutral kinds, one probe, dead probe doubles, success resets, cap, snapshot shape, registry, health, metrics); `tests/test_scheduler.py` rewritten against the breaker; `tests/test_scan_deadlines.py` proves a scheduled scan skips an open book while a manual scan still runs it; alert tests stub `_breaker_snapshots`. `pytest`: 1853 passed, 6 skipped, 1 xfailed; `check_test_isolation.py`: both ledger modes 1853 passed, 6 skipped, 1 xfailed; ruff clean; mypy 231 files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed; `pytest --cov`: 86.40% (12,072 statements, floor 80%). |
+| 2026-11-08 | SR7-1 | Done | Operator chose **B (full fetch)**. Betole now calls the batched full-offer endpoint (`GET /restapi/offer/ba/matches/by-ids?matchIdsToken=<40 ids>&annex=0`) after the desk listing; the annex code comes from the site's `parametersData.json` (`BOOK_ANNEX_CODE=0`). Desk events are filtered (mode/live, blocked, teams) before batching, so 809 matches cost 22 requests. Parser gains double chance (7/8/9) and totals 1.5/2.5/3.5/4.5/5.5 (242/21, 24/22, 25/219, 27/453, 223/266); the registry gains `over_under_4_5`/`over_under_5_5` for betole; the 22 combination/special picks stay in `_excluded`. Mozzartbet has no bulk variant (tested `loadAllTemplateGames`/`loadExtendedOffer`/`packGroupsInMatch`: the list payload is unchanged), so it fetches `POST /betting/match/{id}` per unique event with 8 in flight, the shared 5/s limiter, and the list odds as the fallback per event; the GET form returns `{"error":"Not found. Sorry."}` (caught in the first live run: 642 wasted GETs, fixed to POST). Parser gains game 4 first-half 1X2 (experimental, like Betole's) and the 1.5/3.5/4.5 complete totals; unsupported game ids (5,7,8,9,16,19,20,26,128,129,131,132,139,140,142,143,153,154,179,297) are declared in `_excluded`. Fixtures re-captured from the live endpoints and contracts rewritten (`refresh_fixtures --write`): betole full-offer odds map, mozzartbet match-offer rows; `UNCOVERED_ROWS` entries for the now-covered rows removed. New admissibility baseline `docs/evidence/2026-11-08-admissibility-baseline.json` (betole's two new families were `new_family_without_evidence` warnings on the 2026-11-05 baseline; `DEFAULT_BASELINE` and the docs now point at the 2026-11-08 file). **Measured before → after (same machine, 2026-11-07 22:18 → 2026-11-08 01:05):** requests/scan 124 → 777 (+5.9x), bytes 234.7 MB → 433.0 MB, scan wall 105 s → 237 s, mozzartbet adapter 57 s → 159.9 s (under the 240 s deadline), betole 22 requests / 31.3 s, mozzart 678 requests / 159.9 s; markets betole 3,275 → 6,628 (4.0 → 8.2 per event), mozzartbet 2,598 → 4,976 (4.1 → 7.9); feed integrity mozzartbet 0.558 missing (degraded) → 0.170 (healthy), betole 0.028 (healthy); 26 surebets on the final scan. Handicap/Asian handicap stay unmapped: the offer carries the picks but not the line value (recorded under the task). New `tests/test_full_offer_markets.py` (9 tests: family sets, incomplete legs, batching, failed batch fallback, desk prefilter, first-half 1X2, offer-failure fallback). `pytest`: 1861 passed, 6 skipped, 1 xfailed; `check_test_isolation.py`: both ledger modes green; `pytest --cov`: 86.23% (12,149 statements, floor 80%); ruff clean; mypy 232 files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. |
+| 2026-11-08 | SR7-2 | Done | Operator asked to raise the rate to 60 requests/second. Added `SCRAPER_BOOK_RATES` (parsed `"book=rate,..."` pairs, default `mozzartbet=60`) as a per-book override of `SCRAPER_REQUESTS_PER_SECOND`; `TransportPolicy.requests_per_second` takes the override, every other book stays at 5/s. Betole's full-offer batches now run 8-in-flight; Mozzartbet keeps 32 in flight. **Measured on two live prematch scans:** scan wall 237 s → 124 s and 121 s; mozzartbet 159.9 s → 43.8 s / 40.8 s; betole 31.3 s → 13.3 s; requests unchanged at 777/779; kinds stayed `ok`, no 429/blocked (one Betole batch 503'd and the retry succeeded). The limiter is no longer binding: 675 Mozzartbet requests in 40.8 s ≈ 16.5 req/s, because `page.request` shares the browser's per-host connection pool; the remaining ~80 s is local matching/pricing (M2-1, operator-gated). `SCRAPER_BOOK_RATES` documented in README and `.env.example`; `tests/test_ratelimit.py` pins mozzartbet 60/s, mbet 5/s. `pytest`: 1861 passed, 6 skipped, 1 xfailed; `check_test_isolation.py`: both ledger modes green; `pytest --cov`: 86.23% (12,166 statements, floor 80%); ruff clean; mypy 232 files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` passed. |
+| 2026-11-08 | SR7-1 | Investigation | Operator asked why Mozzartbet and Betole carry so few markets. Live probes (read-only): Betole `GET /restapi/offer/ba/sport/S/desk` returned 1,415 events with 30 distinct pick codes; the 10 mapped codes are 1X2, BTTS, O/U 2.5 and the experimental first-half 1X2, and the other 20 (present on 1,106 events) are exactly `_excluded.betole`. Decoding them through Betole's own catalog (`GET /restapi/offer/ba/ttg_lang`, 1,204 bets / 6,426 picks) shows they are combination/special/advance markets (team wins match-or-first-half, wins both halves, goals per half mixes, qualification, two-goals-in-a-row) — no supported family. Mozzartbet `POST /betting/matches` returned 15 events with 14 odds and 5 groups each: 1X2, DC, BTTS (`gg`/`ng`/`gg3+`), totals with only the 2.5 line complete, and per-half goals; `totalOddsCount` is 518 against the 14 listed, so the full offer is only on the match page. Neither parser drops a supported family; more markets require one request per event (652 + 820 in the 2026-11-07 scan), i.e. ~1,470 requests (+12.9x) and ~130 s per book at the 5/s ceiling, over the 240 s adapter deadline. Recorded as gated **SR7-1** with evidence in `docs/evidence/2026-11-08-market-coverage-probe.md`; no code, book or market was changed. `pytest`/ruff/mypy unchanged from the previous entry (no source changes). |

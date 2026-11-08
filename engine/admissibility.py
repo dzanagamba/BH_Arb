@@ -42,7 +42,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 SPORT_DISCOVERY_EVIDENCE = "docs/evidence/2026-11-04-sport-discovery.json"
 FOOTBALL_LINES_EVIDENCE = "docs/evidence/2026-11-04-football-lines.json"
 PREMATCH_EVIDENCE = "docs/evidence/2026-11-04-prematch-scan.json"
-DEFAULT_BASELINE = "docs/evidence/2026-11-05-admissibility-baseline.json"
+DEFAULT_BASELINE = "docs/evidence/2026-11-08-admissibility-baseline.json"
 
 # Families that are sport vocabulary, not football market types. They are
 # reported under their sport entry and have no separate football market row.

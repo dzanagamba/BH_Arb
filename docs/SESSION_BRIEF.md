@@ -1,15 +1,37 @@
 # Session brief
 
-**Updated:** 2026-11-07
+**Updated:** 2026-11-08
 **Goal:** keep `ROADMAP.md` current without weakening the trust model.
-**Current task:** none; SR1-1, SR1-2, SR1-3, SR2-1, SR2-2, SR2-3, SR2-4, SR2-5
-and SR2-6 are done and pushed.
-The roadmap is the single task list in `ROADMAP.md`; N2-4 stays deferred and
-P1-6 stays waived until the operator says otherwise.
+**Current task:** none; SR1-1, SR1-2, SR1-3, SR2-1, SR2-2, SR2-3, SR2-4, SR2-5,
+SR2-6, SR7-1 and SR7-2 are done. SR7-1 and SR7-2 are uncommitted in the
+working tree. The roadmap
+is the single task list in `ROADMAP.md`; N2-4 stays deferred and P1-6 stays
+waived until the operator says otherwise.
 **Last task commit:** `a13229a` — per-book rate limit, scan deadlines and
 circuit breaker (SR2-4, SR2-5, SR2-6).
 
 ## Project state
+
+SR7-1 (2026-11-08, **uncommitted**): both books now parse their full offer.
+Betole uses the batched `matches/by-ids` endpoint (22 requests for 809 matches);
+Mozzartbet needs one `POST /betting/match/{id}` per event (678 requests,
+159.9 s). Betole gained double chance and the 1.5/3.5/4.5/5.5 totals, Mozzartbet
+the first-half 1X2 and the 1.5/3.5/4.5 totals. Measured: requests/scan 124 → 777,
+scan wall 105 s → 237 s, markets per event betole 4.0 → 8.2 and Mozzartbet
+4.1 → 7.9, and both books are now `healthy` (Mozzartbet missing rate 0.558 →
+0.170). Fixtures were re-captured on 2026-11-08 and the admissibility baseline
+re-recorded as `docs/evidence/2026-11-08-admissibility-baseline.json`. Handicap
+and Asian handicap stay unmapped: the offer carries the picks but not the line
+value.
+
+SR7-2 (2026-11-08, **uncommitted**): `SCRAPER_BOOK_RATES` overrides the outgoing
+ceiling per book (`mozzartbet=60` by default; every other book keeps 5/s).
+Betole's full-offer batches run 8-in-flight. Measured: scan wall 237 s → 121-124 s,
+Mozzartbet 159.9 s → ~41 s, Betole 31.3 s → 13.3 s, requests unchanged. The
+limiter is no longer binding — the browser's per-host connection pool caps
+Mozzartbet at ~16.5 req/s — and the remaining ~80 s is local matching/pricing
+(M2-1, operator-gated).
+
 
 SR2-6 (2026-11-07, commit `a13229a`): the scheduled-scan backoff is now a real
 per-book circuit breaker in `scrapers/breaker.py`, keyed by `(mode, book)`,
@@ -57,8 +79,7 @@ unchanged. `settle()` returns that shared kind instead of swallowing failures.
 client per book per scan, closed when the scraper gather returns.
 `scrapers/retry.py` now applies full jitter, the attempt cap and total-time
 budget, `Retry-After` and one-attempt 403/challenge blocking, with every attempt
-counted; wwin's private retry loop is gone. The suite is **1,853 passed, 6
-skipped, 1 xfailed** in both ledger modes.
+counted; wwin's private retry loop is gone.
 
 M7-1 (2026-11-07, commit `9cd37d0`): presentation-only dashboard fixes — Unicode
 name capitalisation, the re-check banner's escaped age markup, a worded
@@ -70,11 +91,11 @@ On 2026-11-07 the old roadmaps and the maintenance backlog were folded into
 `ROADMAP.md` and deleted; the research briefs moved to `research/`. The
 `P*`/`N*` IDs are now historical labels with a glossary in the `ROADMAP.md`
 History section. P1-6 is waived and excluded. The suite runs
-**1,853 passed, 6 skipped, 1 xfailed, 1 warning** in both ledger modes, with
-**86.40%** coverage (floor 80%; 12,072 statements). The six skips are the two
+**1,861 passed, 6 skipped, 1 xfailed, 1 warning** in both ledger modes, with
+**86.23%** coverage (floor 80%; 12,166 statements). The six skips are the two
 opt-in runtime-state checks, the two Chromium tests unless
 `BH_ARB_TEST_BROWSER=1`, and the two load budgets unless `BH_ARB_TEST_SLOW=1`.
-Ruff, MyPy (231 source files), Node syntax checks and the generated market doc
+Ruff, MyPy (232 source files), Node syntax checks and the generated market doc
 are clean. The xfail documents the deferred named-key auth gap (see below).
 
 ### 2026-11-06 maintenance pass (`2e06756`)
@@ -102,7 +123,7 @@ offline report has a stable schema and records, per book and sport, the measured
 market families with their settlements; for every enabled football market it
 records the dated evidence row, the per-book registry declarations and, for
 0.5/4.5/5.5, the measured price sources. The dated baseline is
-`docs/evidence/2026-11-05-admissibility-baseline.json`.
+`docs/evidence/2026-11-08-admissibility-baseline.json`.
 
 `python scripts/audit_admissibility.py --check` fails when an admitted sport or
 market disappears, a previously measured family or price source disappears, a
@@ -126,8 +147,7 @@ latter and is deferred.
 
 Start **SR4-1** (transport-level tests with respx); it is the next ungated task,
 now that SR2-3 is Done. The SR3 rows are still blocked on SR3-1 (gate SR0-1).
-The four operator gates waiting for a decision are SR0-1, SR0-2, SR4-9 and
-SR6-3. N2-4 stays deferred and P1-6 stays waived. Do not invent a task or
+The operator gates waiting for a decision are SR0-1, SR0-2, SR4-9 and SR6-3. N2-4 stays deferred and P1-6 stays waived. Do not invent a task or
 reopen a done one.
 
 ## Rules

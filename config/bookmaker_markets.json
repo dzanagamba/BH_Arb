@@ -176,7 +176,27 @@
       141,
       "*DALJE*",
       "*PROLAZ*",
-      "*KVALIFIKACIJE*"
+      "*KVALIFIKACIJE*",
+      5,
+      7,
+      8,
+      9,
+      16,
+      19,
+      20,
+      26,
+      128,
+      129,
+      131,
+      132,
+      139,
+      140,
+      142,
+      143,
+      153,
+      154,
+      179,
+      297
     ],
     "wwin": [
       7,
@@ -197,9 +217,9 @@
       "*KOMBINACIJA*",
       "*PROLAZ*",
       "*REZULTAT*",
-      "*KLAĐENJE*POBJEDU*",
+      "*KLA\u0110ENJE*POBJEDU*",
       "*POLUVRIJEME*KRAJ*",
-      "*TOČAN*",
+      "*TO\u010cAN*",
       "*RASPON*",
       "*PAR/NEPAR*",
       "*POLUVRIJEME*",
@@ -211,10 +231,10 @@
       "*KARTON*",
       "*KORNER*",
       "*UDAR*",
-      "*PREKRŠ*",
+      "*PREKR\u0160*",
       "*ZALE*",
       "*STRIJELAC*",
-      "*IGRAČ*",
+      "*IGRA\u010c*",
       "PRVI *",
       "ZADNJI GOL",
       "*DAJE GOL*",
@@ -234,12 +254,12 @@
       "UTAKMICA I *",
       "ZBROJ GOLOVA I *",
       "ZBROJ GOLOVA MANJI*",
-      "ZBROJ GOLOVA VEĆI*",
+      "ZBROJ GOLOVA VE\u0106I*",
       "*GOL+*",
-      "TOČAN REZULTAT",
+      "TO\u010cAN REZULTAT",
       "TKO *",
-      "TIM SA VIŠE*",
-      "TIM S VIŠE*",
+      "TIM SA VI\u0160E*",
+      "TIM S VI\u0160E*",
       "X-TI GOL",
       "UTAKMICA/ZBROJ",
       "VRIJEME POSTIZANJA*",
@@ -414,10 +434,10 @@
       "*KARTON*",
       "*KORNER*",
       "*UDAR*",
-      "*PREKRŠ*",
+      "*PREKR\u0160*",
       "*ZALE*",
       "*STRIJELAC*",
-      "*IGRAČ*",
+      "*IGRA\u010c*",
       "PRVI *",
       "ZADNJI GOL",
       "*DAJE GOL*",
@@ -437,12 +457,12 @@
       "UTAKMICA I *",
       "ZBROJ GOLOVA I *",
       "ZBROJ GOLOVA MANJI*",
-      "ZBROJ GOLOVA VEĆI*",
+      "ZBROJ GOLOVA VE\u0106I*",
       "*GOL+*",
-      "TOČAN REZULTAT",
+      "TO\u010cAN REZULTAT",
       "TKO *",
-      "TIM SA VIŠE*",
-      "TIM S VIŠE*"
+      "TIM SA VI\u0160E*",
+      "TIM S VI\u0160E*"
     ]
   },
   "mdshop": {
@@ -1519,6 +1539,32 @@
         ],
         "line": 3.5,
         "min_legs": 2
+      },
+      "over_under_4_5": {
+        "ids": [
+          27,
+          453
+        ],
+        "labels": [
+          "Over 4.5",
+          "Under 4.5"
+        ],
+        "line": 4.5,
+        "min_legs": 2,
+        "settlement": "full_time"
+      },
+      "over_under_5_5": {
+        "ids": [
+          223,
+          266
+        ],
+        "labels": [
+          "Over 5.5",
+          "Under 5.5"
+        ],
+        "line": 5.5,
+        "min_legs": 2,
+        "settlement": "full_time"
       }
     },
     "live": {}

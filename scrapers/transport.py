@@ -26,6 +26,7 @@ from typing import Any
 import httpx
 
 from config.settings import (
+    SCRAPER_BOOK_RATES,
     SCRAPER_BOOK_TIMEOUT_SECONDS,
     SCRAPER_REQUESTS_PER_SECOND,
     VERIFY_SSL,
@@ -96,7 +97,15 @@ class TransportPolicy:
 DEFAULT_POLICY = TransportPolicy(30.0, 30.0, 30.0, requests_per_second=None)
 
 POLICIES: dict[tuple[str, str], TransportPolicy] = {
-    (book, mode): TransportPolicy(timeout, timeout, timeout, bookmaker=book)
+    (book, mode): TransportPolicy(
+        timeout,
+        timeout,
+        timeout,
+        bookmaker=book,
+        requests_per_second=SCRAPER_BOOK_RATES.get(
+            book, SCRAPER_REQUESTS_PER_SECOND
+        ),
+    )
     for book, modes in _BOOK_TIMEOUTS.items()
     for mode, timeout in modes.items()
 }

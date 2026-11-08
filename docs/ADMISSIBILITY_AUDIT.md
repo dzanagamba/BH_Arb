@@ -37,7 +37,7 @@ The report is a measurement record. The code still decides what is enabled.
 ## Baseline and change detection
 
 The dated snapshot is
-`docs/evidence/2026-11-05-admissibility-baseline.json`. `detect_changes` compares
+`docs/evidence/2026-11-08-admissibility-baseline.json`. `detect_changes` compares
 a fresh report with it:
 
 **Failures** (exit 1)

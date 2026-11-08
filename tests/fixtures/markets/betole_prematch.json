@@ -1,38 +1,56 @@
 {
   "bookmaker": "betole",
   "mode": "prematch",
-  "captured_at": "2026-11-05",
-  "endpoint": "https://www.betole.ba/restapi/offer/ba/sport/S/desk",
+  "captured_at": "2026-11-08",
+  "endpoint": "https://www.betole.ba/restapi/offer/ba/matches/by-ids?matchIdsToken=91393484&annex=0&desktopVersion=2.47.6.10&locale=ba",
   "source": "live_api_response",
-  "payload_kind": "betole_desk_odds",
-  "provenance": "odds{} of one prematch football event (id 91368362, 'Adelaide Wom.' v 'Wellington Phoenix Wom.') from the live Betole desk feed, trimmed to the pick codes the prematch desk actually serves for 1X2, BTTS, the 2.5 total and the experimental first-half 1X2. The prematch desk carries no double chance or 1.5/3.5 totals, and the registry declares no live rows for this book.",
+  "payload_kind": "betole_full_offer",
+  "provenance": "odds{} of one prematch football event (id 91393484, 'San Carlos' v 'Zeledon') from the live full-offer endpoint, trimmed to the pick codes the parser resolves: 1X2 (1/2/3), double chance (7/8/9), BTTS (272/273), the experimental first-half 1X2 (4/5/6) and the 1.5/2.5/3.5/4.5/5.5 totals (242/21, 24/22, 25/219, 27/453, 223/266). Pick 284 is kept as a control: the 2026-11-08 ttg_lang catalog names it AT_1, 'team wins the match or the first half', a combination this project does not price.",
   "dropped_fields": [
-    "all unregistered pick codes"
+    "all pick codes except the mapped families and the 284 control"
   ],
-  "excluded_ids_present": [],
-  "bets": {
-    "1": 3.35,
-    "2": 3.4,
-    "3": 1.93,
-    "272": 1.65,
-    "273": 2.1,
-    "24": 1.71,
-    "22": 2.0,
-    "4": 3.8,
-    "5": 2.12,
-    "6": 2.55
-  },
+  "excluded_ids_present": [
+    {
+      "id": 284,
+      "context": "AT_1 team wins match or first half"
+    }
+  ],
   "expected_markets": [
     "1x2",
-    "btts",
-    "over_under_2_5"
-  ],
-  "uncovered_registry_rows": [
     "double_chance",
+    "btts",
     "over_under_1_5",
-    "over_under_3_5"
+    "over_under_2_5",
+    "over_under_3_5",
+    "over_under_4_5",
+    "over_under_5_5"
   ],
   "experimental_markets": [
     "first_half_1x2"
-  ]
+  ],
+  "uncovered_registry_rows": [],
+  "bets": {
+    "1": 1.47,
+    "2": 4.1,
+    "3": 6.25,
+    "4": 1.97,
+    "5": 2.27,
+    "6": 6.0,
+    "7": 1.08,
+    "8": 1.19,
+    "9": 2.47,
+    "21": 4.1,
+    "22": 2.05,
+    "24": 1.67,
+    "25": 2.8,
+    "219": 1.38,
+    "242": 1.19,
+    "272": 1.9,
+    "273": 1.77,
+    "27": 5.35,
+    "453": 1.11,
+    "223": 11.25,
+    "266": 1.01,
+    "284": 1.35
+  }
 }
