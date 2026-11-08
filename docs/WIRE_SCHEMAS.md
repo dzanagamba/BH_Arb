@@ -14,7 +14,9 @@ an event envelope (see below). SR4-3c reuses the NSoft models for Admiralbet
 after its own dated captures proved the same shape. SR4-3d added Betole, whose
 price rows are `{pick_code: price}` maps. SR4-3e added MBet, whose odds map
 holds either a typed entry or a bare number. SR4-3f added SportPlus, whose
-fixtures freeze a match's `markets[]` array.
+fixtures freeze a match's `markets[]` array. SR4-3h added Premier Kladionica,
+whose PrSync rows are positional arrays (SR4-3g, EVLBet, is blocked on the
+SR6-3 operator decision).
 
 ## The pattern for the next book
 
@@ -49,7 +51,8 @@ bh_wire_unknown_keys_total{book="mdshop",level="outcome",field="newPriceField"} 
 
 `level` is `root`, `event`, `bet` or `outcome` for the NSoft books, `root`,
 `match`, `odd`, `game` or `subgame` for Mozzartbet, `root`/`row` for Betole,
-`root`/`odd` for MBet, and `root`/`market`/`odd` for SportPlus. The counter is
+`root`/`odd` for MBet, `root`/`market`/`odd` for SportPlus, and `section` for
+Premier Kladionica (whose rows are positional, not keyed). The counter is
 rendered by the existing `/api/metrics` endpoint; no dashboard change is needed
 to see it.
 
@@ -188,10 +191,40 @@ so a renamed team field still drops that match silently.
 
 Tests: `tests/test_wire_schemas_sportplus.py`.
 
+### Premier Kladionica (SR4-3h)
+
+PrSync is positional: the response is `[sections]`, each section a list of
+rows, and a column's meaning is its **index**. The dated fixtures freeze two
+tables: the dogTipK odds rows (`bets`) and the setTip/setTipVar/setTipTip
+definition rows (`lookup`). Each model maps its positional list through a
+`model_validator(mode="before")`, then the strict field types apply by position:
+
+- `PremierOddRow` — `dog_id`, `grupa_tip_id`, `set_tip_id`, `var_id`, `tip_id`,
+  `koef` (the price, column 5), `na_pon`, `dobitni`, `koef1`; a row shorter than
+  nine columns is drift (the price column cannot be located).
+- `PremierSetTip` — `sport_id`, `set_tip_id`, `name` (column 2).
+- `PremierSetTipVar` — `sport_id`, `set_tip_id`, `var_id`, `line` (column 9).
+- `PremierSetTipTip` — `sport_id`, `set_tip_id`, `tip_id`, `code` (column 4).
+
+`validate_premier_odds` and `validate_premier_lookup` are the fixture entry
+points. `_sync_call` runs `validate_premier_sync`: a **full** sync must be a
+`[sections]` list with at least ten slots (each slot a list) and its sections
+7/8/9 are typed; a **delta** sync has every non-empty section typed as odds
+rows. A non-JSON body, a wrong envelope or a drifted column raises
+`SCRAPE_DRIFT` and the book drops out.
+
+Positional data has no field names to call unknown, so the counter reports
+**unknown section slots** — slots past the fifteen the parser documents — at
+`level="section"`, `field="<index>"`. The event, sports, competition-group and
+execRes sections have no dated capture and stay unmodelled.
+
+Tests: `tests/test_wire_schemas_premier.py`.
+
 ## Follow-up rows
 
 One book per session, each with its own capture and allow-list:
 `SR4-3b` Mozzartbet (done 2026-11-08), `SR4-3c` Admiralbet (done 2026-11-08),
 `SR4-3d` Betole (done 2026-11-08), `SR4-3e` MBet (done 2026-11-08),
-`SR4-3f` SportPlus (done 2026-11-08), `SR4-3g` EVLBet,
-`SR4-3h` Premier Kladionica, `SR4-3i` WWin, `SR4-3j` MaxBet.
+`SR4-3f` SportPlus (done 2026-11-08), `SR4-3g` EVLBet (**blocked on SR6-3**:
+disabled book, empty capture, operator decision pending), `SR4-3h` Premier
+Kladionica (done 2026-11-08), `SR4-3i` WWin, `SR4-3j` MaxBet.

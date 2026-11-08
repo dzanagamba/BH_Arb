@@ -2,17 +2,37 @@
 
 **Updated:** 2026-11-08
 **Goal:** keep `ROADMAP.md` current without weakening the trust model.
-**Current task:** none; SR1-1, SR1-2, SR1-3, SR2-1, SR2-2, SR2-3, SR2-4, SR2-5,
-SR2-6, SR4-1, SR4-2, SR4-3, SR4-3b, SR4-3c, SR4-3d, SR4-3e, SR4-3f, SR7-1 and
-SR7-2 are done. SR4-1, SR4-2, SR4-3, SR4-3b, SR4-3c, SR4-3d, SR4-3e and SR4-3f
-are in the working tree (not yet committed). The roadmap is the single task list
-in `ROADMAP.md`; N2-4 stays deferred and P1-6 stays waived until the operator
-says otherwise.
-**Last task commit:** `57666c6` — strict wire schemas for six books
-(SR4-3, SR4-3b … SR4-3f); SR4-1 and SR4-2 are in `f4e97e9` and `2614206`.
-Pushed to `origin/main` on 2026-11-08.
+**Current task:** none; SR1-1, SR1-2, SR1-3, SR2-1 … SR2-6, SR4-1, SR4-2,
+SR4-3, SR4-3b … SR4-3f, SR4-3h, SR7-1 and SR7-2 are done. **SR4-3g is blocked on
+SR6-3** (operator decision). SR4-3h is in the working tree (not committed). The
+roadmap is the single task list in `ROADMAP.md`; N2-4 stays deferred and P1-6
+stays waived until the operator says otherwise.
+**Last task commit:** `de02a63` — strict wire schema for Premier Kladionica
+(SR4-3h); SR4-1, SR4-2 and SR4-3 … SR4-3f are in `f4e97e9` … `e53560c`.
+SR4-3g is blocked on SR6-3.
 
 ## Project state
+
+SR4-3h (2026-11-08, working tree): Premier Kladionica's PrSync is positional, so
+`wire_schemas.py` gained `PremierOddRow` (price at column 5), `PremierSetTip`
+(name at 2), `PremierSetTipVar` (line at 9) and `PremierSetTipTip` (code at 4),
+mapped from positional lists through `model_validator(mode="before")`, plus
+`validate_premier_odds`/`validate_premier_lookup`/`validate_premier_sync`.
+`_sync_call` validates the `[sections]` envelope (at least ten slots) and, for a
+full sync, sections 7/8/9; a delta sync's every non-empty section is typed as
+odds rows. A non-JSON body, wrong envelope, short row/table or string price is
+`ScrapeError(SCHEMA_DRIFT)` and drops the book with zero legs. Because rows are
+positional there are no field names to count, so unknown **section slots** past
+the documented fifteen are counted at `level="section"`. The event/sports/
+competition-group/execRes sections have no dated capture and stay unmodelled (a
+renamed team column still drops that event silently; SR4-4/SR5-1 close it). New
+`tests/test_wire_schemas_premier.py` (19 tests) drives the real `scrape()` in
+both modes. No live scan was run.
+
+SR4-3g (2026-11-08, blocked): EVLBet is disabled, its recorded flat offer is
+empty and it has no market capture, so the strict-schema acceptance cannot be
+met. SR6-3 (operator) must choose: capture a fixture and keep the adapter, or
+remove it. No code was changed; the row is marked `Blocked on SR6-3`.
 
 SR4-3f (2026-11-08, working tree): SportPlus's fixtures freeze one match's
 `markets[]` array, so `SportplusMarket` (`id`/`name`/`odds`, required but
@@ -109,7 +129,7 @@ instead of returning zero legs as an empty feed. Unknown keys are kept, counted
 in `bh_wire_unknown_keys_total{book,level,field}` and logged, never fatal.
 `validate_bets` proves each dated fixture; `tests/test_wire_schemas.py` has 13
 tests including the real `scrape()` drift path. The pattern and the remaining
-`SR4-3g` … `SR4-3j` follow-up rows (one per book) are in
+`SR4-3i` … `SR4-3j` follow-up rows (one per book) are in
 `docs/WIRE_SCHEMAS.md`.
 
 SR4-2 (2026-11-08, working tree): every fixture in
@@ -210,8 +230,8 @@ On 2026-11-07 the old roadmaps and the maintenance backlog were folded into
 `ROADMAP.md` and deleted; the research briefs moved to `research/`. The
 `P*`/`N*` IDs are now historical labels with a glossary in the `ROADMAP.md`
 History section. P1-6 is waived and excluded. The suite runs
-**2,024 passed, 6 skipped, 1 xfailed, 1 warning** in both ledger modes, with
-**89.18%** coverage (floor 80%; 12,666 statements). The six skips are the two
+**2,043 passed, 6 skipped, 1 xfailed, 1 warning** in both ledger modes, with
+**89.26%** coverage (floor 80%; 12,767 statements). The six skips are the two
 opt-in runtime-state checks, the two Chromium tests unless
 `BH_ARB_TEST_BROWSER=1`, and the two load budgets unless `BH_ARB_TEST_SLOW=1`.
 Ruff, MyPy (236 source files), Node syntax checks and the generated market doc
@@ -264,16 +284,14 @@ latter and is deferred.
 
 ## Next action
 
-Start **SR4-3g** (strict wire schema for EVLBet), the next follow-up row after
-SR4-3f, subject to SR6-3: EVLBet is disabled, returns an empty flat offer and
-has no market capture, so a payload schema cannot be proved. Record that against
-the row; if SR6-3 has no written operator decision, take the next row after it
-(SR4-3h Premier Kladionica) instead and leave SR4-3g blocked on SR6-3. SR4-5 is
-also ungated, but the SR4-3 follow-ups are earlier rows. The SR3 rows are still
-blocked on SR3-1 (gate SR0-1). The operator gates waiting for a decision are
-SR0-1, SR0-2, SR4-9 and SR6-3. N2-4 stays deferred and P1-6 stays waived. Do not
-invent a task or reopen a done one. SR4-1, SR4-2, SR4-3, SR4-3b, SR4-3c, SR4-3d,
-SR4-3e and SR4-3f are in the working tree; commit them if the operator asks.
+Start **SR4-3i** (strict wire schema for WWin), the next follow-up row after
+SR4-3h. It and `SR4-3j` follow the same pattern, one book per session;
+`docs/WIRE_SCHEMAS.md` records it. SR4-3g stays **Blocked on SR6-3** (operator
+decision) — do not start it. SR4-5 is also ungated, but the SR4-3 follow-ups are
+earlier rows. The SR3 rows are still blocked on SR3-1 (gate SR0-1). The operator
+gates waiting for a decision are SR0-1, SR0-2, SR4-9 and SR6-3. N2-4 stays
+deferred and P1-6 stays waived. Do not invent a task or reopen a done one.
+SR4-3h is in the working tree; commit it if the operator asks.
 
 ## Rules
 
