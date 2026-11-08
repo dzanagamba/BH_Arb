@@ -165,7 +165,7 @@ do not copy stale numbers here.
 | M2-2 | Stop rewriting the cache on verify-links | Done | — | operator |
 | M2-3 | Serve a cached `/api/health` summary | Done | — | operator |
 | M2-4 | Decide the candidate queue cap | Done | — | operator |
-| M2-5 | Review compact cache/ledger representations | Not started | — | operator |
+| M2-5 | Review compact cache/ledger representations | Done | — | operator |
 | M3-1 | Decompose `server/api.py` | Not started | — | operator |
 | M3-2 | Move the deep-link store to `engine/` | Not started | — | operator |
 | M3-3 | One link-settled predicate | Not started | — | operator |
@@ -2598,16 +2598,71 @@ Acceptance (written before coding, 2026-11-08):
 
 ### M2-5 Review compact cache/ledger representations
 
-Status: Not started
+Status: Done
 
 Gate: operator
+
+**Decision (2026-11-08, operator: continue after M1-2): keep every piece of
+evidence, make the representation match the consumer.** Measured on the
+operator's machine: `config/generated/mapping_evidence.json` is **93,981,475
+bytes** (16,649 claims) and is written with `indent=2`, which puts it **over the
+67.1 MB `MAPPING_LEDGER_BUDGET_BYTES`** for no benefit — every reader loads it
+through `MappingLedger.load()` or `json.load`, and no consumer, script or test
+reads the raw text or depends on line breaks. The cache files (`last_scan.json`,
+`last_live_scan.json`), the diagnostics stores (`coverage_budget.json`,
+`feed_integrity.json`, `scan_cost.json`, `stale_price_state.json`,
+`opportunity_metrics.json`) and the SQLite rows are already compact; only the
+ledger and the small human-inspectable decision/link-sweep files use indentation.
+The ledger is a machine trust record, not hand-edited config, so it should be
+compact like the scan cache (P0-1).
+
+So: write the ledger with compact separators, keeping its schema, claim set,
+evidence records, statuses, TTLs and prune rule byte-for-byte equivalent. Do not
+delete claims or evidence and do not raise the budget to hide the size. Record
+the per-representation consumer audit in `docs/STORAGE.md` so the next change
+knows which reader owns what.
 
 Why / what: Evaluate the compact cache/ledger representations against every
 consumer; never delete runtime evidence to meet a budget.
 
-Acceptance:
-- [x] Operator approval recorded here.
-- [x] Acceptance criteria written here before coding.
+**M2-5 Outcome (2026-11-08).** `engine/mapping_evidence.py::MappingLedger.save`
+now writes compact JSON (`separators=(",", ":")`, `sort_keys=True`) instead of
+`indent=2`; the schema, claim set, evidence records, statuses, TTLs and prune
+rule are unchanged. This is a representation change, not retention: no claim or
+evidence record is removed, `prune()` remains the only thing that drops evidence
+and still runs only from the maintenance job. The audit of every persisted
+representation and its consumers is in `docs/STORAGE.md`; the ledger was the
+only indented runtime file, and every reader goes through `MappingLedger.load()`
+or `json.load` (gate, learner, replay, league resolver's `detail["teams"]`,
+candidate remediation/mapping coverage evidence types, the market-registry
+script's last-evidence detail, maintenance prune and health bytes). Two tests in
+`tests/test_mapping_evidence.py`: the file has no newline and is smaller than
+its indented equivalent, and a nine-record claim survives save/load intact
+(above the prune cap, proving save does not prune). **Measured on the operator's
+real ledger (16,649 claims): 93,981,475 -> 50,054,456 bytes (-46.7 %), now under
+`MAPPING_LEDGER_BUDGET_BYTES` (67.1 MB) without raising the budget or pruning;
+load 1.83 -> 1.73 s, save 4.45 -> 4.01 s (best of runs, on a copy).**
+`pytest`: 2312 passed, 12 skipped (17 snapshots) in 116.23 s; ruff clean; mypy
+275 source files clean; market doc in sync; refresh_fixtures and
+audit_admissibility `--check` exit 0. No live scan, no runtime state rewritten.
+
+Acceptance (written before coding, 2026-11-08):
+- [x] `MappingLedger.save()` writes compact JSON (no indentation), with the same
+      schema, claim keys, evidence records and ordering as before.
+- [x] A round trip through the compact file preserves every claim and every
+      evidence record exactly; no evidence is deleted or capped by this change.
+- [x] The operator's real ledger is measured before → after, and the compact
+      file is under `MAPPING_LEDGER_BUDGET_BYTES` (67.1 MB) without pruning,
+      raising the budget, or dropping a single claim.
+- [x] Save/load time is measured before → after on the real ledger.
+- [x] Every persisted representation and its consumers is audited in
+      `docs/STORAGE.md`; the ledger is the only remaining indented runtime file,
+      and each consumer reads through `json`/`MappingLedger`, never formatting.
+- [x] Tests pin the compact form, the full evidence round trip, and that the
+      prune/TTL behaviour is unchanged. The maintenance health bytes view still
+      reports the ledger.
+- [x] No prune rule, TTL, evidence cap or trust input changes.
+
 
 ---
 
@@ -3147,3 +3202,4 @@ Useful starting points:
 | 2026-11-08 | M2-2 | Done | Each `/api/verify-links` call ended in `_save_cache(mode)`, rewriting the whole scan cache to persist at most a handful of `deep_link_verified` flags, once per checked event. The write is gone: `apply_report` + `_apply_deep_link_verifications` still update the in-memory cache, and the verdict stays durable in `deep_link_verifications.json` (proof written or removed) and `deep_link_decisions.json` (the event is decided). Because the cache file can now predate a failed check, `_load_cache` re-derives the flag: new `_clear_stale_deep_link_flags` clears a cached True that no fresh store record backs, then `_apply_deep_link_verifications` re-applies the fresh ones; a book the gate settles by declaration is unaffected. The one test pinning the old asymmetry (match list kept a stale True while the report was filtered) now asserts the flag is re-derived as well. **Measured** on the operator's real files: `_save_cache` 71.4 ms at 1.2 MB/384 matches (today's prematch), 201.2 ms at 3.7 MB/942 matches (live), 1230.3 ms at 21.6 MB/6,610 matches (the SR5-2 baseline shape, the row's size); a check now does zero cache writes and its two store writes take 0.325 ms. New tests: normal check writes no cache but persists the proof and updates memory; failed check removes the proof, records the decision, clears the flag; restart with an emptied store clears the cached flag. `pytest`: 2298 passed, 12 skipped (17 snapshots) in 116.27 s; ruff clean; mypy 275 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No live scan. |
 | 2026-11-08 | M2-4 | Done | Operator: "Continue with M2-4, the candidate queue cap." The operator's scan history (`cache/bh_arb.sqlite3`, 25 scans) shows a prematch queue peaking at **14,249** pairs (11,657 matches), median 5,855, of which at most **473** were actionable; live peaked at 766. Keeping all of them cost 8.9 ms per `/api/candidates` poll, ~22.7 ms per health summary rebuild and ~19.8 MB of candidate JSON. New `CANDIDATE_QUEUE_MAX` (env, default 2000, 0 disables) keeps the top N in the existing priority order (closeable, alias-actionable, fewest blockers, tightest kickoff, closest names, id), with `_pair_priority` shared by a mid-walk trim at 4×N so the transient list stays bounded and the retained set is identical. Nothing is silent: `/api/candidates` gains `found`/`retained`/`dropped`/`cap` and found-side `actionable_found`/`closeable_found`; health gains `candidate_queue.{prematch,live}`; history keeps `candidate_queue` = found (comparable with old rows) plus `candidate_retained`; the blocker trend point gains `retained`/`dropped`/`cap`; `bh_candidate_queue_size` is retained and new `bh_candidates_found` is the denominator; the Review tab shows the cap note (Bosnian string added). **Measured at the 14,249 peak: `/api/candidates` 7.8 → 2.8 ms, health candidate blocks 22.7 → 2.7 ms, retained JSON ~19.8 → ~2.8 MB.** New tests: cap keeps the actionable pair, 0 disables, trim is exact, endpoint/health/history/trend denominator, frontend note. `README.md`, `.env.example`, `docs/METRICS.md`, `docs/CANDIDATE_REMEDIATION.md` updated. `pytest`: 2306 passed, 12 skipped (17 snapshots) in 118.23 s; ruff clean; mypy 275 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No live scan. |
 | 2026-11-08 | M1-2 | Done | Operator: continue. Decision: **reject with 422**. `accepted_odds: 0` is the explicit "not placed" sentinel, but it is a sentinel on both fields: `BetStore.settle` already treats either zero as not placed (bankroll, staked and profit stay correct) and CLV skips a falsy accepted odds, so the old behaviour was safe for money but silent — a positive stake at a price that cannot exist was neutralised and the operator's claimed stake vanished from P/L with no warning. The dashboard cannot produce it ("Mark placed" refuses odds < 1.01 and sends both accepted fields from the same `placed` flag), so only a hand-written client could. New `BetLegPayload` model validator `_a_stake_needs_a_price` refuses `accepted_stake > 0` with `accepted_odds == 0` with a 422 that names both fields, and writes no row. The sentinel stays: both zero = not placed, `accepted_odds: null` still falls back to the planned price, a zero stake with a real price is still accepted. `BetStore.settle` unchanged, so an already-stored inconsistent row still settles as not placed (verified: staked 0.0, payout 0.0, profit 0.0). Four new tests in `tests/test_bet_log.py`; `docs/BET_LOG.md` documents the pair rule. `pytest`: 2310 passed, 12 skipped (17 snapshots) in 117.63 s; ruff clean; mypy 275 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No live scan. |
+| 2026-11-08 | M2-5 | Done | Operator: continue. Decision: **keep every piece of evidence; compact the representation that has no human reader.** The operator's `config/generated/mapping_evidence.json` was 93,981,475 bytes / 16,649 claims written with `indent=2` — over the 67.1 MB `MAPPING_LEDGER_BUDGET_BYTES` — while every consumer loads it through `MappingLedger.load()` or `json.load`: the gate, learner, replay, league resolver (`detail["teams"]`), candidate remediation and mapping coverage (evidence types), `scripts/generate_market_registry.py` (last evidence detail), maintenance prune and `/api/health.retention` bytes. The scan caches and every diagnostics file were already compact; only the ledger (and the two small human-inspectable decision/link-sweep files) were indented. `MappingLedger.save()` now writes `separators=(",", ":")` with `sort_keys=True`; schema, claims, evidence, statuses, TTLs and the prune rule are unchanged, and `prune()` remains the only evidence-dropping step (maintenance only). Audit recorded in `docs/STORAGE.md`. Two tests: compact file (no newline, smaller than indented), and a nine-record claim round-trips intact above the prune cap. **Measured on a copy of the real ledger: 93,981,475 -> 50,054,456 bytes (-46.7 %), under budget without pruning; load 1.83 -> 1.73 s, save 4.45 -> 4.01 s.** `pytest`: 2312 passed, 12 skipped (17 snapshots) in 116.23 s; ruff clean; mypy 275 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No live scan, no runtime state rewritten. |

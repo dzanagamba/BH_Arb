@@ -34,6 +34,31 @@ inserted rows must equal the JSON source counts.
 `mode`; no large JSON file is loaded. `days=0` returns the in-memory recent
 list. The dashboard's History tab still uses the default 30-day query.
 
+## Persisted representations and their consumers (M2-5)
+
+Runtime state is written for a machine, not a person. Every cache file except
+the two small human-inspectable stores is compact JSON (`indent=None`), because
+every consumer parses it; the mapping ledger was the last indented runtime file,
+which cost 44 MB and put the operator's ledger over
+`MAPPING_LEDGER_BUDGET_BYTES` for no reader.
+
+| Representation | Form | Consumers |
+|---|---|---|
+| `cache/last_scan.json`, `cache/last_live_scan.json` | compact JSON | `_load_cache` → `/api/status`, `/api/surebets`, `/api/matches`, health; diagnostics read the same payload |
+| `cache/opportunity_metrics.json` | compact JSON (aggregates and bounded crossing keys, never the full board) | `/api/health`, `scripts/opportunity_baseline.py` |
+| `cache/coverage_budget.json`, `cache/feed_integrity.json`, `cache/scan_cost.json`, `cache/stale_price_state.json` | compact JSON | health diagnostics and alerting; never a trust input |
+| `cache/suppressed_candidates.json`, `cache/link_sweeps.json` | indented JSON, small and human-inspectable | decision restore / review tab, sweep history |
+| `config/generated/mapping_evidence.json` | **compact JSON since M2-5** | `MappingLedger.load()` (gate, learner, replay), `engine/league_resolver.py` (`detail["teams"]`), `candidate_remediation` / `mapping_coverage` (evidence types), `scripts/generate_market_registry.py` (last evidence detail), maintenance prune and health bytes |
+| `cache/bh_arb.sqlite3` | compact payloads in normalized tables | `/api/history`, paper/bet/CLV endpoints, maintenance |
+
+Compaction is a representation change, never a retention one: the ledger's
+schema, claim set and evidence records are unchanged, and `save()` writes every
+evidence record it holds. Dropping evidence is only `MappingLedger.prune()`,
+which the maintenance job runs explicitly. Measured on the operator's real
+ledger (16,649 claims): **93,981,475 → 50,054,456 bytes (−46.7 %)**, under the
+67.1 MB budget, with load **1.83 → 1.73 s** and save **4.45 → 4.01 s** (best of
+three and two runs). No claim or evidence record was removed.
+
 ## Retention and maintenance (N1-1)
 
 Every runtime store now has a configured window in `config/settings.py`:

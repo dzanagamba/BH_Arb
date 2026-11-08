@@ -286,6 +286,16 @@ class MappingLedger:
             return self
 
     def save(self) -> None:
+        """Write the ledger as compact JSON (M2-5).
+
+        The ledger is a machine trust record, not hand-edited config, and every
+        reader goes through ``load()`` or ``json.load``. Indenting it cost 44 MB
+        on the operator's 94 MB file and pushed it over
+        ``MAPPING_LEDGER_BUDGET_BYTES`` without making it more usable, so the
+        on-disk form is compact while the schema, claims and evidence are
+        unchanged. Never delete evidence to meet a budget; change the
+        representation.
+        """
         with self._lock:
             payload = {
                 "schema": SCHEMA_VERSION,
@@ -298,7 +308,13 @@ class MappingLedger:
             )
             try:
                 with os.fdopen(fd, "w", encoding="utf-8") as handle:
-                    json.dump(payload, handle, ensure_ascii=False, indent=2, sort_keys=True)
+                    json.dump(
+                        payload,
+                        handle,
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                        sort_keys=True,
+                    )
                     handle.flush()
                     os.fsync(handle.fileno())
                 os.replace(temp_path, self.path)

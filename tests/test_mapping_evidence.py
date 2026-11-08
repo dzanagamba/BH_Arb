@@ -56,6 +56,58 @@ def test_save_is_atomic_and_leaves_no_temp_file(tmp_path):
     assert [p.name for p in tmp_path.iterdir()] == ["evidence.json"]
 
 
+def test_the_ledger_is_written_compact_for_its_readers(tmp_path):
+    """M2-5: the ledger is a machine file; indentation only costs bytes.
+
+    Every reader goes through `MappingLedger.load()` or `json.load`, so the
+    on-disk form carries no information a consumer can use. The operator's file
+    was 94 MB indented and over budget; compact is the same document.
+    """
+    ledger = _ledger(tmp_path)
+    ledger.accept("team_alias", team_alias_key("A", "B"), [_evidence()])
+    ledger.save()
+
+    text = (tmp_path / "evidence.json").read_text(encoding="utf-8")
+    payload = json.loads(text)
+
+    assert "\n" not in text, "the ledger is indented again"
+    assert payload["schema"] == 1
+    assert len(text) < len(json.dumps(payload, ensure_ascii=False, indent=2))
+
+
+def test_the_compact_file_keeps_every_evidence_record(tmp_path):
+    """Compaction changes the spacing, never the evidence.
+
+    Nine observations are more than the eight the maintenance prune keeps, and
+    the save still writes all nine: pruning is a separate, explicit retention
+    step, never a side effect of the representation.
+    """
+    ledger = _ledger(tmp_path)
+    key = team_alias_key("A", "B")
+    records = [
+        Evidence(
+            type="betradar_shared_id",
+            detail={"id": str(index), "pair": ["A", "B"]},
+            scan=f"scan-{index}",
+            books=("mdshop", "wwin"),
+            observed_at=f"2026-11-0{index + 1}T12:00:00",
+        )
+        for index in range(9)
+    ]
+    ledger.accept("team_alias", key, records, "nine observations")
+    ledger.save()
+
+    loaded = MappingLedger(tmp_path / "evidence.json").load()
+    claim = loaded.get("team_alias", key)
+
+    assert claim is not None
+    assert claim.status == "accepted"
+    assert len(claim.evidence) == 9, "a save must not prune evidence"
+    assert [item.to_dict() for item in claim.evidence] == [
+        item.to_dict() for item in ledger.get("team_alias", key).evidence
+    ]
+
+
 def test_a_corrupt_file_is_an_empty_ledger_with_an_error(tmp_path):
     path = tmp_path / "evidence.json"
     path.write_text("{not json", encoding="utf-8")
