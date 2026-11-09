@@ -171,3 +171,22 @@ def test_release_doc_has_the_checklist_and_local_equivalents():
     assert "pip freeze --all" in release
     assert "5–10 minutes" in release
     assert "Dependabot" in release
+
+
+def test_smoke_launches_chromium_with_the_runtime_flags():
+    """M4-2: the browser bundle must launch, not merely be installed."""
+    assert "sync_playwright" in SMOKE
+    assert "chromium.launch" in SMOKE
+    assert "--no-sandbox" in SMOKE
+    assert "chromium-ok" in SMOKE
+
+
+def test_the_image_is_scanned_for_high_and_critical_cves():
+    """M4-2: OS and library CVEs with a fix fail the Docker job and releases."""
+    for name in ("docker.yml", "release.yml"):
+        workflow = (REPO_ROOT / ".github" / "workflows" / name).read_text(encoding="utf-8")
+        assert "aquasecurity/trivy-action@" in workflow, name
+        assert "vuln-type: os,library" in workflow, name
+        assert "severity: HIGH,CRITICAL" in workflow, name
+        assert "ignore-unfixed: true" in workflow, name
+        assert 'exit-code: "1"' in workflow, name

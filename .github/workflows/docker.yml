@@ -45,5 +45,15 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Smoke test (health, non-root, cache survives restart)
+      - name: Scan the image for HIGH/CRITICAL OS and library CVEs
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8  # v0.36.0
+        with:
+          image-ref: bh-arb:ci
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+
+      - name: Smoke test (health, non-root, Chromium, cache survives restart)
         run: python scripts/docker_smoke.py --no-build --image bh-arb:ci --port 18000

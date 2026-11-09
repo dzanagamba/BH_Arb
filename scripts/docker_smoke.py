@@ -2,9 +2,10 @@
 """Docker smoke test for P1-3.
 
 Builds the image (unless ``--no-build``), starts a container with a named cache
-volume, waits for ``/api/health``, checks the runtime uid is non-root, writes a
-marker into ``/app/cache``, restarts the container and verifies the marker
-survived. Everything is cleaned up on the way out.
+volume, waits for ``/api/health``, checks the runtime uid is non-root, launches
+the bundled Chromium headless, writes a marker into ``/app/cache``, restarts the
+container and verifies the marker survived. Everything is cleaned up on the way
+out.
 
 Run on a Linux host with Docker access:
 
@@ -23,6 +24,24 @@ import urllib.request
 
 NAME = "bh-arb-smoke"
 VOLUME = "bh-arb-smoke-cache"
+
+# Chromium is installed in the image for the browser-backed books, so the smoke
+# proves it actually launches as the non-root runtime user, with the same
+# no-sandbox flags `launch_browser()` uses. A missing system library or a broken
+# browser bundle fails here, not on the first live scan.
+CHROMIUM_PROBE = """\
+from playwright.sync_api import sync_playwright
+
+with sync_playwright() as playwright:
+    browser = playwright.chromium.launch(
+        headless=True,
+        args=["--no-sandbox", "--disable-dev-shm-usage"],
+    )
+    page = browser.new_page()
+    page.set_content("<title>chromium-ok</title>")
+    print(page.title())
+    browser.close()
+"""
 
 
 def _run(args: list[str], *, capture: bool = False) -> subprocess.CompletedProcess:
@@ -110,6 +129,14 @@ def main() -> int:
             raise SystemExit("container is running as root")
         print(f"runtime uid: {uid} (non-root)", flush=True)
 
+        chromium = _run(
+            ["docker", "exec", NAME, "python", "-c", CHROMIUM_PROBE],
+            capture=True,
+        ).stdout.strip()
+        if chromium != "chromium-ok":
+            raise SystemExit(f"Chromium did not launch in the container: {chromium!r}")
+        print("chromium: launched headless", flush=True)
+
         _run(
             [
                 "docker",
@@ -136,7 +163,7 @@ def main() -> int:
         if marker != "ok":
             raise SystemExit(f"cache marker did not survive the restart: {marker!r}")
 
-        print("PASS: dashboard health is up, the user is non-root, cache survived restart")
+        print("PASS: health is up, the user is non-root, Chromium launched, cache survived restart")
         return 0
     finally:
         logs = subprocess.run(

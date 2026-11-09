@@ -173,7 +173,7 @@ do not copy stale numbers here.
 | M3-5 | Route registry lookups through `registered_spec()` | Done | — | operator |
 | M3-6 | Move `pairing_audit` and verifier into `server/` | Done | — | operator |
 | M4-1 | Add a resolved constraints/lock file | Done | — | operator |
-| M4-2 | Docker Chromium check and image CVE scan | Not started | — | operator |
+| M4-2 | Docker Chromium check and image CVE scan | Done | — | operator |
 | M4-3 | Pin Actions by SHA and base image by digest | Not started | — | operator |
 | M4-4 | Plan the remaining dependency upgrades | Not started | — | operator |
 | M5-1 | Remove legacy URL maps | Not started | — | operator |
@@ -3111,15 +3111,53 @@ Acceptance (written before coding, 2026-11-09):
 
 ### M4-2 Docker Chromium check and image CVE scan
 
-Status: Not started
+Status: Done
 
 Gate: operator
 
+**Decision (2026-11-09, operator: next three).** The Docker smoke proved the
+server starts but never proved the browser layer works, and nothing scanned the
+image for OS or library CVEs. A Playwright bump or a missing system library could
+pass every build and fail the first browser-book scan. So:
+
+* `scripts/docker_smoke.py` launches the bundled Chromium headless inside the
+  running container with the same `--no-sandbox`/`--disable-dev-shm-usage` flags
+  `launch_browser()` uses, and fails unless the page title round-trips.
+* `docker.yml` scans the loaded image with Trivy (`os,library`),
+  `HIGH,CRITICAL`, `ignore-unfixed: true`, `exit-code: 1`. A fixable HIGH or
+  CRITICAL CVE fails the Docker job; an unfixed one is reported but does not
+  block, because the base image has no remedy to apply.
+* `release.yml` runs the same scan against `bh-arb:release`, so a release cannot
+  ship an image the Docker job would refuse.
+
+Trivy is pinned by commit SHA now (M4-3 covers the rest), and the Dependabot
+`docker` ecosystem keeps the base image moving.
+
 Why / what: Add a Docker Chromium launch check and an OS/image CVE scan.
 
-Acceptance:
-- [ ] Operator approval recorded here.
-- [ ] Acceptance criteria written here before coding.
+**Outcome (2026-11-09).** `scripts/docker_smoke.py` now launches the image's
+bundled Chromium headless as the non-root runtime user (same `--no-sandbox` and
+`--disable-dev-shm-usage` flags the scanners use) and fails unless a page title
+round-trips. `docker.yml` scans the loaded `bh-arb:ci` image with Trivy
+(`aquasecurity/trivy-action` pinned by SHA): `vuln-type: os,library`,
+`severity: HIGH,CRITICAL`, `ignore-unfixed: true`, `exit-code: "1"`;
+`release.yml` runs the same scan against `bh-arb:release`. Two tests in
+`tests/test_deployment_assets.py` pin the probe and the scan policy.
+`docs/CI.md` documents both. Full suite **2,374 passed, 12 skipped** (17
+snapshots) in 113.54 s; ruff and mypy (289 files) clean; market doc, fixtures and
+admissibility checks green. The image build/scan itself runs in the path-
+triggered Docker workflow, not locally.
+
+Acceptance (written before coding, 2026-11-09):
+- [x] Operator approval recorded here.
+- [x] Acceptance criteria written here before coding.
+- [x] `scripts/docker_smoke.py` launches Chromium and fails when it cannot.
+- [x] `docker.yml` and `release.yml` scan the built image for fixable HIGH and
+      CRITICAL OS/library CVEs and fail the job.
+- [x] `tests/test_deployment_assets.py` pins the probe and the scan policy, and
+      the smoke test's docstring/pass line name the new check.
+- [x] Docker/CI docs describe both; the full suite and checks pass.
+
 
 ### M4-3 Pin Actions by SHA and base image by digest
 
@@ -3555,3 +3593,4 @@ Useful starting points:
 | 2026-11-09 | M3-5 | Done | Operator: continue with M3-5. Added call-time registry accessors to `engine/market_registry.py`: `registry()`, `has_source_id()`, `specs_for()`, `lookup_type()`, `ids_for()`; `registered_spec()` resolves through them and keeps its `has_source_id` fallback. Removed every direct `from engine.market_registry import MARKET_REGISTRY` and method call from `engine/admissibility.py`, `scrapers/{wwin,maxbet,mbet,evlbet,mozzartbet}.py`, `scrapers/common._nsoft_registry` and `scripts/capture_market_fixtures.py`; 0 modules outside the registry now name the singleton. Raw lookups (mbet live, mozzartbet hardcoded ids, fixture capture) use `lookup_type()` so unmapped diagnostics do not change. Two tests in `tests/test_market_registry.py` prove every accessor follows a replaced global and that a registry replaced AFTER the adapters import is seen by common/nsoft, mbet, mozzartbet, wwin, maxbet and admissibility. `pytest`: 2363 passed, 12 skipped (17 snapshots) in 112.94 s; ruff clean; mypy 285 files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No registry row, mapping or parser verdict changed. |
 | 2026-11-09 | M3-6 | Done | Operator: continue with M3-6. Moved the reusable code out of `scripts/` so coverage measures it: **`server/pairing_audit.py`** (234 lines, `audit` + miss helpers) and **`server/deeplink_verifier.py`** (585 lines, criterion, dataclasses, evidence, `build_targets`, `apply_report`, `check_target`, `verify_bookmaker`). `scripts/pairing_audit.py` (48 lines) and `scripts/verify_deeplinks.py` (109 lines) keep their `main`/loader and re-export the public names, so existing importers and CLI flags are unchanged. `server/api.py` now imports both from `server`, removing the app→scripts dependency. `tests/test_layering.py` pins: no `server` module imports `scripts`, both implementations are under `server`, and both wrappers keep their names; the README cursor-claim test now reads `server/deeplink_verifier.py`. `python scripts/pairing_audit.py --check` exits 0; `pytest`: 2366 passed, 12 skipped (17 snapshots) in 113.32 s; ruff clean; mypy 287 files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No criterion, report shape, flag or verdict changed. |
 | 2026-11-09 | M4-1 | Done | Added **`requirements.lock`** (27 runtime packages) and **`requirements-dev.lock`** (85), generated by **`scripts/lock_requirements.py`** (one clean temp venv; `--check` reported in sync). Lock files are sorted exact pins, excluding pip/setuptools/wheel. Dockerfile, all CI install steps, the release workflow, the Docker-smoke path filter and the SBOM venv now install the locks; `pip-audit` audits the resolved locks instead of the manifests. New `tests/test_dependency_lock.py` (6 tests) proves direct manifest pins match the lock, the dev lock is a superset with unchanged runtime pins, locks are sorted/exact, resolved transitives are present, and Docker/CI/SBOM install the lock; `test_deployment_assets`, `test_ci_hardening` and README/RELEASE/CI docs were updated. `pytest`: 2372 passed, 12 skipped (17 snapshots) in 105.03 s; ruff clean; mypy 289 files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. |
+| 2026-11-09 | M4-2 | Done | `scripts/docker_smoke.py` now launches the image's bundled Chromium headless with the scanners' `--no-sandbox`/`--disable-dev-shm-usage` flags and fails unless a page title round-trips; its docstring and PASS line name the check. `docker.yml` scans `bh-arb:ci` with Trivy (`aquasecurity/trivy-action` pinned by SHA) for HIGH/CRITICAL `os,library` CVEs with `ignore-unfixed: true` and `exit-code: 1`; `release.yml` scans `bh-arb:release` the same way. Two `tests/test_deployment_assets.py` tests pin the probe and scan policy; `docs/CI.md` documents both. `pytest`: 2374 passed, 12 skipped (17 snapshots) in 113.54 s; ruff clean; mypy 289 files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. |

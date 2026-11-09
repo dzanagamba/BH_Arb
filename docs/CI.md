@@ -278,6 +278,24 @@ runtime image.
 The SBOM is an inventory, not a vulnerability report. `pip-audit` remains the
 vulnerability gate.
 
+## Container checks
+
+`.github/workflows/docker.yml` builds the image and runs
+`scripts/docker_smoke.py`, which now proves four things: `/api/health` is up, the
+process is non-root, the bundled Chromium launches headless with the same
+`--no-sandbox`/`--disable-dev-shm-usage` flags the scanners use, and a cache
+marker survives a container restart. A missing browser library or a broken
+Playwright bundle therefore fails here, not on the first live scan.
+
+The same job scans the loaded image with Trivy
+(`aquasecurity/trivy-action`, pinned by SHA): `vuln-type: os,library`,
+`severity: HIGH,CRITICAL`, `ignore-unfixed: true`, `exit-code: "1"`. A CVE with
+no fixed package is reported by pip-audit/Trivy output but does not fail the
+build; a HIGH or CRITICAL finding that has a fix does. The release workflow runs
+the same scan against `bh-arb:release`, so a release cannot ship an image the
+Docker job would refuse. Dependabot's `docker` and `pip` updates are the normal
+way to pick up a fixed base image or package.
+
 ## Release and dependency updates
 
 `.github/workflows/release.yml` runs on a `v*` tag or manually: it regenerates
