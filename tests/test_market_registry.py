@@ -365,3 +365,103 @@ def test_label_checks_reject_incomplete_registered_label_sets(monkeypatch):
         ]},
     ])
     assert markets == []
+
+
+class _EmptyRegistry:
+    """A fake the parsers must follow once the shared global is replaced.
+
+    ``has_mode`` is True so the NSoft parser takes its registry path and asks
+    this fake for a spec, instead of falling back to its legacy map — the
+    fallback is for synthetic callers and would hide whether the seam reached it.
+    """
+
+    def has_mode(self, bookmaker, mode):
+        return True
+
+    def has_source_id(self, bookmaker, mode, source_id):
+        return False
+
+    def specs_for(self, bookmaker, mode, source_id):
+        return []
+
+    def lookup(self, bookmaker, mode, source_id, line=None):
+        return None
+
+    def lookup_type(self, bookmaker, mode, source_id, market_type, line=None):
+        return None
+
+    def ids_for(self, bookmaker, mode, market_type):
+        return set()
+
+
+def test_accessors_resolve_the_shared_object_at_call_time(monkeypatch):
+    """M3-5: one replacement covers every accessor, not an import-time copy."""
+    import engine.market_registry as registry_module
+
+    fake = _EmptyRegistry()
+    monkeypatch.setattr(registry_module, "MARKET_REGISTRY", fake)
+
+    assert registry_module.registry() is fake
+    assert registry_module.ids_for("mdshop", "prematch", MarketType.MATCH_RESULT) == set()
+    assert registry_module.has_source_id("mdshop", "prematch", 135) is False
+    assert registry_module.specs_for("mdshop", "prematch", 135) == []
+    assert (
+        registry_module.lookup_type(
+            "mdshop", "prematch", 135, MarketType.MATCH_RESULT
+        )
+        is None
+    )
+    assert (
+        registry_module.registered_spec(
+            "mdshop", "prematch", 424244, MarketType.MATCH_RESULT
+        )
+        is None
+    )
+
+
+def test_replacing_the_registry_after_import_reaches_every_parser(monkeypatch):
+    """The seam used to patch one module global while adapters held their own.
+
+    Every parser now calls the accessor, so a fake installed after the adapter
+    modules were imported is the registry they see. If any module captured the
+    object at import time, this test would return the real markets instead.
+    """
+    import engine.market_registry as registry_module
+    from engine.admissibility import ids_for as admissibility_ids_for
+    from scrapers import common
+    from scrapers.maxbet import _spec_for
+    from scrapers.mbet import _resolve_mbet_market
+    from scrapers.mozzartbet import _parse_markets as mozzart_parse
+    from scrapers.wwin import _request_market_ids
+
+    fake = _EmptyRegistry()
+    monkeypatch.setattr(registry_module, "MARKET_REGISTRY", fake)
+
+    assert admissibility_ids_for("mdshop", "prematch", MarketType.MATCH_RESULT) == set()
+    assert _spec_for("prematch", 424244, None) is None
+    assert _request_market_ids("live") == []
+    assert _resolve_mbet_market(
+        "fb", {"ofb:fs:1": 2.0, "ofb:fs:X": 3.0, "ofb:fs:2": 4.0}
+    ) == {}
+    assert common.parse_nsoft_bets([{
+        "betTypeId": 135,
+        "betOutcomes": [
+            {"name": "1", "odd": 2.0},
+            {"name": "X", "odd": 3.0},
+            {"name": "2", "odd": 4.0},
+        ],
+    }], bookmaker="mdshop", mode="prematch") == []
+    assert mozzart_parse(
+        {
+            "odds": [
+                {
+                    "game": {"id": 1, "shortName": "ki", "name": "Konacan ishod"},
+                    "subgame": {"name": label},
+                    "value": 2.0,
+                }
+                for label in ("1", "X", "2")
+            ]
+        },
+        "prematch",
+        "mozzartbet",
+    ) == []

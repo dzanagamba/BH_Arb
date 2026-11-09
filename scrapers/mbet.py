@@ -12,7 +12,7 @@ import logging
 from datetime import UTC, datetime, timedelta
 
 from engine import sports
-from engine.market_registry import MARKET_REGISTRY, record_unmapped, registered_spec
+from engine.market_registry import lookup_type, record_unmapped, registered_spec
 from engine.structural_drift import observe
 from models.schemas import Market, MarketType, Match, OddsValue
 from scrapers.base import fetch_pages
@@ -395,7 +395,7 @@ def _resolve_mbet_live_market(odds_dict: dict) -> dict[str, list[OddsValue]]:
             "over_under_5_5": 5.5,
         }.get(market_key)
         spec = (
-            MARKET_REGISTRY.lookup_type(
+            lookup_type(
                 "mbet", "live", source_id, market_enum, line=line
             )
             if source_id is not None and market_enum is not None

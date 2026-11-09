@@ -8,7 +8,7 @@ Endpoint: GET https://sportapis.evlbet.com/SportsOfferApi/api/sport/offer/v3/mat
 import logging
 from datetime import UTC, datetime
 
-from engine.market_registry import MARKET_REGISTRY, record_unmapped, registered_spec
+from engine.market_registry import has_source_id, record_unmapped, registered_spec
 from engine.structural_drift import observe
 from models.schemas import Market, MarketType, Match, OddsValue
 from scrapers.base import fetch_pages
@@ -138,8 +138,7 @@ class EvlbetScraper:
             or _DEFAULT_BASIC_OFFER_ID
         )
         if basic_offer.get("HasSbv") or basic_offer.get("Sbv") is not None:
-            known = getattr(MARKET_REGISTRY, "has_source_id", None)
-            if known is None or not known("evlbet", "prematch", source_id):
+            if not has_source_id("evlbet", "prematch", source_id):
                 record_unmapped("evlbet", source_id)
             return None
         spec = _evlbet_registered_spec("prematch", source_id, MarketType.MATCH_RESULT)

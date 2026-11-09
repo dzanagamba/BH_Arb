@@ -170,7 +170,7 @@ do not copy stale numbers here.
 | M3-2 | Move the deep-link store to `engine/` | Done | — | operator |
 | M3-3 | One link-settled predicate | Done | — | operator |
 | M3-4 | Unify datetime and SQLite helpers | Done | — | operator |
-| M3-5 | Route registry lookups through `registered_spec()` | Not started | — | operator |
+| M3-5 | Route registry lookups through `registered_spec()` | Done | — | operator |
 | M3-6 | Move `pairing_audit` and verifier into `server/` | Not started | — | operator |
 | M4-1 | Add a resolved constraints/lock file | Not started | — | operator |
 | M4-2 | Docker Chromium check and image CVE scan | Not started | — | operator |
@@ -2916,17 +2916,73 @@ Acceptance (written before coding, 2026-11-09):
 
 ### M3-5 Route registry lookups through `registered_spec()`
 
-Status: Not started
+Status: Done
 
 Gate: operator
+
+**Decision (2026-11-09, operator: continue after M3-4).** The registry had two
+problems, and both come from importing the singleton by name:
+
+* `scrapers/wwin.py`, `scrapers/maxbet.py`, `scrapers/mbet.py`,
+  `scrapers/evlbet.py`, `scrapers/mozzartbet.py`,
+  `engine/admissibility.py` and `scripts/capture_market_fixtures.py` did
+  `from engine.market_registry import MARKET_REGISTRY` and then called methods on
+  their own binding. That binding is captured at import time, so the test seam
+  that replaces `engine.market_registry.MARKET_REGISTRY` never reached those
+  modules; the fake sat unused while the parser queried the real registry.
+* The lookups that only need a spec repeated the unmapped-recording logic or
+  skipped it, so a parser could be silent about an unknown ID.
+
+So `engine/market_registry.py` gains module-level accessors — `registry()`,
+`has_source_id()`, `specs_for()`, `lookup_type()` and `ids_for()` — that read the
+singleton at call time; `registered_spec()` keeps its unmapped-recording
+behaviour and now resolves through `registry()` too. Every caller moves onto
+them; no module outside `engine/market_registry.py` names `MARKET_REGISTRY`.
+`mbet`, `mozzartbet` and the fixture capture use `lookup_type()` rather than
+`registered_spec()` where they previously did a raw lookup without recording an
+unmapped ID, so diagnostics do not gain new entries from this refactor.
+
+The test seam stays "replace the module global"; the difference is that the
+global is now the object every lookup resolves, not one of several import-time
+copies. A test replaces it after the adapter modules are imported and asserts
+that nsoft, mbet, mozzartbet, wwin, maxbet and admissibility all follow it.
 
 Why / what: Route the remaining direct `MARKET_REGISTRY` lookups through
 `registered_spec()` (or an accessor) and make the registry test seam patch the
 object, not only the module global.
 
-Acceptance:
-- [x] Operator approval recorded here.
-- [x] Acceptance criteria written here before coding.
+**Outcome (2026-11-09).** `engine/market_registry.py` now exposes
+`registry()`, `has_source_id()`, `specs_for()`, `lookup_type()` and `ids_for()`,
+all resolving `MARKET_REGISTRY` at call time; `registered_spec()` uses the same
+resolution and keeps the `has_source_id` fallback. Every direct singleton import
+moved: `engine/admissibility.py`, `scrapers/{wwin,maxbet,mbet,evlbet,mozzartbet}.py`,
+`scrapers/common._nsoft_registry` and `scripts/capture_market_fixtures.py`.
+**Zero** modules outside `engine/market_registry.py` name `MARKET_REGISTRY` any
+more. `mbet`, `mozzartbet` and the capture script use the raw `lookup_type()`
+accessor where they previously looked up without recording unmapped IDs, so
+diagnostics did not gain entries. Two tests were added to
+`tests/test_market_registry.py`: one checks every accessor follows a replaced
+global, and one replaces the registry *after* the adapters are imported and
+proves `common.parse_nsoft_bets`, `mbet`, `mozzartbet`, `wwin`, `maxbet` and
+admissibility all see the fake — the seam that used to miss import-time copies.
+Full suite **2,363 passed, 12 skipped** (17 snapshots) in 112.94 s; ruff and
+mypy (285 files) clean; market doc, fixture and admissibility checks green. No
+registry row, mapping or parser verdict changed.
+
+Acceptance (written before coding, 2026-11-09):
+- [x] `engine.market_registry` exposes `registry()`, `has_source_id()`,
+      `specs_for()`, `lookup_type()` and `ids_for()`, each resolving
+      `MARKET_REGISTRY` at call time.
+- [x] `registered_spec()` uses the same resolution and keeps its
+      `has_source_id` fallback for fakes that lack it.
+- [x] No module outside `engine/market_registry.py` imports or calls
+      `MARKET_REGISTRY`.
+- [x] A test replaces `MARKET_REGISTRY` after the adapter modules load and
+      proves nsoft/common, mbet, mozzartbet, wwin, maxbet and admissibility all
+      use the replacement.
+- [x] No registry row, market mapping, unmapped-recording behaviour or parser
+      verdict changes; the full suite and generated-doc check pass.
+
 
 ### M3-6 Move `pairing_audit` and verifier into `server/`
 
@@ -3401,3 +3457,4 @@ Useful starting points:
 | 2026-11-09 | M3-2 | Done | Operator: continue with M3-2. The declaration store moved from `scrapers/common.py` to **`engine/deeplinks.py`** (317 lines): path, cache, mtime/size reload, provenance, `supports_event_id`/`declares_no_event_id`/`declares_route_pattern_verified`, `declaration_verified_at`, `declaration_audit`, `effective_deeplink_declarations`, `deeplink_declaration_source` and `build_event_url`; semantics (fail-safe parse, synthetic-cache seam, TTLs) unchanged. The other engine→scrapers edges were the AH label helpers, so **`engine/ah_labels.py`** (49 lines) now owns them and `scrapers.common` re-exports them for `mbet`/`sportplus` and the tests. `scrapers/common.py`: **986 → 657 lines**. Certainty, matcher and arbitrage import from engine only; `tests/test_layering.py` proves by subprocess that importing those three loads no `scrapers` module and by AST that no engine source imports scrapers even inside a function, and that `scrapers.common` no longer exposes the store. `server/api.py`, `scripts/verify_deeplinks.py`, `scripts/audit_deeplinks.py`, `mdshop`/`maxbet`/`admiralbet`, tests and `conftest`'s cache-reset fixture all read the new modules. `AGENTS.md` documents the one-way dependency. `pytest`: 2323 passed, 12 skipped (17 snapshots) in 149.41 s; ruff clean; mypy 281 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No live scan; no declaration value or trust rule changed. |
 | 2026-11-09 | M3-3 | Done | Operator: continue with M3-3. `engine.deeplinks.settle_link()` now answers "is this leg's per-event link settled?" once for all three callers, returning `LinkSettlement(settled, reason)`. The gate passes the match's `deep_link_verified` flag; the cache restore passes a fresh store record keyed `bookmaker|event_id` (never the cached flag, which outlives its proof); `_unverified_link_count` passes the flag and keeps its event-id scope. Removed the duplicated four-case branches from `engine/certainty.py::_link_evidence` and `server/api.py::_restorable_match_groups`/`_unverified_link_count`. New `tests/test_link_settlement.py` runs ten cases (proof, route pattern, declares-no-route ±id, declared-unproven ±capture, silence with id/url/nothing, stale store proof) through the predicate, gate, restore and counter and asserts agreement, plus a stale-proof restore rejection. `pytest`: 2354 passed, 12 skipped (17 snapshots) in 115.83 s; ruff clean; mypy 282 files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No trust rule, declaration, TTL or cache format changed. |
 | 2026-11-09 | M3-4 | Done | Operator: continue with M3-4. Added **`server/sqlite_store.py`** as the one connection path for the shared `cache/bh_arb.sqlite3`: `connect()` sets WAL + `synchronous=NORMAL`, `connect_readonly()` sets no pragmas and cannot create the file. `Storage`, `BetStore`, `PaperStore` and `_readonly_connection` in maintenance now delegate, ending the split where only `Storage` set NORMAL and the other two ran FULL. Added **`server/timeutil.py`** with `utcnow()`, `naive_utc()`, `iso_now()` and `iso_seconds()`; removed the `_now`/`_now_iso`/`_iso`/`_naive_utc` copies and all 41 inline `datetime.now(UTC).replace(tzinfo=None)` expressions under `server/` (0 remain outside the helper). Stored timestamp shapes and precisions unchanged. New `tests/test_storage_policy.py` (7 tests) pins WAL+NORMAL on all three stores, the read-only no-create/no-write rule, the clock helpers and a shared-file round trip. `docs/STORAGE.md` and `AGENTS.md` document the helpers. `pytest`: 2361 passed, 12 skipped (17 snapshots) in 113.89 s; ruff clean; mypy 285 files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No schema, cache format or retention rule changed. |
+| 2026-11-09 | M3-5 | Done | Operator: continue with M3-5. Added call-time registry accessors to `engine/market_registry.py`: `registry()`, `has_source_id()`, `specs_for()`, `lookup_type()`, `ids_for()`; `registered_spec()` resolves through them and keeps its `has_source_id` fallback. Removed every direct `from engine.market_registry import MARKET_REGISTRY` and method call from `engine/admissibility.py`, `scrapers/{wwin,maxbet,mbet,evlbet,mozzartbet}.py`, `scrapers/common._nsoft_registry` and `scripts/capture_market_fixtures.py`; 0 modules outside the registry now name the singleton. Raw lookups (mbet live, mozzartbet hardcoded ids, fixture capture) use `lookup_type()` so unmapped diagnostics do not change. Two tests in `tests/test_market_registry.py` prove every accessor follows a replaced global and that a registry replaced AFTER the adapters import is seen by common/nsoft, mbet, mozzartbet, wwin, maxbet and admissibility. `pytest`: 2363 passed, 12 skipped (17 snapshots) in 112.94 s; ruff clean; mypy 285 files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No registry row, mapping or parser verdict changed. |

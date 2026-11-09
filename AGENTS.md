@@ -92,7 +92,10 @@ them on every push.
 - `engine.market_consensus` owns complete-market, devig and outlier math.
   Operator scripts import it; do not reintroduce local market tables.
 - `engine.market_registry.registered_spec()` is the shared per-book resolver.
-  It keeps the `has_source_id` seam used by test fakes.
+  It keeps the `has_source_id` seam used by test fakes. Other registry reads go
+  through the module accessors `registry()`, `has_source_id()`, `specs_for()`,
+  `lookup_type()` and `ids_for()`; never import `MARKET_REGISTRY` into another
+  module, or the test seam that replaces the module global will miss it.
 - `engine.deeplinks` owns the deep-link declaration store the certainty gate
   reads (`config/bookmaker_deeplinks.json`, its cache and provenance, the
   `supports_event_id: false` predicate and `build_event_url`).

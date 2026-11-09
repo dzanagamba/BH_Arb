@@ -34,7 +34,7 @@ from contextlib import AsyncExitStack
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from engine.market_registry import MARKET_REGISTRY, record_unmapped, registered_spec
+from engine.market_registry import ids_for, record_unmapped, registered_spec
 from engine.structural_drift import observe
 from models.schemas import Market, MarketType, Match, OddsValue
 from scrapers.base import browser_session, goto, measured_api_get, settle
@@ -98,7 +98,7 @@ def _request_market_ids(mode: str) -> list[int | str]:
         MarketType.OVER_UNDER_4_5,
         MarketType.OVER_UNDER_5_5,
     ):
-        ids.update(MARKET_REGISTRY.ids_for("wwin", mode, market_type))
+        ids.update(ids_for("wwin", mode, market_type))
     ordered: list[int | str] = [sid for sid in (95, 6, 3, 11, 2) if sid in ids]
     known = set(ordered)
     ordered.extend(sorted((sid for sid in ids if sid not in known), key=str))

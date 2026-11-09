@@ -10,7 +10,7 @@ import time
 from contextlib import AsyncExitStack
 from datetime import UTC, datetime
 
-from engine.market_registry import MARKET_REGISTRY, record_unmapped, registered_spec
+from engine.market_registry import lookup_type, record_unmapped, registered_spec
 from engine.structural_drift import observe
 from models.schemas import Market, MarketType, Match, OddsValue
 from scrapers.base import (
@@ -287,7 +287,7 @@ def _parse_markets(
                 record_unmapped(bookmaker, gid, context=f"{gshort} {gname}")
 
     # Only accept 1X2 when the registered minimum and label set are satisfied.
-    mr_spec = MARKET_REGISTRY.lookup_type(bookmaker, mode, 1, MarketType.MATCH_RESULT)
+    mr_spec = lookup_type(bookmaker, mode, 1, MarketType.MATCH_RESULT)
     if (
         mr_spec is not None
         and len({o.label for o in mr_odds}) >= mr_spec.min_legs
@@ -297,7 +297,7 @@ def _parse_markets(
             Market(market_type=MarketType.MATCH_RESULT, odds=mr_odds, source_id="1")
         )
 
-    dc_spec = MARKET_REGISTRY.lookup_type(bookmaker, mode, 2, MarketType.DOUBLE_CHANCE)
+    dc_spec = lookup_type(bookmaker, mode, 2, MarketType.DOUBLE_CHANCE)
     if (
         dc_spec is not None
         and len({o.label for o in dc_odds}) >= dc_spec.min_legs
@@ -307,7 +307,7 @@ def _parse_markets(
             Market(market_type=MarketType.DOUBLE_CHANCE, odds=dc_odds, source_id="2")
         )
 
-    btts_spec = MARKET_REGISTRY.lookup_type(bookmaker, mode, 130, MarketType.BTTS)
+    btts_spec = lookup_type(bookmaker, mode, 130, MarketType.BTTS)
     btts_odds = [
         OddsValue(label=label, value=btts_dict[label])
         for label in ("GG", "NG")
@@ -343,7 +343,7 @@ def _parse_markets(
         over_label = f"Over {thresh}"
         under_label = f"Under {thresh}"
         market_type = mt_map[thresh]
-        spec = MARKET_REGISTRY.lookup_type(
+        spec = lookup_type(
             bookmaker, mode, 3, market_type, line=float(thresh)
         )
         ou_odds = [

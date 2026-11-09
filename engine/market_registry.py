@@ -324,6 +324,51 @@ class MarketRegistry:
         return set(self._by_type.get((bookmaker, mode, market_type.value), set()))
 
 
+def registry() -> MarketRegistry:
+    """Return the shared registry, resolved at call time.
+
+    Every lookup goes through this accessor or one of the helpers below rather
+    than importing ``MARKET_REGISTRY`` into another module. An imported name is a
+    second binding that captures the object at import time, so the test seam that
+    replaces ``engine.market_registry.MARKET_REGISTRY`` could not reach it: the
+    parser kept querying the original registry while the test's fake sat unused.
+    Resolving here makes one replacement cover every parser.
+    """
+    return MARKET_REGISTRY
+
+
+def has_source_id(bookmaker: str, mode: str, source_id: int | str) -> bool:
+    """Return whether an ID is registered for this bookmaker/mode."""
+    return registry().has_source_id(bookmaker, mode, source_id)
+
+
+def specs_for(
+    bookmaker: str, mode: str, source_id: int | str
+) -> list[MarketSpec]:
+    """Return all registry specs associated with a source ID."""
+    return registry().specs_for(bookmaker, mode, source_id)
+
+
+def lookup_type(
+    bookmaker: str,
+    mode: str,
+    source_id: int | str,
+    market_type: MarketType,
+    line: float | None = None,
+) -> MarketSpec | None:
+    """Look up a source ID within a specific market type."""
+    return registry().lookup_type(
+        bookmaker, mode, source_id, market_type, line=line
+    )
+
+
+def ids_for(
+    bookmaker: str, mode: str, market_type: MarketType
+) -> set[int | str]:
+    """Return the source IDs registered for one market type."""
+    return registry().ids_for(bookmaker, mode, market_type)
+
+
 def registered_spec(
     bookmaker: str,
     mode: str,
@@ -337,9 +382,10 @@ def registered_spec(
     does not offer this market, which is not a coverage failure. Only an ID the
     registry has never seen is counted as unmapped.
     """
-    spec = MARKET_REGISTRY.lookup_type(bookmaker, mode, source_id, market_type, line=line)
+    current = registry()
+    spec = current.lookup_type(bookmaker, mode, source_id, market_type, line=line)
     if spec is None:
-        known = getattr(MARKET_REGISTRY, "has_source_id", None)
+        known = getattr(current, "has_source_id", None)
         if known is None or not known(bookmaker, mode, source_id):
             record_unmapped(bookmaker, source_id)
     return spec

@@ -76,14 +76,14 @@ def _active(odds: Any) -> bool:
 
 def _registry_rows(bookmaker: str, mode: str) -> list[str]:
     """Core market types the registry declares for this bookmaker/mode."""
-    from engine.market_registry import MARKET_REGISTRY
+    from engine.market_registry import ids_for
     from models.schemas import MarketType
 
     return [
         market_type.value
         for market_type in MarketType
         if market_type.value in CORE_MARKETS
-        and MARKET_REGISTRY.ids_for(bookmaker, mode, market_type)
+        and ids_for(bookmaker, mode, market_type)
     ]
 
 
@@ -175,10 +175,10 @@ def _trim_nsoft_bet(bet: dict[str, Any]) -> dict[str, Any]:
 
 
 def _nsoft_spec(bookmaker: str, mode: str, bet_id: int, market_type_name: str):
-    from engine.market_registry import MARKET_REGISTRY
+    from engine.market_registry import lookup_type
     from models.schemas import MarketType
 
-    return MARKET_REGISTRY.lookup_type(
+    return lookup_type(
         bookmaker, mode, bet_id, MarketType[market_type_name]
     )
 

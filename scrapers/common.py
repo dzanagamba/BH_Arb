@@ -321,9 +321,9 @@ NSOFT_SPORT_BET_TYPES_BY_BOOK: dict[tuple[str, str], dict[int, tuple[MarketType,
 # Registry loading is lazy so importing shared scraper helpers remains cheap
 # for callers that do not parse an NSoft payload.
 def _nsoft_registry() -> MarketRegistry:
-    from engine.market_registry import MARKET_REGISTRY
+    from engine.market_registry import registry
 
-    return MARKET_REGISTRY
+    return registry()
 
 
 def _nsoft_registered_spec(

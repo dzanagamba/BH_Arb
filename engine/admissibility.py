@@ -30,7 +30,7 @@ from config.settings import (
     EXPERIMENTAL_MARKETS,
 )
 from engine import sports
-from engine.market_registry import MARKET_REGISTRY
+from engine.market_registry import ids_for
 from models.schemas import MarketType
 
 SCHEMA_VERSION = "1"
@@ -229,12 +229,12 @@ def _football_markets(
         declared_prematch = sorted(
             book
             for book in _ENABLED_BOOKS
-            if MARKET_REGISTRY.ids_for(book, "prematch", market_type)
+            if ids_for(book, "prematch", market_type)
         )
         declared_live = sorted(
             book
             for book in _ENABLED_BOOKS
-            if MARKET_REGISTRY.ids_for(book, "live", market_type)
+            if ids_for(book, "live", market_type)
         )
         if market in MEASURED_FOOTBALL_LINES:
             evidence = dict(lines_evidence)
@@ -290,7 +290,7 @@ def _football_sport_entry(
         families: dict[str, int] = {}
         for market in markets:
             market_type = MarketType(market)
-            count = len(MARKET_REGISTRY.ids_for(book, "prematch", market_type))
+            count = len(ids_for(book, "prematch", market_type))
             if count:
                 families[market] = count
         if families:

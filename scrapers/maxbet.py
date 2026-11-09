@@ -27,7 +27,12 @@ from urllib.parse import urlencode
 
 from engine import sports
 from engine.deeplinks import build_event_url
-from engine.market_registry import MARKET_REGISTRY, MarketSpec, record_unmapped
+from engine.market_registry import (
+    MarketSpec,
+    has_source_id,
+    record_unmapped,
+    specs_for,
+)
 from engine.structural_drift import observe
 from models.schemas import Market, Match, OddsValue
 from scrapers.common import betradar_id, parse_dt, qualify_league
@@ -88,9 +93,9 @@ LIVE_STATUS = 3
 
 def _spec_for(mode: str, odd_type_id: int, line: float | None) -> MarketSpec | None:
     """The registry entry for an odd type (and, for totals, its exact line)."""
-    specs = MARKET_REGISTRY.specs_for(BOOKMAKER_ID, mode, odd_type_id)
+    specs = specs_for(BOOKMAKER_ID, mode, odd_type_id)
     if not specs:
-        if not MARKET_REGISTRY.has_source_id(BOOKMAKER_ID, mode, odd_type_id):
+        if not has_source_id(BOOKMAKER_ID, mode, odd_type_id):
             record_unmapped(BOOKMAKER_ID, odd_type_id)
         return None
     for spec in specs:
