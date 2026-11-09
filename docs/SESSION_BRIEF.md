@@ -12,11 +12,12 @@ SR7-1 and SR7-2 are done.
 feed). Every other `Not started` row is `Gate: operator`; the roadmap is the
 single task list in `ROADMAP.md`, N2-4 stays deferred and P1-6 stays waived
 until the operator says otherwise.
-**Last task commit:** `493e3a3` — "pin workflow actions and the base image
-(M4-3)", pushed to `origin/main` on 2026-11-09. Before it, `14ae9f2` adds the
-Docker Chromium launch and image CVE scan (M4-2), `b854b25` installs Docker/CI/
-SBOM from resolved locks (M4-1), `022c569` moves the pairing audit and verifier
-into server (M3-6), `cac7507` resolves the market registry through accessors
+**Last task commit:** `3ea80f3` — "plan the remaining dependency upgrades
+(M4-4)", pushed to `origin/main` on 2026-11-09. Before it, `493e3a3` pins the
+workflow actions and the base image (M4-3), `14ae9f2` adds the Docker Chromium
+launch and image CVE scan (M4-2), `b854b25` installs Docker/CI/SBOM from
+resolved locks (M4-1), `022c569` moves the pairing audit and verifier into
+server (M3-6), `cac7507` resolves the market registry through accessors
 (M3-5), `31f3ef6` unifies the SQLite connections and the server clock (M3-4),
 `7b49156` shares one link-settled predicate (M3-3), `42297ee` moves the
 deep-link store and AH labels into engine (M3-2), `7e982eb` extracts the
