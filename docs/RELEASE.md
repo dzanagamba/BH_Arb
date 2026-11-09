@@ -92,6 +92,12 @@ so a dependency-only PR that does not touch a deployment input will not pay the
 Chromium build cost; run `Docker` manually when the update changes Playwright or
 the runtime requirements.
 
+The staged plan for the remaining deliberate moves (FastAPI 0.162, MyPy 2.x,
+Ruff 0.17 and the dev-only `httpx2` TestClient) is
+[`docs/DEPENDENCY_UPGRADES.md`](DEPENDENCY_UPGRADES.md): one upgrade per commit,
+each with its own acceptance and rollback, and no change to the trust rules or
+data formats.
+
 ## Notes and limits
 
 - The SBOM is an inventory of the runtime environment `requirements.txt`
