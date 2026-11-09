@@ -12,8 +12,9 @@ SR7-1 and SR7-2 are done.
 feed). Every other `Not started` row is `Gate: operator`; the roadmap is the
 single task list in `ROADMAP.md`, N2-4 stays deferred and P1-6 stays waived
 until the operator says otherwise.
-**Last task commit:** `cac7507` — "resolve the market registry through accessors
-(M3-5)", pushed to `origin/main` on 2026-11-09. Before it, `31f3ef6` unifies the
+**Last task commit:** `022c569` — "move the pairing audit and verifier into
+server (M3-6)", pushed to `origin/main` on 2026-11-09. Before it, `cac7507`
+resolves the market registry through accessors (M3-5), `31f3ef6` unifies the
 SQLite connections and the server clock (M3-4), `7b49156` shares one link-settled
 predicate (M3-3), `42297ee` moves the deep-link store and AH labels into engine
 (M3-2), `7e982eb` extracts the JSON-store layer
