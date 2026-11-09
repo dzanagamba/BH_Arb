@@ -18,12 +18,15 @@ import json
 import sqlite3
 import uuid
 from collections import Counter
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 from engine.closing_line import capture_closing as capture_closing_lines
 from server.csv_export import csv_cell as _csv_cell
+from server.sqlite_store import connect as _sqlite_connect
+from server.sqlite_store import connect_readonly as _sqlite_connect_readonly
+from server.timeutil import iso_now, utcnow
 
 BANKROLL_START = 1000.0
 
@@ -34,17 +37,10 @@ class BetStore:
         self.bankroll_start = bankroll_start
 
     def _connect(self) -> sqlite3.Connection:
-        Path(self.path).parent.mkdir(parents=True, exist_ok=True)
-        connection = sqlite3.connect(self.path, timeout=30)
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA journal_mode=WAL")
-        return connection
+        return _sqlite_connect(self.path)
 
     def _connect_readonly(self) -> sqlite3.Connection:
-        uri = f"file:{Path(self.path).resolve().as_posix()}?mode=ro"
-        connection = sqlite3.connect(uri, uri=True, timeout=30)
-        connection.row_factory = sqlite3.Row
-        return connection
+        return _sqlite_connect_readonly(self.path)
 
     def initialize(self) -> None:
         with self._connect() as connection:
@@ -64,7 +60,7 @@ class BetStore:
 
     def create(self, payload: dict[str, Any]) -> dict[str, Any]:
         bet_id = str(uuid.uuid4())[:12]
-        now = datetime.now(UTC).replace(tzinfo=None).isoformat(timespec="seconds")
+        now = iso_now()
         stored = {
             **payload,
             "id": bet_id,
@@ -90,7 +86,7 @@ class BetStore:
         return json.loads(row["payload"]) if row else None
 
     def list_bets(self, *, days: int = 30, limit: int = 200) -> list[dict[str, Any]]:
-        cutoff = (datetime.now(UTC).replace(tzinfo=None) - timedelta(days=days)).isoformat()
+        cutoff = (utcnow() - timedelta(days=days)).isoformat()
         with self._connect() as connection:
             rows = connection.execute(
                 "SELECT payload FROM bets WHERE created_at >= ? ORDER BY created_at DESC LIMIT ?",
@@ -172,7 +168,7 @@ class BetStore:
                     payout += stake
                 leg["result"] = result.get("result")
             profit = round(payout - staked, 2)
-            now = datetime.now(UTC).replace(tzinfo=None).isoformat(timespec="seconds")
+            now = iso_now()
             payload.update(
                 {
                     "status": "settled",
@@ -196,7 +192,7 @@ class BetStore:
         A manual entry is authoritative and labelled ``manual``; a later scan
         never overwrites it. It also clears any earlier capture reason.
         """
-        now = datetime.now(UTC).replace(tzinfo=None).isoformat(timespec="seconds")
+        now = iso_now()
         with self._connect() as connection:
             row = self._row(connection, bet_id)
             if row is None:

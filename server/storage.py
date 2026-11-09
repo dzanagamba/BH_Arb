@@ -18,6 +18,10 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from server.sqlite_store import connect as _sqlite_connect
+from server.sqlite_store import connect_readonly as _sqlite_connect_readonly
+from server.timeutil import iso_now, utcnow
+
 SCHEMA_VERSION = 1
 
 
@@ -26,12 +30,7 @@ class Storage:
         self.path = path
 
     def _connect(self) -> sqlite3.Connection:
-        Path(self.path).parent.mkdir(parents=True, exist_ok=True)
-        connection = sqlite3.connect(self.path, timeout=30)
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA journal_mode=WAL")
-        connection.execute("PRAGMA synchronous=NORMAL")
-        return connection
+        return _sqlite_connect(self.path)
 
     def _connect_readonly(self) -> sqlite3.Connection:
         """Open without creating, migrating or touching WAL state.
@@ -39,10 +38,7 @@ class Storage:
         A dry run must be able to count what it *would* prune without changing
         the database file, so it never takes the write path above.
         """
-        uri = f"file:{Path(self.path).resolve().as_posix()}?mode=ro"
-        connection = sqlite3.connect(uri, uri=True, timeout=30)
-        connection.row_factory = sqlite3.Row
-        return connection
+        return _sqlite_connect_readonly(self.path)
 
     def initialize(self) -> None:
         with self._connect() as connection:
@@ -184,7 +180,7 @@ class Storage:
         clauses: list[str] = []
         params: list[Any] = []
         if days is not None:
-            cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=days)
+            cutoff = utcnow() - timedelta(days=days)
             clauses.append("scan_time >= ?")
             params.append(cutoff.isoformat())
         if mode:
@@ -231,7 +227,7 @@ class Storage:
                 candidate_id,
                 decision,
                 premise,
-                datetime.now(UTC).replace(tzinfo=None).isoformat(timespec="seconds"),
+                iso_now(),
             ),
         )
 
@@ -287,7 +283,7 @@ class Storage:
         """Delete scan rows older than ``days``; a dry run only counts them."""
         if not Path(self.path).exists():
             return 0
-        cutoff = (datetime.now(UTC).replace(tzinfo=None) - timedelta(days=days)).isoformat()
+        cutoff = (utcnow() - timedelta(days=days)).isoformat()
         try:
             if dry_run:
                 with self._connect_readonly() as connection:
@@ -308,7 +304,7 @@ class Storage:
         """Delete link-sweep rows older than ``days``; a dry run only counts."""
         if not Path(self.path).exists():
             return 0
-        cutoff = (datetime.now(UTC).replace(tzinfo=None) - timedelta(days=days)).isoformat()
+        cutoff = (utcnow() - timedelta(days=days)).isoformat()
         try:
             if dry_run:
                 with self._connect_readonly() as connection:

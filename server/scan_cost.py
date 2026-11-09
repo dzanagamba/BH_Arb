@@ -9,9 +9,11 @@ and durations the wrapper recorded.
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
+
+from server.timeutil import naive_utc, utcnow
 
 FAILURE_OUTCOMES = frozenset({"parse_error", "blocked"})
 
@@ -37,7 +39,7 @@ def _scan_time(entry: dict[str, Any]) -> datetime | None:
     except ValueError:
         return None
     if parsed.tzinfo is not None:
-        return parsed.astimezone(UTC).replace(tzinfo=None)
+        return naive_utc(parsed)
     return parsed
 
 
@@ -140,7 +142,7 @@ def aggregate(
     now: datetime | None = None,
 ) -> dict[str, Any]:
     """Aggregate the per-book table over a date window."""
-    current = now or datetime.now(UTC).replace(tzinfo=None)
+    current = now or utcnow()
     cutoff = current - timedelta(days=max(0, days))
     per_book: dict[str, dict[str, Any]] = {}
     scans_by_mode: dict[str, int] = {}

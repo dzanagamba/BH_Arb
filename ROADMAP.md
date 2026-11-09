@@ -169,7 +169,7 @@ do not copy stale numbers here.
 | M3-1 | Decompose `server/api.py` | Done | — | operator |
 | M3-2 | Move the deep-link store to `engine/` | Done | — | operator |
 | M3-3 | One link-settled predicate | Done | — | operator |
-| M3-4 | Unify datetime and SQLite helpers | Not started | — | operator |
+| M3-4 | Unify datetime and SQLite helpers | Done | — | operator |
 | M3-5 | Route registry lookups through `registered_spec()` | Not started | — | operator |
 | M3-6 | Move `pairing_audit` and verifier into `server/` | Not started | — | operator |
 | M4-1 | Add a resolved constraints/lock file | Not started | — | operator |
@@ -2853,16 +2853,66 @@ Acceptance (written before coding, 2026-11-09):
 
 ### M3-4 Unify datetime and SQLite helpers
 
-Status: Not started
+Status: Done
 
 Gate: operator
+
+**Decision (2026-11-09, operator: continue after M3-3).** Two shared modules,
+both under `server/` because they describe runtime state, not engine logic:
+
+* `server/sqlite_store.py` owns the connection policy for the one shared
+  `cache/bh_arb.sqlite3`. `Storage`, `BetStore`, `PaperStore` and the
+  maintenance runner all spelled the connection out; all set WAL, but only
+  `Storage` set `synchronous=NORMAL`, so the same file ran under two durability
+  policies depending on which store opened it. The policy is **WAL +
+  `synchronous=NORMAL`**, which `docs/STORAGE.md` already documents: durable
+  across an application crash, not a power-loss guarantee, and appropriate for
+  one scanner process whose data is reproducible from feeds. Read-only opens
+  stay pragma-free so a dry run cannot change the file.
+* `server/timeutil.py` owns the clock and the written timestamp shape: naive UTC
+  from `utcnow()`, normalization from `naive_utc()`, second-precision strings
+  from `iso_now()` / `iso_seconds()`. The duplicated `_now`, `_now_iso`, `_iso`
+  and `_naive_utc` helpers and 41 inline `datetime.now(UTC).replace(...)`
+  expressions in `server/` move onto it.
+
+`engine/` keeps its own clock expressions: it is the pure package and must not
+import `server`. This task is about the server runtime stores and their one
+shared database, not about relocating the engine's timestamps.
 
 Why / what: Unify the repeated datetime and SQLite connection helpers; decide one
 `synchronous` policy for the shared database file.
 
-Acceptance:
-- [x] Operator approval recorded here.
-- [x] Acceptance criteria written here before coding.
+**Outcome (2026-11-09).** `server/sqlite_store.py` (44 lines) is the one
+connection path for `cache/bh_arb.sqlite3`: `connect()` sets WAL +
+`synchronous=NORMAL`, `connect_readonly()` opens `mode=ro` without pragmas and
+never creates the file. `Storage`, `BetStore`, `PaperStore` and maintenance
+delegate to it, so the shared file no longer runs under FULL for two stores and
+NORMAL for one. `server/timeutil.py` (40 lines) owns `utcnow()`, `naive_utc()`,
+`iso_now()` and `iso_seconds()`; the `_now`/`_now_iso`/`_iso`/`_naive_utc`
+copies are gone and **zero** `datetime.now(UTC).replace(tzinfo=None)` expressions
+remain under `server/` outside the helper. Stored shapes are unchanged (naive
+UTC, same precisions). `tests/test_storage_policy.py` (7 tests) pins WAL +
+NORMAL for all three stores, proves a read-only open neither creates the file
+nor writes, checks the clock/normalization helpers, and round-trips a bet and a
+meta row through the shared file. `docs/STORAGE.md` and `AGENTS.md` name the
+shared helpers. Full suite **2,361 passed, 12 skipped** (17 snapshots) in
+113.89 s; ruff and mypy (285 files) clean; market doc, fixtures and admissibility
+checks green.
+
+Acceptance (written before coding, 2026-11-09):
+- [x] `server/sqlite_store.connect()` is the only read-write connection path for
+      the shared database and sets WAL + `synchronous=NORMAL`;
+      `connect_readonly()` never creates or mutates the file.
+- [x] `Storage`, `BetStore`, `PaperStore` and maintenance open the database
+      through it, and a test pins the pragmas for every store.
+- [x] `server/timeutil` provides `utcnow`, `naive_utc`, `iso_now` and
+      `iso_seconds`; the `_now`/`_now_iso`/`_iso`/`_naive_utc` copies are gone
+      and no server module hand-writes naive-UTC `now`.
+- [x] Stored timestamp shapes and precisions are unchanged; a bet and a paper
+      row still parse as naive UTC.
+- [x] `docs/STORAGE.md` and `AGENTS.md` name the shared helpers; the full suite,
+      ruff, mypy and the generated/fixture/admissibility checks pass.
+
 
 ### M3-5 Route registry lookups through `registered_spec()`
 
@@ -3350,3 +3400,4 @@ Useful starting points:
 | 2026-11-08 | M3-1 (stage 3) | Done | Operator: continue. New **`server/json_store.py`** (70 lines) owns the JSON-store layer: `atomic_write_json` (temp file + `os.replace`, the writer moved out of api) and `read_json` (missing/unreadable/malformed → `None`). Every JSON reader and writer in `server/api.py` now uses it: market/bookmaker toggles, allowlist, suppressed decisions and premises, both deep-link stores, the history export, opportunity metrics, feed integrity, stale price state, coverage budget, scan cost, the scan cache loaders and link sweeps. Shape validation, locks, TTL filtering and merge rules stay with each store's owner, so scan and deep-link semantics are unchanged. `server/api.py` **5,782 → 5,714 lines** (5,903 → 5,714 across M3-1) and no longer imports `json` or `tempfile`. New `tests/test_json_store.py`: compact output, readable default, whole replacement with no temp file, a failed write keeping the previous document, and the forgiving read; `tests/test_cache_serialization.py` and `tests/test_candidates_api.py` follow the moved writer. `pytest`: 2320 passed, 12 skipped (17 snapshots) in 117.95 s; ruff clean; mypy 279 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No live scan. |
 | 2026-11-09 | M3-2 | Done | Operator: continue with M3-2. The declaration store moved from `scrapers/common.py` to **`engine/deeplinks.py`** (317 lines): path, cache, mtime/size reload, provenance, `supports_event_id`/`declares_no_event_id`/`declares_route_pattern_verified`, `declaration_verified_at`, `declaration_audit`, `effective_deeplink_declarations`, `deeplink_declaration_source` and `build_event_url`; semantics (fail-safe parse, synthetic-cache seam, TTLs) unchanged. The other engine→scrapers edges were the AH label helpers, so **`engine/ah_labels.py`** (49 lines) now owns them and `scrapers.common` re-exports them for `mbet`/`sportplus` and the tests. `scrapers/common.py`: **986 → 657 lines**. Certainty, matcher and arbitrage import from engine only; `tests/test_layering.py` proves by subprocess that importing those three loads no `scrapers` module and by AST that no engine source imports scrapers even inside a function, and that `scrapers.common` no longer exposes the store. `server/api.py`, `scripts/verify_deeplinks.py`, `scripts/audit_deeplinks.py`, `mdshop`/`maxbet`/`admiralbet`, tests and `conftest`'s cache-reset fixture all read the new modules. `AGENTS.md` documents the one-way dependency. `pytest`: 2323 passed, 12 skipped (17 snapshots) in 149.41 s; ruff clean; mypy 281 source files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No live scan; no declaration value or trust rule changed. |
 | 2026-11-09 | M3-3 | Done | Operator: continue with M3-3. `engine.deeplinks.settle_link()` now answers "is this leg's per-event link settled?" once for all three callers, returning `LinkSettlement(settled, reason)`. The gate passes the match's `deep_link_verified` flag; the cache restore passes a fresh store record keyed `bookmaker|event_id` (never the cached flag, which outlives its proof); `_unverified_link_count` passes the flag and keeps its event-id scope. Removed the duplicated four-case branches from `engine/certainty.py::_link_evidence` and `server/api.py::_restorable_match_groups`/`_unverified_link_count`. New `tests/test_link_settlement.py` runs ten cases (proof, route pattern, declares-no-route ±id, declared-unproven ±capture, silence with id/url/nothing, stale store proof) through the predicate, gate, restore and counter and asserts agreement, plus a stale-proof restore rejection. `pytest`: 2354 passed, 12 skipped (17 snapshots) in 115.83 s; ruff clean; mypy 282 files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No trust rule, declaration, TTL or cache format changed. |
+| 2026-11-09 | M3-4 | Done | Operator: continue with M3-4. Added **`server/sqlite_store.py`** as the one connection path for the shared `cache/bh_arb.sqlite3`: `connect()` sets WAL + `synchronous=NORMAL`, `connect_readonly()` sets no pragmas and cannot create the file. `Storage`, `BetStore`, `PaperStore` and `_readonly_connection` in maintenance now delegate, ending the split where only `Storage` set NORMAL and the other two ran FULL. Added **`server/timeutil.py`** with `utcnow()`, `naive_utc()`, `iso_now()` and `iso_seconds()`; removed the `_now`/`_now_iso`/`_iso`/`_naive_utc` copies and all 41 inline `datetime.now(UTC).replace(tzinfo=None)` expressions under `server/` (0 remain outside the helper). Stored timestamp shapes and precisions unchanged. New `tests/test_storage_policy.py` (7 tests) pins WAL+NORMAL on all three stores, the read-only no-create/no-write rule, the clock helpers and a shared-file round trip. `docs/STORAGE.md` and `AGENTS.md` document the helpers. `pytest`: 2361 passed, 12 skipped (17 snapshots) in 113.89 s; ruff clean; mypy 285 files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No schema, cache format or retention rule changed. |

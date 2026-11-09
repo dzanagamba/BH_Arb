@@ -17,7 +17,6 @@ import os
 import secrets
 import threading
 import time
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -26,6 +25,7 @@ from config.settings import (
     AUTH_FAILURE_RATE_LIMIT,
     RATE_LIMIT_WINDOW_SECONDS,
 )
+from server.timeutil import iso_now
 
 SCOPES = {"read", "scan", "admin"}
 AUDIT_MAX = 500
@@ -52,10 +52,6 @@ def _hash(token: str, salt: str) -> str:
     return hashlib.pbkdf2_hmac(
         "sha256", token.encode("utf-8"), salt.encode("utf-8"), 200_000
     ).hex()
-
-
-def _now() -> str:
-    return datetime.now(UTC).replace(tzinfo=None).isoformat(timespec="seconds")
 
 
 class ApiKeyStore:
@@ -130,7 +126,7 @@ class ApiKeyStore:
             "salt": salt,
             "hash": _hash(token, salt),
             "scopes": scopes,
-            "created_at": _now(),
+            "created_at": iso_now(),
             "last_used_at": "",
             "revoked_at": "",
         }
@@ -193,7 +189,7 @@ class ApiKeyStore:
         last = self._last_used_write.get(key_id)
         if ttl > 0 and last is not None and now - last < ttl:
             return
-        record["last_used_at"] = _now()
+        record["last_used_at"] = iso_now()
         self._save(data)
         self._last_used_write[key_id] = now
 
@@ -215,7 +211,7 @@ class ApiKeyStore:
                 if isinstance(record, dict) and record.get("id") == key_id:
                     if record.get("revoked_at"):
                         return True
-                    record["revoked_at"] = _now()
+                    record["revoked_at"] = iso_now()
                     self._save(data)
                     self.invalidate()
                     self.audit("key_revoked", key_id, str(record.get("label") or ""))
@@ -237,7 +233,7 @@ class ApiKeyStore:
             data = self._load()
             data["audit"].append(
                 {
-                    "at": _now(),
+                    "at": iso_now(),
                     "event": event,
                     "key_id": key_id,
                     "detail": detail[:500],

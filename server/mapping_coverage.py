@@ -10,13 +10,13 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Sequence
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from engine import mapping_evidence
 from engine.mapping_evidence import MappingLedger
 from models.schemas import Match
+from server.timeutil import iso_now
 
 # Parsing the 60 MB evidence ledger for every diagnostics request is wasted
 # work when the file has not changed. Key the parsed ledger by path, mtime and
@@ -85,7 +85,7 @@ def build_coverage(
 
     return {
         "mode": mode,
-        "generated_at": datetime.now(UTC).replace(tzinfo=None).isoformat(timespec="seconds") + "Z",
+        "generated_at": iso_now() + "Z",
         "books": per_book,
         "groups": {
             "total": len(groups),

@@ -115,6 +115,10 @@ them on every push.
   the network. See `docs/HAR_REPLAY.md`.
 - `server/csv_export.csv_cell()` neutralises formula-leading cells in every CSV
   export. Use it rather than a local copy.
+- `server/sqlite_store.connect()` / `connect_readonly()` are the only SQLite
+  connection paths for `cache/bh_arb.sqlite3` (WAL + `synchronous=NORMAL`).
+  `server/timeutil` is the server clock: `utcnow()`, `naive_utc()`, `iso_now()`
+  and `iso_seconds()`; do not hand-write another naive-UTC `now`.
 - Keep `engine/__init__.py` and `scrapers/__init__.py` lazy. Import submodules
   directly (`from engine.matcher import MatchMatcher`) instead of re-exporting
   eagerly.

@@ -13,8 +13,14 @@ compatibility exports and the rollback path.
 | `decisions` | Candidate id, decision, premise, decided time. |
 | `link_sweeps` | Completed sweep reports (payload JSON) for later history queries. |
 
-SQLite runs in WAL mode with `synchronous=NORMAL`. Each call uses a short-lived
-connection; a scan's history append is one transaction.
+SQLite runs in WAL mode with `synchronous=NORMAL`. `server/sqlite_store.py` is
+the one connection helper: every store and the maintenance runner open this file
+through it, so the same database never runs under two durability policies. The
+trade is durability across an application crash, not a power-loss guarantee,
+which suits one scanner process whose data is reproducible from feeds. Read-only
+opens (`connect_readonly`) deliberately set no pragmas and do not create the
+file. Each call uses a short-lived connection; a scan's history append is one
+transaction.
 
 ## Migration
 
@@ -35,6 +41,12 @@ inserted rows must equal the JSON source counts.
 list. The dashboard's History tab still uses the default 30-day query.
 
 ## Persisted representations and their consumers (M2-5)
+
+Timestamps are naive UTC produced by `server/timeutil`: `utcnow()` for the
+clock, `naive_utc()` to normalize an aware value, and `iso_now()` /
+`iso_seconds()` for the written second-precision string. Do not hand-write
+`datetime.now(UTC).replace(tzinfo=None)` in `server/`; the one helper keeps the
+store shapes comparable.
 
 Runtime state is written for a machine, not a person. Every cache file except
 the two small human-inspectable stores is compact JSON (`indent=None`), because

@@ -201,6 +201,8 @@ from server.observability import (
 from server.paper import PaperStore
 from server.scan_cost import book_failure_rates
 from server.storage import Storage, default_storage_path
+from server.timeutil import naive_utc as _naive_utc
+from server.timeutil import utcnow
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -750,8 +752,8 @@ def _deep_link_record_is_fresh(record: dict | None, now: datetime | None = None)
     except ValueError:
         return False
     if checked_at.tzinfo is not None:
-        checked_at = checked_at.astimezone(UTC).replace(tzinfo=None)
-    reference = now or datetime.now(UTC).replace(tzinfo=None)
+        checked_at = _naive_utc(checked_at)
+    reference = now or utcnow()
     age = (reference - checked_at).total_seconds()
     return 0 <= age <= DEEP_LINK_VERIFICATION_TTL_SECONDS
 
@@ -784,7 +786,7 @@ def _record_deep_link_outcomes(mode: str, bookmaker: str, outcomes: list) -> Non
     check that errored is ignored: absence of evidence is not evidence of
     absence, so a timeout must never revoke a proof.
     """
-    now = datetime.now(UTC).replace(tzinfo=None).isoformat()
+    now = utcnow().isoformat()
     with _DEEP_LINK_LOCK:
         entries = _deep_link_verifications.setdefault(mode, {})
         for outcome in outcomes:
@@ -819,8 +821,8 @@ def _deep_link_decision_is_fresh(record: dict, now: datetime | None = None) -> b
     except ValueError:
         return False
     if checked_at.tzinfo is not None:
-        checked_at = checked_at.astimezone(UTC).replace(tzinfo=None)
-    reference = now or datetime.now(UTC).replace(tzinfo=None)
+        checked_at = _naive_utc(checked_at)
+    reference = now or utcnow()
     age = (reference - checked_at).total_seconds()
     return 0 <= age <= DEEP_LINK_DECISION_TTL_SECONDS
 
@@ -855,7 +857,7 @@ def _record_deep_link_decisions(mode: str, bookmaker: str, outcomes: list) -> No
     Expired decisions are dropped on the way out, so a long-lived server's file
     cannot grow without bound.
     """
-    now = datetime.now(UTC).replace(tzinfo=None)
+    now = utcnow()
     now_iso = now.isoformat()
     with _DEEP_LINK_LOCK:
         entries = _deep_link_decisions.setdefault(mode, {})
@@ -890,7 +892,7 @@ def _decided_event_ids(
     is also what makes a pass finishable — see `DEEP_LINK_DECISION_TTL_SECONDS`,
     which is longer than a measured pass for exactly this reason.
     """
-    reference = now or datetime.now(UTC).replace(tzinfo=None)
+    reference = now or utcnow()
     prefix = f"{bookmaker}|"
     return {
         key[len(prefix):]
@@ -910,7 +912,7 @@ def _apply_deep_link_verifications(
     are pruned here, so a proof cannot outlive its window just because the
     server stayed up.
     """
-    reference = now or datetime.now(UTC).replace(tzinfo=None)
+    reference = now or utcnow()
     with _DEEP_LINK_LOCK:
         entries = _deep_link_verifications.get(mode)
         if not entries:
@@ -1008,7 +1010,7 @@ def _append_history(num_groups: int, mode: str) -> None:
     state = _state_for(mode)
     entry = {
         "mode": mode,
-        "scan_time": state.status.last_scan_time.isoformat() if state.status.last_scan_time else datetime.now(UTC).replace(tzinfo=None).isoformat(),
+        "scan_time": state.status.last_scan_time.isoformat() if state.status.last_scan_time else utcnow().isoformat(),
         "total_matches": state.status.total_matches,
         "match_groups": num_groups,
         "surebets_found": state.status.surebets_found,
@@ -1560,7 +1562,7 @@ def _build_candidates(
                         ai_reason="",
                         rule_rejections=result.reasons,
                         remediation=remediation,
-                        created_at=datetime.now(UTC).replace(tzinfo=None),
+                        created_at=utcnow(),
                     ),
                     alias_actionable=actionable,
                     closeable=remediation.closeable,
@@ -2005,7 +2007,7 @@ async def run_scan(
     matches_cache = state.matches
     report_cache = state.report
     per_bookie = state.per_bookie
-    scan_started_at = datetime.now(UTC).replace(tzinfo=None)
+    scan_started_at = utcnow()
     scan_started_monotonic = time.perf_counter()
     scan_id = new_request_id()
     scan_token = set_scan_id(scan_id)
@@ -2270,7 +2272,7 @@ async def run_scan(
         # Age spread guard (P0-1): warn if scrapers' fetched_at diverge >90s
         if all_matches:
             times = [
-                m.fetched_at.astimezone(UTC).replace(tzinfo=None)
+                _naive_utc(m.fetched_at)
                 if m.fetched_at and m.fetched_at.tzinfo
                 else m.fetched_at
                 for m in all_matches if m.fetched_at
@@ -2400,7 +2402,7 @@ async def run_scan(
         # removed from the copies used by the engine and price guard; the full
         # group stays available for diagnostics and evidence.
         status.current_bookmaker = "Checking feed integrity..."
-        integrity_now = datetime.now(UTC).replace(tzinfo=None)
+        integrity_now = utcnow()
         # N0-2: update the per-book price observations and refuse frozen rows
         # before the integrity scorecard and the pricing pass read the groups.
         stale_result = await asyncio.to_thread(
@@ -2505,7 +2507,7 @@ async def run_scan(
             )
 
         # --- Update state ---
-        scan_finished_at = datetime.now(UTC).replace(tzinfo=None)
+        scan_finished_at = utcnow()
         status.last_scan_time = scan_finished_at
 
         # N0-4: capture the last pre-kickoff price for every open logged bet.
@@ -2873,18 +2875,11 @@ def _cache_size(path: str) -> int:
         return 0
 
 
-def _naive_utc(value: datetime) -> datetime:
-    """Normalize a datetime to naive UTC, the shape the cache stores."""
-    if value.tzinfo is None:
-        return value
-    return value.astimezone(UTC).replace(tzinfo=None)
-
-
 def _age_seconds(value: datetime | None, now: datetime | None = None) -> float | None:
     """Age of a stored timestamp in seconds, or None when it is unknown."""
     if value is None:
         return None
-    reference = now or datetime.now(UTC).replace(tzinfo=None)
+    reference = now or utcnow()
     try:
         return (reference - _naive_utc(value)).total_seconds()
     except Exception:
@@ -2913,7 +2908,7 @@ def _freshness_block(mode: str, status: ScanStatus, matches: list[dict]) -> dict
     changes is that they are labelled historical instead of current.
     """
     ttl = LIVE_ODDS_TTL_SECONDS if mode == "live" else ODDS_TTL_SECONDS
-    now = datetime.now(UTC).replace(tzinfo=None)
+    now = utcnow()
     scan_age = _age_seconds(status.last_scan_time, now)
     per_book: dict[str, dict[str, Any]] = {}
     for row in matches:
@@ -3387,7 +3382,7 @@ def _restorable_match_groups(report: object, mode: str) -> list[dict]:
         return []
     with _DEEP_LINK_LOCK:
         entries = dict(_deep_link_verifications.get(mode) or {})
-    reference = datetime.now(UTC).replace(tzinfo=None)
+    reference = utcnow()
     kept: list[dict] = []
     for row in report:
         if not isinstance(row, dict):
@@ -3447,7 +3442,7 @@ def _clear_stale_deep_link_flags(matches: list, mode: str) -> int:
     """
     with _DEEP_LINK_LOCK:
         entries = dict(_deep_link_verifications.get(mode) or {})
-    reference = datetime.now(UTC).replace(tzinfo=None)
+    reference = utcnow()
     cleared = 0
     for match in matches:
         is_dict = isinstance(match, dict)
@@ -3503,7 +3498,7 @@ def _load_cache():
                     parsed = datetime.fromisoformat(scan_time)
                     # Handle naive UTC stored
                     if parsed.tzinfo is None:
-                        age = (datetime.now(UTC).replace(tzinfo=None) - parsed).total_seconds()
+                        age = (utcnow() - parsed).total_seconds()
                     else:
                         age = (datetime.now(UTC) - parsed).total_seconds()
                     if age > 1800:
@@ -3724,7 +3719,7 @@ def _unverified_link_count(matches: list[dict]) -> int:
 
 def _last_scan_age_samples() -> list[tuple[dict[str, object], float]]:
     """Age of each feed's last completed scan, computed at scrape time."""
-    now = datetime.now(UTC).replace(tzinfo=None)
+    now = utcnow()
     samples: list[tuple[dict[str, object], float]] = []
     for mode, status in (("prematch", scan_status), ("live", live_status)):
         if status.last_scan_time:
@@ -3905,7 +3900,7 @@ def _health_summary() -> tuple[dict[str, Any], dict[str, Any]]:
         # maintenance run. A crossed budget is a warning, never a scan stop.
         "retention": retention_health()
     }
-    generated_at = datetime.now(UTC).replace(tzinfo=None).isoformat(timespec="seconds")
+    generated_at = utcnow().isoformat(timespec="seconds")
     if HEALTH_CACHE_SECONDS > 0:
         _health_cache = (body, now, generated_at)
     return body, {
@@ -3924,7 +3919,7 @@ async def health() -> dict[str, Any]:
         try:
             # Handle naive UTC stored
             if dt.tzinfo is None:
-                return (datetime.now(UTC).replace(tzinfo=None) - dt).total_seconds()
+                return (utcnow() - dt).total_seconds()
             return (datetime.now(UTC) - dt).total_seconds()
         except Exception:
             return None
@@ -4634,7 +4629,7 @@ def _resolve_candidate(
     an unproven link does not outlive the deep-link check that proves it.
     """
     candidate.status = decision
-    candidate.resolved_at = datetime.now(UTC).replace(tzinfo=None)
+    candidate.resolved_at = utcnow()
     candidate.resolved_by = "human"
     for queue in (pending_candidates, pending_live_candidates):
         queue.pop(candidate.id, None)
@@ -4877,7 +4872,7 @@ async def verify_surebet(
         if not bookie_ids:
             raise HTTPException(status_code=400, detail="All involved bookmakers are disabled")
 
-        fetched_at = datetime.now(UTC).replace(tzinfo=None)
+        fetched_at = utcnow()
         fresh_matches: list[Match] = []
         errors: list[str] = []
         for bookie_id in bookie_ids:
@@ -4958,7 +4953,7 @@ async def verify_surebet(
         [group],
         dict(_stale_price_store.get(req.mode) or {}),
         mode=req.mode,
-        now=datetime.now(UTC).replace(tzinfo=None),
+        now=utcnow(),
         ttl_sec=LIVE_ODDS_TTL_SECONDS if is_live else ODDS_TTL_SECONDS,
     )
     stale_rows = stale_result.evidence

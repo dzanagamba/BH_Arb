@@ -20,7 +20,7 @@ import hashlib
 import io
 import json
 import sqlite3
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +32,9 @@ from config.settings import (
 )
 from models.schemas import Surebet
 from server.csv_export import csv_cell
+from server.sqlite_store import connect as _sqlite_connect
+from server.sqlite_store import connect_readonly as _sqlite_connect_readonly
+from server.timeutil import iso_now, utcnow
 
 PAPER_BANKROLL_START = 1000.0
 
@@ -43,10 +46,6 @@ PAPER_DISCLAIMER = (
     "Paper simulation only. No bet was placed, no money moved, and no bookmaker "
     "account was used."
 )
-
-
-def _now_iso() -> str:
-    return datetime.now(UTC).replace(tzinfo=None).isoformat(timespec="seconds")
 
 
 def opportunity_key(surebet: Surebet) -> str:
@@ -196,17 +195,10 @@ class PaperStore:
         self.book_caps = dict(book_caps if book_caps is not None else BOOK_STAKE_LIMITS)
 
     def _connect(self) -> sqlite3.Connection:
-        Path(self.path).parent.mkdir(parents=True, exist_ok=True)
-        connection = sqlite3.connect(self.path, timeout=30)
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA journal_mode=WAL")
-        return connection
+        return _sqlite_connect(self.path)
 
     def _connect_readonly(self) -> sqlite3.Connection:
-        uri = f"file:{Path(self.path).resolve().as_posix()}?mode=ro"
-        connection = sqlite3.connect(uri, uri=True, timeout=30)
-        connection.row_factory = sqlite3.Row
-        return connection
+        return _sqlite_connect_readonly(self.path)
 
     def initialize(self) -> None:
         with self._connect() as connection:
@@ -288,7 +280,7 @@ class PaperStore:
         feed_mode: str = "",
         offset: int = 0,
     ) -> list[dict[str, Any]]:
-        cutoff = (datetime.now(UTC).replace(tzinfo=None) - timedelta(days=days)).isoformat()
+        cutoff = (utcnow() - timedelta(days=days)).isoformat()
         query = "SELECT payload FROM recorded_opportunities WHERE recorded_at >= ?"
         params: list[Any] = [cutoff]
         if run_mode:
@@ -306,7 +298,7 @@ class PaperStore:
     def count_opportunities(
         self, *, days: int = 30, run_mode: str = "", feed_mode: str = ""
     ) -> int:
-        cutoff = (datetime.now(UTC).replace(tzinfo=None) - timedelta(days=days)).isoformat()
+        cutoff = (utcnow() - timedelta(days=days)).isoformat()
         query = "SELECT COUNT(*) FROM recorded_opportunities WHERE recorded_at >= ?"
         params: list[Any] = [cutoff]
         if run_mode:
@@ -566,7 +558,7 @@ class PaperStore:
         feed_mode: str = "",
         offset: int = 0,
     ) -> list[dict[str, Any]]:
-        cutoff = (datetime.now(UTC).replace(tzinfo=None) - timedelta(days=days)).isoformat()
+        cutoff = (utcnow() - timedelta(days=days)).isoformat()
         query = "SELECT payload FROM paper_positions WHERE opened_at >= ?"
         params: list[Any] = [cutoff]
         if status:
@@ -584,7 +576,7 @@ class PaperStore:
     def count_positions(
         self, *, days: int = 30, status: str = "", feed_mode: str = ""
     ) -> int:
-        cutoff = (datetime.now(UTC).replace(tzinfo=None) - timedelta(days=days)).isoformat()
+        cutoff = (utcnow() - timedelta(days=days)).isoformat()
         query = "SELECT COUNT(*) FROM paper_positions WHERE opened_at >= ?"
         params: list[Any] = [cutoff]
         if status:
@@ -772,7 +764,7 @@ class PaperStore:
         }
         if not Path(self.path).exists():
             return result
-        cutoff = (datetime.now(UTC).replace(tzinfo=None) - timedelta(days=days)).isoformat()
+        cutoff = (utcnow() - timedelta(days=days)).isoformat()
         cap = max(0, int(max_rows))
         try:
             if dry_run:
@@ -911,7 +903,7 @@ class PaperStore:
                     payout += stake
                 leg["result"] = result.get("result")
             profit = round(payout - staked, 2)
-            now = _now_iso()
+            now = iso_now()
             payload.update(
                 {
                     "status": "settled",

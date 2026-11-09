@@ -22,7 +22,7 @@ import shutil
 import sqlite3
 import threading
 from collections.abc import Callable
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -31,7 +31,9 @@ from engine import matcher
 from engine.mapping_evidence import MappingLedger
 from server.bets import BetStore
 from server.paper import PaperStore
+from server.sqlite_store import connect_readonly as _sqlite_connect_readonly
 from server.storage import Storage, default_storage_path
+from server.timeutil import iso_seconds, utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -59,10 +61,6 @@ _PAYLOAD_TABLES = {
 def maintenance_running() -> bool:
     """True while a retention job holds the process-wide guard."""
     return _MAINTENANCE_ACTIVE.is_set()
-
-
-def _iso(moment: datetime) -> str:
-    return moment.replace(tzinfo=None).isoformat(timespec="seconds")
 
 
 def _file_bytes(path: Path) -> int:
@@ -98,10 +96,7 @@ def _log_bytes(log_dir: Path) -> int:
 
 
 def _readonly_connection(path: Path) -> sqlite3.Connection:
-    uri = f"file:{path.resolve().as_posix()}?mode=ro"
-    connection = sqlite3.connect(uri, uri=True, timeout=30)
-    connection.row_factory = sqlite3.Row
-    return connection
+    return _sqlite_connect_readonly(path)
 
 
 def _table_inventory(path: Path) -> tuple[dict[str, dict[str, int]], dict[str, Any] | None]:
@@ -299,7 +294,7 @@ def _archive_bets(
         return report
     archive_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
-        "archived_at": _iso(now),
+        "archived_at": iso_seconds(now),
         "cutoff": cutoff,
         "count": len(rows),
         "note": "Archive copy only; the bets remain in the SQLite store.",
@@ -373,13 +368,13 @@ def run_maintenance(
     ``scan_active`` is the caller's live scan check; when it returns true the
     job returns ``skipped`` without touching a store.
     """
-    started = now or datetime.now(UTC).replace(tzinfo=None)
+    started = now or utcnow()
     if not _MAINTENANCE_LOCK.acquire(blocking=False):
         return {
             "ok": False,
             "skipped": "maintenance_already_running",
             "dry_run": dry_run,
-            "started_at": _iso(started),
+            "started_at": iso_seconds(started),
         }
     _MAINTENANCE_ACTIVE.set()
     try:
@@ -388,7 +383,7 @@ def run_maintenance(
                 "ok": False,
                 "skipped": "scan_in_progress",
                 "dry_run": dry_run,
-                "started_at": _iso(started),
+                "started_at": iso_seconds(started),
             }
 
         db_path = Path(storage_path or default_storage_path())
@@ -458,15 +453,15 @@ def run_maintenance(
                 dry_run=dry_run,
             )
 
-        finished = datetime.now(UTC).replace(tzinfo=None)
+        finished = utcnow()
         after = retention_health(
             storage_path=db_path, ledger_path=ledger, log_dir=logs
         )
         report: dict[str, Any] = {
             "ok": True,
             "dry_run": dry_run,
-            "started_at": _iso(started),
-            "finished_at": _iso(finished),
+            "started_at": iso_seconds(started),
+            "finished_at": iso_seconds(finished),
             "windows": _windows(),
             "pruned": pruned,
             "paper": paper_pruned,
@@ -480,7 +475,7 @@ def run_maintenance(
         }
         if not dry_run:
             record = {
-                "finished_at": _iso(finished),
+                "finished_at": iso_seconds(finished),
                 "dry_run": False,
                 "pruned": pruned,
                 "paper": paper_pruned,
