@@ -12,13 +12,15 @@ SR7-1 and SR7-2 are done.
 feed). Every other `Not started` row is `Gate: operator`; the roadmap is the
 single task list in `ROADMAP.md`, N2-4 stays deferred and P1-6 stays waived
 until the operator says otherwise.
-**Last task commit:** `022c569` — "move the pairing audit and verifier into
-server (M3-6)", pushed to `origin/main` on 2026-11-09. Before it, `cac7507`
-resolves the market registry through accessors (M3-5), `31f3ef6` unifies the
-SQLite connections and the server clock (M3-4), `7b49156` shares one link-settled
-predicate (M3-3), `42297ee` moves the deep-link store and AH labels into engine
-(M3-2), `7e982eb` extracts the JSON-store layer
-(M3-1 stage 3), `68f2eaf` extracts candidate scoring and names the feed state
+**Last task commit:** `493e3a3` — "pin workflow actions and the base image
+(M4-3)", pushed to `origin/main` on 2026-11-09. Before it, `14ae9f2` adds the
+Docker Chromium launch and image CVE scan (M4-2), `b854b25` installs Docker/CI/
+SBOM from resolved locks (M4-1), `022c569` moves the pairing audit and verifier
+into server (M3-6), `cac7507` resolves the market registry through accessors
+(M3-5), `31f3ef6` unifies the SQLite connections and the server clock (M3-4),
+`7b49156` shares one link-settled predicate (M3-3), `42297ee` moves the
+deep-link store and AH labels into engine (M3-2), `7e982eb` extracts the
+JSON-store layer (M3-1 stage 3), `68f2eaf` extracts candidate scoring and names the feed state
 (M3-1 stages 1-2), `e0448d2` writes the mapping evidence ledger compact (M2-5),
 `e616ac8` rejects a positive accepted stake at zero odds (M1-2), `276b6f4` caps
 the candidate review queue and reports the denominator (M2-4), `fbdd5cc` stops
