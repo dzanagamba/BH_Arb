@@ -208,11 +208,36 @@ python -m coverage report --format=markdown
 `coverage.xml` is gitignored build output; the CI job uploads it as an
 artifact.
 
+## Dependency locks
+
+`requirements.txt` and `requirements-dev.txt` are the manifests: the eight direct
+runtime pins and CI's tools. `requirements.lock` and `requirements-dev.lock` are
+the resolved sets, transitives included, and they are what the Docker image, CI
+and the SBOM install:
+
+```bash
+pip install -r requirements.lock        # the image and the SBOM
+pip install -r requirements-dev.lock    # CI's quality/tests/security jobs
+```
+
+Regenerate both after any manifest change and commit them together:
+
+```bash
+python scripts/lock_requirements.py
+python scripts/lock_requirements.py --check   # network: resolves a fresh venv
+```
+
+CI does not run `--check` (it needs network and can move when a new transitive
+is released). `tests/test_dependency_lock.py` runs on every push and fails when a
+direct manifest pin is not carried at the same version by its lock, when a lock
+is unsorted or unpinned, or when Docker/CI stop installing the lock. That is
+what makes a Dependabot manifest PR fail until the lock is regenerated.
+
 ## Dependency audit
 
 ```bash
-python -m pip_audit -r requirements.txt --progress-spinner off
-python -m pip_audit -r requirements-dev.txt --progress-spinner off
+python -m pip_audit -r requirements.lock --progress-spinner off
+python -m pip_audit -r requirements-dev.lock --progress-spinner off
 ```
 
 Both files must be clean. `pip-audit` fails the job on any advisory with an
@@ -228,14 +253,14 @@ the id, the reason and the review date here. Never silently skip an advisory.
 
 ## SBOM
 
-The image installs `requirements.txt`, which pins the eight direct dependencies
-and resolves to 27 runtime packages (29 including pip and setuptools). The `sbom` job installs that file into a clean venv
-and generates CycloneDX JSON from the resolved set, so the artifact describes
-what the image actually contains rather than the 8-line manifest:
+The image installs `requirements.lock`, the resolved 27-package runtime set (29
+including pip and setuptools). The `sbom` job installs that file into a clean
+venv and generates CycloneDX JSON from the resolved set, so the artifact
+describes exactly what the image contains rather than the 8-line manifest:
 
 ```bash
 python -m venv .sbom-venv
-.sbom-venv/bin/pip install -r requirements.txt
+.sbom-venv/bin/pip install -r requirements.lock
 .sbom-venv/bin/pip freeze --all > sbom-requirements.txt
 cyclonedx-py requirements sbom-requirements.txt \
   --of JSON --output-reproducible -o sbom.cdx.json

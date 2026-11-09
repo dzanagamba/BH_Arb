@@ -23,7 +23,7 @@ def test_dockerfile_is_python311_slim_and_installs_playwright():
     assert "FROM python:3.11-slim" in DOCKERFILE
     assert "playwright install --with-deps chromium" in DOCKERFILE
     assert "PLAYWRIGHT_BROWSERS_PATH=/ms-playwright" in DOCKERFILE
-    assert "pip install --no-cache-dir -r requirements.txt" in DOCKERFILE
+    assert "pip install --no-cache-dir -r requirements.lock" in DOCKERFILE
 
 
 def test_dockerfile_runs_as_a_non_root_user():
@@ -126,7 +126,7 @@ def test_ci_generates_the_sbom_from_the_runtime_requirements():
     workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(
         encoding="utf-8"
     )
-    assert "pip install --disable-pip-version-check -q -r requirements.txt" in workflow
+    assert "pip install --disable-pip-version-check -q -r requirements.lock" in workflow
     assert "pip freeze --all" in workflow
     assert "cyclonedx-py requirements sbom-requirements.txt" in workflow
     assert "sbom.cdx.json" in workflow

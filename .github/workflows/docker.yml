@@ -10,6 +10,7 @@ on:
       - .dockerignore
       - docker-compose.yml
       - requirements.txt
+      - requirements.lock
       - deploy/**
       - scripts/docker_smoke.py
   pull_request:
@@ -18,6 +19,7 @@ on:
       - .dockerignore
       - docker-compose.yml
       - requirements.txt
+      - requirements.lock
       - deploy/**
       - scripts/docker_smoke.py
 

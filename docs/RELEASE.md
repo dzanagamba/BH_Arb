@@ -36,13 +36,13 @@ python -m mypy .
 python scripts/generate_market_mapping_doc.py --check
 
 # Security
-python -m pip_audit -r requirements.txt --progress-spinner off
-python -m pip_audit -r requirements-dev.txt --progress-spinner off
+python -m pip_audit -r requirements.lock --progress-spinner off
+python -m pip_audit -r requirements-dev.lock --progress-spinner off
 python -m bandit -r engine server scrapers config models main.py scripts -ll -q
 
-# SBOM (the runtime environment requirements.txt resolves to, not the manifest)
+# SBOM (the resolved runtime lock the image installs, not the manifest)
 python -m venv .sbom-venv
-.sbom-venv/bin/pip install -r requirements.txt
+.sbom-venv/bin/pip install -r requirements.lock
 .sbom-venv/bin/pip freeze --all > sbom-requirements.txt
 cyclonedx-py requirements sbom-requirements.txt \
   --of JSON --output-reproducible -o sbom.cdx.json

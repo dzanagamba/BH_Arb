@@ -1,9 +1,9 @@
 name: Release
 
 # Release-specific proof: the image builds, the container serves /api/health,
-# and the SBOM is generated from the runtime environment that requirements.txt
-# resolves to. The normal CI still runs on the tag push; this workflow fails the
-# release if the Docker smoke fails.
+# and the SBOM is generated from the exact runtime lock the image installs. The
+# normal CI still runs on the tag push; this workflow fails the release if the
+# Docker smoke fails.
 on:
   push:
     tags:
@@ -24,18 +24,18 @@ jobs:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: |
-            requirements.txt
-            requirements-dev.txt
+            requirements.lock
+            requirements-dev.lock
 
       - name: Install dependencies
-        run: pip install -r requirements.txt -r requirements-dev.txt
+        run: pip install -r requirements-dev.lock
 
-      # requirements.txt pins the direct packages only; resolve it in a clean
-      # venv so the release artifact lists the whole runtime set the image has.
+      # requirements.lock is the exact runtime set the image installs; install
+      # it in a clean venv so the release artifact lists the same packages.
       - name: Resolve the runtime environment
         run: |
           python -m venv .sbom-venv
-          .sbom-venv/bin/pip install --disable-pip-version-check -q -r requirements.txt
+          .sbom-venv/bin/pip install --disable-pip-version-check -q -r requirements.lock
           .sbom-venv/bin/pip freeze --all > sbom-requirements.txt
 
       - name: Generate CycloneDX SBOM

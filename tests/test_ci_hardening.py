@@ -39,8 +39,8 @@ def test_ci_runs_tests_with_coverage_and_publishes_the_report():
 
 def test_ci_runs_dependency_and_static_security_scans_on_every_push_and_pr():
     assert "on:\n  push:\n  pull_request:" in CI
-    assert "python -m pip_audit -r requirements.txt" in CI
-    assert "python -m pip_audit -r requirements-dev.txt" in CI
+    assert "python -m pip_audit -r requirements.lock" in CI
+    assert "python -m pip_audit -r requirements-dev.lock" in CI
     assert "python -m bandit" in CI
     assert "-ll" in CI
     assert "security:" in CI
@@ -62,7 +62,7 @@ def test_every_workflow_is_least_privilege():
 
 def test_development_install_matches_ci():
     readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
-    install = "pip install -r requirements.txt -r requirements-dev.txt"
+    install = "pip install -r requirements-dev.lock"
     assert install in CI
     assert install in readme
 

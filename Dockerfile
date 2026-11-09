@@ -28,8 +28,10 @@ RUN groupadd --gid "${BH_GID}" scanner \
 WORKDIR /app
 
 # Dependencies first, so an application edit does not redownload them.
-COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+# The lock carries the full resolved runtime set, transitives included, so the
+# image gets exactly the packages CI tested.
+COPY requirements.lock ./
+RUN pip install --no-cache-dir -r requirements.lock
 
 # Chromium is the size driver (~400 MB of browser plus system libraries) and
 # the slowest cold-build step, roughly 5–10 minutes on a clean runner. Keeping

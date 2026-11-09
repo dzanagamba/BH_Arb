@@ -55,7 +55,7 @@ Chromium for the browser-backed books.
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 
-pip install -r requirements.txt
+pip install -r requirements.lock
 playwright install --with-deps chromium   # Linux; drop --with-deps on Windows/macOS
 cp .env.example .env
 
@@ -488,7 +488,7 @@ and `tests/test_live_mode.py`.
 Install the dev tools once, then run the same checks as CI:
 
 ```bash
-pip install -r requirements.txt -r requirements-dev.txt
+pip install -r requirements-dev.lock
 
 python -m pytest
 python -m ruff check .
