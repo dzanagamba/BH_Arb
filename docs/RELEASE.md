@@ -82,8 +82,10 @@ invalidates the browser layer because it sits above the pip layer.
   HTTPX, python-dotenv and tzdata;
 - **dev-dependencies** — pytest/coverage, Ruff, MyPy, Hypothesis, pip-audit,
   Bandit and CycloneDX;
-- **github-actions** — all action bumps in one PR;
-- **docker** — the `python:3.11-slim` base image.
+- **github-actions** — all action bumps in one PR; Dependabot rewrites the
+  commit-SHA pin and its `# vX.Y.Z` comment together;
+- **docker** — the digest pin on `python:3.11-slim`; Dependabot advances the
+  `@sha256:` digest and keeps the tag.
 
 Dependabot PRs run the full `CI` workflow. The Docker smoke is path-triggered,
 so a dependency-only PR that does not touch a deployment input will not pay the

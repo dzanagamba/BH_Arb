@@ -304,6 +304,12 @@ the SBOM and runs the Docker smoke. A failed smoke fails the release workflow.
 Actions and the Docker base image into separate weekly PRs; every PR runs this
 full CI. See `docs/RELEASE.md` for the checklist and local equivalents.
 
+Every `uses:` is pinned to a 40-character commit SHA with a `# vX.Y.Z` comment,
+and the Dockerfile pins `python:3.11-slim@sha256:<digest>`. Dependabot's
+`github-actions` ecosystem rewrites the SHA and its version comment; the `docker`
+ecosystem advances the image digest. Never replace either with a moving tag:
+`tests/test_workflow_pins.py` fails on an unpinned action or base image.
+
 ## Static security scan
 
 ```bash

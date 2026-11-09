@@ -3,7 +3,7 @@
 **Updated:** 2026-11-09
 **Goal:** keep `ROADMAP.md` current without weakening the trust model.
 **Current task:** none; SR0-1, SR0-2, SR1-1, SR1-2, SR1-3, SR1-4, M1-1, M1-2,
-M1-3, M2-1, M2-2, M2-3, M2-4, M2-5, M3-1 … M3-6, M4-1, M4-2, SR2-1 …
+M1-3, M2-1, M2-2, M2-3, M2-4, M2-5, M3-1 … M3-6, M4-1 … M4-3, SR2-1 …
 SR2-6, SR3-1, SR3-2, SR3-3, SR3-4, SR4-1, SR4-2, SR4-3, SR4-3b … SR4-3f,
 SR4-3h, SR4-3i, SR4-3j, SR4-4, SR4-5, SR4-6, SR4-7, SR4-7a, SR4-8, SR4-8a,
 SR4-9, SR4-10, SR4-11, SR4-12, SR4-13, SR5-1, SR5-2, SR6-1, SR6-2, SR6-3,
@@ -29,6 +29,11 @@ key guard (M1-1), `3f9a911` carries the health-summary cache (M2-3), and
 `8a1cb90` carries SR6-2, SR4-8a and SR4-8.
 
 ## Project state
+
+M4-3 (2026-11-09, working tree, operator: next three): every workflow action is
+pinned to a commit SHA with a version comment, the Docker base image is a tag +
+`@sha256:` digest, and Dependabot's existing `github-actions`/`docker` ecosystems
+update both. `tests/test_workflow_pins.py` fails on a moving tag or bare `FROM`.
 
 M4-2 (2026-11-09, working tree, operator: next three): the Docker smoke launches
 the bundled Chromium as the non-root user with the scanners' flags, and
@@ -766,12 +771,12 @@ the seven-day opportunity baseline remains unmeasured and N2-4 owns it.
 ## Next action
 
 **No `Not started` row is ungated.** M1-1, M1-2, M1-3, M2-1, M2-2, M2-3, M2-4,
-M2-5, M3-1 … M3-6, M4-1, M4-2 and SR4-8 closed the last ones.
+M2-5, M3-1 … M3-6, M4-1 … M4-3 and SR4-8 closed the last ones.
 What is left needs the operator: **SR4-3g** (blocked on a live EVLBet payload —
 do not start it), the remaining **M\*** rows (all `Gate: operator`; each needs
 explicit approval and written acceptance criteria before any work), and the
 deferred N2-4 / waived P1-6 (leave both alone). Sensible next picks, in the
-order this session would take them: M4-3, then M4-4/M5. All are
+order this session would take them: M4-4, then M5. All are
 `Gate: operator`. A HAR refresh is an operator action, not a task:
 `python scripts/capture_har.py --books all`.
 

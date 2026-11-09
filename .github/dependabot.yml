@@ -3,6 +3,11 @@ version: 2
 # and every Dependabot PR runs the normal pull_request CI (quality, tests,
 # security and SBOM). The Docker smoke stays path-triggered because the Chromium
 # layer is the expensive part.
+#
+# GitHub Actions are pinned to commit SHAs with a `# vX.Y.Z` version comment;
+# Dependabot's github-actions ecosystem rewrites both the SHA and that comment.
+# The base image is pinned by tag + digest; the docker ecosystem advances the
+# digest. Never replace either pin with a moving tag.
 updates:
   - package-ecosystem: "pip"
     directory: "/"
