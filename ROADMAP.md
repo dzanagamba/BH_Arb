@@ -171,7 +171,7 @@ do not copy stale numbers here.
 | M3-3 | One link-settled predicate | Done | — | operator |
 | M3-4 | Unify datetime and SQLite helpers | Done | — | operator |
 | M3-5 | Route registry lookups through `registered_spec()` | Done | — | operator |
-| M3-6 | Move `pairing_audit` and verifier into `server/` | Not started | — | operator |
+| M3-6 | Move `pairing_audit` and verifier into `server/` | Done | — | operator |
 | M4-1 | Add a resolved constraints/lock file | Not started | — | operator |
 | M4-2 | Docker Chromium check and image CVE scan | Not started | — | operator |
 | M4-3 | Pin Actions by SHA and base image by digest | Not started | — | operator |
@@ -2986,16 +2986,64 @@ Acceptance (written before coding, 2026-11-09):
 
 ### M3-6 Move `pairing_audit` and verifier into `server/`
 
-Status: Not started
+Status: Done
 
 Gate: operator
 
-Why / what: Move `scripts/pairing_audit.audit` and the reusable deep-link verifier
-into `server/` so coverage measures them.
+**Decision (2026-11-09, operator: continue after M3-5).** Coverage's `source`
+is `engine`, `server`, `scrapers`, `config` and `models`, so the pairing audit
+and the deep-link verifier were exercised by tests but invisible to the coverage
+floor. Worse, the running application imported them *from* `scripts`:
+`server/api.py` called `scripts.pairing_audit.audit` and lazily imported
+`scripts.verify_deeplinks` for `/api/verify-links`. The reusable logic moves,
+the command lines stay:
 
-Acceptance:
-- [x] Operator approval recorded here.
-- [x] Acceptance criteria written here before coding.
+* `server/pairing_audit.py` owns the measurement helpers and `audit()`;
+  `scripts/pairing_audit.py` keeps `main()` and re-exports `audit` and
+  `DEFAULT_MAX_MISS_RATE` for existing importers.
+* `server/deeplink_verifier.py` owns the criterion, dataclasses, evidence
+  parsing, `build_targets`, `apply_report`, `check_target` and
+  `verify_bookmaker`; `scripts/verify_deeplinks.py` keeps `_load_cached_matches`
+  and `main()` and re-exports the names tests and callers already import.
+* `server/api.py` imports from the `server` modules, so the app no longer
+  depends on `scripts`.
+
+Behaviour, prompts, criterion text, CLI flags and report shapes do not change.
+The one test that read the verifier source to keep the README's cursor claim
+honest now reads `server/deeplink_verifier.py`.
+
+Why / what: Move `scripts/pairing_audit.audit` and the reusable deep-link
+verifier into `server/` so coverage measures them.
+
+**Outcome (2026-11-09).** `server/pairing_audit.py` (234 lines) now owns the
+strict-miss measurement and `audit()`; `scripts/pairing_audit.py` is a 48-line
+CLI wrapper that re-exports `audit` and `DEFAULT_MAX_MISS_RATE`.
+`server/deeplink_verifier.py` (585 lines) owns the criterion, dataclasses,
+evidence parsers, target builder, `check_target` and `verify_bookmaker`;
+`scripts/verify_deeplinks.py` is a 109-line wrapper that keeps
+`_load_cached_matches`/`main` and re-exports the public names. `server/api.py`
+imports both from `server`, so the app no longer depends on an unmeasured
+directory. `tests/test_layering.py` now pins that no `server` module imports
+`scripts`, that the implementations live under `server`, and that the wrappers
+keep their public names; the README-claims test that read the verifier source
+reads the new module. CLI flags, report shapes, criterion text and verdicts are
+unchanged: `python scripts/pairing_audit.py --check` exits 0 on the shipped
+cache. Full suite **2,366 passed, 12 skipped** (17 snapshots) in 113.32 s; ruff
+and mypy (287 files) clean; market doc, fixtures and admissibility checks green.
+
+Acceptance (written before coding, 2026-11-09):
+- [x] `server/pairing_audit.py` owns `audit()` and the measurement helpers;
+      `scripts/pairing_audit.py` is a CLI wrapper that re-exports them.
+- [x] `server/deeplink_verifier.py` owns the reusable verifier;
+      `scripts/verify_deeplinks.py` keeps only the CLI loader/report/storage and
+      re-exports the public names.
+- [x] `server/api.py` imports both from `server`, and no `server` module imports
+      `scripts` (pinned by a test).
+- [x] CLI flags, printed report shapes, criterion text and verdicts are
+      unchanged; the existing tests pass through the wrappers.
+- [x] The full suite, coverage source list, ruff, mypy and the doc/fixture checks
+      pass.
+
 
 ---
 
@@ -3458,3 +3506,4 @@ Useful starting points:
 | 2026-11-09 | M3-3 | Done | Operator: continue with M3-3. `engine.deeplinks.settle_link()` now answers "is this leg's per-event link settled?" once for all three callers, returning `LinkSettlement(settled, reason)`. The gate passes the match's `deep_link_verified` flag; the cache restore passes a fresh store record keyed `bookmaker|event_id` (never the cached flag, which outlives its proof); `_unverified_link_count` passes the flag and keeps its event-id scope. Removed the duplicated four-case branches from `engine/certainty.py::_link_evidence` and `server/api.py::_restorable_match_groups`/`_unverified_link_count`. New `tests/test_link_settlement.py` runs ten cases (proof, route pattern, declares-no-route ±id, declared-unproven ±capture, silence with id/url/nothing, stale store proof) through the predicate, gate, restore and counter and asserts agreement, plus a stale-proof restore rejection. `pytest`: 2354 passed, 12 skipped (17 snapshots) in 115.83 s; ruff clean; mypy 282 files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No trust rule, declaration, TTL or cache format changed. |
 | 2026-11-09 | M3-4 | Done | Operator: continue with M3-4. Added **`server/sqlite_store.py`** as the one connection path for the shared `cache/bh_arb.sqlite3`: `connect()` sets WAL + `synchronous=NORMAL`, `connect_readonly()` sets no pragmas and cannot create the file. `Storage`, `BetStore`, `PaperStore` and `_readonly_connection` in maintenance now delegate, ending the split where only `Storage` set NORMAL and the other two ran FULL. Added **`server/timeutil.py`** with `utcnow()`, `naive_utc()`, `iso_now()` and `iso_seconds()`; removed the `_now`/`_now_iso`/`_iso`/`_naive_utc` copies and all 41 inline `datetime.now(UTC).replace(tzinfo=None)` expressions under `server/` (0 remain outside the helper). Stored timestamp shapes and precisions unchanged. New `tests/test_storage_policy.py` (7 tests) pins WAL+NORMAL on all three stores, the read-only no-create/no-write rule, the clock helpers and a shared-file round trip. `docs/STORAGE.md` and `AGENTS.md` document the helpers. `pytest`: 2361 passed, 12 skipped (17 snapshots) in 113.89 s; ruff clean; mypy 285 files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No schema, cache format or retention rule changed. |
 | 2026-11-09 | M3-5 | Done | Operator: continue with M3-5. Added call-time registry accessors to `engine/market_registry.py`: `registry()`, `has_source_id()`, `specs_for()`, `lookup_type()`, `ids_for()`; `registered_spec()` resolves through them and keeps its `has_source_id` fallback. Removed every direct `from engine.market_registry import MARKET_REGISTRY` and method call from `engine/admissibility.py`, `scrapers/{wwin,maxbet,mbet,evlbet,mozzartbet}.py`, `scrapers/common._nsoft_registry` and `scripts/capture_market_fixtures.py`; 0 modules outside the registry now name the singleton. Raw lookups (mbet live, mozzartbet hardcoded ids, fixture capture) use `lookup_type()` so unmapped diagnostics do not change. Two tests in `tests/test_market_registry.py` prove every accessor follows a replaced global and that a registry replaced AFTER the adapters import is seen by common/nsoft, mbet, mozzartbet, wwin, maxbet and admissibility. `pytest`: 2363 passed, 12 skipped (17 snapshots) in 112.94 s; ruff clean; mypy 285 files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No registry row, mapping or parser verdict changed. |
+| 2026-11-09 | M3-6 | Done | Operator: continue with M3-6. Moved the reusable code out of `scripts/` so coverage measures it: **`server/pairing_audit.py`** (234 lines, `audit` + miss helpers) and **`server/deeplink_verifier.py`** (585 lines, criterion, dataclasses, evidence, `build_targets`, `apply_report`, `check_target`, `verify_bookmaker`). `scripts/pairing_audit.py` (48 lines) and `scripts/verify_deeplinks.py` (109 lines) keep their `main`/loader and re-export the public names, so existing importers and CLI flags are unchanged. `server/api.py` now imports both from `server`, removing the app→scripts dependency. `tests/test_layering.py` pins: no `server` module imports `scripts`, both implementations are under `server`, and both wrappers keep their names; the README cursor-claim test now reads `server/deeplink_verifier.py`. `python scripts/pairing_audit.py --check` exits 0; `pytest`: 2366 passed, 12 skipped (17 snapshots) in 113.32 s; ruff clean; mypy 287 files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. No criterion, report shape, flag or verdict changed. |

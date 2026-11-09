@@ -160,7 +160,6 @@ from scrapers.errors import (
 from scrapers.forensics import artefact_summary, take_artefacts
 from scrapers.registry import SCRAPERS
 from scrapers.transport import policy_for, transport_pool
-from scripts.pairing_audit import audit as audit_pairing
 from server.alerts import (
     AlertManager,
     book_failure_alert,
@@ -198,6 +197,7 @@ from server.observability import (
     reset_scan_id,
     set_scan_id,
 )
+from server.pairing_audit import audit as audit_pairing
 from server.paper import PaperStore
 from server.scan_cost import book_failure_rates
 from server.storage import Storage, default_storage_path
@@ -956,7 +956,7 @@ async def _run_link_verification(
     settled: set[str] | frozenset[str] = frozenset(),
 ):
     """Run the Playwright deep-link check. The endpoint's only browser seam."""
-    from scripts.verify_deeplinks import verify_bookmaker
+    from server.deeplink_verifier import verify_bookmaker
 
     return await verify_bookmaker(
         bookmaker, matches, mode=mode, live=live, limit=limit, offset=offset, settled=settled
@@ -5129,7 +5129,7 @@ async def verify_links(
     rate limit is what paces a sweep — raising it means a browser per call, and
     the cursor is what made those calls worth making.
     """
-    from scripts.verify_deeplinks import (
+    from server.deeplink_verifier import (
         CRITERION,
         apply_report,
         build_targets,

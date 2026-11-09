@@ -76,7 +76,7 @@ count (comparable with older rows) and the blocker trend point carries
 `retained`/`dropped`/`cap`. Group shares and counts in this document are shares
 of the **retained** queue, which is the queue a reviewer can page through.
 
-Strict misses are grouped in `scripts/pairing_audit.py` by
+Strict misses are grouped in `server/pairing_audit.py` by
 `(book pair, league, spelling pattern)`, where the spelling pattern is the
 identity-normalized pair of each team slot. The report gives:
 

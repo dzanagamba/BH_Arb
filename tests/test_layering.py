@@ -141,3 +141,46 @@ def test_scraper_package_still_exports_its_public_classes_lazily():
         "MozzartbetScraper",
         "SportPlusScraper",
     ]
+
+
+def test_server_does_not_import_from_scripts():
+    """M3-6: the app owns the reusable logic; scripts are CLI wrappers.
+
+    `/api/verify-links` used to import the verifier from `scripts` and the
+    health/audit path imported `scripts.pairing_audit.audit`. That made the
+    running application depend on a directory coverage does not measure. Both
+    implementations now live in `server/`, and a script may import `server`,
+    never the other way.
+    """
+    offenders: list[str] = []
+    for path in sorted((REPO_ROOT / "server").glob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            names: list[str] = []
+            if isinstance(node, ast.Import):
+                names = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                names = [node.module]
+            if any(name == "scripts" or name.startswith("scripts.") for name in names):
+                offenders.append(path.name)
+                break
+    assert offenders == []
+
+
+def test_the_measurement_and_verifier_live_under_server():
+    """Coverage's `source` is the app packages, so the reusable code must be one."""
+    from server import deeplink_verifier, pairing_audit
+
+    assert callable(pairing_audit.audit)
+    assert callable(deeplink_verifier.verify_bookmaker)
+    assert callable(deeplink_verifier.build_targets)
+
+
+def test_the_scripts_keep_their_public_names():
+    """The CLI wrappers re-export what their importers already used."""
+    from scripts import pairing_audit, verify_deeplinks
+
+    assert callable(pairing_audit.main)
+    assert pairing_audit.audit is not None
+    assert verify_deeplinks.verify_bookmaker is not None
+    assert verify_deeplinks.CRITERION

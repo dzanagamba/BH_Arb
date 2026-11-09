@@ -963,7 +963,7 @@ def _convergence_problems(text: str, source: str | None = None) -> list[str]:
     section = _section(text, "## Match & mapping certainty")
     carriers = [claim for claim in _claims(section) if "build_targets" in claim]
     if source is None:
-        source = (REPO_ROOT / "scripts" / "verify_deeplinks.py").read_text(encoding="utf-8")
+        source = (REPO_ROOT / "server" / "deeplink_verifier.py").read_text(encoding="utf-8")
     for node in ast.walk(ast.parse(source)):
         if not (isinstance(node, ast.FunctionDef) and node.name == "build_targets"):
             continue
@@ -1024,7 +1024,7 @@ def test_convergence_check_fails_when_only_one_half_of_the_cursor_is_explained()
 def test_convergence_check_fails_when_the_code_loses_the_cursor():
     """The other direction: a README that promises a cursor `build_targets` does
     not have is the same defect, and only reading the code catches it."""
-    source = (REPO_ROOT / "scripts" / "verify_deeplinks.py").read_text(encoding="utf-8")
+    source = (REPO_ROOT / "server" / "deeplink_verifier.py").read_text(encoding="utf-8")
     stripped = source.replace("    offset: int = 0,\n", "").replace(
         "    settled: Collection[str] = (),\n", ""
     )
