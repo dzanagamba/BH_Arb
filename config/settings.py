@@ -497,16 +497,3 @@ FORENSICS_MAX_MB = int(os.getenv("FORENSICS_MAX_MB", "200"))
 FORENSICS_MAX_BYTES = FORENSICS_MAX_MB * 1024 * 1024
 FORENSICS_MAX_AGE_DAYS = int(os.getenv("FORENSICS_MAX_AGE_DAYS", "7"))
 
-# --- Match page URL templates (best-effort; scrapers may override with real per-match URLs) ---
-MATCH_URL_TEMPLATES: dict[str, str] = {
-    "mozzartbet": "https://www.mozzartbet.ba/sr/kladjenje/sport/1",
-    "mdshop": "https://www.mdshop.ba/sport-prematch?sport=Fudbal",
-    "admiralbet": "https://www.admiralbet.ba/sport-prematch?sport=Fudbal",
-    "betole": "https://www.betole.ba/ba/sport/S",
-    "mbet": "https://www.mbet.ba/",
-    "sportplus": "https://www.sportplus.ba/prematch/betting",
-    "evlbet": "https://evlbet.com/",
-    "premier_kladionica": "https://www.premier-kladionica.com/ponuda/",
-    "wwin": "https://wwin.ba/kladjenje/",
-    "maxbet": "https://sportsbook.maxbet.ba/sport/1",
-}

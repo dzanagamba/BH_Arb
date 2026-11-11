@@ -121,7 +121,6 @@ class Match(BaseModel):
     kickoff: datetime | None = None
     markets: list[Market] = []
     url: str = ""
-    bet_url: str = ""  # deep link that prefills a new bet slip/ticket for this match
     match_code: str = ""
     event_id: str = ""
     # Betradar match id, when the book's feed carries one. Books on the same id
@@ -372,8 +371,6 @@ class Surebet(BaseModel):
     raw_margin: float = 0.0
     realized: RoundingSummary | None = None
     stakes: list[SurebetStake]
-    match_urls: dict[str, str] = {}  # bookmaker -> match page URL
-    bet_urls: dict[str, str] = {}  # bookmaker -> bet-slip prefill URL (empty when unsupported)
     # How each book in the group lists the fixture, so the operator can find it
     # on a site that has no per-event page: bookmaker -> {home, away, league, kickoff}.
     listings: dict[str, dict[str, str]] = {}

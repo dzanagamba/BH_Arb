@@ -27,7 +27,6 @@ from config.settings import (
     DEFAULT_INVESTMENT,
     EXPIRY_BUFFER_MINUTES,
     LIVE_ODDS_TTL_SECONDS,
-    MATCH_URL_TEMPLATES,
     MAX_SUREBET_PROFIT_PERCENT,
     MAX_TWO_SOURCE_PROFIT_PERCENT,
     MIN_PROFIT_PERCENT,
@@ -83,26 +82,6 @@ def _too_good_for_two_sources(
         and len(sources) < 3
         and available_books < 3
     )
-
-
-def _collect_match_urls(group: MatchGroup) -> dict[str, str]:
-    """Bookmaker → match page URL for every bookmaker in a group."""
-    urls: dict[str, str] = {}
-    for match in group.matches:
-        urls[match.bookmaker] = match.url or MATCH_URL_TEMPLATES.get(match.bookmaker, "")
-    return urls
-
-
-def _collect_bet_urls(group: MatchGroup) -> dict[str, str]:
-    """Bookmaker → bet-slip prefill URL for every bookmaker in a group.
-
-    Empty when the bookmaker does not support URL-based ticket prefill —
-    the frontend then falls back to the match page URL.
-    """
-    urls: dict[str, str] = {}
-    for match in group.matches:
-        urls[match.bookmaker] = match.bet_url or ""
-    return urls
 
 
 _EVIDENCE_TEXT = {
@@ -725,8 +704,6 @@ class ArbitrageEngine:
             raw_margin=best_implied,
             realized=_rounding_block(stakes, investment),
             stakes=stakes,
-            match_urls=_collect_match_urls(group),
-            bet_urls=_collect_bet_urls(group),
             found_at=datetime.now(UTC).replace(tzinfo=None),
         )
 
@@ -878,8 +855,6 @@ class ArbitrageEngine:
             raw_margin=best_implied,
             realized=_rounding_block(stakes, investment),
             stakes=stakes,
-            match_urls=_collect_match_urls(group),
-            bet_urls=_collect_bet_urls(group),
             found_at=datetime.now(UTC).replace(tzinfo=None),
         )
 
@@ -1057,8 +1032,6 @@ class ArbitrageEngine:
             raw_margin=best_implied,
             realized=_rounding_block(stakes, investment),
             stakes=stakes,
-            match_urls=_collect_match_urls(group),
-            bet_urls=_collect_bet_urls(group),
             found_at=datetime.now(UTC).replace(tzinfo=None),
         )
 

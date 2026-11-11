@@ -177,7 +177,7 @@ do not copy stale numbers here.
 | M4-3 | Pin Actions by SHA and base image by digest | Done | — | operator |
 | M4-4 | Plan the remaining dependency upgrades | Done | — | operator |
 | M4-5 | Apply the planned dependency upgrades | Done | M4-4 | operator |
-| M5-1 | Remove legacy URL maps | Not started | — | operator |
+| M5-1 | Remove legacy URL maps | Done | — | operator |
 | M5-2 | Decide the `link_sweeps` table | Not started | — | operator |
 | M5-3 | Decide approve/reject functions | Not started | — | operator |
 | M5-4 | Decide `raw_market_resolver.resolve_offers` | Not started | — | operator |
@@ -3302,17 +3302,39 @@ Acceptance:
 
 ### M5-1 Remove legacy URL maps
 
-Status: Not started
+Status: Done
 
 Gate: operator
+
+**Decision (2026-11-11, operator: continue with M5): remove.** The compatibility
+window is over: no frontend or server reader uses `Surebet.match_urls` or
+`Surebet.bet_urls` (`tests/test_destinations.py` already asserts the dashboard
+never reads `sb.bet_urls`), `Match.bet_url` is never populated by an adapter, and
+`SurebetStake.destination` is the supported per-leg destination path. Keeping
+three parallel URL shapes invites a future consumer to trust the unverified one.
+
+Removing `Surebet.match_urls`/`bet_urls`, `Match.bet_url`, `MATCH_URL_TEMPLATES`
+and the two `_collect_*` helpers shrinks every results payload and leaves
+`Match.url` (the scraped event page, still used by adapters and tests) alone.
 
 Why / what: Remove or deprecate `Surebet.match_urls`, `Surebet.bet_urls`,
 `Match.bet_url` and `MATCH_URL_TEMPLATES` after a documented compatibility
 window. `SurebetStake.destination` is the supported path.
 
-Acceptance:
-- [ ] Operator approval recorded here.
-- [ ] Acceptance criteria written here before coding.
+**Outcome (2026-11-11).** Removed `Surebet.match_urls`, `Surebet.bet_urls`,
+`Match.bet_url`, `MATCH_URL_TEMPLATES` and the two `_collect_*` helpers. Served
+results and caches no longer carry the three fields; `Match.url` (the scraped
+event page) stays. `SurebetStake.destination` is the only destination path, and
+`test_destinations` still proves the dashboard never reads `sb.bet_urls`.
+`tests/test_urls.py` now covers only the two parser-built match URLs.
+
+Acceptance (2026-11-11):
+- [x] The four legacy symbols and the two collectors are gone; no result,
+      cache or API payload carries `match_urls`/`bet_urls`/`bet_url`.
+- [x] `SurebetStake.destination` is the only served destination path and the
+      dashboard still reads it.
+- [x] Tests citing the removed collectors are removed or rewritten; the full
+      suite and checks pass.
 
 ### M5-2 Decide the `link_sweeps` table
 
@@ -3707,3 +3729,4 @@ Useful starting points:
 | 2026-11-09 | M4-3 | Done | Pinned every workflow action to a commit SHA with a `# vX.Y.Z` comment: checkout v4.4.0, setup-python v5.6.0, setup-node v4.4.0, upload-artifact v4.6.2, setup-buildx-action v3.12.0, build-push-action v6.19.2 and Trivy v0.36.0. The Dockerfile base is `python:3.11-slim@sha256:07d48240…b535`. New `tests/test_workflow_pins.py` (3 tests) fails on a moving tag, a bare `FROM`, or a Dependabot config lacking the `github-actions`/`docker` ecosystems; `dependabot.yml`, `docs/CI.md` and `docs/RELEASE.md` document that those ecosystems rewrite the SHA + comment and advance the digest. No workflow behaviour or Docker build content changed. `pytest`: 2377 passed, 12 skipped (17 snapshots) in 113.10 s; ruff clean; mypy 290 files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. |
 | 2026-11-09 | M4-4 | Done | Wrote **`docs/DEPENDENCY_UPGRADES.md`**, a plan-only row: no pin moved. Measured a throwaway venv (`/tmp/opencode/m44-venv`) with `fastapi==0.162.2`, `starlette==1.10.0`, `mypy==2.4.1`, `ruff==0.17.4` and `httpx2==2.16.0`: full suite green (2,389 collected, exit 0, 17 snapshots, 1 m 50 s, no test change); mypy 2.4.1 reports one `refresh_fixtures.py:212` assignment error; ruff 0.17.4 reports three `UP042` `str, Enum` findings (`MarketType`, `Sport`, `ScrapeKind`); `httpx2` removes the live `StarletteDeprecationWarning` and Starlette resolves it for `TestClient`. The plan splits U4 `httpx2` (dev-only), U1 FastAPI, U2 MyPy (one annotation), U3 Ruff (`StrEnum` with JSON/label assertions), each with steps, acceptance and rollback; `httpx` stays runtime, pydantic/uvicorn stay out of scope. Working tree verification: `pytest` 2,377 passed, 12 skipped (17 snapshots) in 113.82 s; ruff clean; mypy 290 files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. |
 | 2026-11-11 | M4-5 | Done | Applied the four M4-4 upgrades as separate commits: **U4** `httpx2==2.16.0` dev-only (runtime lock keeps `httpx==0.28.1`; `starlette.testclient` resolves httpx2, deprecation warning gone; 2 new lock tests), **U1** FastAPI 0.162.2 with Starlette 1.10.0 and no app/test edit, **U2** mypy 2.4.1 with one `dict[str, Any]` annotation in `scripts/refresh_fixtures.py`, **U3** ruff 0.17.4 with `MarketType`/`Sport`/`ScrapeKind` as `StrEnum` (3 new value-string tests in `tests/test_enum_values.py`, no rule ignored). `docs/DEPENDENCY_UPGRADES.md` records the applied set. `pytest`: 2,382 passed, 12 skipped (17 snapshots) in 108.71 s, no warning line; ruff clean; mypy 291 files clean; market doc in sync; refresh_fixtures, audit_admissibility and lock `--check` exit 0. |
+| 2026-11-11 | M5-1 | Done | Removed the legacy URL maps: `Surebet.match_urls`, `Surebet.bet_urls`, `Match.bet_url`, `MATCH_URL_TEMPLATES` and `_collect_match_urls`/`_collect_bet_urls`. `SurebetStake.destination` stays the only served destination path; `Match.url` stays. `tests/test_urls.py` keeps only the two parser URL tests. `pytest`: 2,378 passed, 12 skipped (17 snapshots) in 106.61 s; ruff and mypy clean. |
