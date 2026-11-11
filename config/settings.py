@@ -404,6 +404,13 @@ DEEP_LINK_VERIFY_RATE_LIMIT = int(os.getenv("DEEP_LINK_VERIFY_RATE_LIMIT", "2"))
 # limit). A verify scrapes every book in the bet while holding the mode lock, so
 # repeated calls can block the scheduler and hit the bookmakers.
 VERIFY_RATE_LIMIT = int(os.getenv("VERIFY_RATE_LIMIT", "10"))
+# Minimum seconds between two on-demand leg-link checks of the SAME surebet
+# (SR9-3). Each check opens one browser page per leg for several seconds, so a
+# double-clicked button must be refused, not queued; other surebets are not
+# affected. 0 disables the limit.
+SUREBET_LINK_CHECK_MIN_INTERVAL_SECONDS = float(
+    os.getenv("SUREBET_LINK_CHECK_MIN_INTERVAL_SECONDS", "30")
+)
 # Sliding window shared by every per-client-IP rate limit, so tuning one endpoint
 # cannot silently move another's. It is NOT a per-endpoint knob.
 RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))

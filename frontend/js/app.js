@@ -169,6 +169,7 @@ let evidenceOffset = 0;             // group-evidence page offset
 let evidenceTotal = 0;
 const EVIDENCE_PAGE_SIZE = 50;
 const verifyState = {};             // surebet id -> {state, at, data}
+const linkCheckState = {};          // surebet id -> {state, at, data}: on-demand leg-link check (SR9-3)
 const slipState = {};               // surebet id -> {investment, placed: {label: {odds, stake}}}
 const sweepState = { running: false };
 
@@ -371,6 +372,7 @@ function handleDataAction(event) {
         case 'mark-placed': markPlaced(element.dataset.slipId, element.dataset.outcomeLabel, element); break;
         case 'unmark-placed': unmarkPlaced(element.dataset.slipId, element.dataset.outcomeLabel); break;
         case 'verify-surebet': verifySurebet(element.dataset.slipId); break;
+        case 'check-links': checkSurebetLinks(element.dataset.slipId); break;
         case 'copy-surebet': copySurebetDetails(element.dataset.slipId); break;
         case 'evidence-prev': setEvidenceOffset(evidenceOffset - EVIDENCE_PAGE_SIZE); break;
         case 'evidence-next': setEvidenceOffset(evidenceOffset + EVIDENCE_PAGE_SIZE); break;
@@ -1686,6 +1688,7 @@ function renderSlip() {
             <span class="slip-progress-bar"><i data-progress="${(placedCount / plan.legs.length) * 100}"></i></span>
         </div>
         <ol class="legs">${legsHtml}</ol>
+        ${renderLinkCheckPanel(sb)}
 
         <details class="slip-howto">
             <summary>${escapeHtml(tr('How to place this'))}</summary>
@@ -1700,6 +1703,7 @@ function renderSlip() {
 
         <div class="slip-actions">
             <button type="button" class="btn btn-secondary" data-action="verify-surebet" data-slip-id="${escapeHtml(sb.id)}">${escapeHtml(tr('Re-check odds'))}</button>
+            <button type="button" class="btn btn-secondary" data-action="check-links" data-slip-id="${escapeHtml(sb.id)}"${linkCheckState[sb.id]?.state === 'checking' ? ' disabled aria-disabled="true"' : ''}>${escapeHtml(linkCheckState[sb.id]?.state === 'checking' ? tr('Checking links…') : tr('Check links'))}</button>
             <button type="button" class="btn btn-secondary" data-action="log-bet" data-slip-id="${escapeHtml(sb.id)}">${escapeHtml(tr('Log bet'))}</button>
             <button type="button" class="btn btn-secondary" data-action="copy-surebet" data-slip-id="${escapeHtml(sb.id)}"${staleFeed() ? ' disabled aria-disabled="true" data-stale-blocked="true"' : ''}>${escapeHtml(tr('Copy slip'))}</button>
         </div>
@@ -1771,6 +1775,50 @@ function verifyShortLabel(check) {
 function verifyIsFresh(check) {
     if (!check || check.state !== 'ok') return false;
     return (Date.now() - check.at.getTime()) / 1000 <= VERIFY_FRESH_SECONDS[currentMode];
+}
+
+// SR9-3: the on-demand leg-link check, per leg and with its own timestamp. It
+// is advisory: the note says so, because a green row here is not a gate proof.
+function linkStatusLabel(leg) {
+    if (leg.status === 'ok') {
+        return leg.kind === 'ticket_filled' ? tr('Ticket has the pick') : tr('Opens the match');
+    }
+    if (leg.status === 'ticket_empty') return tr('Ticket is empty');
+    if (leg.status === 'fixture_not_found') return tr('Fixture not found');
+    if (leg.status === 'error') return tr('Link check failed');
+    return tr('Not checked (no per-fixture link)');
+}
+
+function renderLinkCheckPanel(sb) {
+    const check = linkCheckState[sb.id];
+    if (!check) return '';
+    if (check.state === 'checking') {
+        return `<div class="linkcheck-panel linkcheck-checking"><span class="spinner"></span> ${escapeHtml(tr('Checking links…'))}</div>`;
+    }
+    if (check.state === 'error') {
+        return `<div class="linkcheck-panel linkcheck-bad">${escapeHtml(tr('Could not check the links: {error}', { error: check.message || tr('unknown') }))}</div>`;
+    }
+    const data = check.data || {};
+    const legs = Array.isArray(data.legs) ? data.legs : [];
+    if (!legs.length) {
+        return `<div class="linkcheck-panel linkcheck-skip">${escapeHtml(data.skip_reason || tr('Not checked (no per-fixture link)'))}</div>`;
+    }
+    const opened = legs.filter(leg => leg.opens_fixture).length;
+    const rows = legs.map(leg => {
+        const tone = leg.failed ? 'linkcheck-bad' : leg.status === 'skipped' ? 'linkcheck-skip' : 'linkcheck-ok';
+        const evidence = leg.error || leg.evidence || '';
+        return `<li class="${tone}" title="${escapeHtml(evidence)}"><span class="linkcheck-book">${escapeHtml(bookName(leg.bookmaker))}</span><span class="linkcheck-state">${escapeHtml(linkStatusLabel(leg))}</span></li>`;
+    }).join('');
+    const ago = `<span data-ago="${check.at.getTime()}">${formatAgo(check.at)}</span>`;
+    return `<div class="linkcheck-panel">
+        <div class="linkcheck-head">
+            <b>${escapeHtml(tr('Check links'))}</b>
+            <span>${escapeHtml(tr('{opened} of {legs} legs open the match', { opened, legs: legs.length }))}</span>
+            <span>${trWithMarkup('checked {ago}.', { ago })}</span>
+        </div>
+        <ul class="linkcheck-legs">${rows}</ul>
+        <p class="linkcheck-note">${escapeHtml(tr('The link check is advisory; it never proves a link for the certainty gate.'))}</p>
+    </div>`;
 }
 
 function setSlipInvestment(id, value) {
@@ -1852,6 +1900,33 @@ async function verifySurebet(id) {
     }
     verifyState[id] = result;
     refreshRowBadge(id);
+    if (id === selectedSurebetId) renderSlip();
+}
+
+// SR9-3: ask the server to open this surebet's leg links. Operator-triggered
+// only; the route refuses a second check of the same card inside its interval,
+// and the 429's detail is shown instead of being swallowed.
+async function checkSurebetLinks(id) {
+    const sb = allSurebets.find(s => s.id === id);
+    if (!sb) return;
+    linkCheckState[id] = { state: 'checking', at: new Date() };
+    if (id === selectedSurebetId) renderSlip();
+    let result;
+    try {
+        const res = await apiFetch(`/api/surebets/${encodeURIComponent(id)}/check-links?mode=${currentMode}`, {
+            method: 'POST',
+            headers: candidateActionHeaders(),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            result = { state: 'error', at: new Date(), message: data.detail || tr('request failed ({status})', { status: res.status }) };
+        } else {
+            result = { state: 'done', at: new Date(), data };
+        }
+    } catch (e) {
+        result = { state: 'error', at: new Date(), message: tr('network error') };
+    }
+    linkCheckState[id] = result;
     if (id === selectedSurebetId) renderSlip();
 }
 

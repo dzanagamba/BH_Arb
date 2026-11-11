@@ -293,7 +293,7 @@ one of the nine cells and needs the live-feed id from SR8-1 first.
 
 ### SR9-3 On-demand browser check of a served surebet's leg links
 
-Status: Not started
+Status: Done (2026-11-11)
 
 Why: a one-time sample proves a pattern, not today's leg. Before the operator
 acts on a surebet, each leg's link should be checked to open that fixture (and,
@@ -308,10 +308,34 @@ Operator-triggered only: it never runs per scan, so it adds no scheduled
 traffic. It is advisory and never sets `deep_link_verified`.
 
 Acceptance:
-- [ ] The slip shows a per-leg link check result with its time.
-- [ ] Offline tests drive the check against HAR/fixture pages for a pass, a
+- [x] The slip shows a per-leg link check result with its time.
+- [x] Offline tests drive the check against HAR/fixture pages for a pass, a
       generic page (fail) and an empty slip (fail).
-- [ ] The route requires the `scan` scope and is rate-limited per surebet.
+- [x] The route requires the `scan` scope and is rate-limited per surebet.
+
+**SR9-3 outcome (2026-11-11).** `server/leg_link_check.py` is the check;
+`POST /api/surebets/{id}/check-links` (`scan` scope) serves it from the slip's
+**Check links** button. Per leg with a `ticket_filled`/`match_page` destination
+it opens the URL in its own fresh browser context (one context per leg, so a
+filled slip cannot leak into the next leg's check) and judges the rendered
+accessibility text: both team names (book spelling from `listings`) for
+`opens_fixture`, and for a ticket the text after the page's own slip wording
+(Tiket/Listić/Selekcije) must repeat both teams and the pick; a line market also
+needs its side and line. An empty slip is caught by the book's own phrase ("Vaš
+tiket je prazan") and by the slip-area rule — the FIRST marker, because both
+MaxBet and NSoft render a ticket-status widget after the slip. Captured page
+texts are in `tests/fixtures/link_check/`: MaxBet filled (`1027619`, 1 @ 1.55
+slip), MaxBet empty slip (same fixture, fresh context), MDShop filled
+(Manchester City – Fulham), MaxBet home. A leg with only a search/competition
+rung is skipped without a browser; the per-surebet window
+(`SUREBET_LINK_CHECK_MIN_INTERVAL_SECONDS`, 30 s) refuses a double-click with
+429 + Retry-After, a `read`-only key gets 403, and the check shares the deep-link
+checker's lock and browser semaphore. The slip panel shows one row per leg,
+failed rows marked, the count ("N of M legs open the match") and a live
+`data-ago` timestamp, in EN and BS. Tests: `tests/test_surebet_link_check.py`
+(27: judge against the four captures, targets, page/route seam, scope, window,
+404/409/skip, no gate write) and `tests/test_frontend_link_check.py` (14,
+node-driven against the shipped `renderLinkCheckPanel`/`linkStatusLabel`).
 
 ### SR9-4 Show which legs reach the match; decide whether to hide the rest — Gate: operator (hide option only)
 
@@ -533,3 +557,4 @@ Entries before 2026-11-11 are in the archive.
 | 2026-11-11 | SR9-1 | Done | Operator: WWIN prematch and Betole match links open the match in a normal browser; change the MaxBet gate template. Promoted WWIN prematch (`#/top-bets/match/{event_id}`); Betole proof names the operator check; `config/bookmaker_deeplinks.json` MaxBet template/template_live → `https://www.maxbet.ba/ba/sportsbook/match/{event_id}`, fallback `https://www.maxbet.ba/ba`. Best rungs now: ticket 4, match page 7, generic 7 (was 4 / 5 / 9). Tests: `tests/test_maxbet.py` new `Match.url`; `tests/test_destinations.py` + WWIN prematch test. Full run: `1 failed, 2377 passed, 12 skipped in 125.01s` (the one failure is the pre-existing M6-2 test); ruff `All checks passed!`; mypy `no issues found in 291 source files`; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. |
 | 2026-11-11 | M6-2 + docs | Done | Operator: update the README, roadmap and every file that should follow. M6-2: `tests/test_ci_hardening.py` reads `fail_under` via `tomllib` (80 ≤ floor ≤ 88.05, `branch = true`); with `fail_under = 79` the test failed, file restored. README: MaxBet's new declared URL, a **Leg links** dashboard bullet (4 / 7 / 7 of 18), the `record_scan.py` state caveat, lock-file `pip_audit` commands, the 87.05 % branch floor, a Project status section. `docs/PRODUCTION_READINESS.md` status note pointing at the checklist (M8-1 still refreshes it); `docs/ACCEPTANCE.md` coverage line marked superseded; `AGENTS.md` destinations building block. Full run: `2378 passed, 12 skipped in 136.38s` (0 failed); ruff `All checks passed!`; mypy `no issues found in 291 source files`; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. |
 | 2026-11-11 | SR9-2 | Done | MaxBet ticket filled in both modes. `scrapers/maxbet.py` keeps each open outcome's own `id` (not `outcomeId`) in `Market.outcome_ids`; `engine/destinations.py` gained `{outcome_id}`; `config/bookmaker_destinations.json` ships `…/sportsbook/match/{event_id}?outcome={outcome_id}` prematch + live with dated proofs. Measured in plain headless Chromium: prematch `1027619` CD Universitario – Herrera FC, slip 1 @ 1.55; live `1032215` CD Ibiza Islas Pitiusas – UD Arenal (HT), slip 1 @ 1.21; the live list response carries `outcomes[].id` on 13,180/13,180 rows. MaxBet fixtures re-captured (`--capture --books maxbet --write`, 2026-10-26 → 2026-11-11); the "unpriced control" total moved 4.5 → 6.5 because the registry prices 4.5/5.5, and the two maxbet parser snapshots were regenerated for the new capture; `contracts.json` now records `[].outcomes[].id:int`. SportPlus and Premier Kladionica (four cells) got dated "no per-event URL" proofs: no router/route in the served app, no anchors on the offer pages, a row click leaves the URL, Premier's `?who=`/`#/who=` forms are ignored. Betole live stays copy-only (no live leg priced). Tests: `tests/test_maxbet.py` +3 (4 cases incl. the two-mode capture check), `tests/test_destinations.py` +3 (ticket URL, missing-id fallback, live ticket), `tests/test_fixture_metadata.py` `pop(key, None)` for freshly captured fixtures. Full run: `2385 passed, 12 skipped in 117.30s` (0 failed); ruff `All checks passed!`; mypy `no issues found in 291 source files`; market doc / refresh_fixtures / audit_admissibility `--check` exit 0. Operator then opened the WWIN live route for `4732588` (Z.Podbrezova – Z.Moravce) in a normal browser and reported it opens the fixture; WWIN live promoted to a confirmed match page with a second test (`test_wwin_live_match_page_is_confirmed_by_the_operator` replaces the old fallback test). All nine cells covered; best rungs 6 ticket / 6 match page / 6 generic (was 4 / 7 / 7). Mozzartbet live stays on `/sr/uzivo` (needs SR8-1's live-feed id). |
+| 2026-11-11 | SR9-3 | Done | `server/leg_link_check.py` + `POST /api/surebets/{id}/check-links` (`scan` scope) behind the slip's **Check links** button. Per leg with a ticket or match destination: a fresh browser context, then the rendered accessibility text (`aria_snapshot`, which also sees MaxBet's closed shadow DOM), both book-spelled team names for `opens_fixture`, and for a ticket the slip area after the FIRST slip marker must repeat the teams and the pick (side + line for totals); an empty slip fails on the book's own phrase. A surebet with only search/competition rungs is skipped without a browser. Per-surebet window 30 s (`SUREBET_LINK_CHECK_MIN_INTERVAL_SECONDS`, 429 + Retry-After), a `read`-only key gets 403, a scan in progress 409, and the check shares `_deep_link_check_lock` + `_browser_sem` with the deep-link checker; it never writes `deep_link_verified`. Captured page texts in `tests/fixtures/link_check/` (MaxBet filled `1027619` and empty slip, MDShop filled, MaxBet home). Tests: `tests/test_surebet_link_check.py` 27, `tests/test_frontend_link_check.py` 14 (node-driven against the shipped renderer). Full run: `2425 passed, 12 skipped in 105.07s` (0 failed); ruff `All checks passed!`; mypy `no issues found in 294 source files`; market doc / refresh_fixtures / audit_admissibility `--check` exit 0. |

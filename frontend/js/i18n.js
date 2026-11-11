@@ -555,6 +555,18 @@ window.I18N = {
         "Export bets CSV": "Izvezi CSV opklada",
         "This SureBet deployment requires an API key to download this file.": "Ova SureBet instalacija zahtijeva API ključ za preuzimanje ove datoteke.",
         "Could not download the file: {error}": "Nije moguće preuzeti datoteku: {error}",
-        "Could not open the report: {error}": "Nije moguće otvoriti izvještaj: {error}"
+        "Could not open the report: {error}": "Nije moguće otvoriti izvještaj: {error}",
+        "Check links": "Provjeri linkove",
+        "Checking links…": "Provjeravam linkove…",
+        "Ticket has the pick": "Listić ima odabir",
+        "Opens the match": "Otvara utakmicu",
+        "Ticket is empty": "Listić je prazan",
+        "Fixture not found": "Utakmica nije pronađena",
+        "Link check failed": "Provjera linka nije uspjela",
+        "Not checked (no per-fixture link)": "Nije provjereno (nema linka na utakmicu)",
+        "Could not check the links: {error}": "Nije moguće provjeriti linkove: {error}",
+        "{opened} of {legs} legs open the match": "{opened} od {legs} nogu otvara utakmicu",
+        "checked {ago}.": "provjereno {ago}.",
+        "The link check is advisory; it never proves a link for the certainty gate.": "Provjera linkova je informativna; nikada ne dokazuje link za sigurnosnu provjeru."
     }
 };

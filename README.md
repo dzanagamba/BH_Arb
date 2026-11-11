@@ -178,6 +178,10 @@ POST /api/scan
   cells open a filled ticket, 6 the match page and 6 a fallback; the table is in
   [`docs/DESTINATIONS.md`](docs/DESTINATIONS.md) and the record in
   `config/bookmaker_destinations.json`. A destination never changes the gate.
+  A slip's **Check links** button opens each leg's destination on demand in a
+  fresh browser context and reports per leg, with a timestamp, whether the page
+  showed the fixture and — for a filled ticket — the pick on the slip. That check
+  is advisory and never sets `deep_link_verified`.
 - **Installable shell** — the dashboard registers a service worker for the
   static app shell only. It never caches `/api` responses or odds; an offline
   reload shows the shell, and a stale scan is still labelled historical.
@@ -267,7 +271,7 @@ safe only on the loopback default; set `API_KEY` before exposing the port.
 | Scope | Grants |
 |---|---|
 | `read` | Every `GET`/`HEAD` (results, status, config, groups, history, metrics, candidates, bets/paper reads, CSV downloads). |
-| `scan` | The write routes: `POST /api/scan`, `/api/verify`, `/api/recalculate`, `/api/verify-links`, `/api/link-sweeps`, `/api/bets`, the bet/paper settle and closing writes. |
+| `scan` | The write routes: `POST /api/scan`, `/api/verify`, `/api/recalculate`, `/api/verify-links`, `/api/surebets/{id}/check-links`, `/api/link-sweeps`, `/api/bets`, the bet/paper settle and closing writes. |
 | `admin` | Config toggles, shutdown, key creation/listing/revocation and the audit log. |
 
 A dashboard key normally needs `read` and `scan`; `admin` is for operator

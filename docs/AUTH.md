@@ -18,7 +18,7 @@ persisted or logged. The store keeps the last 500 audit records.
 | Scope | What it can do |
 |---|---|
 | `read` | Every `GET`/`HEAD`: results, status, config, groups, history, metrics, candidates, bets/paper reads and the CSV downloads. |
-| `scan` | The write routes: `POST /api/scan`, `/api/verify`, `/api/recalculate`, `/api/verify-links`, `/api/link-sweeps`, `/api/bets`, the bet/paper settle and closing writes. |
+| `scan` | The write routes: `POST /api/scan`, `/api/verify`, `/api/recalculate`, `/api/verify-links`, `/api/surebets/{id}/check-links`, `/api/link-sweeps`, `/api/bets`, the bet/paper settle and closing writes. |
 | `admin` | Toggle bookmakers/markets, shut down, create/list/revoke keys, read the audit log. |
 
 The env key is admin. A key with only `read` cannot call `/api/scan` or

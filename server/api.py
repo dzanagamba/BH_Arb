@@ -58,6 +58,7 @@ from config.settings import (
     SCAN_RATE_LIMIT,
     SCRAPER_SCAN_TIMEOUT_SECONDS,
     STALE_PRICE_UNCHANGED_SCANS,
+    SUREBET_LINK_CHECK_MIN_INTERVAL_SECONDS,
     VERIFIED_KICKOFF_WINDOW_MINUTES,
     VERIFY_RATE_LIMIT,
     book_risk_profile,
@@ -3547,6 +3548,10 @@ _scan_request_times: dict[str, list[float]] = {}
 # A verify has its own window; spending it must not spend the scan or deep-link
 # budget, and a flood of verifies must not hold the mode lock all afternoon.
 _verify_request_times: dict[str, list[float]] = {}
+# SR9-3: the leg-link check is bounded PER SUREBET, not per client, because the
+# same operator often checks several cards in a row while a double-click on one
+# card must not queue two browser runs for it.
+_surebet_link_check_times: dict[str, float] = {}
 
 
 def _enforce_sliding_window(
@@ -3581,6 +3586,36 @@ def _enforce_sliding_window(
         )
     window.append(now_ts)
     bucket[client] = window
+
+
+def _enforce_surebet_link_window(mode: str, surebet_id: str) -> None:
+    """Refuse a second leg-link check of the same surebet inside the interval.
+
+    The window is charged before any browser work, and it is keyed by the
+    surebet rather than the client: checking card A then card B is normal, while
+    a double-click on card A must not queue a second Chromium run for it. A 429
+    carries Retry-After so the dashboard can say how long to wait.
+    """
+    interval = SUREBET_LINK_CHECK_MIN_INTERVAL_SECONDS
+    if interval <= 0:
+        return
+    now_ts = time.time()
+    for stale in [key for key, at in _surebet_link_check_times.items() if now_ts - at >= interval]:
+        del _surebet_link_check_times[stale]
+    key = f"{mode}|{surebet_id}"
+    last = _surebet_link_check_times.get(key)
+    if last is not None:
+        remaining = interval - (now_ts - last)
+        retry_after = max(1, int(remaining) + (1 if remaining % 1 else 0))
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                "This surebet's links were checked moments ago; wait "
+                f"{retry_after}s before checking again"
+            ),
+            headers={"Retry-After": str(retry_after)},
+        )
+    _surebet_link_check_times[key] = now_ts
 
 
 async def start_scan_if_idle(mode: str) -> bool:
@@ -4845,6 +4880,69 @@ async def verify_surebet(
         "stale_prices": stale_rows,
         "errors": errors,
     }
+
+
+@router.post("/surebets/{surebet_id}/check-links")
+async def check_surebet_links(
+    surebet_id: str,
+    mode: str = "prematch",
+    _auth: None = Depends(_require_scope("scan")),
+):
+    """Open one served surebet's leg links and report what each one showed.
+
+    ON-DEMAND BY DESIGN. Each check opens up to one page per leg in a real
+    browser for several seconds, so it never runs inside a scan and is refused
+    while the mode is scanning. It is bounded per SUREBET rather than per client
+    (a double-click on one card must not queue two browser runs, while checking
+    several cards in a row is normal) and shares the deep-link checker's
+    one-browser lock, so the two on-demand browsers never run together.
+
+    It is ADVISORY: the result says whether the page showed both team names
+    (book spelling) and, for a ticket rung, whether the slip repeated the pick
+    after the page's own slip wording. It never sets `deep_link_verified`,
+    never changes a group's status and never submits anything. A surebet whose
+    legs are all search/competition fallbacks is reported as skipped without
+    touching a browser, because there is no per-fixture page to open.
+
+    The response carries `checked_at` and the cost, so the dashboard can show
+    how old the result is instead of presenting it as live.
+    """
+    from server.leg_link_check import build_targets, report_for, skip_reason
+
+    if mode not in ("prematch", "live"):
+        raise HTTPException(status_code=400, detail="mode must be 'prematch' or 'live'")
+    target = next(
+        (s for s in _state_for(mode).surebets if str(s.get("id") or "") == surebet_id),
+        None,
+    )
+    if target is None:
+        raise HTTPException(status_code=404, detail="Surebet not found")
+    status = _state_for(mode).status
+    if _lock_for(mode).locked() or status.is_scanning:
+        raise HTTPException(
+            status_code=409,
+            detail=f"A {mode} scan is in progress — retry after it finishes",
+        )
+    if not build_targets(target):
+        # No per-fixture rung to open: report it, and do not charge the window
+        # or a browser for a check that could not learn anything.
+        return report_for(target, mode, utcnow(), [], "skipped", skip_reason(target))
+
+    _enforce_surebet_link_window(mode, surebet_id)
+    async with _deep_link_check_lock:
+        async with _browser_sem:
+            _metric_browser_opened(1)
+            try:
+                return await _run_leg_link_check(target, mode)
+            finally:
+                _metric_browser_opened(-1)
+
+
+async def _run_leg_link_check(surebet: dict, mode: str) -> dict:
+    """Run the SR9-3 browser check. The endpoint's only browser seam."""
+    from server.leg_link_check import check_surebet
+
+    return await check_surebet(surebet, mode=mode)
 
 
 @router.post("/recalculate")

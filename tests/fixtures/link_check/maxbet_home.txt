@@ -1,0 +1,542 @@
+# MaxBet home page, no fixture opened (2026-11-11)
+# source: https://www.maxbet.ba/ba
+# captured: 2026-11-11 (aria snapshot tail)
+- button
+- link:
+  - /url: /ba
+  - img
+- link "Sport":
+  - /url: /ba/sportsbook
+- link "Uživo":
+  - /url: /ba/sportsbook/live
+- link "Slot":
+  - /url: /ba/Slots
+- link "Igre uživo":
+  - /url: /ba/live-games
+- link "Virtualne igre":
+  - /url: /ba/virtual-sport
+- link "Novo Brze Igre":
+  - /url: /ba/fast-games
+- link "Novo Esport":
+  - /url: /ba/esport
+- link "Novo Crash Igre":
+  - /url: /ba/crash-games
+- button "Promo":
+  - img
+  - paragraph: Promo
+- link "Registruj se":
+  - /url: /ba/registration
+- text: Prijavi se
+- region:
+  - group:
+    - img "General-MaxSpin"
+    - img "General-MaxSpin"
+  - group:
+    - img "General-prolaz na plus"
+    - img "General-prolaz na plus"
+  - group:
+    - img "General-MaxJackpot"
+    - img "General-MaxJackpot"
+  - group:
+    - img "General-live 1000 TIKETA"
+    - img "General-live 1000 TIKETA"
+  - group:
+    - img "General-bankomati"
+    - img "General-bankomati"
+  - group:
+    - img "General-maxvip"
+    - img "General-maxvip"
+  - button:
+    - img
+  - button:
+    - img
+  - button "Go to slide 1"
+  - button "Go to slide 2"
+  - button "Go to slide 3"
+  - button "Go to slide 4"
+  - button "Go to slide 5"
+  - button "Go to slide 6"
+- heading "Top igre" [level=3]
+- button [disabled]:
+  - img
+- button:
+  - img
+- link "icon Bonus Buy Gates of Olympus IGRAJ":
+  - /url: /ba/Game-launch/1014056?gameSource=desktop-home-top-games
+  - img "icon"
+  - text: Bonus Buy
+  - img "Gates of Olympus"
+  - button "IGRAJ"
+- text: Gates of Olympus
+- link "icon Top icon Hot icon Jackpot Shining Crown IGRAJ":
+  - /url: /ba/Game-launch/1012852?gameSource=desktop-home-top-games
+  - img "icon"
+  - text: Top
+  - img "icon"
+  - text: Hot
+  - img "icon"
+  - text: Jackpot
+  - img "Shining Crown"
+  - button "IGRAJ"
+- text: Shining Crown
+- link "icon Top icon Popular 40 Super Hot Bell Link IGRAJ":
+  - /url: /ba/Game-launch/1013054?gameSource=desktop-home-top-games
+  - img "icon"
+  - text: Top
+  - img "icon"
+  - text: Popular
+  - img "40 Super Hot Bell Link"
+  - button "IGRAJ"
+- text: 40 Super Hot Bell Link
+- link "icon Hot icon Bonus Buy Sweet Bonanza IGRAJ":
+  - /url: /ba/Game-launch/1013961?gameSource=desktop-home-top-games
+  - img "icon"
+  - text: Hot
+  - img "icon"
+  - text: Bonus Buy
+  - img "Sweet Bonanza"
+  - button "IGRAJ"
+- text: Sweet Bonanza
+- link "icon Popular Wild Hot 40 IGRAJ":
+  - /url: /ba/Game-launch/1019650?gameSource=desktop-home-top-games
+  - img "icon"
+  - text: Popular
+  - img "Wild Hot 40"
+  - button "IGRAJ"
+- text: Wild Hot 40
+- link "icon Hot icon Bonus Buy Sugar Rush IGRAJ":
+  - /url: /ba/Game-launch/1014100?gameSource=desktop-home-top-games
+  - img "icon"
+  - text: Hot
+  - img "icon"
+  - text: Bonus Buy
+  - img "Sugar Rush"
+  - button "IGRAJ"
+- text: Sugar Rush
+- link "icon Top icon Jackpot Burning Hot IGRAJ":
+  - /url: /ba/Game-launch/1012862?gameSource=desktop-home-top-games
+  - img "icon"
+  - text: Top
+  - img "icon"
+  - text: Jackpot
+  - img "Burning Hot"
+  - button "IGRAJ"
+- text: Burning Hot
+- link "icon Hot icon Top icon Bonus Buy Big Bass Splash IGRAJ":
+  - /url: /ba/Game-launch/1014029?gameSource=desktop-home-top-games
+  - img "icon"
+  - text: Hot
+  - img "icon"
+  - text: Top
+  - img "icon"
+  - text: Bonus Buy
+  - img "Big Bass Splash"
+  - button "IGRAJ"
+- text: Big Bass Splash
+- link "icon Popular Book Of Spells IGRAJ":
+  - /url: /ba/Game-launch/1019649?gameSource=desktop-home-top-games
+  - img "icon"
+  - text: Popular
+  - img "Book Of Spells"
+  - button "IGRAJ"
+- text: Book Of Spells
+- link "icon Hot icon Top icon Jackpot 40 Burning Hot IGRAJ":
+  - /url: /ba/Game-launch/1012774?gameSource=desktop-home-top-games
+  - img "icon"
+  - text: Hot
+  - img "icon"
+  - text: Top
+  - img "icon"
+  - text: Jackpot
+  - img "40 Burning Hot"
+  - button "IGRAJ"
+- text: 40 Burning Hot
+- link "icon Popular icon Top icon Hot Book of Ra IGRAJ":
+  - /url: /ba/Game-launch/1019675?gameSource=desktop-home-top-games
+  - img "icon"
+  - text: Popular
+  - img "icon"
+  - text: Top
+  - img "icon"
+  - text: Hot
+  - img "Book of Ra"
+  - button "IGRAJ"
+- text: Book of Ra
+- link "icon Jackpot 40 Shining Crown Bell Link IGRAJ":
+  - /url: /ba/Game-launch/1013048?gameSource=desktop-home-top-games
+  - img "icon"
+  - text: Jackpot
+  - img "40 Shining Crown Bell Link"
+  - button "IGRAJ"
+- text: 40 Shining Crown Bell Link
+- link "icon Top icon Popular icon New icon Bonus Buy icon Hot Gates of Olympus 1000 IGRAJ":
+  - /url: /ba/Game-launch/1013942?gameSource=desktop-home-top-games
+  - img "icon"
+  - text: Top
+  - img "icon"
+  - text: Popular
+  - img "icon"
+  - text: New
+  - img "icon"
+  - text: Bonus Buy
+  - img "icon"
+  - text: Hot
+  - img "Gates of Olympus 1000"
+  - button "IGRAJ"
+- text: Gates of Olympus 1000
+- link "icon Top icon New icon Bonus Buy icon Popular icon Hot Sugar Rush 1000 IGRAJ":
+  - /url: /ba/Game-launch/1013880?gameSource=desktop-home-top-games
+  - img "icon"
+  - text: Top
+  - img "icon"
+  - text: New
+  - img "icon"
+  - text: Bonus Buy
+  - img "icon"
+  - text: Popular
+  - img "icon"
+  - text: Hot
+  - img "Sugar Rush 1000"
+  - button "IGRAJ"
+- text: Sugar Rush 1000
+- link "icon Top icon Hot icon Jackpot 40 Super Hot IGRAJ":
+  - /url: /ba/Game-launch/1012869?gameSource=desktop-home-top-games
+  - img "icon"
+  - text: Top
+  - img "icon"
+  - text: Hot
+  - img "icon"
+  - text: Jackpot
+  - img "40 Super Hot"
+  - button "IGRAJ"
+- text: 40 Super Hot
+- link "icon Hot icon Top icon New icon Bonus Buy icon Popular Wisdom of Athena 1000 IGRAJ":
+  - /url: /ba/Game-launch/1014332?gameSource=desktop-home-top-games
+  - img "icon"
+  - text: Hot
+  - img "icon"
+  - text: Top
+  - img "icon"
+  - text: New
+  - img "icon"
+  - text: Bonus Buy
+  - img "icon"
+  - text: Popular
+  - img "Wisdom of Athena 1000"
+  - button "IGRAJ"
+- text: Wisdom of Athena 1000
+- link "icon Top icon Hot icon New icon Bonus Buy icon Popular Sweet Bonanza 1000 IGRAJ":
+  - /url: /ba/Game-launch/1014323?gameSource=desktop-home-top-games
+  - img "icon"
+  - text: Top
+  - img "icon"
+  - text: Hot
+  - img "icon"
+  - text: New
+  - img "icon"
+  - text: Bonus Buy
+  - img "icon"
+  - text: Popular
+  - img "Sweet Bonanza 1000"
+  - button "IGRAJ"
+- text: Sweet Bonanza 1000
+- link "icon Hot icon Top icon Bonus Buy icon Jackpot icon Popular Book of Secrets Extra IGRAJ":
+  - /url: /ba/Game-launch/1013205?gameSource=desktop-home-top-games
+  - img "icon"
+  - text: Hot
+  - img "icon"
+  - text: Top
+  - img "icon"
+  - text: Bonus Buy
+  - img "icon"
+  - text: Jackpot
+  - img "icon"
+  - text: Popular
+  - img "Book of Secrets Extra"
+  - button "IGRAJ"
+- text: Book of Secrets Extra
+- link "icon Jackpot icon Popular icon Top Respin Joker IGRAJ":
+  - /url: /ba/Game-launch/1013215?gameSource=desktop-home-top-games
+  - img "icon"
+  - text: Jackpot
+  - img "icon"
+  - text: Popular
+  - img "icon"
+  - text: Top
+  - img "Respin Joker"
+  - button "IGRAJ"
+- text: Respin Joker
+- link "icon Hot icon Top icon New icon Bonus Buy icon Popular Starlight Princess 1000 IGRAJ":
+  - /url: /ba/Game-launch/1013918?gameSource=desktop-home-top-games
+  - img "icon"
+  - text: Hot
+  - img "icon"
+  - text: Top
+  - img "icon"
+  - text: New
+  - img "icon"
+  - text: Bonus Buy
+  - img "icon"
+  - text: Popular
+  - img "Starlight Princess 1000"
+  - button "IGRAJ"
+- text: Starlight Princess 1000
+- paragraph: Top mečevi
+- tablist:
+  - tab "Košarka" [selected]
+  - tab "Fudbal"
+  - tab "Tenis"
+  - link "Još":
+    - /url: /ba/Sportsbook
+- button [disabled]:
+  - img
+- button:
+  - img
+- tabpanel "Košarka":
+  - text: Košarka EUROLEAGUE
+  - link "Paris 11 nov. 20:45 Fenerbahce":
+    - /url: sportsbook/match/1024657
+  - paragraph: Pobjednik (Uklj.prod.)
+  - link "1 2.85":
+    - /url: sportsbook/match/1024657?outcome=146694083
+    - paragraph: "1"
+    - paragraph: "2.85"
+  - link "2 1.45":
+    - /url: sportsbook/match/1024657?outcome=146694084
+    - paragraph: "2"
+    - paragraph: "1.45"
+  - text: Košarka EUROLEAGUE
+  - link "Partizan 11 nov. 20:45 Baskonia":
+    - /url: sportsbook/match/1024662
+  - paragraph: Pobjednik (Uklj.prod.)
+  - link "1 1.28":
+    - /url: sportsbook/match/1024662?outcome=146694671
+    - paragraph: "1"
+    - paragraph: "1.28"
+  - link "2 3.90":
+    - /url: sportsbook/match/1024662?outcome=146694674
+    - paragraph: "2"
+    - paragraph: "3.90"
+  - text: Košarka EUROLEAGUE
+  - link "Maccabi T.A. 12 nov. 20:05 Hapoel T.A.":
+    - /url: sportsbook/match/1024659
+  - paragraph: Pobjednik (Uklj.prod.)
+  - link "1 2.65":
+    - /url: sportsbook/match/1024659?outcome=146694400
+    - paragraph: "1"
+    - paragraph: "2.65"
+  - link "2 1.50":
+    - /url: sportsbook/match/1024659?outcome=146694401
+    - paragraph: "2"
+    - paragraph: "1.50"
+  - text: Košarka EUROLEAGUE
+  - link "Olympiacos 12 nov. 20:15 Dubai":
+    - /url: sportsbook/match/1024663
+  - paragraph: Pobjednik (Uklj.prod.)
+  - link "1 1.43":
+    - /url: sportsbook/match/1024663?outcome=146694945
+    - paragraph: "1"
+    - paragraph: "1.43"
+  - link "2 2.75":
+    - /url: sportsbook/match/1024663?outcome=146694947
+    - paragraph: "2"
+    - paragraph: "2.75"
+  - text: Košarka EUROLEAGUE
+  - link "Olimpia Milano 12 nov. 20:30 Zalgiris":
+    - /url: sportsbook/match/1024664
+  - paragraph: Pobjednik (Uklj.prod.)
+  - link "1 2.15":
+    - /url: sportsbook/match/1024664?outcome=146695207
+    - paragraph: "1"
+    - paragraph: "2.15"
+  - link "2 1.72":
+    - /url: sportsbook/match/1024664?outcome=146695210
+    - paragraph: "2"
+    - paragraph: "1.72"
+  - text: Košarka EUROLEAGUE
+  - link "Valencia 12 nov. 20:30 Bayern":
+    - /url: sportsbook/match/1024665
+  - paragraph: Pobjednik (Uklj.prod.)
+  - link "1 1.23":
+    - /url: sportsbook/match/1024665?outcome=146695499
+    - paragraph: "1"
+    - paragraph: "1.23"
+  - link "2 4.40":
+    - /url: sportsbook/match/1024665?outcome=146695502
+    - paragraph: "2"
+    - paragraph: "4.40"
+  - text: Košarka EUROLEAGUE
+  - link "Real Madrid 12 nov. 21:00 Crvena Zvezda":
+    - /url: sportsbook/match/1024666
+  - paragraph: Pobjednik (Uklj.prod.)
+  - link "1 1.29":
+    - /url: sportsbook/match/1024666?outcome=146695772
+    - paragraph: "1"
+    - paragraph: "1.29"
+  - link "2 3.45":
+    - /url: sportsbook/match/1024666?outcome=146695774
+    - paragraph: "2"
+    - paragraph: "3.45"
+- tabpanel "Fudbal"
+- tabpanel "Tenis"
+- heading "Igre uživo" [level=3]
+- button [disabled]:
+  - img
+- button:
+  - img
+- link "icon Top Crazy Time IGRAJ 0.20 BAM - 5 000 BAM":
+  - /url: /ba/Game-launch/1016849?gameSource=desktop-home-casino
+  - img "icon"
+  - text: Top
+  - img "Crazy Time"
+  - button "IGRAJ"
+  - paragraph: 0.20 BAM - 5 000 BAM
+- link "icon Popular icon Hot First Person XXXtreme Lightning Baccarat IGRAJ 2 BAM - 500 BAM":
+  - /url: /ba/Game-launch/1020106?gameSource=desktop-home-casino
+  - img "icon"
+  - text: Popular
+  - img "icon"
+  - text: Hot
+  - img "First Person XXXtreme Lightning Baccarat"
+  - button "IGRAJ"
+  - paragraph: 2 BAM - 500 BAM
+- link "icon Popular Snakes & Ladders Live IGRAJ 0.2 BAM - 7 400 BAM":
+  - /url: /ba/Game-launch/1020099?gameSource=desktop-home-casino
+  - img "icon"
+  - text: Popular
+  - img "Snakes & Ladders Live"
+  - button "IGRAJ"
+  - paragraph: 0.2 BAM - 7 400 BAM
+- link "icon Top icon Popular icon Hot Monopoly Live IGRAJ 0.10 BAM - 1 000 BAM":
+  - /url: /ba/Game-launch/1016861?gameSource=desktop-home-casino
+  - img "icon"
+  - text: Top
+  - img "icon"
+  - text: Popular
+  - img "icon"
+  - text: Hot
+  - img "Monopoly Live"
+  - button "IGRAJ"
+  - paragraph: 0.10 BAM - 1 000 BAM
+- link "icon Top XXXtreme Lightning Roulette IGRAJ 0.20 BAM - 2 000 BAM":
+  - /url: /ba/Game-launch/1016839?gameSource=desktop-home-casino
+  - img "icon"
+  - text: Top
+  - img "XXXtreme Lightning Roulette"
+  - button "IGRAJ"
+  - paragraph: 0.20 BAM - 2 000 BAM
+- link "icon Top Auto Mega Roulette IGRAJ 0.2 BAM - 10 000 BAM":
+  - /url: /ba/Game-launch/1020090?gameSource=desktop-home-casino
+  - img "icon"
+  - text: Top
+  - img "Auto Mega Roulette"
+  - button "IGRAJ"
+  - paragraph: 0.2 BAM - 10 000 BAM
+- link "icon Top Lightning Roulette IGRAJ 0.20 BAM - 5 000 BAM":
+  - /url: /ba/Game-launch/1016859?gameSource=desktop-home-casino
+  - img "icon"
+  - text: Top
+  - img "Lightning Roulette"
+  - button "IGRAJ"
+  - paragraph: 0.20 BAM - 5 000 BAM
+- link "icon Top icon Popular icon Hot Crazy Pachinko IGRAJ 0.10 BAM - 3 750 BAM":
+  - /url: /ba/Game-launch/1017173?gameSource=desktop-home-casino
+  - img "icon"
+  - text: Top
+  - img "icon"
+  - text: Popular
+  - img "icon"
+  - text: Hot
+  - img "Crazy Pachinko"
+  - button "IGRAJ"
+  - paragraph: 0.10 BAM - 3 750 BAM
+- link "icon Top First Person Roulette IGRAJ 0.10 BAM - 5 000 BAM":
+  - /url: /ba/Game-launch/1016827?gameSource=desktop-home-casino
+  - img "icon"
+  - text: Top
+  - img "First Person Roulette"
+  - button "IGRAJ"
+  - paragraph: 0.10 BAM - 5 000 BAM
+- link "icon Top Always 8 Baccarat IGRAJ 2 BAM - 2 000 BAM":
+  - /url: /ba/Game-launch/1020094?gameSource=desktop-home-casino
+  - img "icon"
+  - text: Top
+  - img "Always 8 Baccarat"
+  - button "IGRAJ"
+  - paragraph: 2 BAM - 2 000 BAM
+- link "icon Popular icon Hot First Person XXXtreme Lightning Roulette IGRAJ 0.10 BAM - 10 000 BAM":
+  - /url: /ba/Game-launch/1019643?gameSource=desktop-home-casino
+  - img "icon"
+  - text: Popular
+  - img "icon"
+  - text: Hot
+  - img "First Person XXXtreme Lightning Roulette"
+  - button "IGRAJ"
+  - paragraph: 0.10 BAM - 10 000 BAM
+- text: Preuzmite aplikacije za
+- button "Android"
+- text: and
+- button "iOS"
+- button "Android Preuzmi na For Android":
+  - img "Android"
+  - text: Preuzmi na For Android
+- button "Ios Preuzmi na App Store":
+  - img "Ios"
+  - text: Preuzmi na App Store
+- link "Klađenje":
+  - /url: /ba/sportsbook
+- link "Uživo":
+  - /url: /ba/sportsbook/live
+- link "Slotovi":
+  - /url: /ba/slots
+- link "Igre uživo":
+  - /url: /ba/live-games
+- link "Virtuelne igre":
+  - /url: /ba/virtual-sport
+- link "MyLucky6":
+  - /url: /ba/game-launch/1015026
+- text: Promocije
+- link "Česta pitanja":
+  - /url: /ba/faq
+- link "Uplatna mjesta":
+  - /url: /ba/betting-shops
+- link "Preuzmi":
+  - /url: /ba/download
+- link "Podešavanja kolačića":
+  - /url: "#"
+- link "Pravila":
+  - /url: /ba/rules?nav=14
+- link "Kontaktirajte nas":
+  - /url: /ba/contact
+- link:
+  - /url: https://www.facebook.com/maxbetbosnaihercegovina
+  - img
+- link:
+  - /url: https://www.instagram.com/maxbetbih/
+  - img
+- link "+38765031111":
+  - /url: tel:+38765031111
+  - img
+  - text: "+38765031111"
+- link "online@maxbet.ba":
+  - /url: mailto:online@maxbet.ba
+  - img
+  - text: online@maxbet.ba
+- button "Pitanja? Ćaskajte sa nama":
+  - text: Pitanja? Ćaskajte sa nama
+  - img
+- img
+- img
+- img
+- img
+- img
+- img
+- img
+- paragraph: "www.maxbet.ba je u vlasništvu KRIJCOS d.o.o. Bijeljina, koji je registrovan kod Okružnog privrednog suda u Bijeljini pod matičnim brojem upisa: 1-4842, matični broj: 01929003. KRIJCOS d.o.o. Bijeljina priređuje internet igre na sreću na osnovu rješenja Ministarstva finansija Republike Srpske broj: 06.05/463-3/24 od 25.06.2024. godine."
+- text: 17:31:54
+- button "Bos":
+  - img
+  - text: Bos
+  - img
+- region "Notifications alt+T"
+- alert

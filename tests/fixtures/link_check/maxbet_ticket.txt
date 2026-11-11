@@ -1,0 +1,692 @@
+# MaxBet prematch ticket page, outcome 147294305 on the slip (2026-11-11)
+# source: https://www.maxbet.ba/ba/sportsbook/match/1027619?outcome=147294305
+# captured: 2026-11-11 (aria snapshot tail)
+- link [disabled]:
+  - /url: /ba/
+  - img
+- link "Sport":
+  - /url: /ba/sportsbook
+- link "Uživo":
+  - /url: /ba/sportsbook/live
+- link "Slot":
+  - /url: /ba/Slots
+- link "Igre uživo":
+  - /url: /ba/live-games
+- link "Virtualne igre":
+  - /url: /ba/virtual-sport
+- link "Novo Brze Igre":
+  - /url: /ba/fast-games
+- link "Novo Esport":
+  - /url: /ba/esport
+- link "Novo Crash Igre":
+  - /url: /ba/crash-games
+- button "Promo":
+  - img
+  - paragraph: Promo
+- link "Registruj se":
+  - /url: /ba/registration
+- text: Prijavi se
+- banner:
+  - navigation:
+    - list:
+      - listitem:
+        - link "Mečevi":
+          - /url: /ba/sportsbook/dashboard?lang=bs&filterId=all
+          - img:
+            - img
+          - text: Mečevi
+      - listitem:
+        - link "Najbolja ponuda":
+          - /url: /ba/sportsbook/top?lang=bs&filterId=all
+          - img:
+            - img
+          - text: Najbolja ponuda
+      - listitem:
+        - link "Igrači":
+          - /url: /ba/sportsbook/special-offer?lang=bs&filterId=all
+          - img:
+            - img
+          - text: Igrači
+      - listitem:
+        - link "Vremenska ponuda":
+          - /url: /ba/sportsbook/time?lang=bs&filterId=all
+          - img:
+            - img
+          - text: Vremenska ponuda
+      - listitem:
+        - img:
+          - img
+        - text: Statistika
+- complementary:
+  - link:
+    - /url: /ba/sportsbook/special-offer
+    - img:
+      - img
+  - button "Sve"
+  - navigation:
+    - list:
+      - listitem:
+        - img:
+          - img
+      - listitem:
+        - img:
+          - img
+      - listitem:
+        - img:
+          - img
+      - listitem:
+        - img:
+          - img
+      - listitem:
+        - img:
+          - img
+      - listitem:
+        - img:
+          - img
+      - listitem:
+        - img:
+          - img
+      - listitem:
+        - img:
+          - img
+      - listitem:
+        - img:
+          - img
+      - listitem:
+        - img:
+          - img
+      - listitem:
+        - img:
+          - img
+      - listitem:
+        - img:
+          - img
+      - listitem:
+        - img:
+          - img
+      - listitem:
+        - img:
+          - img
+      - listitem:
+        - img:
+          - img
+      - listitem:
+        - img:
+          - img
+      - listitem:
+        - img:
+          - img
+- main
+- button:
+  - img:
+    - img
+- text: Fudbal / Panama / Panama 1 sub 14.11 22:00 CD Universitario - Herrera FC
+- button "Statistika":
+  - img:
+    - img
+  - text: Statistika
+  - img:
+    - img
+- button "Sve":
+  - img:
+    - img
+  - text: Sve
+- button "Sve"
+- button:
+  - img:
+    - img
+- button "Popularno"
+- button "Golovi"
+- button "Poluvrijeme"
+- button "Kombo"
+- button "Tačan rezultat"
+- button "Popularno":
+  - text: Popularno
+  - img
+- button "Konačan ishod":
+  - img:
+    - img
+  - text: Konačan ishod
+- button "1 1.55"
+- button "X 3.90"
+- button "2 4.80"
+- button "Ukupno golova":
+  - img:
+    - img
+  - text: Ukupno golova
+- button "Manje 10.00"
+- text: "0.5"
+- button "Više":
+  - text: Više
+  - img
+- button "Manje 4.40"
+- text: "1.5"
+- button "Više 1.14"
+- button "Manje 2.10"
+- text: "2.5"
+- button "Više 1.58"
+- button "Manje 1.42"
+- text: "3.5"
+- button "Više 2.50"
+- button "Manje 1.15"
+- text: "4.5"
+- button "Više 4.25"
+- button "Manje 1.03"
+- text: "5.5"
+- button "Više 7.50"
+- button "GG - NG":
+  - img:
+    - img
+  - text: GG - NG
+- button "GG 1.60"
+- button "NG 2.10"
+- button "Ukupno golova 1. poluvrijeme":
+  - img:
+    - img
+  - text: Ukupno golova 1. poluvrijeme
+- button "Ug 1P Manje 3.50"
+- text: "0.5"
+- button "Ug 1P više 1.22"
+- button "Ug 1P Manje 1.50"
+- text: "1.5"
+- button "Ug 1P više 2.30"
+- button "Ug 1P Manje 1.09"
+- text: "2.5"
+- button "Ug 1P više 5.40"
+- button "Ug 1P Manje":
+  - text: Ug 1P Manje
+  - img
+- text: "3.5"
+- button "Ug 1P više 10.00"
+- button "Ug 1P Manje":
+  - text: Ug 1P Manje
+  - img
+- text: "4.5"
+- button "Ug 1P više 20.00"
+- button "Ug 1P Manje":
+  - text: Ug 1P Manje
+  - img
+- text: "5.5"
+- button "Ug 1P više 30.00"
+- button "Domaćin ukupno golova":
+  - img:
+    - img
+  - text: Domaćin ukupno golova
+- button "Manje 6.20"
+- text: "0.5"
+- button "Više 1.06"
+- button "Manje 2.20"
+- text: "1.5"
+- button "Više 1.54"
+- button "Manje 1.34"
+- text: "2.5"
+- button "Više 2.80"
+- button "Manje 1.08"
+- text: "3.5"
+- button "Više 5.60"
+- button "Dupla šansa":
+  - img:
+    - img
+  - text: Dupla šansa
+- button "1X 1.13"
+- button "12 1.19"
+- button "X2 2.25"
+- button "Gost ukupno golova":
+  - img:
+    - img
+  - text: Gost ukupno golova
+- button "Manje 2.55"
+- text: "0.5"
+- button "više 1.40"
+- button "Manje 1.28"
+- text: "1.5"
+- button "više 3.10"
+- button "Domaćin golovi 1. poluvrijeme":
+  - img:
+    - img
+  - text: Domaćin golovi 1. poluvrijeme
+- button "1D manje 2.25"
+- text: "0.5"
+- button "1D više 1.52"
+- button "1D manje 1.18"
+- text: "1.5"
+- button "1D više 3.90"
+- button "1D manje 1.01"
+- text: "2.5"
+- button "1D više 10.00"
+- button "1D manje":
+  - text: 1D manje
+  - img
+- text: "3.5"
+- button "1D više 20.00"
+- button "1D manje":
+  - text: 1D manje
+  - img
+- text: "4.5"
+- button "1D više 21.00"
+- button "Sljedeći gol":
+  - img:
+    - img
+  - text: Sljedeći gol
+- text: "1"
+- button "1 1.48"
+- button "bez gola 14.00"
+- button "2 2.80"
+- button "Sledeći gol prvo poluvrijeme":
+  - img:
+    - img
+  - text: Sledeći gol prvo poluvrijeme
+- text: "1"
+- button "1 1.87"
+- button "bez gola 3.60"
+- button "2 3.50"
+- button "Prvo poluvrijeme - ishod":
+  - img:
+    - img
+  - text: Prvo poluvrijeme - ishod
+- button "P1 2.07"
+- button "PX 2.40"
+- button "P2 4.80"
+- button "Poluvrijeme - Kraj":
+  - img:
+    - img
+  - text: Poluvrijeme - Kraj
+- button "1-1 2.40"
+- button "1-X 14.00"
+- button "1-2 41.00"
+- button "X-1 4.80"
+- button "X-X 6.50"
+- button "X-2 11.50"
+- button "2-1 19.00"
+- button "2-X 15.00"
+- button "2-2 8.25"
+- button "Golovi":
+  - text: Golovi
+  - img
+- button "Ukupno golova":
+  - img:
+    - img
+  - text: Ukupno golova
+- button "Manje 10.00"
+- text: "0.5"
+- button "Više":
+  - text: Više
+  - img
+- button "Manje 4.40"
+- text: "1.5"
+- button "Više 1.14"
+- button "Manje 2.10"
+- text: "2.5"
+- button "Više 1.58"
+- button "Manje 1.42"
+- text: "3.5"
+- button "Više 2.50"
+- button "Manje 1.15"
+- text: "4.5"
+- button "Više 4.25"
+- button "Manje 1.03"
+- text: "5.5"
+- button "Više 7.50"
+- button "GG & ukupno golova":
+  - img:
+    - img
+  - text: GG & ukupno golova
+- button "GG & manje od 2.5 7.50"
+- button "GG & više od 2.5 1.98"
+- button "NG & manje od 2.5 2.90"
+- button "NG & više od 2.5 7.00"
+- button "Sljedeći gol":
+  - img:
+    - img
+  - text: Sljedeći gol
+- text: "1"
+- button "1 1.48"
+- button "bez gola 14.00"
+- button "2 2.80"
+- button "Domaćin ukupno golova":
+  - img:
+    - img
+  - text: Domaćin ukupno golova
+- button "Manje 6.20"
+- text: "0.5"
+- button "Više 1.06"
+- button "Manje 2.20"
+- text: "1.5"
+- button "Više 1.54"
+- button "Manje 1.34"
+- text: "2.5"
+- button "Više 2.80"
+- button "Manje 1.08"
+- text: "3.5"
+- button "Više 5.60"
+- button "Gost ukupno golova":
+  - img:
+    - img
+  - text: Gost ukupno golova
+- button "Manje 2.55"
+- text: "0.5"
+- button "više 1.40"
+- button "Manje 1.28"
+- text: "1.5"
+- button "više 3.10"
+- button "1+ gol u svakom poluvrijemenu":
+  - img:
+    - img
+  - text: 1+ gol u svakom poluvrijemenu
+- button "1P1+&2P1+ 1.50"
+- button "Ne 1P1+&2P1+ 2.30"
+- button "Multigolovi":
+  - img:
+    - img
+  - text: Multigolovi
+- button "bez golova 16.00"
+- button "ug 1-2 2.45"
+- button "ug 1-3 1.56"
+- button "ug 1-4 1.22"
+- button "ug 1-5 1.08"
+- button "ug 1-6 1.04"
+- button "ug 2-3 2.05"
+- button "ug 2-4 1.50"
+- button "ug 3-4 2.35"
+- button "ug 2-5 1.29"
+- button "ug 2-6 1.20"
+- button "ug 4-6 2.80"
+- button "ug 3-5 1.87"
+- button "ug 3-6 1.69"
+- button:
+  - img:
+    - img
+- button "ug 5-6 5.50"
+- button "ug 7+ 19.00"
+- button:
+  - img:
+    - img
+- button "Domaćin Ukupno golova-Rasponi":
+  - img:
+    - img
+  - text: Domaćin Ukupno golova-Rasponi
+- button "D 1-2 1.66"
+- button "D 2-4 1.70"
+- button "D 1-3 1.26"
+- button "D 3-4 3.35"
+- button "D 1-4 1.13"
+- button "D 5+ 14.00"
+- button "D 2-3 2.00"
+- button "D 0 6.50"
+- button "Gost Ukupno golova-Rasponi":
+  - img:
+    - img
+  - text: Gost Ukupno golova-Rasponi
+- button "G 1-2 1.63"
+- button "G 2-4 3.25"
+- button "G 1-3 1.47"
+- button "G 3-4 9.50"
+- button "G 1-4 1.43"
+- button "G 5+":
+  - text: G 5+
+  - img
+- button "G 2-3 3.45"
+- button "G 0 2.60"
+- button "Poluvrijeme":
+  - text: Poluvrijeme
+  - img
+- button "Prvo poluvrijeme - ishod":
+  - img:
+    - img
+  - text: Prvo poluvrijeme - ishod
+- button "P1 2.07"
+- button "PX 2.40"
+- button "P2 4.80"
+- button "Sledeći gol prvo poluvrijeme":
+  - img:
+    - img
+  - text: Sledeći gol prvo poluvrijeme
+- text: "1"
+- button "1 1.87"
+- button "bez gola 3.60"
+- button "2 3.50"
+- button "Ukupno golova 1. poluvrijeme":
+  - img:
+    - img
+  - text: Ukupno golova 1. poluvrijeme
+- button "Ug 1P Manje 3.50"
+- text: "0.5"
+- button "Ug 1P više 1.22"
+- button "Ug 1P Manje 1.50"
+- text: "1.5"
+- button "Ug 1P više 2.30"
+- button "Ug 1P Manje 1.09"
+- text: "2.5"
+- button "Ug 1P više 5.40"
+- button "Ug 1P Manje":
+  - text: Ug 1P Manje
+  - img
+- text: "3.5"
+- button "Ug 1P više 10.00"
+- button "Ug 1P Manje":
+  - text: Ug 1P Manje
+  - img
+- text: "4.5"
+- button "Ug 1P više 20.00"
+- button "Ug 1P Manje":
+  - text: Ug 1P Manje
+  - img
+- text: "5.5"
+- button "Ug 1P više 30.00"
+- button "1.poluvrijeme - raspon golova":
+  - img:
+    - img
+  - text: 1.poluvrijeme - raspon golova
+- button "ug 1P 1-2 1.55"
+- button "ug 1P 1-3 1.32"
+- button "ug 1P 1-4 1.26"
+- button "ug 1P 2-3 2.65"
+- button "ug 1P 2-4 2.40"
+- button "ug 1P 3-4 6.00"
+- button "ug 1P 5+ 51.00"
+- button "ug 1P 0 3.60"
+- button "Domaćin golovi 1. poluvrijeme":
+  - img:
+    - img
+  - text: Domaćin golovi 1. poluvrijeme
+- button "1D manje 2.25"
+- text: "0.5"
+- button "1D više 1.52"
+- button "1D manje 1.18"
+- text: "1.5"
+- button "1D više 3.90"
+- button "1D manje 1.01"
+- text: "2.5"
+- button "1D više 10.00"
+- button "1D manje":
+  - text: 1D manje
+  - img
+- text: "3.5"
+- button "1D više 20.00"
+- button "1D manje":
+  - text: 1D manje
+  - img
+- text: "4.5"
+- button "1D više 21.00"
+- button "Gost golovi 1. poluvrijeme":
+  - img:
+    - img
+  - text: Gost golovi 1. poluvrijeme
+- button "1G manje 1.46"
+- text: "0.5"
+- button "1G više 2.40"
+- button "1G manje":
+  - text: 1G manje
+  - img
+- text: "1.5"
+- button "1G više 8.50"
+- button "1G manje":
+  - text: 1G manje
+  - img
+- text: "2.5"
+- button "1G više 20.00"
+- button "1G manje":
+  - text: 1G manje
+  - img
+- text: "3.5"
+- button "1G više 26.00"
+- button "1G manje":
+  - text: 1G manje
+  - img
+- text: "4.5"
+- button "1G više 26.00"
+- button "2.poluvrijeme - raspon golova":
+  - img:
+    - img
+  - text: 2.poluvrijeme - raspon golova
+- button "ug 2P 1-2 1.61"
+- button "ug 2P 1-3 1.29"
+- button "ug 2P 1-4 1.18"
+- button "ug 2P 2-3 2.20"
+- button "ug 2P 2-4 1.94"
+- button "ug 2P 3-4 4.25"
+- button "ug 2P 5+ 23.00"
+- button "ug 2P 0 4.70"
+- button "Kombo":
+  - text: Kombo
+  - img
+- button "Konačan ishod & ukupno golova 1.5":
+  - img:
+    - img
+  - text: Konačan ishod & ukupno golova 1.5
+- button "1 & manje od 1.5 8.25"
+- button "1 & više od 1.5 1.85"
+- button "X & manje od 1.5 16.00"
+- button "X & više od 1.5 4.90"
+- button "2 & manje od 1.5 15.00"
+- button "2 & više od 1.5 6.25"
+- button "Konačan ishod & ukupno golova 2.5":
+  - img:
+    - img
+  - text: Konačan ishod & ukupno golova 2.5
+- button "1 & manje od 2.5 4.50"
+- button "1 & više od 2.5 2.25"
+- button "X & manje od 2.5 5.60"
+- button "X & više od 2.5 11.00"
+- button "2 & manje od 2.5 11.00"
+- button "2 & više od 2.5 7.50"
+- button "Konačan ishod & ukupno golova 3.5":
+  - img:
+    - img
+  - text: Konačan ishod & ukupno golova 3.5
+- button "1 & manje od 3.5 2.50"
+- button "1 & više od 3.5 3.75"
+- button "X & manje od 3.5 5.60"
+- button "X & više od 3.5 11.00"
+- button "2 & manje od 3.5 6.50"
+- button "2 & više od 3.5 14.00"
+- button "Konačan ishod & ukupno golova 4.5":
+  - img:
+    - img
+  - text: Konačan ishod & ukupno golova 4.5
+- button "1 & manje od 4.5 1.91"
+- button "1 & više od 4.5 5.25"
+- button "X & manje od 4.5 3.90"
+- button "X & više od 4.5 34.00"
+- button "2 & manje od 4.5 5.20"
+- button "2 & više od 4.5 17.00"
+- button "Konačan ishod & GG":
+  - img:
+    - img
+  - text: Konačan ishod & GG
+- button "1 & GG 2.85"
+- button "X & GG 4.40"
+- button "2 & GG 7.00"
+- button "Tačan rezultat":
+  - text: Tačan rezultat
+  - img
+- button "Tačan rezultat":
+  - img:
+    - img
+  - text: Tačan rezultat
+- button "1:0 8.25"
+- button "0:0 16.00"
+- button "0:1 15.00"
+- button "2:0 8.50"
+- button "1:1 7.50"
+- button "0:2 26.00"
+- button "2:1 7.75"
+- button "2:2 13.00"
+- button "1:2 14.00"
+- button "3:0 12.50"
+- button "3:3 46.00"
+- button "0:3 81.00"
+- button "3:1 11.50"
+- button "4:4":
+  - text: 4:4
+  - img
+- button "1:3 34.00"
+- button "Load more"
+- button "Tiket 1"
+- button "Express tiket 0"
+- button "Regularan"
+- button "Sistem" [disabled]
+- paragraph: Selekcije
+- button "Obriši sve":
+  - img:
+    - img
+  - paragraph: Obriši sve
+- text: sub 14.11 22:00
+- img:
+  - img
+- text: "799"
+- button:
+  - img:
+    - img
+- button "CD Universitario Herrera FC":
+  - paragraph: CD Universitario
+  - paragraph: Herrera FC
+- paragraph: Konačan ishod
+- paragraph: "1"
+- paragraph: "1.55"
+- paragraph: Ukupna kvota
+- paragraph: "1.55"
+- paragraph: Ulog
+- button [disabled]:
+  - img:
+    - img
+- textbox: 0.50 BAM
+- button:
+  - img:
+    - img
+- button "Uloguj se & Uplati tiket Max. Dobitak 0.77 BAM":
+  - button "Uloguj se & Uplati tiket Max. Dobitak 0.77 BAM":
+    - paragraph: Uloguj se & Uplati tiket
+    - paragraph: Max. Dobitak
+    - text: 0.77 BAM
+- button "Ekspres Tiket":
+  - img:
+    - img
+  - paragraph: Ekspres Tiket
+- heading "Provjeri status svog tiketa" [level=2]
+- paragraph: Unesite barkod sa vašeg tiketa koji je odigran na lokaciji da provjerite status tiketa.
+- textbox "Tiket ID"
+- textbox "PIN kod"
+- button "Provjeri status" [disabled]
+- text: Imate poteškoća sa pronalaženjem svog koda?
+- button "Pomoć"
+- link "+38765031111":
+  - /url: tel:+38765031111
+  - img
+  - text: "+38765031111"
+- link "online@maxbet.ba":
+  - /url: mailto:online@maxbet.ba
+  - img
+  - text: online@maxbet.ba
+- img
+- paragraph: © MaxBet. Sva prava zadržana.
+- button:
+  - img
+- button:
+  - img
+- button "Bos":
+  - img
+  - text: Bos
+- text: 17:31:15
+- region "Notifications alt+T"
+- alert

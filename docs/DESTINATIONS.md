@@ -133,3 +133,35 @@ live offer has a different shape, so the script is prematch-only.
 - **No gate effect.** These destinations never set `deep_link_verified`, never
   change a group's status, and are not part of the certainty gate. A manual link
   check still cannot make an unverified group display.
+
+## On-demand link check (SR9-3)
+
+The slip's **Check links** button calls `POST /api/surebets/{id}/check-links`
+(`scan` scope). For each leg whose destination is a filled ticket or a match
+page, the server opens the URL in its own fresh browser context (no cookies
+kept between legs, so one leg's filled slip cannot leak into the next) and reads
+the page's rendered accessibility text:
+
+- **opens the match** — both team names, as the book spells them in
+  `listings`, appear on the page. A competition page that does not show the
+  fixture fails;
+- **ticket has the pick** — for a `ticket_filled` leg, the text after the page's
+  own slip wording (Tiket/Listić/Selekcije…) repeats both team names and the
+  pick. An empty slip ("Vaš tiket je prazan") fails, and so does a page with no
+  slip wording at all;
+- a line market also needs its side (više/manje/over/under) and its line, so the
+  other side of the same line does not pass.
+
+A leg with only a search or competition destination is reported as skipped — it
+has no per-fixture page to open, and "we never tried" is not a failure. The
+result lists every leg with its status and the check's time, and it is advisory:
+it never sets `deep_link_verified`, never changes a group's status and never
+submits anything. Each surebet has its own rate window
+(`SUREBET_LINK_CHECK_MIN_INTERVAL_SECONDS`, 30 s by default), so a double-click
+cannot queue a second browser run, while checking several cards in a row is
+normal. The check never runs inside a scan and shares the deep-link checker's
+one-browser lock.
+
+The captured page text the check is tested against lives in
+`tests/fixtures/link_check/` (MaxBet filled and empty slip, MDShop filled slip, a
+MaxBet home page).
