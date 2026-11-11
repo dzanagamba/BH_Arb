@@ -179,11 +179,11 @@ do not copy stale numbers here.
 | M4-5 | Apply the planned dependency upgrades | Done | M4-4 | operator |
 | M5-1 | Remove legacy URL maps | Done | — | operator |
 | M5-2 | Decide the `link_sweeps` table | Done | — | operator |
-| M5-3 | Decide approve/reject functions | In progress | — | operator |
+| M5-3 | Decide approve/reject functions | Done | — | operator |
 | M5-4 | Decide `raw_market_resolver.resolve_offers` | Done | — | operator |
 | M5-5 | Finish the PWA | Done | — | operator |
-| M5-6 | Zero-matches diagnostic and no-surebet state | In progress | — | operator |
-| M5-7 | Fix the feed-mode tab ARIA contract | In progress | — | operator |
+| M5-6 | Zero-matches diagnostic and no-surebet state | Done | — | operator |
+| M5-7 | Fix the feed-mode tab ARIA contract | Done | — | operator |
 | M6-1 | Branch coverage floor in CI | Not started | — | operator |
 | M7-1 | Dashboard UI polish pass | Done | — | — |
 
@@ -3373,7 +3373,7 @@ Acceptance (2026-11-11):
 
 ### M5-3 Decide approve/reject functions
 
-Status: In progress
+Status: Done
 
 Gate: operator
 
@@ -3394,15 +3394,24 @@ Why / what: Decide the unreachable candidate approve/reject functions: restore
 them behind `HUMAN_MAPPING_ENABLED` with a review, or delete them and the stale
 documentation.
 
+**Outcome (2026-11-11).** Deleted `approve_candidate`, `reject_candidate`,
+`_approve`, `_approval_blockers`, `_resolve_candidate`, `HUMAN_MAPPING_ENABLED`,
+`candidate_reviews`, `CANDIDATE_REVIEW_HISTORY_MAX`, the `human_mapping_enabled`
+payload key and the runtime allowlist writer. The suppression reader and the
+`_suppress_candidate` writer stay, so decisions an older build wrote are honoured
+and not re-queued. Approval and allowlist-writer tests were removed; suppression
+tests now drive `_suppress_candidate`, and the 404 route-absence tests stay.
+`docs/CANDIDATE_REMEDIATION.md` updated.
+
 Acceptance (2026-11-11):
-- [ ] `approve_candidate`, `reject_candidate`, `_approve`, `_approval_blockers`,
+- [x] `approve_candidate`, `reject_candidate`, `_approve`, `_approval_blockers`,
       `_resolve_candidate`, `HUMAN_MAPPING_ENABLED`, `candidate_reviews`,
       `CANDIDATE_REVIEW_HISTORY_MAX` and the runtime allowlist writer are gone.
-- [ ] The candidates payload drops `human_mapping_enabled`; the suppression
+- [x] The candidates payload drops `human_mapping_enabled`; the suppression
       reader still loads and honours old decisions.
-- [ ] Tests for the removed path are deleted; suppression tests drive
+- [x] Tests for the removed path are deleted; suppression tests drive
       `_suppress_candidate` directly; the 404 route-absence tests stay.
-- [ ] `docs/CANDIDATE_REMEDIATION.md` matches; the full suite and checks pass.
+- [x] `docs/CANDIDATE_REMEDIATION.md` matches; the full suite and checks pass.
 
 ### M5-4 Decide `raw_market_resolver.resolve_offers`
 
@@ -3480,7 +3489,7 @@ Acceptance (2026-11-11):
 
 ### M5-6 Zero-matches diagnostic and no-surebet state
 
-Status: In progress
+Status: Done
 
 Gate: operator
 
@@ -3500,18 +3509,26 @@ Why / what: Add the "scan completed with zero matches" diagnostic and a
 run-mode-aware no-surebet state; extend the truth table and companions
 deliberately.
 
+**Outcome (2026-11-11).** `diagnosticFlags` gained `scan_completed`
+(`last_scan_age_sec` for the mode on screen) and a `zero_matches` case renders
+between `never_scanned` and the gate cases, with a `Scan now` action and live
+copy; only the two feed-decided cases carry `*_live` copy. The truth table now
+enumerates six flags, `_unreachable` pins `scanned -> scan_completed`, and a real
+completed empty scan selects `zero_matches` in the shipped selector. English and
+Bosnian copy added; `docs/ACCESSIBILITY.md` updated.
+
 Acceptance (2026-11-11):
-- [ ] The diagnostics distinguish never-scanned from a completed zero-match scan
+- [x] The diagnostics distinguish never-scanned from a completed zero-match scan
       in both feeds.
-- [ ] `diagnosticFlags` produces `scan_completed`; the zero-match case offers
+- [x] `diagnosticFlags` produces `scan_completed`; the zero-match case offers
       `Scan now`; only feed-decided cases carry live copy.
-- [ ] The truth table covers all reachable combinations and a real empty-scan
+- [x] The truth table covers all reachable combinations and a real empty-scan
       fixture selects `zero_matches`; companions still break each predicate.
-- [ ] Copy is present in English and Bosnian; the full suite and checks pass.
+- [x] Copy is present in English and Bosnian; the full suite and checks pass.
 
 ### M5-7 Fix the feed-mode tab ARIA contract
 
-Status: In progress
+Status: Done
 
 Gate: operator
 
@@ -3529,14 +3546,22 @@ a small `#slip-status` line announces only the fixture that was opened.
 Why / what: Fix the feed-mode tab ARIA contract (`aria-controls`/roving tabindex
 or a `group` with `aria-pressed`) and reconsider the whole-slip live region.
 
+**Outcome (2026-11-11).** Both feed tabs now carry
+`aria-controls="surebets-panel"` and a roving `tabindex` kept by
+`updateModeToggleUI`; `handleModeTabKeydown` moves with arrows/Home/End and
+switches the feed. The whole-slip `aria-live` was replaced by a labelled region
+plus `#slip-status`, which announces the opened fixture and clears on close.
+`docs/PWA_ACCESSIBILITY.md` and `tests/test_accessibility_axe.py` pin the
+contract.
+
 Acceptance (2026-11-11):
-- [ ] Both feed tabs carry `aria-controls="surebets-panel"`, one `tabindex="0"`
+- [x] Both feed tabs carry `aria-controls="surebets-panel"`, one `tabindex="0"`
       and one `-1`, kept in sync by `updateModeToggleUI`.
-- [ ] Arrow/Home/End keys move focus and switch the feed via
+- [x] Arrow/Home/End keys move focus and switch the feed via
       `handleModeTabKeydown`.
-- [ ] The slip pane is a labelled region, not a live region; `#slip-status`
+- [x] The slip pane is a labelled region, not a live region; `#slip-status`
       announces the opened fixture and clears when the slip closes.
-- [ ] Accessibility tests and docs pin the contract; the full suite passes.
+- [x] Accessibility tests and docs pin the contract; the full suite passes.
 
 ---
 
