@@ -2,8 +2,9 @@
 // are dangerous, and a service worker must not become a second stale-feed layer.
 // The document asks for versioned assets (?v=8); cache those exact URLs and
 // match with ignoreSearch so a version bump still resolves.
-const CACHE = 'bh-arb-shell-v4';
-const SHELL = ['/', '/css/style.css?v=8', '/js/i18n.js', '/js/app.js?v=8', '/manifest.webmanifest'];
+const CACHE = 'bh-arb-shell-v5';
+const SHELL = ['/', '/css/style.css?v=8', '/js/i18n.js', '/js/app.js?v=8', '/manifest.webmanifest',
+    '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', event => {
     event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)));

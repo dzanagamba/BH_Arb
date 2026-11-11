@@ -303,6 +303,8 @@ if os.path.exists(os.path.join(FRONTEND_DIR, "css")):
     app.mount("/css", StaticFiles(directory=os.path.join(FRONTEND_DIR, "css")), name="css")
 if os.path.exists(os.path.join(FRONTEND_DIR, "js")):
     app.mount("/js", StaticFiles(directory=os.path.join(FRONTEND_DIR, "js")), name="js")
+if os.path.exists(os.path.join(FRONTEND_DIR, "icons")):
+    app.mount("/icons", StaticFiles(directory=os.path.join(FRONTEND_DIR, "icons")), name="icons")
 
 
 @app.get("/manifest.webmanifest", include_in_schema=False)

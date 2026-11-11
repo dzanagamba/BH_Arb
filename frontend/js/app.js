@@ -127,9 +127,29 @@ async function enableNotifications() {
         return;
     }
     const permission = await Notification.requestPermission();
-    showToast(permission === 'granted'
-        ? tr('Browser alerts enabled.')
-        : tr('Browser alerts were not enabled.'));
+    if (permission !== 'granted') {
+        showToast(tr('Browser alerts were not enabled.'));
+        return;
+    }
+    showToast(tr('Browser alerts enabled.'));
+    // Prove the grant works instead of only recording it: the service worker
+    // shows the notification where mobile requires one, the page constructor
+    // covers a browser without a ready worker.
+    try {
+        const registration = navigator.serviceWorker ? await navigator.serviceWorker.ready : null;
+        if (registration) {
+            await registration.showNotification(tr('Browser alerts enabled.'), {
+                icon: '/icons/icon-192.png',
+                badge: '/icons/icon-192.png',
+                tag: 'bh-arb-alerts-enabled',
+            });
+        } else {
+            new Notification(tr('Browser alerts enabled.'), { icon: '/icons/icon-192.png' });
+        }
+    } catch (error) {
+        // The toast already confirmed the permission; a refused display is not fatal.
+        console.warn('Notification display failed:', error);
+    }
 }
 
 // P3-4: installable shell only. Odds and /api responses are never cached.

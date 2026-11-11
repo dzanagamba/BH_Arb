@@ -19,6 +19,33 @@ def test_manifest_makes_the_app_installable():
     assert MANIFEST["display"] == "standalone"
     assert 'rel="manifest"' in HTML
     assert 'name="theme-color"' in HTML
+    icons = {icon["sizes"]: icon for icon in MANIFEST["icons"]}
+    assert set(icons) == {"192x192", "512x512"}
+    assert all(icon["type"] == "image/png" for icon in icons.values())
+    assert any(icon.get("purpose") == "maskable" for icon in icons.values())
+
+
+def test_pwa_icons_are_real_pngs_at_the_declared_sizes():
+    import struct
+
+    for icon in MANIFEST["icons"]:
+        path = Path("frontend") / icon["src"].lstrip("/")
+        data = path.read_bytes()
+        assert data[:8] == b"\x89PNG\r\n\x1a\n", path
+        width, height = struct.unpack(">II", data[16:24])
+        assert f"{width}x{height}" == icon["sizes"], path
+
+
+def test_the_server_serves_the_pwa_icons():
+    from fastapi.testclient import TestClient
+
+    from server.app import app
+
+    client = TestClient(app)
+    for icon in MANIFEST["icons"]:
+        response = client.get(icon["src"])
+        assert response.status_code == 200, icon["src"]
+        assert response.headers["content-type"] == "image/png"
 
 
 def test_the_service_worker_never_caches_api_or_odds():
@@ -76,10 +103,14 @@ def test_the_language_toggle_persists_and_covers_main_labels():
     assert "function tr(" in JS
 
 
-def test_browser_alerts_are_permission_gated():
+def test_browser_alerts_are_permission_gated_and_send_a_confirmation():
     assert 'data-action="enable-notifications"' in HTML
     assert "Notification.requestPermission" in JS
     assert "enableNotifications" in JS
+    # The button used to stop at the permission prompt. It now proves the grant
+    # with a real notification, through the worker or the page constructor.
+    assert "showNotification" in JS
+    assert "new Notification" in JS
 
 
 def test_the_service_worker_is_registered_without_a_bundler():
