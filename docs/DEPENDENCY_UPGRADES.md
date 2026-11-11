@@ -1,15 +1,15 @@
 # Dependency upgrade plan (M4-4)
 
-Planning only: this document records the four remaining upgrades, what a dry run
-in a throwaway virtual environment measured, and the acceptance criteria for each
-separate change. No pin in `requirements.txt` / `requirements-dev.txt` moved for
-this task.
+**Applied 2026-11-11 (M4-5).** All four moves below are installed: `httpx2`
+2.16.0 in the dev lock, FastAPI 0.162.2, mypy 2.4.1 and ruff 0.17.4. The plan,
+its measured dry run and each upgrade's acceptance are kept as the record; the
+"Before" column shows the pins the plan started from.
 
-## Current pins and targets
+## Pins when this was planned
 
 Measured 2026-11-09 from `requirements.lock` / `requirements-dev.lock` and PyPI:
 
-| Package | Installed | Target | Notes |
+| Package | Before | Target | Notes |
 |---|---|---|---|
 | `fastapi` | 0.140.13 | 0.162.2 | runtime |
 | `starlette` | 1.10.0 | 1.10.0 | already the latest release; FastAPI 0.162 requires `>=0.46` |
@@ -182,3 +182,24 @@ U1 and U4 touch the runtime/test environment, so their commits also run the
 suite once in both ledger modes as CI does. None of the four needs a data,
 cache, config or trust-rule change; the certainty gate, link proofs, settlement
 and price sources are not involved.
+
+## Applied (2026-11-11, M4-5)
+
+* **U4** — `requirements-dev.txt` carries `httpx2==2.16.0`; the dev lock adds
+  `httpx2`, `httpcore2` and `truststore`. `requirements.lock` is unchanged and
+  still carries `httpx==0.28.1`. `starlette.testclient` resolves `httpx2`, and
+  importing `fastapi.testclient` under `-W error::DeprecationWarning` is silent.
+* **U1** — `requirements.txt` pins `fastapi==0.162.2`; both locks resolve it
+  with `starlette==1.10.0`. No application or test edit was needed.
+* **U2** — `requirements-dev.txt` pins `mypy==2.4.1`; the
+  `refresh_fixtures.py` report dict is annotated `dict[str, Any]`. mypy is clean
+  on 291 files with the unchanged settings.
+* **U3** — `requirements-dev.txt` pins `ruff==0.17.4`; `MarketType`, `Sport`
+  and `ScrapeKind` are `StrEnum`. `tests/test_enum_values.py` (3 tests) pins the
+  value strings through str(), f-strings, Pydantic dumps and a JSON dict key.
+  Ruff is clean with the same `E,F,W,I,UP,B` selection.
+
+Verification on the final set: full suite **2,382 passed, 12 skipped** (17
+snapshots) in 108.71 s; ruff clean; mypy 291 files clean; `MARKET_MAPPING.md` in
+sync; `refresh_fixtures.py --check` and `audit_admissibility.py --check` exit 0;
+`scripts/lock_requirements.py --check` reports the locks in sync.

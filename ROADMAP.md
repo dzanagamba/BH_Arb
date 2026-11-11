@@ -176,7 +176,7 @@ do not copy stale numbers here.
 | M4-2 | Docker Chromium check and image CVE scan | Done | — | operator |
 | M4-3 | Pin Actions by SHA and base image by digest | Done | — | operator |
 | M4-4 | Plan the remaining dependency upgrades | Done | — | operator |
-| M4-5 | Apply the planned dependency upgrades | In progress | M4-4 | operator |
+| M4-5 | Apply the planned dependency upgrades | Done | M4-4 | operator |
 | M5-1 | Remove legacy URL maps | Not started | — | operator |
 | M5-2 | Decide the `link_sweeps` table | Not started | — | operator |
 | M5-3 | Decide approve/reject functions | Not started | — | operator |
@@ -3257,7 +3257,7 @@ Acceptance (2026-11-09, recorded before any dependency pin moves):
 
 ### M4-5 Apply the planned dependency upgrades
 
-Status: In progress
+Status: Done
 
 Gate: operator
 
@@ -3269,18 +3269,31 @@ No trust rule, data format, cache key, metric label or price source changes.
 Why / what: execute the M4-4 plan so the measured dry run becomes the installed
 dependency set.
 
+**Outcome (2026-11-11).** All four moves were applied as separate commits.
+`httpx2==2.16.0` is dev-only (runtime lock still carries `httpx==0.28.1`), and
+`starlette.testclient` resolves it with the deprecation warning gone. FastAPI is
+0.162.2 with Starlette still 1.10.0 and no application or test edit. MyPy is
+2.4.1 after annotating the `refresh_fixtures.py` report dict. Ruff is 0.17.4,
+with `MarketType`, `Sport` and `ScrapeKind` as `StrEnum`; no rule was ignored.
+`tests/test_dependency_lock.py` gained 2 tests (httpx2 stays out of the runtime
+lock; TestClient resolves it) and `tests/test_enum_values.py` has 3 tests pinning
+the enum value strings through str(), f-strings, Pydantic and JSON. Full suite
+**2,382 passed, 12 skipped** (17 snapshots) in 108.71 s with no warning line;
+ruff clean; mypy 291 files clean; market doc, fixtures, admissibility and the lock
+check green.
+
 Acceptance:
-- [ ] `requirements-dev.txt` adds `httpx2==2.16.0`, the dev lock carries it, the
+- [x] `requirements-dev.txt` adds `httpx2==2.16.0`, the dev lock carries it, the
       runtime lock does not, `TestClient` resolves it, and the deprecation
       warning is gone.
-- [ ] `requirements.txt` pins `fastapi==0.162.2`, Starlette stays `1.10.0`, and
+- [x] `requirements.txt` pins `fastapi==0.162.2`, Starlette stays `1.10.0`, and
       the suite is green with no application or test edit.
-- [ ] MyPy 2.4.1 is pinned; `scripts/refresh_fixtures.py` annotates its report
+- [x] MyPy 2.4.1 is pinned; `scripts/refresh_fixtures.py` annotates its report
       dict; mypy is clean on every file with no new ignore or loosened setting.
-- [ ] Ruff 0.17.4 is pinned; `MarketType`, `Sport` and `ScrapeKind` are
+- [x] Ruff 0.17.4 is pinned; `MarketType`, `Sport` and `ScrapeKind` are
       `StrEnum`; API JSON, metric labels and canary text are asserted unchanged;
       ruff is clean under the same rule selection.
-- [ ] Each upgrade is its own commit; the full suite and the doc/fixture checks
+- [x] Each upgrade is its own commit; the full suite and the doc/fixture checks
       pass once at the end of the row.
 
 ---
@@ -3693,3 +3706,4 @@ Useful starting points:
 | 2026-11-09 | M4-2 | Done | `scripts/docker_smoke.py` now launches the image's bundled Chromium headless with the scanners' `--no-sandbox`/`--disable-dev-shm-usage` flags and fails unless a page title round-trips; its docstring and PASS line name the check. `docker.yml` scans `bh-arb:ci` with Trivy (`aquasecurity/trivy-action` pinned by SHA) for HIGH/CRITICAL `os,library` CVEs with `ignore-unfixed: true` and `exit-code: 1`; `release.yml` scans `bh-arb:release` the same way. Two `tests/test_deployment_assets.py` tests pin the probe and scan policy; `docs/CI.md` documents both. `pytest`: 2374 passed, 12 skipped (17 snapshots) in 113.54 s; ruff clean; mypy 289 files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. |
 | 2026-11-09 | M4-3 | Done | Pinned every workflow action to a commit SHA with a `# vX.Y.Z` comment: checkout v4.4.0, setup-python v5.6.0, setup-node v4.4.0, upload-artifact v4.6.2, setup-buildx-action v3.12.0, build-push-action v6.19.2 and Trivy v0.36.0. The Dockerfile base is `python:3.11-slim@sha256:07d48240…b535`. New `tests/test_workflow_pins.py` (3 tests) fails on a moving tag, a bare `FROM`, or a Dependabot config lacking the `github-actions`/`docker` ecosystems; `dependabot.yml`, `docs/CI.md` and `docs/RELEASE.md` document that those ecosystems rewrite the SHA + comment and advance the digest. No workflow behaviour or Docker build content changed. `pytest`: 2377 passed, 12 skipped (17 snapshots) in 113.10 s; ruff clean; mypy 290 files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. |
 | 2026-11-09 | M4-4 | Done | Wrote **`docs/DEPENDENCY_UPGRADES.md`**, a plan-only row: no pin moved. Measured a throwaway venv (`/tmp/opencode/m44-venv`) with `fastapi==0.162.2`, `starlette==1.10.0`, `mypy==2.4.1`, `ruff==0.17.4` and `httpx2==2.16.0`: full suite green (2,389 collected, exit 0, 17 snapshots, 1 m 50 s, no test change); mypy 2.4.1 reports one `refresh_fixtures.py:212` assignment error; ruff 0.17.4 reports three `UP042` `str, Enum` findings (`MarketType`, `Sport`, `ScrapeKind`); `httpx2` removes the live `StarletteDeprecationWarning` and Starlette resolves it for `TestClient`. The plan splits U4 `httpx2` (dev-only), U1 FastAPI, U2 MyPy (one annotation), U3 Ruff (`StrEnum` with JSON/label assertions), each with steps, acceptance and rollback; `httpx` stays runtime, pydantic/uvicorn stay out of scope. Working tree verification: `pytest` 2,377 passed, 12 skipped (17 snapshots) in 113.82 s; ruff clean; mypy 290 files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. |
+| 2026-11-11 | M4-5 | Done | Applied the four M4-4 upgrades as separate commits: **U4** `httpx2==2.16.0` dev-only (runtime lock keeps `httpx==0.28.1`; `starlette.testclient` resolves httpx2, deprecation warning gone; 2 new lock tests), **U1** FastAPI 0.162.2 with Starlette 1.10.0 and no app/test edit, **U2** mypy 2.4.1 with one `dict[str, Any]` annotation in `scripts/refresh_fixtures.py`, **U3** ruff 0.17.4 with `MarketType`/`Sport`/`ScrapeKind` as `StrEnum` (3 new value-string tests in `tests/test_enum_values.py`, no rule ignored). `docs/DEPENDENCY_UPGRADES.md` records the applied set. `pytest`: 2,382 passed, 12 skipped (17 snapshots) in 108.71 s, no warning line; ruff clean; mypy 291 files clean; market doc in sync; refresh_fixtures, audit_admissibility and lock `--check` exit 0. |
