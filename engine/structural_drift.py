@@ -26,6 +26,13 @@ boundary:
   added/removed paths.  The baseline is **not** overwritten on drift: it stays
   the last good shape until an operator reviews the change and deletes that
   entry to record the new one.
+* An empty response never alerts: a payload without items (``[]`` or
+  ``{"events": []}``) carries no shape to compare, so it neither records nor
+  drifts.  A feed that goes empty is reported by the scan's own book status, not
+  by this alarm.
+* The warning is logged at most once per book, endpoint and diff in a scan
+  (``begin_scan()``, called by ``run_scan``).  A page of 173 suspended offers is
+  one line, not 173; the counter still counts every occurrence.
 
 This is alert-only telemetry.  It never rejects a payload, changes a price or
 touches the certainty gate; the wire schemas own fail-closed behaviour.
@@ -61,6 +68,16 @@ _MAX_ARRAY_ITEMS = 50
 _MAX_DIFF_PATHS = 12
 
 _LOCK = threading.Lock()
+
+# Drift warnings already logged in this scan, keyed by book, endpoint and diff.
+# One line per signature per scan; cleared by ``begin_scan()``.
+_WARNED: set[tuple[str, str, str]] = set()
+
+
+def begin_scan() -> None:
+    """Start a scan's alarm window: log each drift signature once more."""
+    with _LOCK:
+        _WARNED.clear()
 
 
 def _json_type(value: Any) -> str:
@@ -185,18 +202,24 @@ def fingerprint(payload: Any) -> str:
 
 
 def _informative(payload: Any) -> bool:
-    """Whether a payload can establish a baseline.
+    """Whether a payload carries a shape worth learning or comparing.
 
     An empty page (``[]`` or ``{"events": []}``) has no element shape to learn;
-    recording it would make the first real page look like drift.  A payload with
-    at least one non-empty container is representative.
+    recording it would make the first real page look like drift, and comparing a
+    later empty page against a real baseline would alarm on the feed simply
+    being empty.  A dict with list values is representative only when at least
+    one list carries an item, so an empty item list next to non-empty metadata
+    (``{"events": [], "filters": {...}}``) stays silent.  A dict with no list at
+    all is an id-keyed map and needs a non-empty object.
     """
     if isinstance(payload, list):
         return bool(payload)
     if isinstance(payload, dict):
+        lists = [value for value in payload.values() if isinstance(value, list)]
+        if lists:
+            return any(bool(value) for value in lists)
         return any(
-            (isinstance(value, list | dict) and bool(value))
-            for value in payload.values()
+            isinstance(value, dict) and bool(value) for value in payload.values()
         )
     return False
 
@@ -308,6 +331,8 @@ def observe(
     Never raises and never changes the payload: a failed read or write only logs
     a warning, because this alarm must not turn into a second failure mode.
     """
+    if not _informative(payload):
+        return "empty"
     required, optional = _structure(payload)
     points = _entries(required)
     current = _digest(points)
@@ -319,8 +344,6 @@ def observe(
             baselines = state["baselines"]
             previous = baselines.get(key)
             if previous is None:
-                if not _informative(payload):
-                    return "empty"
                 _record(baselines, key, points, optional)
                 _save(state_path, state)
                 logger.info(
@@ -333,8 +356,6 @@ def observe(
             if int(previous.get("version") or 1) != FINGERPRINT_VERSION:
                 # SR4-12 changed the signature. Re-record once without an alert
                 # so an upgrade does not look like drift on every book.
-                if not _informative(payload):
-                    return "empty"
                 _record(baselines, key, points, optional)
                 _save(state_path, state)
                 logger.info(
@@ -362,14 +383,20 @@ def observe(
             metrics.inc(
                 METRIC_STRUCTURE_DRIFT, 1, book=book, endpoint=endpoint
             )
+            diff = _diff(before, after, removed, unexpected, changed) or "no path diff"
+            signature = (book, endpoint, diff)
+            if signature in _WARNED:
+                # One line per book/endpoint/diff per scan; the counter above
+                # still counts every occurrence.
+                return "drift"
+            _WARNED.add(signature)
             logger.warning(
                 "[%s] structural drift at %s (was %s, now %s): %s",
                 book,
                 endpoint,
                 previous.get("fingerprint"),
                 current,
-                _diff(before, after, removed, unexpected, changed)
-                or "no path diff",
+                diff,
             )
             # Deliberately keep the last good baseline: the alarm stays until an
             # operator reviews the change and removes the entry.
@@ -392,6 +419,7 @@ __all__ = [
     "FINGERPRINT_VERSION",
     "METRIC_STRUCTURE_DRIFT",
     "baseline",
+    "begin_scan",
     "fingerprint",
     "observe",
     "optional_paths",

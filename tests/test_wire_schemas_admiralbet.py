@@ -155,6 +155,22 @@ def test_the_response_envelope_accepts_the_captured_event_shell():
     assert len(response.events[0].bets) == len(capture["bets"])
 
 
+def test_the_lowercase_sbv_spelling_is_accepted_and_priced(monkeypatch):
+    """SR8-2: the feed moved from ``sBV`` to ``sbv``; schema and parser read both."""
+    capture = _capture("live")
+    for bet in capture["bets"]:
+        if "sBV" in bet:
+            bet["sbv"] = bet.pop("sBV")
+
+    # Modelled, not an unknown extra: both spellings are consumed.
+    assert unknown_key_counts(_envelope(capture["bets"])) == {}
+
+    matches = _scrape_with(monkeypatch, _envelope(capture["bets"]), live=True)
+
+    emitted = {market.market_type.value for market in matches[0].markets}
+    assert emitted == set(capture["expected_markets"])
+
+
 def test_a_renamed_price_field_is_schema_drift():
     capture = _capture()
     outcome = capture["bets"][0]["betOutcomes"][0]

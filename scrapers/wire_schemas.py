@@ -71,13 +71,19 @@ class NSoftOutcome(BaseModel):
 
 
 class NSoftBet(BaseModel):
-    """One market block inside an event."""
+    """One market block inside an event.
+
+    The live feed sent ``sBV`` and the current one sends ``sbv``; the parser
+    reads both spellings, so both are modelled here and neither counts as an
+    unknown key (SR8-2).
+    """
 
     model_config = MODEL_CONFIG
 
     betTypeId: int
     betTypeName: str | None = None
     sBV: str | None = None
+    sbv: str | None = None
     betOutcomes: list[NSoftOutcome] = Field(default_factory=list)
 
 

@@ -28,9 +28,10 @@ decision).
    - `strict=True` means a price served as `"1.85"` (string), `true` or a
      renamed field is a validation error. Nothing is coerced silently.
    - `extra="allow"` means a field the book added does not break the scrape.
-3. Keep the model fields as the **allow-list** the adapter consumes. `sBV`,
-   `betTypeId` and `betOutcomes` are examples; a new consumed field means one
-   model edit plus its allow-list entry. A field the dated capture always
+3. Keep the model fields as the **allow-list** the adapter consumes. `sBV`/`sbv`
+   (one value the feed renamed; both modelled only because the parser reads
+   both), `betTypeId` and `betOutcomes` are examples; a new consumed field means
+   one model edit plus its allow-list entry. A field the dated capture always
    carries is **required but nullable** (`float | None`), so a rename is drift
    rather than a row that quietly disappears. A field the live feed legitimately
    omits on some rows (a suspended pick, SR4-10) is optional with a documented

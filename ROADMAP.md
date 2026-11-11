@@ -126,7 +126,7 @@ work it before every other row.
 | M6-2 | Coverage-floor test still pins the old floor (main is red) | Done | — | — |
 | SR8-1 | Live Mozzartbet and Betole parse to zero matches | In progress | — | operator (Mozzartbet transport) |
 | SR8-4 | `record_scan.py` restores state before scanning | Done | — | — |
-| SR8-2 | Structural-drift alarm noise and stale baselines | Not started | — | — |
+| SR8-2 | Structural-drift alarm noise and stale baselines | Done | — | — |
 | M8-1 | Refresh the production-readiness assessment | Not started | SR8-1 | — |
 | SR8-3 | Mapping-coverage floor vs the full-offer long tail | Not started | — | operator |
 | SR4-3g | Strict wire schema: EVLBet | Blocked on a live EVLBet payload | SR4-3 | — |
@@ -505,7 +505,7 @@ Tests: new `tests/test_record_scan.py` with stubbed adapters (no traffic).
 
 ### SR8-2 Structural-drift alarm noise and stale baselines
 
-Status: Not started
+Status: Done (2026-11-11)
 
 Why: the 2026-11-11 scan logged 173 identical `[mozzartbet] structural drift at
 offer` warnings (fully suspended offers missing `value`, which SR4-10 accepts),
@@ -524,9 +524,43 @@ Steps:
 4. Never stop alarming on a removed or renamed required price path.
 
 Acceptance:
-- [ ] A rerun scan logs at most one drift line per book/endpoint/signature.
-- [ ] Empty pages produce no drift; a removed price path still does (tests).
-- [ ] The admiralbet baseline matches the current casing.
+- [x] A rerun scan logs at most one drift line per book/endpoint/signature.
+- [x] Empty pages produce no drift; a removed price path still does (tests).
+- [x] The admiralbet baseline matches the current casing.
+
+**SR8-2 progress (2026-11-11).**
+
+*Dedupe.* `engine.structural_drift.begin_scan()` clears a per-scan warning
+window and `run_scan` calls it before any adapter runs. `observe` still counts
+every occurrence in `bh_wire_structure_drift_total`, but logs a warning only the
+first time a `(book, endpoint, diff)` signature is seen in that scan.
+
+*Empty pages.* `observe` now returns `empty` before comparing when the payload
+carries no items (`[]`, `{"events": []}`, or an empty item list next to
+non-empty metadata such as `{"events": [], "filters": {...}}`). A feed that goes
+empty is reported by the scan's book status, never as a shape alarm.
+
+*Casing.* The current NSoft feed sends `sbv` where it used to send `sBV`; the
+parser (`scrapers/common.py`) already read both, so `NSoftBet` now models both
+spellings and neither counts as an unknown key. The stale Admiralbet baselines
+were deleted deliberately and re-recorded from the live feed: all six entries
+(3 prematch, 3 live) now carry `sbv*`/`tot*` paths and no `sBV`/`tOT`.
+
+*Measured, same command before → after* (`python scripts/record_scan.py
+prematch --out …`, 2026-11-11): drift lines **225 → 23**, distinct signatures
+29 → 23, signatures repeated in one scan **16 → 0**. Per book before → after:
+mbet 10 → 3, maxbet 2 → 2, betole 30 → 8, sportplus 1 → 1, wwin 21 → 2,
+mozzartbet 158 → 7, admiralbet 3 → 0 (baseline re-recorded). Scan outcome
+unchanged: 1,283 groups / 20 surebets in both runs (matches 6,461 → 6,459; the
+feeds move). Live scan after the change: **8 drift lines, 0 signatures repeated
+in the scan**, 243 matches / 19 groups; Admiralbet's three live baselines were
+re-recorded with `sbv` bet-level keys.
+
+Tests: `tests/test_structural_drift.py` +4 (empty page after a baseline is
+silent, one line per signature per scan with the counter still counting,
+a page of five suspended offers is one line, `begin_scan` reopens the window);
+`tests/test_wire_schemas_admiralbet.py` +1 (`sbv` is modelled, not unknown, and
+the live scrape still prices O/U 1.5/2.5/3.5).
 
 Tests: `tests/test_structural_drift.py` (extend).
 
@@ -616,3 +650,4 @@ Entries before 2026-11-11 are in the archive.
 | 2026-11-11 | SR9-3 | Done | `server/leg_link_check.py` + `POST /api/surebets/{id}/check-links` (`scan` scope) behind the slip's **Check links** button. Per leg with a ticket or match destination: a fresh browser context, then the rendered accessibility text (`aria_snapshot`, which also sees MaxBet's closed shadow DOM), both book-spelled team names for `opens_fixture`, and for a ticket the slip area after the FIRST slip marker must repeat the teams and the pick (side + line for totals); an empty slip fails on the book's own phrase. A surebet with only search/competition rungs is skipped without a browser. Per-surebet window 30 s (`SUREBET_LINK_CHECK_MIN_INTERVAL_SECONDS`, 429 + Retry-After), a `read`-only key gets 403, a scan in progress 409, and the check shares `_deep_link_check_lock` + `_browser_sem` with the deep-link checker; it never writes `deep_link_verified`. Captured page texts in `tests/fixtures/link_check/` (MaxBet filled `1027619` and empty slip, MDShop filled, MaxBet home). Tests: `tests/test_surebet_link_check.py` 27, `tests/test_frontend_link_check.py` 14 (node-driven against the shipped renderer). Full run: `2425 passed, 12 skipped in 105.07s` (0 failed); ruff `All checks passed!`; mypy `no issues found in 294 source files`; market doc / refresh_fixtures / audit_admissibility `--check` exit 0. |
 | 2026-11-11 | SR9-4 | Done | Labelling: `legReachesMatch`/`reachSummary` count only ticket/match destinations with a URL; each card shows `Match links: N/M` (`row-reach-all` when every leg reaches it); generic leg pills are dimmed/dashed with `data-reach="no"` and a “no per-match link” title; in the slip the leg gets a `leg-no-match` tag and the copyable book spelling moves first. EN + BS copy. Tests: `tests/test_frontend_reach.py` 12, node-driven against the shipped helpers and the real `buildSurebetRow`. **Operator decision:** keep every surebet listed — no hide and no deprioritise option (asked with keep / default-off filter / default-off sort); recorded under the row. Full run (after the code change): `2437 passed, 12 skipped in 105.82s` (0 failed); ruff `All checks passed!`; mypy `no issues found in 295 source files`; market doc / refresh_fixtures / audit_admissibility `--check` exit 0. |
 | 2026-11-11 | SR8-4 | Done | `scripts/record_scan.py` restores the persisted runtime state once with `server.app._restore_state()` before the first scan, then scans each requested mode in order (`prematch live` in one invocation); `run(mode)` keeps the evidence-driver signature and goes through the same path. `--out` is now a directory and writes `<mode>-scan.json` per mode. New `tests/test_record_scan.py` (2 tests, real restore + stubbed `api.run_scan`, no traffic; seeded scan-cost history row survives the scan's `_finish_scan_cost`, restore runs once before the first scan, both reports written). Negative control with the restore skipped: `history rows after a scan without restore: 1`, `seeded row survived: False`; through the script the seeded row stays above the new one. `pytest tests/test_record_scan.py tests/test_scan_cost.py tests/test_app_lifecycle.py`: all passed. Full run: `2449 passed, 12 skipped in 104.72s` (0 failed); ruff `All checks passed!`; mypy `no issues found in 296 source files`; market doc / refresh_fixtures / audit_admissibility `--check` exit 0. |
+| 2026-11-11 | SR8-2 | Done | Structural-drift noise: `begin_scan()` (called by `run_scan`) opens a per-scan window, and `observe` logs a signature once while `bh_wire_structure_drift_total` still counts every occurrence; `observe` now returns `empty` before comparing a payload with no items (`[]`, `{"events": []}`, empty item list beside metadata); `NSoftBet` models both `sBV` and `sbv` because `scrapers/common.py` reads both; the stale Admiralbet baselines were deleted and re-recorded from the live feed (6 entries, `sbv*`/`tot*`, no `sBV`/`tOT`). **Measured with `python scripts/record_scan.py prematch --out …` before → after: drift lines 225 → 23, distinct signatures 29 → 23, signatures repeated in one scan 16 → 0; per book mbet 10→3, maxbet 2→2, betole 30→8, sportplus 1→1, wwin 21→2, mozzartbet 158→7, admiralbet 3→0; 1,283 groups / 20 surebets both runs (matches 6,461→6,459).** Live after: 8 lines, 0 repeats, 243 matches / 19 groups, 0 surebets; Betole live 75 matches (SR8-1 fix working), Mozzartbet 0 (`returned no matches`, SR8-1 blocker). Tests: `tests/test_structural_drift.py` +4, `tests/test_wire_schemas_admiralbet.py` +1. Full run: `2453 passed, 12 skipped in 104.54s` (0 failed); ruff `All checks passed!`; mypy `no issues found in 296 source files`; market doc / refresh_fixtures / audit_admissibility `--check` exit 0. |

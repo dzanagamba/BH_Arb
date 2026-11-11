@@ -135,6 +135,7 @@ from engine.skin_detection import (
 )
 from engine.stale_price import REASON_LABEL as STALE_PRICE_LABEL
 from engine.stale_price import evaluate_stale_prices
+from engine.structural_drift import begin_scan as begin_structural_drift_scan
 from models.schemas import (
     CandidateRemediation,
     CandidateReview,
@@ -1970,6 +1971,8 @@ async def run_scan(
     if run_mode not in RUN_MODES:
         run_mode = "advisory"
     is_live = mode == "live"
+    # SR8-2: each scan logs a drift signature once, not once per response.
+    begin_structural_drift_scan()
     state = _state_for(mode)
     status = state.status
     surebets_cache = state.surebets

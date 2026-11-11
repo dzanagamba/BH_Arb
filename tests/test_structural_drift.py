@@ -41,6 +41,7 @@ from engine.structural_drift import (
     FINGERPRINT_VERSION,
     METRIC_STRUCTURE_DRIFT,
     baseline,
+    begin_scan,
     fingerprint,
     observe,
     optional_paths,
@@ -55,7 +56,11 @@ FIXTURE_DIR = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "mark
 @pytest.fixture(autouse=True)
 def _fresh_metrics():
     metrics.reset_values()
+    # SR8-2: a warning is logged once per signature per scan; each test is one
+    # scan, so start with an empty window.
+    begin_scan()
     yield
+    begin_scan()
     metrics.reset_values()
 
 
@@ -175,6 +180,76 @@ def test_an_empty_page_does_not_establish_a_baseline(tmp_path):
     assert observe("book", "endpoint", [], path=path) == "empty"
     assert observe("book", "endpoint", {"events": []}, path=path) == "empty"
     assert baseline(path) == {}
+
+
+def test_an_empty_page_after_a_baseline_does_not_alert(tmp_path, caplog):
+    """SR8-2: a feed that goes empty is a book status, not a shape change."""
+    path = tmp_path / "wire_fingerprints.json"
+    stored = {"events": [{"id": 1, "price": 1.5}]}
+    observe("book", "endpoint", stored, path=path)
+    before = baseline(path)["book|endpoint"]
+
+    with caplog.at_level(logging.WARNING, logger="engine.structural_drift"):
+        assert observe("book", "endpoint", [], path=path) == "empty"
+        assert observe("book", "endpoint", {"events": []}, path=path) == "empty"
+        # Empty item list next to non-empty metadata is still an empty page.
+        assert (
+            observe(
+                "book",
+                "endpoint",
+                {"events": [], "filters": {"sport": 1}},
+                path=path,
+            )
+            == "empty"
+        )
+
+    assert "structural drift" not in caplog.text
+    assert METRIC_STRUCTURE_DRIFT not in metrics.render()
+    assert baseline(path)["book|endpoint"] == before
+
+
+def test_one_drift_line_per_signature_per_scan(tmp_path, caplog):
+    """SR8-2: repeats inside one scan are counted, logged once."""
+    path = tmp_path / "wire_fingerprints.json"
+    observe("book", "endpoint", {"events": [{"id": 1, "price": 1.5}]}, path=path)
+    drifted = {"events": [{"id": 2}]}
+
+    with caplog.at_level(logging.WARNING, logger="engine.structural_drift"):
+        assert observe("book", "endpoint", drifted, path=path) == "drift"
+        assert observe("book", "endpoint", drifted, path=path) == "drift"
+        assert observe("book", "endpoint", drifted, path=path) == "drift"
+
+    assert caplog.text.count("structural drift at endpoint") == 1
+    assert (
+        'bh_wire_structure_drift_total{book="book",endpoint="endpoint"} 3'
+        in metrics.render()
+    )
+
+    # A new scan opens a new window and logs the same signature once again.
+    begin_scan()
+    with caplog.at_level(logging.WARNING, logger="engine.structural_drift"):
+        assert observe("book", "endpoint", drifted, path=path) == "drift"
+
+    assert caplog.text.count("structural drift at endpoint") == 2
+
+
+def test_a_fully_suspended_offer_logs_one_line_not_one_per_event(tmp_path, caplog):
+    """SR8-2: 173 suspended offers with one shape are one warning."""
+    path = tmp_path / "wire_fingerprints.json"
+    priced = {"match": {"odds": [{"gameId": 1, "value": 1.9}, {"gameId": 2, "value": 2.1}]}}
+    observe("mozzartbet", "offer", priced, path=path)
+    suspended = {"match": {"odds": [{"gameId": 1}, {"gameId": 2}]}}
+
+    with caplog.at_level(logging.WARNING, logger="engine.structural_drift"):
+        for _ in range(5):
+            assert observe("mozzartbet", "offer", suspended, path=path) == "drift"
+
+    assert caplog.text.count("structural drift at offer") == 1
+    assert "removed=match.odds[].value:number" in caplog.text
+    assert (
+        'bh_wire_structure_drift_total{book="mozzartbet",endpoint="offer"} 5'
+        in metrics.render()
+    )
 
 
 def test_an_unreadable_state_file_starts_from_an_empty_store(tmp_path):
