@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import copy
 import json
-from datetime import datetime
+from datetime import date, datetime
 
 import pytest
 
@@ -125,9 +125,13 @@ def test_every_route_carries_a_dated_proof_or_recorded_attempts():
             for route in mode_spec["routes"]:
                 proof = route.get("proof")
                 assert isinstance(proof, dict), f"{book}/{mode}/{route['kind']} has no proof"
-                assert proof.get("checked_at") == "2026-11-03", (
+                # Dated ISO check, never older than the first coverage record
+                # (2026-11-03); SR9-1 re-checks move it forward.
+                checked_at = str(proof.get("checked_at") or "")
+                assert len(checked_at) == 10 and checked_at >= "2026-11-03", (
                     f"{book}/{mode}/{route['kind']} has no dated check"
                 )
+                date.fromisoformat(checked_at)
                 assert proof.get("result") in {"confirmed", "failed", "unavailable"}
                 if proof.get("result") == "failed":
                     assert route.get("attempts"), (
@@ -253,6 +257,14 @@ def test_mozzartbet_match_page_is_per_event():
     )
 
 
+def test_wwin_prematch_match_page_is_confirmed_by_the_operator():
+    """SR9-1: the operator's browser opened #/top-bets/match/<id> (panel shows a shell)."""
+    match = Match(bookmaker="wwin", home_team="America MG", away_team="Avai SC", event_id="4730200")
+    destination = _destination(match, _stake(bookmaker="wwin"))
+    assert destination.kind == "match_page"
+    assert destination.url == "https://wwin.ba/kladjenje/#/top-bets/match/4730200"
+
+
 def test_wwin_live_failed_route_falls_to_competition():
     match = Match(
         bookmaker="wwin",
@@ -266,6 +278,59 @@ def test_wwin_live_failed_route_falls_to_competition():
     assert destination.kind == "competition"
     assert destination.url == "https://wwin.ba/kladjenje-uzivo/#/sport/2"
     assert "match/4713116" not in destination.url
+
+
+@pytest.mark.parametrize("mode", ["prematch", "live"])
+def test_maxbet_match_page_uses_the_site_shell_path(mode):
+    """SR9-1: /ba/sportsbook/match/<id> opens the fixture; the old hosts do not."""
+    match = Match(
+        bookmaker="maxbet", home_team="America MG", away_team="Avai", event_id="1024788"
+    )
+    destination = build_destination(
+        match, _stake(bookmaker="maxbet"), MarketType.MATCH_RESULT, mode=mode
+    )
+    assert destination.kind == "match_page"
+    assert destination.url == "https://www.maxbet.ba/ba/sportsbook/match/1024788"
+    assert destination.proof_checked_at == "2026-11-11"
+
+
+def test_mbet_live_uses_the_live_query_route():
+    """SR9-1: single-live?id= is a 404 now; the site navigates to /live?id=."""
+    match = Match(
+        bookmaker="mbet",
+        home_team="Czech Republic U19",
+        away_team="Netherlands U19",
+        event_id="e:fb:cze-net:0001",
+    )
+    destination = build_destination(
+        match, _stake(bookmaker="mbet"), MarketType.MATCH_RESULT, mode="live"
+    )
+    assert destination.kind == "match_page"
+    assert destination.url == "https://mbet.ba/live?id=e:fb:cze-net:0001"
+    assert "single-live" not in destination.url
+
+
+def test_mozzartbet_live_never_links_the_prematch_id_as_a_live_match():
+    """SR9-1: the adapter's live rows carry the prematch id, which the live page cannot open."""
+    match = Match(
+        bookmaker="mozzartbet",
+        home_team="Italy U19",
+        away_team="Romania U19",
+        event_id="10108850",
+    )
+    destination = build_destination(
+        match, _stake(bookmaker="mozzartbet"), MarketType.MATCH_RESULT, mode="live"
+    )
+    assert destination.kind == "competition"
+    assert "10108850" not in (destination.url or "")
+
+
+def test_sportplus_live_fallback_is_the_live_betting_page():
+    match = Match(bookmaker="sportplus", home_team="Češka", away_team="Nizozemska", event_id="74723528")
+    destination = build_destination(
+        match, _stake(bookmaker="sportplus"), MarketType.MATCH_RESULT, mode="live"
+    )
+    assert destination.url == "https://www.sportplus.ba/live/betting"
 
 
 def test_betole_prematch_uses_the_desk_event_id_not_the_match_code():

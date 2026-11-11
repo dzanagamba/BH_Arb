@@ -1,6 +1,6 @@
 # Surebet leg destinations — dated coverage record
 
-**Checked:** 2026-11-03  
+**Checked:** 2026-11-03; re-checked 2026-11-11 (SR9-1)  
 **Scope:** the nine enabled football books. EVLBet is disabled and excluded.  
 **Method:** operator spot check in the OpenChamber browser against each book's
 own site. No bookmaker credentials were stored and no bet was placed. A route is
@@ -24,31 +24,53 @@ a per-event route without a fixture proof is not a match page.
 
 ## Prematch
 
-| Book | Best route | URL pattern | Identifier | Confirmed sample |
+Re-checked 2026-11-11 (SR9-1) against fixtures from that day's scan; each
+route's `proof.method` in the JSON record says whether the OpenChamber panel,
+plain headless Chromium, or both showed it.
+
+| Book | Best route | URL pattern | Identifier | Confirmed sample (2026-11-11) |
 |---|---|---|---|---|
-| Mozzartbet | match page | `https://www.mozzartbet.ba/sr/kladjenje/sport/1/match/{event_id}` | feed event id | `10088115`, Shakhtar – Sporting |
-| MDShop | ticket filled | `https://www.mdshop.ba/sport-site/sr/#/betting/prematch?sport=Fudbal&ticketItems={ticket_items}` | NSoft `[sport, region, competition, event, bet, outcome]` | `6971587`, Shakhtar Donetsk – Sporting; 1 @ 3.42 on the slip |
-| Admiralbet | ticket filled | `https://www.admiralbet.ba/sport-site/sr/#/betting/prematch?sport=Fudbal&ticketItems={ticket_items}` | NSoft `[sport, region, competition, event, bet, outcome]` | `6971587`, Shakhtar Donetsk – Sporting; GG @ 1.64 on the slip |
-| Betole | match page | `https://www.betole.ba/match-special/{event_id}` | feed event id (not `matchCode`) | `91367737`, Sporting CP – Moreirense (operator-confirmed; the embedded panel has a site JS error) |
-| MBet | match page | `https://mbet.ba/single?id={event_id}` | feed event id | `e:fb:sha-spo:0001`, Shakhtar Donetsk – Sporting CP |
-| SportPlus | competition + manual prefill script | `https://www.sportplus.ba/prematch/betting` | book spelling for copying | football competition page; the slip itself is localStorage-only |
-| Premier Kladionica | competition | `https://www.premier-kladionica.com/ponuda/` | book spelling for copying | `/ponuda/`; `/ponuda/<id>` is 404 |
-| WWIN | competition fallback | `https://wwin.ba/kladjenje/#/top-bets` | book spelling for copying | direct `#/top-bets/match/4684404` showed the generic page, not the fixture |
-| MaxBet | competition fallback | `https://www.maxbet.ba/ba` | book spelling for copying | `/match/971607` and `sportsbook.maxbet.ba/sport/1` rendered blank; `www.maxbet.ba/ba` opened |
+| Mozzartbet | match page | `https://www.mozzartbet.ba/sr/kladjenje/sport/1/match/{event_id}` | feed event id | `10105660`, America Mineiro – Avai (panel) |
+| MDShop | ticket filled | `https://www.mdshop.ba/sport-site/sr/#/betting/prematch?sport=Fudbal&ticketItems={ticket_items}` | NSoft `[sport, region, competition, event, bet, outcome]` | `7060446`, America MG – Avai; 1 @ 3.90 on the slip (panel) |
+| Admiralbet | ticket filled | `https://www.admiralbet.ba/sport-site/sr/#/betting/prematch?sport=Fudbal&ticketItems={ticket_items}` | NSoft `[sport, region, competition, event, bet, outcome]` | `7060446`, America MG – Avai; 1 @ 3.90 on the slip (panel) |
+| Betole | match page | `https://www.betole.ba/match-special/{event_id}` | feed event id (not `matchCode`) | `91420001`, America MG – Avai (operator's browser and headless; the panel renders all of Betole blank) |
+| MBet | match page | `https://mbet.ba/single?id={event_id}` | feed event id | `e:fb:ame-ava:0002`, America MG – Avai (panel) |
+| SportPlus | competition + manual prefill script | `https://www.sportplus.ba/prematch/betting` | book spelling for copying | page opened; no per-event route found yet (SR9-2) |
+| Premier Kladionica | competition | `https://www.premier-kladionica.com/ponuda/` | book spelling for copying | page opened; no per-event route found yet (SR9-2) |
+| WWIN | **match page (new)** | `https://wwin.ba/kladjenje/#/top-bets/match/{event_id}` | feed event id | `4730200`, America MG – Avai SC (operator's browser and headless; the panel shows an empty shell) |
+| MaxBet | **match page (new)** | `https://www.maxbet.ba/ba/sportsbook/match/{event_id}` | feed event id | `1024788`, America MG – Avai (panel and headless). `?outcome=<outcome id>` also fills the slip (1 @ 3.70 seen in both); needs the per-outcome id in the adapter (SR9-2) |
 
 ## Live
 
-| Book | Best route | URL pattern | Identifier | Confirmed sample |
+| Book | Best route | URL pattern | Identifier | Confirmed sample (2026-11-11) |
 |---|---|---|---|---|
-| Mozzartbet | match page | `https://www.mozzartbet.ba/sr/uzivo/mec/1/{event_id}` | feed event id | `74560606`, Shakhtar M19 – Sporting M19 |
-| MDShop | ticket filled | `https://www.mdshop.ba/sport-site/sr/#/betting/live?sport=Fudbal&ticketItems={ticket_items}` | NSoft `[sport, region, competition, event, bet, outcome]` | `7030846`, Estrela U23 – Santa Clara U23; rest-of-match 1 @ 2.34 on the slip |
-| Admiralbet | ticket filled | `https://www.admiralbet.ba/sport-site/sr/#/betting/live?sport=Fudbal&ticketItems={ticket_items}` | NSoft `[sport, region, competition, event, bet, outcome]` | `7030846`, Estrela U23 – Santa Clara U23; rest-of-match 1 @ 2.34 on the slip |
-| Betole | search fallback (no live leg priced) | `https://www.betole.ba/live-special/{match_code}` is valid; no live leg is produced | book spelling for copying | live route `273` opened Shakhtar Donetsk U19 – Sporting CP U19; live markets lack a score guard, so no leg is priced |
-| MBet | match page | `https://mbet.ba/single-live?id={event_id}` | feed event id | `e:fb:sha-spo:0002`, Shakhtar Donetsk U19 – Sporting CP U19 |
-| SportPlus | competition | `https://www.sportplus.ba/live` | book spelling for copying | live competition page |
-| Premier Kladionica | competition | `https://www.premier-kladionica.com/ponuda/` | book spelling for copying | live offer on the same page |
-| WWIN | competition fallback | `https://wwin.ba/kladjenje-uzivo/#/sport/2` | book spelling for copying | direct `#/match/4713116` showed the generic live page, not the fixture |
-| MaxBet | competition fallback | `https://www.maxbet.ba/ba` | book spelling for copying | `/match/1006541` rendered blank; `www.maxbet.ba/ba` opened with top matches |
+| Mozzartbet | **competition (demoted)** | `https://www.mozzartbet.ba/sr/uzivo` | book spelling for copying | The live page needs the live-feed id (`/sr/uzivo/mec/1/74723528` opened Czech Republic M19 – Netherland M19), but the adapter's live rows carry the prematch id, which opens nothing. SR9-2 / SR8-1 |
+| MDShop | ticket filled | `…/#/betting/live?sport=Fudbal&ticketItems={ticket_items}` | NSoft ids | `7070062`, Bangladesh – Sri Lanka; selection on the slip (headless) |
+| Admiralbet | ticket filled | `…/#/betting/live?sport=Fudbal&ticketItems={ticket_items}` | NSoft ids | `7070062`, Bangladesh – Sri Lanka; selection on the slip (headless) |
+| Betole | search fallback (no live leg priced) | — | book spelling for copying | not re-checked: the adapter returns no live matches (SR8-1) and live legs are not priced |
+| MBet | **match page (route changed)** | `https://mbet.ba/live?id={event_id}` | feed event id | `e:fb:cze-net:0001`, Czech Republic U19 – Netherlands U19 (panel and headless); the old `single-live?id=` is now a 404 |
+| SportPlus | competition (URL changed) | `https://www.sportplus.ba/live/betting` | book spelling for copying | `/live` is now a 404; `/live/betting` is the site's own live link |
+| Premier Kladionica | competition (URL changed) | `https://www.premier-kladionica.com/live` | book spelling for copying | `/live` lists the in-play rows; `/ponuda/` does not |
+| WWIN | competition fallback | `https://wwin.ba/kladjenje-uzivo/#/sport/2` | book spelling for copying | `#/match/4734682` opened Al Qanater – El Obour SC in headless; **awaiting an operator click** |
+| MaxBet | **match page (new)** | `https://www.maxbet.ba/ba/sportsbook/match/{event_id}` | feed event id | `1028009`, Czech Rep U19 – Netherlands U19 in play (panel and headless) |
+
+### Gate vs destination (MaxBet)
+
+Until 2026-11-11 `config/bookmaker_deeplinks.json` declared MaxBet's route as
+`https://sportsbook.maxbet.ba/match/{event_id}`, which renders blank in a
+browser. By operator decision (2026-11-11) the declaration now names the page
+that opens the fixture, `https://www.maxbet.ba/ba/sportsbook/match/{event_id}`,
+for both modes; the fallback is `https://www.maxbet.ba/ba`. Event identity and
+`route_pattern_verified` are unchanged.
+
+### Operator browser checks (2026-11-11)
+
+The operator opened the WWIN prematch route
+(`#/top-bets/match/4730200`) and the Betole match route
+(`/match-special/91420001`) in a normal browser and both showed the fixture. The
+OpenChamber panel renders both sites as an empty shell, so it is not the reference
+for these two books. WWIN prematch is now a confirmed match page; WWIN live
+(`#/match/{event_id}`) stays failed until it gets its own click.
 
 ## SportPlus manual ticket prefill
 
@@ -90,7 +112,9 @@ live offer has a different shape, so the script is prematch-only.
   MaxBet prematch/live render blank or generic pages, so they are recorded as
   failed routes. WWIN and MaxBet use a confirmed competition page; Betole's own
   site rendered blank even at the competition page, so it is a copy-only search
-  fallback. The attempts are in the JSON record. This is the intended behaviour:
+  fallback. (2026-11-11: MaxBet is resolved by the `/ba/sportsbook/match/` path;
+  WWIN opens in headless Chromium but still not in the panel.) The attempts are in
+  the JSON record. This is the intended behaviour:
   a route the operator cannot reach is not called a match page.
 - **Search URLs.** Mozzartbet, MDShop, Admiralbet, Betole, MBet, SportPlus,
   Premier Kladionica, WWIN and MaxBet expose in-page search, not a stable

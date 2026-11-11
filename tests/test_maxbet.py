@@ -76,7 +76,8 @@ def test_parse_events_builds_a_match_with_identity_and_link_fields():
     assert match.kickoff == datetime(2026, 10, 27, 17, 0)
     assert match.event_id == "914594"
     assert match.betradar_id == "74374512"
-    assert match.url == "https://sportsbook.maxbet.ba/match/914594"
+    # SR9-1 operator decision: the declared page is the one a browser renders.
+    assert match.url == "https://www.maxbet.ba/ba/sportsbook/match/914594"
     assert match.deep_link_verified is False
     assert {m.market_type for m in match.markets} == {
         MarketType.MATCH_RESULT, MarketType.OVER_UNDER_2_5,

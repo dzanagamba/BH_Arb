@@ -3,7 +3,8 @@
 **Updated:** 2026-11-11
 **Goal:** keep the scanner correct and current without weakening the trust
 model; work `ROADMAP.md` top to bottom.
-**Current row:** none in progress. M7-2 (live test scan + doc rewrite) is Done.
+**Current row:** none in progress. SR9-1 is Done (destinations re-proven,
+operator decisions recorded); uncommitted.
 **Last commit:** `afbb3c1` "docs: live test scan, production-readiness
 checklist and roadmap rewrite (M7-2)", pushed to `origin/main` on 2026-11-11.
 
@@ -31,10 +32,10 @@ checklist and roadmap rewrite (M7-2)", pushed to `origin/main` on 2026-11-11.
 ## Next action
 
 **Operator priority 1 (2026-11-11): SR9 — every surebet leg must open the
-exact match or a filled ticket.** Start with SR9-1 (re-prove all 18 book × mode
-destinations on today's sites and settle the MaxBet gate/destination
-contradiction), then SR9-2 (upgrade SportPlus, Premier, WWIN, MaxBet, Betole
-live), SR9-3, SR9-4. Never log in or submit a ticket. After SR9:
+exact match or a filled ticket.** SR9-1 is done; results in
+`docs/evidence/2026-11-11-destinations.md` (ticket 4, match page 7, generic 7 of 18). Next: SR9-2 starting with the MaxBet
+ticket (`?outcome=<id>`, proven) and the Mozzartbet live id, then SportPlus,
+Premier and WWIN live (needs an operator click), then SR9-3 and SR9-4. Never log in or submit a ticket. After SR9:
 
 Take **M6-2**: `main` is red because `tests/test_ci_hardening.py:25`
 still expects `fail_under = 80` after M6-1 set 87.05 (one-line class of fix).

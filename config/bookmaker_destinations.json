@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "checked_at": "2026-11-03",
+  "checked_at": "2026-11-11",
   "scope": "Nine enabled football books: Mozzartbet, MDShop, Admiralbet, Betole, MBet, SportPlus, Premier Kladionica, WWIN, MaxBet. EVLBet is excluded because it is disabled.",
-  "method": "Operator spot check in the OpenChamber browser on 2026-11-03. No bookmaker credentials were stored and no bet was placed. A route is confirmed only when the fixture (and, for ticket-filled, the populated selection) was seen on the book's own page.",
+  "method": "Operator spot check in the OpenChamber browser on 2026-11-03. No bookmaker credentials were stored and no bet was placed. A route is confirmed only when the fixture (and, for ticket-filled, the populated selection) was seen on the book's own page. Re-checked on 2026-11-11 (SR9-1) in the OpenChamber browser panel and in plain headless Chromium against fixtures from that day's scan; each route's proof names which.",
   "books": {
     "mozzartbet": {
       "name": "Mozzartbet",
@@ -15,16 +15,36 @@
               "identifier_source": "event_id",
               "label": "Open Mozzartbet match",
               "proof": {
-                "checked_at": "2026-11-03",
+                "checked_at": "2026-11-11",
                 "result": "confirmed",
-                "method": "browser spot check",
-                "sample_event_id": "10088115",
-                "sample_fixture": "Shakhtar - Sporting",
-                "sample_url": "https://www.mozzartbet.ba/sr/kladjenje/sport/1/match/10088115",
+                "method": "OpenChamber browser panel",
+                "sample_event_id": "10105660",
+                "sample_fixture": "America Mineiro - Avai",
+                "sample_url": "https://www.mozzartbet.ba/sr/kladjenje/sport/1/match/10105660",
                 "fixture_confirmed": true,
                 "ticket_confirmed": false,
-                "notes": "Per-event page opened with the fixture heading and its 1X2/DC/BTTS markets."
-              }
+                "notes": "Per-event page opened with the fixture heading (Sub 20:30, Brazil 2) and its full offer."
+              },
+              "attempts": [
+                {
+                  "checked_at": "2026-11-03",
+                  "method": "browser spot check",
+                  "sample_event_id": "10088115",
+                  "sample_fixture": "Shakhtar - Sporting",
+                  "result": "confirmed",
+                  "notes": "Per-event page opened with the fixture heading and its 1X2/DC/BTTS markets.",
+                  "url": "https://www.mozzartbet.ba/sr/kladjenje/sport/1/match/10088115"
+                },
+                {
+                  "checked_at": "2026-11-11",
+                  "method": "OpenChamber browser panel",
+                  "url": "https://www.mozzartbet.ba/sr/kladjenje/sport/1/match/10105660",
+                  "sample_event_id": "10105660",
+                  "sample_fixture": "America Mineiro - Avai",
+                  "result": "confirmed",
+                  "notes": "Per-event page opened with the fixture heading (Sub 20:30, Brazil 2) and its full offer."
+                }
+              ]
             },
             {
               "kind": "search",
@@ -67,16 +87,36 @@
               "identifier_source": "event_id",
               "label": "Open Mozzartbet live match",
               "proof": {
-                "checked_at": "2026-11-03",
-                "result": "confirmed",
-                "method": "browser spot check",
-                "sample_event_id": "74560606",
-                "sample_fixture": "Shakhtar M19 - Sporting M19",
-                "sample_url": "https://www.mozzartbet.ba/sr/uzivo/mec/1/74560606",
-                "fixture_confirmed": true,
+                "checked_at": "2026-11-11",
+                "result": "failed",
+                "method": "headless Chromium (plain context, no request blocking)",
+                "sample_event_id": "10108850",
+                "sample_fixture": "Italy U19 - Romania U19",
+                "sample_url": "https://www.mozzartbet.ba/sr/uzivo/mec/1/10108850",
+                "fixture_confirmed": false,
                 "ticket_confirmed": false,
-                "notes": "Live per-event page opened with the fixture heading and in-play markets."
-              }
+                "notes": "The adapter's live matches come from the prematch feed and carry the prematch id; /sr/uzivo/mec/1/<prematch id> showed the live list with no fixture open, and /sr/kladjenje/sport/1/match/<prematch id> showed no fixture once the match was in play. The live page needs the live-feed id (/sr/uzivo/mec/1/74723528 opened Czech Republic M19 : Netherland M19 with in-play markets; the same 74723528 is the SportPlus id of that match), which the adapter does not parse. SR9-2 / SR8-1."
+              },
+              "attempts": [
+                {
+                  "checked_at": "2026-11-03",
+                  "method": "browser spot check",
+                  "sample_event_id": "74560606",
+                  "sample_fixture": "Shakhtar M19 - Sporting M19",
+                  "result": "confirmed",
+                  "notes": "Live per-event page opened with the fixture heading and in-play markets.",
+                  "url": "https://www.mozzartbet.ba/sr/uzivo/mec/1/74560606"
+                },
+                {
+                  "checked_at": "2026-11-11",
+                  "method": "headless Chromium (plain context, no request blocking)",
+                  "url": "https://www.mozzartbet.ba/sr/uzivo/mec/1/10108850",
+                  "sample_event_id": "10108850",
+                  "sample_fixture": "Italy U19 - Romania U19",
+                  "result": "failed",
+                  "notes": "The adapter's live matches come from the prematch feed and carry the prematch id; /sr/uzivo/mec/1/<prematch id> showed the live list with no fixture open, and /sr/kladjenje/sport/1/match/<prematch id> showed no fixture once the match was in play. The live page needs the live-feed id (/sr/uzivo/mec/1/74723528 opened Czech Republic M19 : Netherland M19 with in-play markets; the same 74723528 is the SportPlus id of that match), which the adapter does not parse. SR9-2 / SR8-1."
+                }
+              ]
             },
             {
               "kind": "search",
@@ -98,16 +138,33 @@
               "url": "https://www.mozzartbet.ba/sr/uzivo",
               "label": "Open Mozzartbet live competition",
               "proof": {
-                "checked_at": "2026-11-03",
+                "checked_at": "2026-11-11",
                 "result": "confirmed",
-                "method": "browser spot check",
-                "sample_fixture": "live football competition page",
+                "method": "headless Chromium (plain context, no request blocking)",
+                "sample_fixture": "competition page",
+                "sample_url": "https://www.mozzartbet.ba/sr/uzivo",
                 "fixture_confirmed": false,
                 "page_confirmed": true,
                 "ticket_confirmed": false,
-                "notes": "The live competition page opened and listed the fixture."
+                "notes": "Redirected to /sr/uzivo/sport/all with the live list; this is now the live fallback (the match route is demoted)."
               },
-              "identifier_source": "teams"
+              "identifier_source": "teams",
+              "attempts": [
+                {
+                  "checked_at": "2026-11-03",
+                  "method": "browser spot check",
+                  "sample_fixture": "live football competition page",
+                  "result": "confirmed",
+                  "notes": "The live competition page opened and listed the fixture."
+                },
+                {
+                  "checked_at": "2026-11-11",
+                  "method": "headless Chromium (plain context, no request blocking)",
+                  "url": "https://www.mozzartbet.ba/sr/uzivo",
+                  "result": "confirmed",
+                  "notes": "Redirected to /sr/uzivo/sport/all with the live list; this is now the live fallback (the match route is demoted)."
+                }
+              ]
             }
           ]
         }
@@ -128,19 +185,36 @@
                 "format": "NSoft ticketItems: [sportId, regionId, competitionId, eventId, betId, betOutcomeId]"
               },
               "proof": {
-                "checked_at": "2026-11-03",
+                "checked_at": "2026-11-11",
                 "result": "confirmed",
-                "method": "browser spot check",
-                "sample_event_id": "6971587",
-                "sample_fixture": "Shakhtar Donetsk - Sporting",
-                "sample_url": "https://www.mdshop.ba/sport-site/sr/#/betting/prematch?sport=Fudbal&ticketItems=%5B%5B1%2C104%2C764%2C6971587%2C633141222%2C1990033033%5D%5D",
+                "method": "OpenChamber browser panel",
+                "sample_event_id": "7060446",
+                "sample_fixture": "America MG - Avai",
+                "sample_url": "https://www.mdshop.ba/sport-site/sr/#/betting/prematch?sport=Fudbal&ticketItems=%5B%5B1%2C10%2C772%2C7060446%2C644826088%2C2018088225%5D%5D",
                 "fixture_confirmed": true,
                 "ticket_confirmed": true,
-                "ticket_selection": "1",
-                "ticket_odds": 3.42,
-                "ticket_stake": 0.5,
-                "notes": "The slip showed Shakhtar Donetsk - Sporting, Konacan ishod 1 @ 3.42, Ulog 0.50. The site's default stake was shown; NSoft does not accept a stake query parameter."
-              }
+                "notes": "MDShop slip showed America MG - Avai, Konacan ishod 1 @ 3.90 with the site's default 0.50 BAM stake."
+              },
+              "attempts": [
+                {
+                  "checked_at": "2026-11-03",
+                  "method": "browser spot check",
+                  "sample_event_id": "6971587",
+                  "sample_fixture": "Shakhtar Donetsk - Sporting",
+                  "result": "confirmed",
+                  "notes": "The slip showed Shakhtar Donetsk - Sporting, Konacan ishod 1 @ 3.42, Ulog 0.50. The site's default stake was shown; NSoft does not accept a stake query parameter.",
+                  "url": "https://www.mdshop.ba/sport-site/sr/#/betting/prematch?sport=Fudbal&ticketItems=%5B%5B1%2C104%2C764%2C6971587%2C633141222%2C1990033033%5D%5D"
+                },
+                {
+                  "checked_at": "2026-11-11",
+                  "method": "OpenChamber browser panel",
+                  "url": "https://www.mdshop.ba/sport-site/sr/#/betting/prematch?sport=Fudbal&ticketItems=%5B%5B1%2C10%2C772%2C7060446%2C644826088%2C2018088225%5D%5D",
+                  "sample_event_id": "7060446",
+                  "sample_fixture": "America MG - Avai",
+                  "result": "confirmed",
+                  "notes": "MDShop slip showed America MG - Avai, Konacan ishod 1 @ 3.90 with the site's default 0.50 BAM stake."
+                }
+              ]
             },
             {
               "kind": "match_page",
@@ -204,19 +278,36 @@
                 "format": "NSoft ticketItems: [sportId, regionId, competitionId, eventId, betId, betOutcomeId]"
               },
               "proof": {
-                "checked_at": "2026-11-03",
+                "checked_at": "2026-11-11",
                 "result": "confirmed",
-                "method": "browser spot check",
-                "sample_event_id": "7030846",
-                "sample_fixture": "Estrela U23 - Santa Clara U23",
-                "sample_url": "https://www.mdshop.ba/sport-site/sr/#/betting/live?sport=Fudbal&ticketItems=%5B%5B1%2C28%2C2881%2C7030846%2C642012640%2C2009930884%5D%5D",
+                "method": "headless Chromium (plain context, no request blocking)",
+                "sample_event_id": "7070062",
+                "sample_fixture": "Bangladesh - Sri Lanka",
+                "sample_url": "https://www.mdshop.ba/sport-site/sr/#/betting/live?sport=Fudbal&ticketItems=%5B%5B1%2C2%2C16%2C7070062%2C645832210%2C2021224627%5D%5D",
                 "fixture_confirmed": true,
                 "ticket_confirmed": true,
-                "ticket_selection": "1",
-                "ticket_odds": 2.34,
-                "ticket_stake": 0.5,
-                "notes": "The live slip showed Estrela U23 - Santa Clara U23, Pobednik ostatka meca 0:0 1 @ 2.34, Ulog 0.50. The match went offline during the check, which the site flagged on the slip."
-              }
+                "notes": "Live slip held one selection for Bangladesh - Sri Lanka (SAFF Championship), under 1.5 at the live price."
+              },
+              "attempts": [
+                {
+                  "checked_at": "2026-11-03",
+                  "method": "browser spot check",
+                  "sample_event_id": "7030846",
+                  "sample_fixture": "Estrela U23 - Santa Clara U23",
+                  "result": "confirmed",
+                  "notes": "The live slip showed Estrela U23 - Santa Clara U23, Pobednik ostatka meca 0:0 1 @ 2.34, Ulog 0.50. The match went offline during the check, which the site flagged on the slip.",
+                  "url": "https://www.mdshop.ba/sport-site/sr/#/betting/live?sport=Fudbal&ticketItems=%5B%5B1%2C28%2C2881%2C7030846%2C642012640%2C2009930884%5D%5D"
+                },
+                {
+                  "checked_at": "2026-11-11",
+                  "method": "headless Chromium (plain context, no request blocking)",
+                  "url": "https://www.mdshop.ba/sport-site/sr/#/betting/live?sport=Fudbal&ticketItems=%5B%5B1%2C2%2C16%2C7070062%2C645832210%2C2021224627%5D%5D",
+                  "sample_event_id": "7070062",
+                  "sample_fixture": "Bangladesh - Sri Lanka",
+                  "result": "confirmed",
+                  "notes": "Live slip held one selection for Bangladesh - Sri Lanka (SAFF Championship), under 1.5 at the live price."
+                }
+              ]
             },
             {
               "kind": "match_page",
@@ -285,19 +376,36 @@
                 "format": "NSoft ticketItems: [sportId, regionId, competitionId, eventId, betId, betOutcomeId]"
               },
               "proof": {
-                "checked_at": "2026-11-03",
+                "checked_at": "2026-11-11",
                 "result": "confirmed",
-                "method": "browser spot check",
-                "sample_event_id": "6971587",
-                "sample_fixture": "Shakhtar Donetsk - Sporting",
-                "sample_url": "https://www.admiralbet.ba/sport-site/sr/#/betting/prematch?sport=Fudbal&ticketItems=%5B%5B1%2C104%2C764%2C6971587%2C633141250%2C1990033099%5D%5D",
+                "method": "OpenChamber browser panel",
+                "sample_event_id": "7060446",
+                "sample_fixture": "America MG - Avai",
+                "sample_url": "https://www.admiralbet.ba/sport-site/sr/#/betting/prematch?sport=Fudbal&ticketItems=%5B%5B1%2C10%2C772%2C7060446%2C644826220%2C2018088901%5D%5D",
                 "fixture_confirmed": true,
                 "ticket_confirmed": true,
-                "ticket_selection": "GG",
-                "ticket_odds": 1.64,
-                "ticket_stake": 0.5,
-                "notes": "The slip showed Shakhtar Donetsk - Sporting, Oba tima daju gol / GG @ 1.64, Ulog 0.5."
-              }
+                "notes": "Admiralbet slip showed America MG - Avai, Konacan ishod 1 @ 3.90 with the site's default 0.50 BAM stake."
+              },
+              "attempts": [
+                {
+                  "checked_at": "2026-11-03",
+                  "method": "browser spot check",
+                  "sample_event_id": "6971587",
+                  "sample_fixture": "Shakhtar Donetsk - Sporting",
+                  "result": "confirmed",
+                  "notes": "The slip showed Shakhtar Donetsk - Sporting, Oba tima daju gol / GG @ 1.64, Ulog 0.5.",
+                  "url": "https://www.admiralbet.ba/sport-site/sr/#/betting/prematch?sport=Fudbal&ticketItems=%5B%5B1%2C104%2C764%2C6971587%2C633141250%2C1990033099%5D%5D"
+                },
+                {
+                  "checked_at": "2026-11-11",
+                  "method": "OpenChamber browser panel",
+                  "url": "https://www.admiralbet.ba/sport-site/sr/#/betting/prematch?sport=Fudbal&ticketItems=%5B%5B1%2C10%2C772%2C7060446%2C644826220%2C2018088901%5D%5D",
+                  "sample_event_id": "7060446",
+                  "sample_fixture": "America MG - Avai",
+                  "result": "confirmed",
+                  "notes": "Admiralbet slip showed America MG - Avai, Konacan ishod 1 @ 3.90 with the site's default 0.50 BAM stake."
+                }
+              ]
             },
             {
               "kind": "match_page",
@@ -361,19 +469,36 @@
                 "format": "NSoft ticketItems: [sportId, regionId, competitionId, eventId, betId, betOutcomeId]"
               },
               "proof": {
-                "checked_at": "2026-11-03",
+                "checked_at": "2026-11-11",
                 "result": "confirmed",
-                "method": "browser spot check",
-                "sample_event_id": "7030846",
-                "sample_fixture": "Estrela U23 - Santa Clara U23",
-                "sample_url": "https://www.admiralbet.ba/sport-site/sr/#/betting/live?sport=Fudbal&ticketItems=%5B%5B1%2C28%2C2881%2C7030846%2C642012640%2C2009930884%5D%5D",
+                "method": "headless Chromium (plain context, no request blocking)",
+                "sample_event_id": "7070062",
+                "sample_fixture": "Bangladesh - Sri Lanka",
+                "sample_url": "https://www.admiralbet.ba/sport-site/sr/#/betting/live?sport=Fudbal&ticketItems=%5B%5B1%2C2%2C16%2C7070062%2C645832210%2C2021224627%5D%5D",
                 "fixture_confirmed": true,
                 "ticket_confirmed": true,
-                "ticket_selection": "1",
-                "ticket_odds": 2.34,
-                "ticket_stake": 0.5,
-                "notes": "The live slip showed Estrela U23 - Santa Clara U23, Pobednik ostatka meca 0:0 1 @ 2.34, Ulog 0.5."
-              }
+                "notes": "Live slip held one selection for Bangladesh - Sri Lanka (SAFF Championship), under 1.5 at the live price."
+              },
+              "attempts": [
+                {
+                  "checked_at": "2026-11-03",
+                  "method": "browser spot check",
+                  "sample_event_id": "7030846",
+                  "sample_fixture": "Estrela U23 - Santa Clara U23",
+                  "result": "confirmed",
+                  "notes": "The live slip showed Estrela U23 - Santa Clara U23, Pobednik ostatka meca 0:0 1 @ 2.34, Ulog 0.5.",
+                  "url": "https://www.admiralbet.ba/sport-site/sr/#/betting/live?sport=Fudbal&ticketItems=%5B%5B1%2C28%2C2881%2C7030846%2C642012640%2C2009930884%5D%5D"
+                },
+                {
+                  "checked_at": "2026-11-11",
+                  "method": "headless Chromium (plain context, no request blocking)",
+                  "url": "https://www.admiralbet.ba/sport-site/sr/#/betting/live?sport=Fudbal&ticketItems=%5B%5B1%2C2%2C16%2C7070062%2C645832210%2C2021224627%5D%5D",
+                  "sample_event_id": "7070062",
+                  "sample_fixture": "Bangladesh - Sri Lanka",
+                  "result": "confirmed",
+                  "notes": "Live slip held one selection for Bangladesh - Sri Lanka (SAFF Championship), under 1.5 at the live price."
+                }
+              ]
             },
             {
               "kind": "match_page",
@@ -438,17 +563,45 @@
               "identifier_source": "event_id",
               "label": "Open Betole match",
               "proof": {
-                "checked_at": "2026-11-03",
+                "checked_at": "2026-11-11",
                 "result": "confirmed",
-                "method": "browser spot check",
-                "sample_event_id": "91367737",
-                "sample_fixture": "Sporting CP - Moreirense",
-                "sample_url": "https://www.betole.ba/match-special/91367737",
+                "method": "headless Chromium + operator's own browser (2026-11-11, reported in chat)",
+                "sample_event_id": "91420001",
+                "sample_fixture": "America MG - Avai",
+                "sample_url": "https://www.betole.ba/match-special/91420001",
                 "fixture_confirmed": true,
                 "ticket_confirmed": false,
-                "notes": "Operator confirms the link works: /match-special/91367737 opens Sporting CP - Moreirense. The embedded browser panel showed a blank page because of a site JS error in that panel; the route itself is valid.",
-                "page_confirmed": true
-              }
+                "notes": "Operator confirmed in a normal browser that https://www.betole.ba/match-special/91420001 opens America MG - Avai; headless Chromium rendered Brazil, Serie B, America MG - Avai with 1X2 3.65/3.35/1.85. The OpenChamber panel renders the whole Betole site blank."
+              },
+              "attempts": [
+                {
+                  "checked_at": "2026-11-03",
+                  "method": "browser spot check",
+                  "sample_event_id": "91367737",
+                  "sample_fixture": "Sporting CP - Moreirense",
+                  "result": "confirmed",
+                  "notes": "Operator confirms the link works: /match-special/91367737 opens Sporting CP - Moreirense. The embedded browser panel showed a blank page because of a site JS error in that panel; the route itself is valid.",
+                  "url": "https://www.betole.ba/match-special/91367737"
+                },
+                {
+                  "checked_at": "2026-11-11",
+                  "method": "headless Chromium (plain context, no request blocking)",
+                  "url": "https://www.betole.ba/match-special/91420001",
+                  "sample_event_id": "91420001",
+                  "sample_fixture": "America MG - Avai",
+                  "result": "confirmed",
+                  "notes": "Headless Chromium rendered Brazil, Serie B, America MG - Avai with 1X2 3.65/3.35/1.85. The OpenChamber panel still renders the whole Betole site blank (as on 2026-11-03), so this stays confirmed on the operator's 2026-11-03 browser check plus this render."
+                },
+                {
+                  "checked_at": "2026-11-11",
+                  "method": "operator's own browser (2026-11-11, reported in chat)",
+                  "url": "https://www.betole.ba/match-special/91420001",
+                  "sample_event_id": "91420001",
+                  "sample_fixture": "America MG - Avai",
+                  "result": "confirmed",
+                  "notes": "Opens the match."
+                }
+              ]
             },
             {
               "kind": "search",
@@ -585,16 +738,36 @@
               "identifier_source": "event_id",
               "label": "Open MBet match",
               "proof": {
-                "checked_at": "2026-11-03",
+                "checked_at": "2026-11-11",
                 "result": "confirmed",
-                "method": "browser spot check",
-                "sample_event_id": "e:fb:sha-spo:0001",
-                "sample_fixture": "Shakhtar Donetsk - Sporting CP",
-                "sample_url": "https://mbet.ba/single?id=e:fb:sha-spo:0001",
+                "method": "OpenChamber browser panel",
+                "sample_event_id": "e:fb:ame-ava:0002",
+                "sample_fixture": "America MG - Avai",
+                "sample_url": "https://mbet.ba/single?id=e:fb:ame-ava:0002",
                 "fixture_confirmed": true,
                 "ticket_confirmed": false,
-                "notes": "The route opened the fixture page with its markets."
-              }
+                "notes": "Fixture page (Brazil 2, 14.11. 20:30) opened with all market tabs."
+              },
+              "attempts": [
+                {
+                  "checked_at": "2026-11-03",
+                  "method": "browser spot check",
+                  "sample_event_id": "e:fb:sha-spo:0001",
+                  "sample_fixture": "Shakhtar Donetsk - Sporting CP",
+                  "result": "confirmed",
+                  "notes": "The route opened the fixture page with its markets.",
+                  "url": "https://mbet.ba/single?id=e:fb:sha-spo:0001"
+                },
+                {
+                  "checked_at": "2026-11-11",
+                  "method": "OpenChamber browser panel",
+                  "url": "https://mbet.ba/single?id=e:fb:ame-ava:0002",
+                  "sample_event_id": "e:fb:ame-ava:0002",
+                  "sample_fixture": "America MG - Avai",
+                  "result": "confirmed",
+                  "notes": "Fixture page (Brazil 2, 14.11. 20:30) opened with all market tabs."
+                }
+              ]
             },
             {
               "kind": "search",
@@ -633,20 +806,40 @@
           "routes": [
             {
               "kind": "match_page",
-              "url_template": "https://mbet.ba/single-live?id={event_id}",
+              "url_template": "https://mbet.ba/live?id={event_id}",
               "identifier_source": "event_id",
               "label": "Open MBet live match",
               "proof": {
-                "checked_at": "2026-11-03",
+                "checked_at": "2026-11-11",
                 "result": "confirmed",
-                "method": "browser spot check",
-                "sample_event_id": "e:fb:sha-spo:0002",
-                "sample_fixture": "Shakhtar Donetsk U19 - Sporting CP U19",
-                "sample_url": "https://mbet.ba/single-live?id=e:fb:sha-spo:0002",
+                "method": "OpenChamber browser panel and headless Chromium (plain context, no request blocking)",
+                "sample_event_id": "e:fb:cze-net:0001",
+                "sample_fixture": "Czech Republic U19 - Netherlands U19",
+                "sample_url": "https://mbet.ba/live?id=e:fb:cze-net:0001",
                 "fixture_confirmed": true,
                 "ticket_confirmed": false,
-                "notes": "The live route opened the fixture page with in-play markets."
-              }
+                "notes": "single-live?id=<id> now returns the site's 404 page (Stranica nije pronadena). Clicking the fixture on /live navigates to /live?id=<id>; opened cold, that URL showed the fixture (75' 2nd Half, 2:0) with its live markets in both browsers."
+              },
+              "attempts": [
+                {
+                  "checked_at": "2026-11-03",
+                  "method": "browser spot check",
+                  "sample_event_id": "e:fb:sha-spo:0002",
+                  "sample_fixture": "Shakhtar Donetsk U19 - Sporting CP U19",
+                  "result": "confirmed",
+                  "notes": "The live route opened the fixture page with in-play markets.",
+                  "url": "https://mbet.ba/single-live?id=e:fb:sha-spo:0002"
+                },
+                {
+                  "checked_at": "2026-11-11",
+                  "method": "OpenChamber browser panel and headless Chromium (plain context, no request blocking)",
+                  "url": "https://mbet.ba/live?id=e:fb:cze-net:0001",
+                  "sample_event_id": "e:fb:cze-net:0001",
+                  "sample_fixture": "Czech Republic U19 - Netherlands U19",
+                  "result": "confirmed",
+                  "notes": "single-live?id=<id> now returns the site's 404 page (Stranica nije pronadena). Clicking the fixture on /live navigates to /live?id=<id>; opened cold, that URL showed the fixture (75' 2nd Half, 2:0) with its live markets in both browsers."
+                }
+              ]
             },
             {
               "kind": "search",
@@ -708,14 +901,15 @@
               "url": "https://www.sportplus.ba/prematch/betting",
               "label": "Open SportPlus football competition",
               "proof": {
-                "checked_at": "2026-11-03",
+                "checked_at": "2026-11-11",
                 "result": "confirmed",
-                "method": "browser spot check",
-                "sample_fixture": "football competition page",
+                "method": "headless Chromium (plain context, no request blocking)",
+                "sample_fixture": "competition page",
+                "sample_url": "https://www.sportplus.ba/prematch/betting",
                 "fixture_confirmed": false,
                 "page_confirmed": true,
                 "ticket_confirmed": false,
-                "notes": "The football competition page opened and listed the fixture."
+                "notes": "Prematch betting page opened with the sport menu."
               },
               "identifier_source": "teams",
               "manual_ticket_prefill": {
@@ -723,7 +917,23 @@
                 "method": "copyable localStorage script",
                 "confirmed": false,
                 "note": "SportPlus has no per-event URL and no ticket query parameter. Its slip is read from localStorage['ticket'] on load; the dashboard offers a copyable script that fetches the current offer, matches the leg by match id/market code/alias, writes one pair with the planned stake, and reloads. It places no bet and is not a ticket-filled link."
-              }
+              },
+              "attempts": [
+                {
+                  "checked_at": "2026-11-03",
+                  "method": "browser spot check",
+                  "sample_fixture": "football competition page",
+                  "result": "confirmed",
+                  "notes": "The football competition page opened and listed the fixture."
+                },
+                {
+                  "checked_at": "2026-11-11",
+                  "method": "headless Chromium (plain context, no request blocking)",
+                  "url": "https://www.sportplus.ba/prematch/betting",
+                  "result": "confirmed",
+                  "notes": "Prematch betting page opened with the sport menu."
+                }
+              ]
             }
           ]
         },
@@ -746,17 +956,18 @@
             },
             {
               "kind": "competition",
-              "url": "https://www.sportplus.ba/live",
+              "url": "https://www.sportplus.ba/live/betting",
               "label": "Open SportPlus live competition",
               "proof": {
-                "checked_at": "2026-11-03",
+                "checked_at": "2026-11-11",
                 "result": "confirmed",
-                "method": "browser spot check",
-                "sample_fixture": "live competition page",
+                "method": "headless Chromium (plain context, no request blocking)",
+                "sample_fixture": "competition page",
+                "sample_url": "https://www.sportplus.ba/live/betting",
                 "fixture_confirmed": false,
                 "page_confirmed": true,
                 "ticket_confirmed": false,
-                "notes": "The live competition page opened."
+                "notes": "https://www.sportplus.ba/live now answers the site's 404 page; the site's own KLAĐENJE UŽIVO link is /live/betting, which opened with the live football list."
               },
               "identifier_source": "teams",
               "manual_ticket_prefill": {
@@ -764,7 +975,23 @@
                 "method": "none",
                 "confirmed": false,
                 "note": "The prematch localStorage script was verified against the prematch offer only; the live offer/ticket shape has not been confirmed, so live remains a competition fallback."
-              }
+              },
+              "attempts": [
+                {
+                  "checked_at": "2026-11-03",
+                  "method": "browser spot check",
+                  "sample_fixture": "live competition page",
+                  "result": "confirmed",
+                  "notes": "The live competition page opened."
+                },
+                {
+                  "checked_at": "2026-11-11",
+                  "method": "headless Chromium (plain context, no request blocking)",
+                  "url": "https://www.sportplus.ba/live/betting",
+                  "result": "confirmed",
+                  "notes": "https://www.sportplus.ba/live now answers the site's 404 page; the site's own KLAĐENJE UŽIVO link is /live/betting, which opened with the live football list."
+                }
+              ]
             }
           ]
         }
@@ -795,16 +1022,33 @@
               "url": "https://www.premier-kladionica.com/ponuda/",
               "label": "Open Premier Kladionica football competition",
               "proof": {
-                "checked_at": "2026-11-03",
+                "checked_at": "2026-11-11",
                 "result": "confirmed",
-                "method": "browser spot check",
-                "sample_fixture": "football competition page",
+                "method": "headless Chromium (plain context, no request blocking)",
+                "sample_fixture": "competition page",
+                "sample_url": "https://www.premier-kladionica.com/ponuda/",
                 "fixture_confirmed": false,
                 "page_confirmed": true,
                 "ticket_confirmed": false,
-                "notes": "The /ponuda/ page opened; /ponuda/<id> and ?event=<id> both return 404 or an inert list."
+                "notes": "/ponuda opened with the date menu; the offer is empty until a league is picked."
               },
-              "identifier_source": "teams"
+              "identifier_source": "teams",
+              "attempts": [
+                {
+                  "checked_at": "2026-11-03",
+                  "method": "browser spot check",
+                  "sample_fixture": "football competition page",
+                  "result": "confirmed",
+                  "notes": "The /ponuda/ page opened; /ponuda/<id> and ?event=<id> both return 404 or an inert list."
+                },
+                {
+                  "checked_at": "2026-11-11",
+                  "method": "headless Chromium (plain context, no request blocking)",
+                  "url": "https://www.premier-kladionica.com/ponuda/",
+                  "result": "confirmed",
+                  "notes": "/ponuda opened with the date menu; the offer is empty until a league is picked."
+                }
+              ]
             }
           ]
         },
@@ -827,19 +1071,36 @@
             },
             {
               "kind": "competition",
-              "url": "https://www.premier-kladionica.com/ponuda/",
+              "url": "https://www.premier-kladionica.com/live",
               "label": "Open Premier Kladionica live competition",
               "proof": {
-                "checked_at": "2026-11-03",
+                "checked_at": "2026-11-11",
                 "result": "confirmed",
-                "method": "browser spot check",
-                "sample_fixture": "live competition page",
+                "method": "headless Chromium (plain context, no request blocking)",
+                "sample_fixture": "competition page",
+                "sample_url": "https://www.premier-kladionica.com/live",
                 "fixture_confirmed": false,
                 "page_confirmed": true,
                 "ticket_confirmed": false,
-                "notes": "The same /ponuda/ page carries the live offer."
+                "notes": "/ponuda shows no live list; /live (the site's Uživo link) opened with the in-play football rows (e.g. Italija 19 - Rumunjska)."
               },
-              "identifier_source": "teams"
+              "identifier_source": "teams",
+              "attempts": [
+                {
+                  "checked_at": "2026-11-03",
+                  "method": "browser spot check",
+                  "sample_fixture": "live competition page",
+                  "result": "confirmed",
+                  "notes": "The same /ponuda/ page carries the live offer."
+                },
+                {
+                  "checked_at": "2026-11-11",
+                  "method": "headless Chromium (plain context, no request blocking)",
+                  "url": "https://www.premier-kladionica.com/live",
+                  "result": "confirmed",
+                  "notes": "/ponuda shows no live list; /live (the site's Uživo link) opened with the in-play football rows (e.g. Italija 19 - Rumunjska)."
+                }
+              ]
             }
           ]
         }
@@ -856,15 +1117,15 @@
               "identifier_source": "event_id",
               "label": "Open WWIN match",
               "proof": {
-                "checked_at": "2026-11-03",
-                "result": "failed",
-                "method": "browser spot check",
-                "sample_event_id": "4684404",
-                "sample_fixture": "Shakhtar D. - Sporting L.",
-                "sample_url": "https://wwin.ba/kladjenje/#/top-bets/match/4684404",
-                "fixture_confirmed": false,
+                "checked_at": "2026-11-11",
+                "result": "confirmed",
+                "method": "headless Chromium + operator's own browser (2026-11-11, reported in chat)",
+                "sample_event_id": "4730200",
+                "sample_fixture": "America MG - Avai SC",
+                "sample_url": "https://wwin.ba/kladjenje/#/top-bets/match/4730200",
+                "fixture_confirmed": true,
                 "ticket_confirmed": false,
-                "notes": "Direct navigation in the operator browser rendered the generic competition/SEO page, not the fixture; the hash route is not deep-linkable on a cold load."
+                "notes": "Operator confirmed in a normal browser that https://wwin.ba/kladjenje/#/top-bets/match/4730200 opens America MG - Avai SC; headless Chromium showed the same. Only the OpenChamber panel shows the empty shell, so the panel is not the reference for WWIN."
               },
               "attempts": [
                 {
@@ -875,6 +1136,33 @@
                   "sample_fixture": "Shakhtar D. - Sporting L.",
                   "result": "failed",
                   "notes": "Direct navigation in the operator browser rendered the generic competition/SEO page, not the fixture; the hash route is not deep-linkable on a cold load."
+                },
+                {
+                  "checked_at": "2026-11-03",
+                  "method": "browser spot check",
+                  "sample_event_id": "4684404",
+                  "sample_fixture": "Shakhtar D. - Sporting L.",
+                  "result": "failed",
+                  "notes": "Direct navigation in the operator browser rendered the generic competition/SEO page, not the fixture; the hash route is not deep-linkable on a cold load.",
+                  "url": "https://wwin.ba/kladjenje/#/top-bets/match/4684404"
+                },
+                {
+                  "checked_at": "2026-11-11",
+                  "method": "headless Chromium (plain context, no request blocking) (panel disagrees or untested)",
+                  "url": "https://wwin.ba/kladjenje/#/top-bets/match/4730200",
+                  "sample_event_id": "4730200",
+                  "sample_fixture": "America MG - Avai SC",
+                  "result": "failed",
+                  "notes": "Headless Chromium opened the fixture page (Brasileiro, Serie B, all markets) on a cold load, but the OpenChamber panel again showed only the site shell (the competition page itself renders there). Kept failed until the operator confirms in a normal browser."
+                },
+                {
+                  "checked_at": "2026-11-11",
+                  "method": "operator's own browser (2026-11-11, reported in chat)",
+                  "url": "https://wwin.ba/kladjenje/#/top-bets/match/4730200",
+                  "sample_event_id": "4730200",
+                  "sample_fixture": "America MG - Avai SC",
+                  "result": "confirmed",
+                  "notes": "Opens the match."
                 }
               ]
             },
@@ -919,15 +1207,15 @@
               "identifier_source": "event_id",
               "label": "Open WWIN live match",
               "proof": {
-                "checked_at": "2026-11-03",
+                "checked_at": "2026-11-11",
                 "result": "failed",
-                "method": "browser spot check",
-                "sample_event_id": "4713116",
-                "sample_fixture": "Galatasaray/19 - Stuttgart/19",
-                "sample_url": "https://wwin.ba/kladjenje-uzivo/#/match/4713116",
+                "method": "headless Chromium (plain context, no request blocking) (panel disagrees or untested)",
+                "sample_event_id": "4734682",
+                "sample_fixture": "Al Qanater - El Obour SC",
+                "sample_url": "https://wwin.ba/kladjenje-uzivo/#/match/4734682",
                 "fixture_confirmed": false,
                 "ticket_confirmed": false,
-                "notes": "Direct navigation in the operator browser rendered the generic live page, not the fixture; the hash route is not deep-linkable on a cold load."
+                "notes": "Headless Chromium opened the in-play fixture with its score panel. Not yet confirmed in the operator's browser; kept failed until then. The operator confirmed the prematch hash route in a normal browser on 2026-11-11; the live route still needs its own click before it is promoted."
               },
               "attempts": [
                 {
@@ -938,6 +1226,24 @@
                   "sample_fixture": "Galatasaray/19 - Stuttgart/19",
                   "result": "failed",
                   "notes": "Direct navigation in the operator browser rendered the generic live page, not the fixture; the hash route is not deep-linkable on a cold load."
+                },
+                {
+                  "checked_at": "2026-11-03",
+                  "method": "browser spot check",
+                  "sample_event_id": "4713116",
+                  "sample_fixture": "Galatasaray/19 - Stuttgart/19",
+                  "result": "failed",
+                  "notes": "Direct navigation in the operator browser rendered the generic live page, not the fixture; the hash route is not deep-linkable on a cold load.",
+                  "url": "https://wwin.ba/kladjenje-uzivo/#/match/4713116"
+                },
+                {
+                  "checked_at": "2026-11-11",
+                  "method": "headless Chromium (plain context, no request blocking) (panel disagrees or untested)",
+                  "url": "https://wwin.ba/kladjenje-uzivo/#/match/4734682",
+                  "sample_event_id": "4734682",
+                  "sample_fixture": "Al Qanater - El Obour SC",
+                  "result": "failed",
+                  "notes": "Headless Chromium opened the in-play fixture with its score panel. Not yet confirmed in the operator's browser; kept failed until then."
                 }
               ]
             },
@@ -961,16 +1267,33 @@
               "url": "https://wwin.ba/kladjenje-uzivo/#/sport/2",
               "label": "Open WWIN live competition",
               "proof": {
-                "checked_at": "2026-11-03",
+                "checked_at": "2026-11-11",
                 "result": "confirmed",
-                "method": "browser spot check",
-                "sample_fixture": "live football competition page",
+                "method": "headless Chromium (plain context, no request blocking)",
+                "sample_fixture": "competition page",
+                "sample_url": "https://wwin.ba/kladjenje-uzivo/#/sport/2",
                 "fixture_confirmed": false,
                 "page_confirmed": true,
                 "ticket_confirmed": false,
-                "notes": "The live football competition page opened."
+                "notes": "Live football page opened."
               },
-              "identifier_source": "teams"
+              "identifier_source": "teams",
+              "attempts": [
+                {
+                  "checked_at": "2026-11-03",
+                  "method": "browser spot check",
+                  "sample_fixture": "live football competition page",
+                  "result": "confirmed",
+                  "notes": "The live football competition page opened."
+                },
+                {
+                  "checked_at": "2026-11-11",
+                  "method": "headless Chromium (plain context, no request blocking)",
+                  "url": "https://wwin.ba/kladjenje-uzivo/#/sport/2",
+                  "result": "confirmed",
+                  "notes": "Live football page opened."
+                }
+              ]
             }
           ]
         }
@@ -983,19 +1306,19 @@
           "routes": [
             {
               "kind": "match_page",
-              "url_template": "https://sportsbook.maxbet.ba/match/{event_id}",
+              "url_template": "https://www.maxbet.ba/ba/sportsbook/match/{event_id}",
               "identifier_source": "event_id",
               "label": "Open MaxBet match",
               "proof": {
-                "checked_at": "2026-11-03",
-                "result": "failed",
-                "method": "browser spot check",
-                "sample_event_id": "971607",
-                "sample_fixture": "Shakhtar - Sporting Lisbon",
-                "sample_url": "https://sportsbook.maxbet.ba/match/971607",
-                "fixture_confirmed": false,
+                "checked_at": "2026-11-11",
+                "result": "confirmed",
+                "method": "OpenChamber browser panel and headless Chromium (plain context, no request blocking)",
+                "sample_event_id": "1024788",
+                "sample_fixture": "America MG - Avai",
+                "sample_url": "https://www.maxbet.ba/ba/sportsbook/match/1024788",
+                "fixture_confirmed": true,
                 "ticket_confirmed": false,
-                "notes": "The sportsbook host rendered blank and www.maxbet.ba/match/971607 redirected to the homepage; the route is not usable from the dashboard."
+                "notes": "www.maxbet.ba/ba/sportsbook/match/<id> opens the fixture inside the site shell (Fudbal / Brazil / Brazil 2, all markets). Its own home page links matches this way. The 2026-11-03 failures used sportsbook.maxbet.ba/match/<id> and www.maxbet.ba/match/<id>, which still render blank or redirect home. Adding ?outcome=<outcome id> also puts that selection on the slip (seen in both browsers); the ticket route needs the per-outcome id, which the adapter does not keep yet (SR9-2)."
               },
               "attempts": [
                 {
@@ -1006,6 +1329,24 @@
                   "sample_fixture": "Shakhtar - Sporting Lisbon",
                   "result": "failed",
                   "notes": "The sportsbook host rendered blank and www.maxbet.ba/match/971607 redirected to the homepage; the route is not usable from the dashboard."
+                },
+                {
+                  "checked_at": "2026-11-03",
+                  "method": "browser spot check",
+                  "sample_event_id": "971607",
+                  "sample_fixture": "Shakhtar - Sporting Lisbon",
+                  "result": "failed",
+                  "notes": "The sportsbook host rendered blank and www.maxbet.ba/match/971607 redirected to the homepage; the route is not usable from the dashboard.",
+                  "url": "https://sportsbook.maxbet.ba/match/971607"
+                },
+                {
+                  "checked_at": "2026-11-11",
+                  "method": "OpenChamber browser panel and headless Chromium (plain context, no request blocking)",
+                  "url": "https://www.maxbet.ba/ba/sportsbook/match/1024788",
+                  "sample_event_id": "1024788",
+                  "sample_fixture": "America MG - Avai",
+                  "result": "confirmed",
+                  "notes": "www.maxbet.ba/ba/sportsbook/match/<id> opens the fixture inside the site shell (Fudbal / Brazil / Brazil 2, all markets). Its own home page links matches this way. The 2026-11-03 failures used sportsbook.maxbet.ba/match/<id> and www.maxbet.ba/match/<id>, which still render blank or redirect home. Adding ?outcome=<outcome id> also puts that selection on the slip (seen in both browsers); the ticket route needs the per-outcome id, which the adapter does not keep yet (SR9-2)."
                 }
               ]
             },
@@ -1029,14 +1370,15 @@
               "url": "https://www.maxbet.ba/ba",
               "label": "Open MaxBet sport page",
               "proof": {
-                "checked_at": "2026-11-03",
+                "checked_at": "2026-11-11",
                 "result": "confirmed",
-                "method": "browser spot check",
-                "sample_fixture": "football competition page",
+                "method": "headless Chromium (plain context, no request blocking)",
+                "sample_fixture": "competition page",
+                "sample_url": "https://www.maxbet.ba/ba",
                 "fixture_confirmed": false,
                 "page_confirmed": true,
                 "ticket_confirmed": false,
-                "notes": "www.maxbet.ba/ba opened with the sport navigation and top matches; the sportsbook host rendered blank."
+                "notes": "Home page opened; now only a fallback behind the confirmed match page."
               },
               "identifier_source": "teams",
               "attempts": [
@@ -1047,6 +1389,20 @@
                   "sample_fixture": "MaxBet sport page",
                   "result": "confirmed",
                   "notes": "Opened with top matches and sport navigation."
+                },
+                {
+                  "checked_at": "2026-11-03",
+                  "method": "browser spot check",
+                  "sample_fixture": "football competition page",
+                  "result": "confirmed",
+                  "notes": "www.maxbet.ba/ba opened with the sport navigation and top matches; the sportsbook host rendered blank."
+                },
+                {
+                  "checked_at": "2026-11-11",
+                  "method": "headless Chromium (plain context, no request blocking)",
+                  "url": "https://www.maxbet.ba/ba",
+                  "result": "confirmed",
+                  "notes": "Home page opened; now only a fallback behind the confirmed match page."
                 }
               ]
             }
@@ -1056,20 +1412,19 @@
           "routes": [
             {
               "kind": "match_page",
-              "url_template": "https://sportsbook.maxbet.ba/match/{event_id}",
+              "url_template": "https://www.maxbet.ba/ba/sportsbook/match/{event_id}",
               "identifier_source": "event_id",
               "label": "Open MaxBet live match",
               "proof": {
-                "checked_at": "2026-11-03",
-                "result": "failed",
-                "method": "browser spot check",
-                "sample_event_id": "1006541",
-                "sample_fixture": "Galatasaray U19 - VFB Stuttgart U19",
-                "sample_url": "https://sportsbook.maxbet.ba/match/1006541",
-                "fixture_confirmed": false,
+                "checked_at": "2026-11-11",
+                "result": "confirmed",
+                "method": "OpenChamber browser panel and headless Chromium (plain context, no request blocking)",
+                "sample_event_id": "1028009",
+                "sample_fixture": "Czech Rep U19 - Netherlands U19",
+                "sample_url": "https://www.maxbet.ba/ba/sportsbook/match/1028009",
+                "fixture_confirmed": true,
                 "ticket_confirmed": false,
-                "inherited_from": "prematch /match/{event_id} pattern",
-                "notes": "The same /match/{id} template rendered blank in the operator browser for a live sample; it is not usable from the dashboard."
+                "notes": "The same path opened the in-play fixture (H2 77', 2:0) with live markets."
               },
               "attempts": [
                 {
@@ -1080,6 +1435,24 @@
                   "sample_fixture": "Galatasaray U19 - VFB Stuttgart U19",
                   "result": "failed",
                   "notes": "The same /match/{id} template rendered blank in the operator browser for a live sample; it is not usable from the dashboard."
+                },
+                {
+                  "checked_at": "2026-11-03",
+                  "method": "browser spot check",
+                  "sample_event_id": "1006541",
+                  "sample_fixture": "Galatasaray U19 - VFB Stuttgart U19",
+                  "result": "failed",
+                  "notes": "The same /match/{id} template rendered blank in the operator browser for a live sample; it is not usable from the dashboard.",
+                  "url": "https://sportsbook.maxbet.ba/match/1006541"
+                },
+                {
+                  "checked_at": "2026-11-11",
+                  "method": "OpenChamber browser panel and headless Chromium (plain context, no request blocking)",
+                  "url": "https://www.maxbet.ba/ba/sportsbook/match/1028009",
+                  "sample_event_id": "1028009",
+                  "sample_fixture": "Czech Rep U19 - Netherlands U19",
+                  "result": "confirmed",
+                  "notes": "The same path opened the in-play fixture (H2 77', 2:0) with live markets."
                 }
               ]
             },
@@ -1103,14 +1476,15 @@
               "url": "https://www.maxbet.ba/ba",
               "label": "Open MaxBet sport page",
               "proof": {
-                "checked_at": "2026-11-03",
+                "checked_at": "2026-11-11",
                 "result": "confirmed",
-                "method": "browser spot check",
-                "sample_fixture": "live football competition page",
+                "method": "headless Chromium (plain context, no request blocking)",
+                "sample_fixture": "competition page",
+                "sample_url": "https://www.maxbet.ba/ba",
                 "fixture_confirmed": false,
                 "page_confirmed": true,
                 "ticket_confirmed": false,
-                "notes": "www.maxbet.ba/ba opened with the sport navigation and top matches; the sportsbook host rendered blank."
+                "notes": "Home page opened; now only a fallback behind the confirmed match page."
               },
               "identifier_source": "teams",
               "attempts": [
@@ -1121,6 +1495,20 @@
                   "sample_fixture": "MaxBet sport page",
                   "result": "confirmed",
                   "notes": "Opened with top matches and sport navigation."
+                },
+                {
+                  "checked_at": "2026-11-03",
+                  "method": "browser spot check",
+                  "sample_fixture": "live football competition page",
+                  "result": "confirmed",
+                  "notes": "www.maxbet.ba/ba opened with the sport navigation and top matches; the sportsbook host rendered blank."
+                },
+                {
+                  "checked_at": "2026-11-11",
+                  "method": "headless Chromium (plain context, no request blocking)",
+                  "url": "https://www.maxbet.ba/ba",
+                  "result": "confirmed",
+                  "notes": "Home page opened; now only a fallback behind the confirmed match page."
                 }
               ]
             }

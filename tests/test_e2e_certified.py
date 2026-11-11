@@ -966,7 +966,9 @@ def test_scan_applies_stored_link_proofs_and_serves_the_surebet(
         )
         if destination["kind"] == "match_page":
             assert destination["url"], "a match-page label needs a URL"
-            assert destination["proof_checked_at"] == "2026-11-03"
+            # A dated proof from the coverage record (first 2026-11-03,
+            # re-checked by SR9-1); never an undated label.
+            assert destination["proof_checked_at"] >= "2026-11-03"
         if destination["kind"] in {"search", "competition"}:
             assert destination["search_text"], "a fallback needs the book's own spelling"
             assert "ticket" not in destination["label"].lower()
