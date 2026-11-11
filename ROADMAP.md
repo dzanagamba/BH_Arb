@@ -179,7 +179,7 @@ do not copy stale numbers here.
 | M4-5 | Apply the planned dependency upgrades | Done | M4-4 | operator |
 | M5-1 | Remove legacy URL maps | Done | — | operator |
 | M5-2 | Decide the `link_sweeps` table | Done | — | operator |
-| M5-3 | Decide approve/reject functions | Not started | — | operator |
+| M5-3 | Decide approve/reject functions | In progress | — | operator |
 | M5-4 | Decide `raw_market_resolver.resolve_offers` | Not started | — | operator |
 | M5-5 | Finish the PWA | Not started | — | operator |
 | M5-6 | Zero-matches diagnostic and no-surebet state | Not started | — | operator |
@@ -3373,17 +3373,36 @@ Acceptance (2026-11-11):
 
 ### M5-3 Decide approve/reject functions
 
-Status: Not started
+Status: In progress
 
 Gate: operator
+
+**Decision (2026-11-11, operator: continue with M5): delete.** The two functions
+had no route (`POST /api/candidates/{id}/approve|reject` is asserted absent), the
+dashboard has no approve/reject control, and the project already records the
+evidence ledger as the only trust source with Diagnostics read-only. Restoring
+them behind `HUMAN_MAPPING_ENABLED` would reopen a retired human path that grants
+team aliases; deleting removes the flag, the in-memory decision log, the runtime
+allowlist writer and the stale documentation instead.
+
+The suppression reader stays: it honours candidate decisions an older build wrote
+to `cache/suppressed_candidates.json`, so those pairs are not re-queued. Only the
+writer to that store remains (`_suppress_candidate`, now used by imported/legacy
+data and tests), with no HTTP or human entry point.
 
 Why / what: Decide the unreachable candidate approve/reject functions: restore
 them behind `HUMAN_MAPPING_ENABLED` with a review, or delete them and the stale
 documentation.
 
-Acceptance:
-- [ ] Operator approval recorded here.
-- [ ] Acceptance criteria written here before coding.
+Acceptance (2026-11-11):
+- [ ] `approve_candidate`, `reject_candidate`, `_approve`, `_approval_blockers`,
+      `_resolve_candidate`, `HUMAN_MAPPING_ENABLED`, `candidate_reviews`,
+      `CANDIDATE_REVIEW_HISTORY_MAX` and the runtime allowlist writer are gone.
+- [ ] The candidates payload drops `human_mapping_enabled`; the suppression
+      reader still loads and honours old decisions.
+- [ ] Tests for the removed path are deleted; suppression tests drive
+      `_suppress_candidate` directly; the 404 route-absence tests stay.
+- [ ] `docs/CANDIDATE_REMEDIATION.md` matches; the full suite and checks pass.
 
 ### M5-4 Decide `raw_market_resolver.resolve_offers`
 
@@ -3752,3 +3771,4 @@ Useful starting points:
 | 2026-11-11 | M4-5 | Done | Applied the four M4-4 upgrades as separate commits: **U4** `httpx2==2.16.0` dev-only (runtime lock keeps `httpx==0.28.1`; `starlette.testclient` resolves httpx2, deprecation warning gone; 2 new lock tests), **U1** FastAPI 0.162.2 with Starlette 1.10.0 and no app/test edit, **U2** mypy 2.4.1 with one `dict[str, Any]` annotation in `scripts/refresh_fixtures.py`, **U3** ruff 0.17.4 with `MarketType`/`Sport`/`ScrapeKind` as `StrEnum` (3 new value-string tests in `tests/test_enum_values.py`, no rule ignored). `docs/DEPENDENCY_UPGRADES.md` records the applied set. `pytest`: 2,382 passed, 12 skipped (17 snapshots) in 108.71 s, no warning line; ruff clean; mypy 291 files clean; market doc in sync; refresh_fixtures, audit_admissibility and lock `--check` exit 0. |
 | 2026-11-11 | M5-1 | Done | Removed the legacy URL maps: `Surebet.match_urls`, `Surebet.bet_urls`, `Match.bet_url`, `MATCH_URL_TEMPLATES` and `_collect_match_urls`/`_collect_bet_urls`. `SurebetStake.destination` stays the only served destination path; `Match.url` stays. `tests/test_urls.py` keeps only the two parser URL tests. `pytest`: 2,378 passed, 12 skipped (17 snapshots) in 106.61 s; ruff and mypy clean. |
 | 2026-11-11 | M5-2 | Done | Removed the unused SQLite `link_sweeps` store: table creation, `Storage.append_link_sweep()`/`prune_link_sweeps()`, the `counts()` key, the maintenance inventory/prune step and window, and `RETENTION_LINK_SWEEPS_DAYS`. `cache/link_sweeps.json` (cap 200) stays the one sweep history; `docs/STORAGE.md` and the maintenance/migration tests were updated. `pytest`: 2,378 passed, 12 skipped (17 snapshots) in 108.48 s; ruff and mypy clean. |
+| 2026-11-11 | M5-3 | Done | Deleted the unreachable human approval path: `approve_candidate`, `reject_candidate`, `_approve`, `_approval_blockers`, `_resolve_candidate`, `HUMAN_MAPPING_ENABLED`, `candidate_reviews`, `CANDIDATE_REVIEW_HISTORY_MAX`, the `human_mapping_enabled` payload key and the runtime allowlist writer (`_load_allowlist`/`_save_allowlist`/`ALLOWLIST_FILE`). The suppression reader still honours old decisions; tests now drive `_suppress_candidate` directly, and the 404 route-absence tests stay. `docs/CANDIDATE_REMEDIATION.md` updated. `pytest`: 2,368 passed, 12 skipped (17 snapshots) in 104.83 s; ruff and mypy clean. |

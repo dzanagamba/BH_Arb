@@ -48,9 +48,9 @@ notes say so; only `scripts/verify_deeplinks.py` or `POST /api/verify-links` can
 change it.
 
 No code path here writes the allowlist, the evidence ledger or a candidate's
-status. The dashboard has no approve/reject control, and the legacy approval
-routes are absent unless `HUMAN_MAPPING_ENABLED` is explicitly set for a
-migration.
+status. The dashboard has no approve/reject control, and the unreachable legacy
+approval functions were removed (M5-3): human mapping is not a trust source, so
+only the evidence ledger and the system deep-link check can change a mapping.
 
 ## Recurring groups and denominators
 
@@ -98,8 +98,8 @@ python scripts/candidate_remediation.py --cache cache/last_scan.json --json out.
 
 The script reads the same cache the dashboard serves, rebuilds the queue with
 the product's own collector (AI ranking disabled, no network), and prints the
-closeable pairs with their proposals and ledger state. It never calls an
-approve/reject path and never writes a mapping. With no cache it exits 2 and
+closeable pairs with their proposals and ledger state. It never writes a
+mapping. With no cache it exits 2 and
 says so rather than inventing a queue.
 
 ## Rules this does not change

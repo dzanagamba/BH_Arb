@@ -1,8 +1,6 @@
 """Candidates review endpoints and health diagnostics."""
 
 import asyncio
-import json
-import threading
 from datetime import datetime
 
 import pytest
@@ -13,7 +11,7 @@ from engine import deeplinks
 from engine.deeplinks import declares_no_event_id, effective_deeplink_declarations
 from engine.matcher import MatchMatcher
 from models.schemas import CandidateReview, Match
-from server import api, json_store
+from server import api
 from server.app import app
 
 client = TestClient(app)
@@ -30,20 +28,15 @@ def _route_books() -> set[str]:
 
 @pytest.fixture(autouse=True)
 def reset_candidate_state(monkeypatch, tmp_path):
-    # The old review path is a migration tool, not a default trust source.
-    monkeypatch.setattr(api, "HUMAN_MAPPING_ENABLED", True)
     original_pending = api.pending_candidates.copy()
     original_live_pending = api.pending_live_candidates.copy()
-    original_reviews = api.candidate_reviews.copy()
     original_report = api.cached_match_groups_report.copy()
     original_matches = api.cached_matches.copy()
     original_unmapped = api.unmapped_markets.copy()
     original_suppressed = dict(api._suppressed_candidates)
     api.pending_candidates.clear()
     api.pending_live_candidates.clear()
-    api.candidate_reviews.clear()
     api._suppressed_candidates.clear()
-    monkeypatch.setattr(api, "ALLOWLIST_FILE", str(tmp_path / "team_alias_allowlist.json"))
     monkeypatch.setattr(
         api, "SUPPRESSED_CANDIDATES_FILE", str(tmp_path / "suppressed_candidates.json")
     )
@@ -52,7 +45,6 @@ def reset_candidate_state(monkeypatch, tmp_path):
     api.pending_candidates.update(original_pending)
     api.pending_live_candidates.clear()
     api.pending_live_candidates.update(original_live_pending)
-    api.candidate_reviews[:] = original_reviews
     api.cached_match_groups_report[:] = original_report
     api.cached_matches[:] = original_matches
     api.unmapped_markets.clear()
@@ -317,96 +309,6 @@ def test_candidates_carry_a_name_score_for_ranking():
     assert 0 < body["candidates"][0]["name_score"] <= 100
 
 
-
-
-
-
-def test_allowlist_replace_is_atomic_for_concurrent_reader(monkeypatch):
-    api._save_allowlist({"before"})
-    original_dump = json.dump
-    dump_started = threading.Event()
-    release_dump = threading.Event()
-    errors: list[BaseException] = []
-
-    def paused_dump(payload, file, *args, **kwargs):
-        file.flush()
-        dump_started.set()
-        release_dump.wait(5)
-        return original_dump(payload, file, *args, **kwargs)
-
-    monkeypatch.setattr(json_store.json, "dump", paused_dump)
-
-    def write_allowlist():
-        try:
-            api._save_allowlist({"after"})
-        except BaseException as exc:  # pragma: no cover - surfaced by assertion below
-            errors.append(exc)
-
-    writer = threading.Thread(target=write_allowlist)
-    writer.start()
-    try:
-        assert dump_started.wait(5)
-        for _ in range(20):
-            with open(api.ALLOWLIST_FILE, encoding="utf-8") as file:
-                observed = json.load(file)
-            assert observed == {"aliases": ["before"]}
-    finally:
-        release_dump.set()
-        writer.join(5)
-
-    assert not writer.is_alive()
-    assert not errors
-    with open(api.ALLOWLIST_FILE, encoding="utf-8") as file:
-        assert json.load(file) == {"aliases": ["after"]}
-
-
-def test_concurrent_approvals_preserve_both_aliases(monkeypatch):
-    first_candidate = _candidate("candidate-1", "Alpha Town", "Beta", "Alpha", "Beta")
-    second_candidate = _candidate("candidate-2", "Gamma Town", "Delta", "Gamma", "Delta")
-    api.pending_candidates[first_candidate.id] = first_candidate
-    api.pending_candidates[second_candidate.id] = second_candidate
-
-    real_save = api._save_allowlist
-    save_count = 0
-    save_count_lock = threading.Lock()
-    first_save_entered = threading.Event()
-    release_first_save = threading.Event()
-    errors: list[BaseException] = []
-
-    def controlled_save(aliases):
-        nonlocal save_count
-        with save_count_lock:
-            save_count += 1
-            number = save_count
-        if number == 1:
-            first_save_entered.set()
-            release_first_save.wait(1.0)
-        elif number == 2:
-            release_first_save.set()
-        real_save(aliases)
-
-    def approve(candidate_id: str):
-        try:
-            asyncio.run(api.approve_candidate(candidate_id, _auth=None))
-        except BaseException as exc:  # pragma: no cover - surfaced by assertion below
-            errors.append(exc)
-
-    monkeypatch.setattr(api, "_save_allowlist", controlled_save)
-    first_thread = threading.Thread(target=approve, args=(first_candidate.id,))
-    first_thread.start()
-    assert first_save_entered.wait(5)
-
-    second_thread = threading.Thread(target=approve, args=(second_candidate.id,))
-    second_thread.start()
-    first_thread.join(5)
-    second_thread.join(5)
-
-    assert not first_thread.is_alive()
-    assert not second_thread.is_alive()
-    assert not errors
-    with open(api.ALLOWLIST_FILE, encoding="utf-8") as file:
-        aliases = set(json.load(file)["aliases"])
-    assert aliases == {"Alpha|Alpha Town", "Gamma|Gamma Town"}
 
 
 

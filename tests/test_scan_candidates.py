@@ -12,14 +12,12 @@ test here:
 
 import asyncio
 import json
-import os
 from datetime import UTC, datetime, timedelta
 
 import pytest
 from rapidfuzz import fuzz
 
 from config.settings import VERIFIED_KICKOFF_WINDOW_MINUTES
-from engine import matcher as matcher_module
 from engine.ai import PairProposal
 from engine.certainty import CertaintyGate
 from engine.matcher import MatchMatcher
@@ -41,12 +39,6 @@ from server.candidate_scoring import (
     team_similarity,
 )
 from server.candidate_scoring import candidate_id as make_candidate_id
-
-
-@pytest.fixture(autouse=True)
-def _enable_human_mapping(monkeypatch):
-    """These tests exercise the legacy approval mechanics explicitly."""
-    monkeypatch.setattr(api, "HUMAN_MAPPING_ENABLED", True)
 
 KICKOFF = datetime(2026, 9, 25, 18, 0)
 
@@ -144,7 +136,6 @@ def isolate_scan_state(monkeypatch, tmp_path):
     """Keep the global scan state out of every other test module."""
     snapshot = {
         "pending": dict(api.pending_candidates),
-        "reviews": list(api.candidate_reviews),
         "enabled": dict(api._bookmaker_enabled),
         "history": list(api.scan_history),
         "surebets": list(api.cached_surebets),
@@ -157,7 +148,6 @@ def isolate_scan_state(monkeypatch, tmp_path):
     }
     monkeypatch.setattr(api, "_save_cache", lambda *a, **k: None)
     monkeypatch.setattr(api, "_append_history", lambda *a, **k: None)
-    monkeypatch.setattr(api, "ALLOWLIST_FILE", str(tmp_path / "team_alias_allowlist.json"))
     monkeypatch.setattr(
         api, "SUPPRESSED_CANDIDATES_FILE", str(tmp_path / "suppressed_candidates.json")
     )
@@ -165,7 +155,6 @@ def isolate_scan_state(monkeypatch, tmp_path):
     yield
     api.pending_candidates.clear()
     api.pending_candidates.update(snapshot["pending"])
-    api.candidate_reviews[:] = snapshot["reviews"]
     api._bookmaker_enabled.clear()
     api._bookmaker_enabled.update(snapshot["enabled"])
     api.scan_history[:] = snapshot["history"]
@@ -224,11 +213,6 @@ def _one_candidate(matches: list[Match] | None = None) -> CandidateReview:
     out = _collect(list(matches or _ambiguous_pair()))
     assert len(out) == 1, out
     return next(iter(out.values()))
-
-
-def _aliases_on_disk() -> set[str]:
-    with open(api.ALLOWLIST_FILE, encoding="utf-8") as file:
-        return set(json.load(file)["aliases"])
 
 
 def _pure_similarity(left: Match, right: Match) -> float:
@@ -456,79 +440,6 @@ def test_team_positions_pair_the_two_books_by_orientation(monkeypatch):
 # ─── Approval grants a team alias, never a link (Critical 2) ─────────────────────
 
 
-def test_approval_writes_the_cross_bookmaker_team_alias(monkeypatch):
-    _fake_ai(monkeypatch, [], available=False)
-    candidate = _one_candidate()
-    api.pending_candidates[candidate.id] = candidate
-
-    body = run(api.approve_candidate(candidate.id, _auth=None))
-
-    assert body["status"] == "approved"
-    # Entries keep the two spellings the reviewer saw, one per team slot.
-    assert set(body["allowlist_entries"]) == {"FC Thun|Thun", "Lech Poznan|Lech Pznan"}
-    assert _aliases_on_disk() == {"FC Thun|Thun", "Lech Poznan|Lech Pznan"}
-    # The two halves of ONE fixture are different clubs, never an alias pair.
-    assert "Lech Poznan|Thun" not in _aliases_on_disk()
-
-
-def test_approval_writes_one_entry_per_differing_team(monkeypatch):
-    _fake_ai(monkeypatch, [], available=False)
-    left = _match("mdshop", "A. Salzburg", "Kapfenberg", "Liga Evrope", "1")
-    right = _match("mbet", "Austria Salzburg", "Kapfenberg SV", "Liga Konferencija", "2")
-    candidate = _one_candidate([left, right])
-    api.pending_candidates[candidate.id] = candidate
-
-    run(api.approve_candidate(candidate.id, _auth=None))
-
-    assert _aliases_on_disk() == {
-        "A. Salzburg|Austria Salzburg",
-        "Kapfenberg|Kapfenberg SV",
-    }
-
-
-def test_approval_skips_a_position_whose_two_spellings_already_agree(monkeypatch):
-    _fake_ai(monkeypatch, [], available=False)
-    left = _match("mdshop", "Lech Poznan", "Thun", "Liga Evrope", "1")
-    right = _match("mbet", "Lech Pznan", "Thun", "Liga Konferencija", "2")
-    candidate = _one_candidate([left, right])
-    api.pending_candidates[candidate.id] = candidate
-
-    run(api.approve_candidate(candidate.id, _auth=None))
-
-    assert _aliases_on_disk() == {"Lech Poznan|Lech Pznan"}
-
-
-def test_written_alias_is_honoured_by_the_real_certainty_gate(monkeypatch):
-    """The gate — not the endpoint — decides whether an alias is usable."""
-    _fake_ai(monkeypatch, [], available=False)
-    left, right = _ambiguous_pair()
-    candidate = _one_candidate([left, right])
-    api.pending_candidates[candidate.id] = candidate
-    run(api.approve_candidate(candidate.id, _auth=None))
-
-    gate = CertaintyGate(league_equivalences=MatchMatcher()._equivalences)
-    gate.normalize([left, right])
-    gate.alias_allowlist = set(_aliases_on_disk())
-    result = gate.evaluate_pair(left, right)
-
-    assert "team_unresolved" not in result.reasons
-    # The link gate is a system check and still refuses: approval is not a link proof.
-    assert result.reasons == ["link_unverified"]
-    assert result.status == "suggested"
-
-
-def test_approval_reports_that_the_link_gate_is_still_open(monkeypatch):
-    _fake_ai(monkeypatch, [], available=False)
-    candidate = _one_candidate()
-    api.pending_candidates[candidate.id] = candidate
-
-    body = run(api.approve_candidate(candidate.id, _auth=None))
-
-    assert body["link_verified"] is False
-    assert body["link_state"] == "pending_system_check"
-    assert "link" in body["note"].lower()
-
-
 def test_candidate_reports_the_link_state_of_both_sides(monkeypatch):
     _fake_ai(monkeypatch, [], available=False)
     identical = (
@@ -546,36 +457,12 @@ def test_candidate_reports_the_link_state_of_both_sides(monkeypatch):
     assert _collect(linked) == {}
 
 
-def test_approval_refuses_a_candidate_without_cross_bookmaker_names(monkeypatch):
-    legacy = CandidateReview(
-        id="legacy-candidate",
-        home_team="Lech Poznan",
-        away_team="Thun",
-        league="Liga Evrope",
-        kickoff=KICKOFF,
-        bookmakers=["mbet", "mdshop"],
-        created_at=datetime.now(UTC).replace(tzinfo=None),
-    )
-    api.pending_candidates[legacy.id] = legacy
-
-    with pytest.raises(api.HTTPException) as excinfo:
-        run(api.approve_candidate(legacy.id, _auth=None))
-
-    assert excinfo.value.status_code == 400
-    assert "cross-bookmaker" in excinfo.value.detail
-    assert not os.path.exists(api.ALLOWLIST_FILE)
-    assert legacy.id in api.pending_candidates
-
-
-# ─── Suppression: a decided candidate never comes back ──────────────────────────
-
-
 def test_approved_candidate_is_suppressed_on_the_next_scan(stub_scan_inputs):
     api.pending_candidates.clear()
     run(api.run_scan("prematch"))
     candidate = next(iter(api.pending_candidates.values()))
 
-    run(api.approve_candidate(candidate.id, _auth=None))
+    api._suppress_candidate(candidate.id, "approved")
     api.pending_candidates.clear()
     run(api.run_scan("prematch"))
 
@@ -587,7 +474,7 @@ def test_rejected_candidate_is_suppressed_on_the_next_scan(stub_scan_inputs):
     run(api.run_scan("prematch"))
     candidate = next(iter(api.pending_candidates.values()))
 
-    run(api.reject_candidate(candidate.id, _auth=None))
+    api._suppress_candidate(candidate.id, "rejected")
     api.pending_candidates.clear()
     run(api.run_scan("prematch"))
 
@@ -598,7 +485,7 @@ def test_suppression_is_persisted_and_reloaded_from_disk(monkeypatch):
     _fake_ai(monkeypatch, [], available=False)
     candidate = _one_candidate()
     api.pending_candidates[candidate.id] = candidate
-    run(api.approve_candidate(candidate.id, _auth=None))
+    api._suppress_candidate(candidate.id, "approved")
 
     api._suppressed_candidates.clear()
     reloaded = api._load_suppressed_candidates()
@@ -610,7 +497,9 @@ def test_a_decision_recorded_with_its_premise_survives_a_restart(monkeypatch):
     _fake_ai(monkeypatch, [], available=False)
     candidate = _one_candidate()
     api.pending_candidates[candidate.id] = candidate
-    run(api.reject_candidate(candidate.id, _auth=None))
+    api._suppress_candidate(
+        candidate.id, "rejected", api._decision_premise(candidate.link_blocked)
+    )
 
     api._suppressed_candidates.clear()
     api._suppressed_premises.clear()
@@ -640,7 +529,7 @@ def test_suppression_does_not_hide_a_pair_under_a_new_bookmaker_event_id(monkeyp
     left, right = _ambiguous_pair()
     candidate = _one_candidate([left, right])
     api.pending_candidates[candidate.id] = candidate
-    run(api.approve_candidate(candidate.id, _auth=None))
+    api._suppress_candidate(candidate.id, "approved")
 
     # The same fixture, but the bookmaker now publishes it under a new event id.
     out = _collect([left, right.model_copy(update={"event_id": "99"})])
@@ -667,7 +556,9 @@ def test_a_decision_does_not_outlive_the_deep_link_result_it_was_made_on(monkeyp
     candidate = _one_candidate([left, right])
     assert candidate.link_blocked is True
     api.pending_candidates[candidate.id] = candidate
-    run(api.reject_candidate(candidate.id, _auth=None))
+    api._suppress_candidate(
+        candidate.id, "rejected", api._decision_premise(candidate.link_blocked)
+    )
 
     proven = [m.model_copy(update={"deep_link_verified": True}) for m in (left, right)]
     out = _collect(proven)
@@ -675,30 +566,6 @@ def test_a_decision_does_not_outlive_the_deep_link_result_it_was_made_on(monkeyp
     assert list(out) == [candidate.id]  # same id, so suppression is what let it go
     assert out[candidate.id].alias_actionable is True
     assert out[candidate.id].link_blocked is False
-
-
-def test_an_approval_does_not_contradict_its_own_record(monkeypatch):
-    """The premise must ignore the facts the decision itself changed.
-
-    An approval grants the aliases, which clears `team_unresolved` from the next
-    scan's reason list. If that counted as the premise moving, every approval
-    would re-queue the pair it had just resolved and the review loop would never
-    converge — so `link_blocked` is the premise, and it has not moved here.
-    """
-    _fake_ai(monkeypatch, [], available=False)
-    monkeypatch.setattr(matcher_module, "_TEAM_ALIAS_FILE", api.ALLOWLIST_FILE)
-    left, right = _ambiguous_pair()
-    candidate = _one_candidate([left, right])
-    api.pending_candidates[candidate.id] = candidate
-    run(api.approve_candidate(candidate.id, _auth=None))
-    assert "team_unresolved" in candidate.rule_rejections
-
-    out = _collect([left, right])
-
-    assert out == {}  # the granted aliases cleared the team reason; the link did not
-
-
-# ─── Actionability decides what the reviewer sees first (Important 4) ────────────
 
 
 def test_alias_actionable_candidate_outranks_a_league_blocked_one(monkeypatch):
@@ -1103,19 +970,3 @@ def test_get_results_reports_group_statuses():
 
     assert body["match_groups"] == 3
     assert body["group_statuses"] == {"verified": 2, "suggested": 1}
-
-
-def test_candidate_review_history_is_bounded(monkeypatch):
-    monkeypatch.setattr(api, "CANDIDATE_REVIEW_HISTORY_MAX", 3)
-    api.pending_candidates.clear()
-    for index in range(5):
-        candidate = _one_candidate()
-        candidate.id = f"{index:016d}"
-        api.pending_candidates[candidate.id] = candidate
-        run(api.reject_candidate(candidate.id, _auth=None))
-
-    assert [review.id for review in api.candidate_reviews] == [
-        "0000000000000004",
-        "0000000000000003",
-        "0000000000000002",
-    ]

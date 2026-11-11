@@ -1097,9 +1097,8 @@ def test_scan_refuses_a_link_proof_that_aged_out(
     assert body["group_statuses"] == {}
 
     # What the server does instead of dropping the pairing silently: queue it for
-    # review, blocked on the link. (That an approval cannot clear the link is
-    # `approve_candidate`'s own contract, asserted in
-    # tests/test_scan_candidates.py -- not something a scan-level test can see.)
+    # review, blocked on the link. The old approve path is gone (M5-3), so only
+    # the evidence ledger can clear a mapping.
     assert api.pending_candidates, "an unproven pair must be queued for review"
     for candidate in api.pending_candidates.values():
         assert candidate.status == "pending"

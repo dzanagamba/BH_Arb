@@ -208,15 +208,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 alert_manager: AlertManager = configured_alert_manager()
 
-# The evidence ledger is the only trust source. The old review endpoints remain
-# for migration/diagnostics but are disabled unless an operator explicitly
-# opts in; no default path can change a mapping.
-HUMAN_MAPPING_ENABLED = os.getenv("HUMAN_MAPPING_ENABLED", "false").strip().lower() in (
-    "1",
-    "true",
-    "yes",
-)
-
 # The two independent feeds. A query parameter typed with this is validated by
 # FastAPI (422 on anything else) instead of silently falling back to prematch.
 ScanMode = Literal["prematch", "live"]
@@ -393,17 +384,9 @@ def _find_pending_candidate(candidate_id: str) -> dict[str, CandidateReview] | N
         if candidate_id in queue:
             return queue
     return None
-candidate_reviews: list[CandidateReview] = []
 last_learning_report: dict[str, Any] = {}
 # Scheduled-scan per-book state lives in the SR2-6 breakers
 # (`scrapers.breaker.breaker_for`); manual scans ignore it.
-ALLOWLIST_FILE = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "config",
-    "team_alias_allowlist.json",
-)
-_ALLOWLIST_LOCK = threading.Lock()
-
 # Candidates a human has already decided on, keyed by the deterministic pair id.
 # Without this a decided pair is rebuilt into the queue on every scan and can be
 # approved again forever, so the review loop could never converge.
@@ -413,20 +396,6 @@ _suppressed_candidates: dict[str, str] = {}
 # applying when the system moves that state on its own. See `_decision_premise`.
 _suppressed_premises: dict[str, str] = {}
 _SUPPRESSED_LOCK = threading.Lock()
-
-
-def _load_allowlist() -> set[str]:
-    try:
-        data = read_json(ALLOWLIST_FILE)
-        if not isinstance(data, dict) or not isinstance(data.get("aliases"), list):
-            return set()
-        return {alias for alias in data["aliases"] if isinstance(alias, str)}
-    except (OSError, TypeError, ValueError):
-        return set()
-
-
-def _save_allowlist(aliases: set[str]) -> None:
-    atomic_write_json(ALLOWLIST_FILE, {"aliases": sorted(aliases)}, "team_alias_allowlist")
 
 
 def _using_default_decision_store() -> bool:
@@ -1077,7 +1046,6 @@ CANDIDATE_QUEUE_MAX = int(os.getenv("CANDIDATE_QUEUE_MAX", "2000"))
 # trim uses the same total order, so the final top N is identical.
 CANDIDATE_TRIM_FACTOR = 4
 
-CANDIDATE_REVIEW_HISTORY_MAX = 200   # in-memory log; the allowlist file is the durable record
 # Reasons the gate raises only because a bookmaker's event link is unproven.
 # They come from the per-book deep-link system check, never from a name, so no
 # human decision can clear them.
@@ -4211,7 +4179,6 @@ async def get_config():
             }
             for k, v in BOOKMAKERS.items()
         },
-        "human_mapping_enabled": HUMAN_MAPPING_ENABLED,
         "experimental_markets": {m: _market_enabled.get(m, False) for m in EXPERIMENTAL_MARKETS},
         "sports": [
             {"id": sport, "label": sport.replace("_", " ").title()}
@@ -4617,140 +4584,6 @@ def _name_score(candidate: CandidateReview) -> int:
         if position.team_a and position.team_b
     ]
     return int(min(scores)) if scores else 0
-
-
-def _resolve_candidate(
-    candidate: CandidateReview, decision: Literal["approved", "rejected"]
-) -> None:
-    """Record a human decision and take the candidate out of the queue for good.
-
-    "For good" is as long as the state the decision was taken on still holds: the
-    record carries that premise, so a decision made while the pair was blocked on
-    an unproven link does not outlive the deep-link check that proves it.
-    """
-    candidate.status = decision
-    candidate.resolved_at = utcnow()
-    candidate.resolved_by = "human"
-    for queue in (pending_candidates, pending_live_candidates):
-        queue.pop(candidate.id, None)
-    candidate_reviews.insert(0, candidate.model_copy(deep=True))
-    del candidate_reviews[CANDIDATE_REVIEW_HISTORY_MAX:]
-    _suppress_candidate(
-        candidate.id, decision, _decision_premise(candidate.link_blocked)
-    )
-
-
-def _approval_blockers(candidate: CandidateReview) -> list[str]:
-    """The reasons an approval cannot move, in the order the gate emitted them.
-
-    Link reasons are excluded: `alias_actionable` is asked with both links marked
-    verified, so a candidate reaching this branch is blocked on an identity fact
-    (a league gap, a kickoff no approval can shift, a category mismatch, or a
-    name pair below the reviewed-alias floor), never on a link a human cannot
-    prove.
-    """
-    return [reason for reason in candidate.rule_rejections if reason not in LINK_REJECTION_REASONS]
-
-
-def _approve(candidate: CandidateReview) -> list[str]:
-    """Grant the aliases a candidate implies and resolve it. Empty when it has none."""
-    entries = _alias_entries(candidate.team_positions)
-    if not entries:
-        return []
-    with _ALLOWLIST_LOCK:
-        aliases = _load_allowlist()
-        aliases.update(entries)
-        _save_allowlist(aliases)
-    _resolve_candidate(candidate, "approved")
-    return entries
-
-
-async def approve_candidate(
-    candidate_id: str,
-    _auth: None = Depends(_require_api_key),
-):
-    """Approve a candidate by granting the reviewed team aliases it implies.
-
-    What an approval grants, precisely: one allowlist entry per team slot whose
-    two spellings differ, so the certainty gate will trust that those two names
-    are the same club. It grants nothing about the event link. When the pair's
-    link is also unproven, the response says so and the link half stays closed
-    until the per-book system check runs: approving the *pair* here would forge a
-    machine result from a name judgement.
-
-    An approval is refused when the candidate is not ``alias_actionable``.
-    Nothing a team alias grants can clear those blockers, so writing the entries
-    and resolving the pair would take a claim out of the queue that the next scan
-    still refuses — the spelling would never be taught and nobody would see it
-    again.
-    """
-    if not HUMAN_MAPPING_ENABLED:
-        raise HTTPException(
-            status_code=403,
-            detail=(
-                "Human mapping is disabled. The evidence ledger is the only trust "
-                "source; set HUMAN_MAPPING_ENABLED=true only for a migration."
-            ),
-        )
-    queue = _find_pending_candidate(candidate_id)
-    candidate = queue.get(candidate_id) if queue is not None else None
-    if not candidate:
-        raise HTTPException(status_code=404, detail="Candidate not found")
-
-    if not _alias_entries(candidate.team_positions):
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Candidate carries no cross-bookmaker team names to alias; "
-                "re-run a scan to regenerate it"
-            ),
-        )
-    if not candidate.alias_actionable:
-        blockers = ", ".join(_approval_blockers(candidate)) or "team_unresolved"
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                "Approving cannot clear this pairing's remaining blockers: "
-                f"{blockers}. The pair is still shown for information, but no team "
-                "alias changes its verdict."
-            ),
-        )
-    link_pending = candidate.link_blocked
-    entries = _approve(candidate)
-    return {
-        "status": "approved",
-        "allowlist_entries": entries,
-        "link_verified": not link_pending,
-        "link_state": "pending_system_check" if link_pending else "verified",
-        "note": (
-            "Team aliases granted. The deep-link check is a separate system "
-            "verification and is still pending, so this pair is not verified yet."
-            if link_pending else
-            "Team aliases granted."
-        ),
-    }
-
-
-async def reject_candidate(
-    candidate_id: str,
-    _auth: None = Depends(_require_api_key),
-):
-    """Reject a pending match candidate without changing alias mappings."""
-    if not HUMAN_MAPPING_ENABLED:
-        raise HTTPException(
-            status_code=403,
-            detail=(
-                "Human mapping is disabled. The evidence ledger is the only trust "
-                "source; set HUMAN_MAPPING_ENABLED=true only for a migration."
-            ),
-        )
-    queue = _find_pending_candidate(candidate_id)
-    candidate = queue.get(candidate_id) if queue is not None else None
-    if not candidate:
-        raise HTTPException(status_code=404, detail="Candidate not found")
-
-    _resolve_candidate(candidate, "rejected")
-    return {"status": "rejected"}
 
 
 @router.get("/history")

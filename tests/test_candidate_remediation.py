@@ -42,7 +42,6 @@ client = TestClient(app)
 
 @pytest.fixture(autouse=True)
 def _isolated_candidate_state(monkeypatch, tmp_path):
-    monkeypatch.setattr(api, "ALLOWLIST_FILE", str(tmp_path / "allowlist.json"))
     monkeypatch.setattr(
         api, "SUPPRESSED_CANDIDATES_FILE", str(tmp_path / "suppressed.json")
     )
@@ -50,7 +49,6 @@ def _isolated_candidate_state(monkeypatch, tmp_path):
     monkeypatch.setattr(api, "pending_live_candidates", {})
     monkeypatch.setattr(api, "_suppressed_candidates", {})
     monkeypatch.setattr(api, "_suppressed_premises", {})
-    monkeypatch.setattr(api, "HUMAN_MAPPING_ENABLED", False)
 
 
 def _match(
@@ -244,7 +242,6 @@ def test_building_the_queue_does_not_change_status_or_write_any_mapping(tmp_path
     assert candidate.status == "pending"
     assert candidate.remediation is not None
     assert candidate.remediation.action == "alias"
-    assert not Path(api.ALLOWLIST_FILE).exists()
     assert api._suppressed_candidates == {}
     assert set(matcher._ledger.claims) == claims_before
     # The gate's verdict on the same two rows is still "rejected": a proposal
@@ -544,4 +541,3 @@ def test_default_approval_path_is_still_disabled():
 
     assert response.status_code == 404  # the route does not exist at all
     assert candidate.status == "pending"
-    assert not Path(api.ALLOWLIST_FILE).exists()

@@ -195,7 +195,6 @@ def isolate_state(monkeypatch, tmp_path):
         api, "DEEP_LINK_DECISIONS_FILE", str(tmp_path / "deep_link_decisions.json")
     )
     monkeypatch.setattr(api, "_save_cache", lambda *a, **k: None)
-    monkeypatch.setattr(api, "ALLOWLIST_FILE", str(tmp_path / "team_alias_allowlist.json"))
     api._deep_link_verifications = {}
     api._deep_link_decisions = {}
     api.cached_matches.clear()
@@ -868,13 +867,11 @@ def test_a_restored_report_may_not_verify_a_link_the_store_no_longer_proves(
 # ─── 6. The endpoint touches nothing it has no business touching ───────────────
 
 
-def test_verifying_links_does_not_touch_the_candidate_queue_or_allowlist(monkeypatch):
+def test_verifying_links_does_not_touch_the_candidate_queue(monkeypatch):
     candidate = api.pending_candidates.get("x")
     api.pending_candidates["x"] = candidate if candidate is not None else object()  # type: ignore[assignment]
     api._suppressed_candidates["x"] = "rejected"
     monkeypatch.setattr(api, "_suppress_candidate", lambda *a, **k: None)
-    with open(api.ALLOWLIST_FILE, "w", encoding="utf-8") as file:
-        json.dump({"aliases": ["Lech P.|Lech Poznan"]}, file)
     _install_checker(monkeypatch, _report(outcomes=[_verified_outcome()]))
     api.cached_matches.extend(_cached(_match()))
 
@@ -882,8 +879,6 @@ def test_verifying_links_does_not_touch_the_candidate_queue_or_allowlist(monkeyp
 
     assert set(api.pending_candidates) == {"x"}
     assert api._suppressed_candidates == {"x": "rejected"}
-    with open(api.ALLOWLIST_FILE, encoding="utf-8") as file:
-        assert json.load(file)["aliases"] == ["Lech P.|Lech Poznan"]
 
 
 def test_verifying_links_is_refused_while_a_scan_runs(monkeypatch):
