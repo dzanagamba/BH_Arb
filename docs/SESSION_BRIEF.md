@@ -5,8 +5,8 @@
 model; work `ROADMAP.md` top to bottom.
 **Current row:** none in progress. SR9-2 and SR9-3 are Done (MaxBet ticket
 both modes, WWIN live match page, on-demand leg-link check).
-**Last commit:** `1e69a29` "feat: fill a MaxBet ticket and open WWIN live from a
-leg (SR9-2)" on `origin/main` (2026-11-11). `git log -1` has the hash.
+**Last commit:** `582f81a` "feat: check a surebet's leg links on demand (SR9-3)"
+on `origin/main` (2026-11-11). `git log -1` has the hash.
 
 ## Project state
 
