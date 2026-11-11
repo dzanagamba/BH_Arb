@@ -7,7 +7,8 @@ model; work `ROADMAP.md` top to bottom.
 In progress because Mozzartbet live is websocket-only and waits on the
 operator's transport decision; Betole live is fixed (0 → 76 matches, 75 in
 today's live scan).
-**Last commit:** `PENDING` on `main` (2026-11-11). `git log -1` has the hash.
+**Last commit:** `4813287` "docs: refresh the production-readiness assessment from
+today's scans (M8-1)" on `main` (2026-11-11). `git log -1` has the hash.
 
 ## Project state
 
