@@ -12,13 +12,18 @@ SR7-1 and SR7-2 are done.
 feed). Every other `Not started` row is `Gate: operator`; the roadmap is the
 single task list in `ROADMAP.md`, N2-4 stays deferred and P1-6 stays waived
 until the operator says otherwise.
-**Last task commit:** `b46cc1e` — "upgrade ruff to 0.17.4 and use StrEnum
-(M4-5 U3)", pushed to `origin/main` on 2026-11-11, after `56ed5aa` (mypy 2.4.1),
-`34ddf69` (FastAPI 0.162.2) and `9b28657` (`httpx2` TestClient). Before them,
-`3ea80f3` plans the upgrades (M4-4), `493e3a3` pins the workflow actions and the
-base image (M4-3), `14ae9f2` adds the Docker Chromium launch and image CVE scan
-(M4-2), `b854b25` installs Docker/CI/SBOM from resolved locks (M4-1), `022c569`
-moves the pairing audit and verifier into server (M3-6), `cac7507` resolves the market registry through accessors
+**Last task commit:** `0f0d143` — "give feed tabs a tab contract and shrink the
+slip live region (M5-7)", pushed to `origin/main` on 2026-11-11, after
+`a7ad653` (zero-match diagnostic, M5-6), `3d805db` (PWA icons/alerts, M5-5),
+`19a2405` (retire the raw market resolver, M5-4), `ecd3f0d` (delete the human
+approval path, M5-3), `4d7efa3` (remove the `link_sweeps` SQLite store, M5-2),
+`d8323cb` (remove legacy URL maps, M5-1), `b46cc1e` (ruff 0.17.4 + StrEnum,
+M4-5 U3), `56ed5aa` (mypy 2.4.1), `34ddf69` (FastAPI 0.162.2) and `9b28657`
+(`httpx2` TestClient). Before them, `3ea80f3` plans the upgrades (M4-4),
+`493e3a3` pins the workflow actions and the base image (M4-3), `14ae9f2` adds
+the Docker Chromium launch and image CVE scan (M4-2), `b854b25` installs
+Docker/CI/SBOM from resolved locks (M4-1), `022c569` moves the pairing audit and
+verifier into server (M3-6), `cac7507` resolves the market registry through accessors
 (M3-5), `31f3ef6` unifies the SQLite connections and the server clock (M3-4),
 `7b49156` shares one link-settled predicate (M3-3), `42297ee` moves the
 deep-link store and AH labels into engine (M3-2), `7e982eb` extracts the
