@@ -5,8 +5,8 @@
 model; work `ROADMAP.md` top to bottom.
 **Current row:** SR8-1 in progress — Betole live is fixed and measured (0 → 76
 matches); Mozzartbet live is websocket-only and needs a scope decision.
-**Last commit:** `d317bf6` "docs: close SR9-4 with the operator's decision" on
-`main` (2026-11-11, not pushed). `git log -1` has the hash.
+**Last commit:** `6c32e09` "feat: price Betole's live feed from proven pick codes
+(SR8-1)" on `main` (2026-11-11, not pushed). `git log -1` has the hash.
 
 ## Project state
 
