@@ -118,3 +118,18 @@ def test_docker_ci_and_sbom_install_the_locks():
             assert "requirements-dev.lock" in line or "requirements.lock" in line, (
                 f"{name} installs an unlocked requirement file: {line.strip()}"
             )
+
+
+def test_the_test_only_httpx2_stays_out_of_the_runtime_lock():
+    """M4-5: `httpx2` backs Starlette's TestClient, never the app."""
+    assert "httpx2" in dict(_lock_pins(DEV_LOCK))
+    assert "httpx2" not in dict(_lock_pins(RUNTIME_LOCK))
+    # The runtime client the adapters and respx use is still `httpx`.
+    assert "httpx" in dict(_lock_pins(RUNTIME_LOCK))
+
+
+def test_starlette_testclient_resolves_the_httpx2_dev_pin():
+    """The warning-free TestClient is part of the installed dev set."""
+    import starlette.testclient as testclient
+
+    assert testclient.httpx.__name__ == "httpx2"

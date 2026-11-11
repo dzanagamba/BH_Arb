@@ -176,6 +176,7 @@ do not copy stale numbers here.
 | M4-2 | Docker Chromium check and image CVE scan | Done | — | operator |
 | M4-3 | Pin Actions by SHA and base image by digest | Done | — | operator |
 | M4-4 | Plan the remaining dependency upgrades | Done | — | operator |
+| M4-5 | Apply the planned dependency upgrades | In progress | M4-4 | operator |
 | M5-1 | Remove legacy URL maps | Not started | — | operator |
 | M5-2 | Decide the `link_sweeps` table | Not started | — | operator |
 | M5-3 | Decide approve/reject functions | Not started | — | operator |
@@ -3252,6 +3253,35 @@ Acceptance (2026-11-09, recorded before any dependency pin moves):
 - [x] The plan keeps `httpx` runtime, adds `httpx2` dev-only, and leaves the
       trust rules, data formats and `requirements.lock` untouched.
 - [x] Full suite, ruff, mypy and the doc/fixture checks pass with no code change.
+
+
+### M4-5 Apply the planned dependency upgrades
+
+Status: In progress
+
+Gate: operator
+
+**Decision (2026-11-11, operator: continue).** `docs/DEPENDENCY_UPGRADES.md`
+defines four separate moves; this row executes them, one commit each, in the
+planned order: dev-only `httpx2`, FastAPI 0.162.2, MyPy 2.4.1, Ruff 0.17.4.
+No trust rule, data format, cache key, metric label or price source changes.
+
+Why / what: execute the M4-4 plan so the measured dry run becomes the installed
+dependency set.
+
+Acceptance:
+- [ ] `requirements-dev.txt` adds `httpx2==2.16.0`, the dev lock carries it, the
+      runtime lock does not, `TestClient` resolves it, and the deprecation
+      warning is gone.
+- [ ] `requirements.txt` pins `fastapi==0.162.2`, Starlette stays `1.10.0`, and
+      the suite is green with no application or test edit.
+- [ ] MyPy 2.4.1 is pinned; `scripts/refresh_fixtures.py` annotates its report
+      dict; mypy is clean on every file with no new ignore or loosened setting.
+- [ ] Ruff 0.17.4 is pinned; `MarketType`, `Sport` and `ScrapeKind` are
+      `StrEnum`; API JSON, metric labels and canary text are asserted unchanged;
+      ruff is clean under the same rule selection.
+- [ ] Each upgrade is its own commit; the full suite and the doc/fixture checks
+      pass once at the end of the row.
 
 ---
 

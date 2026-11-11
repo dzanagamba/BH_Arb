@@ -10,6 +10,9 @@ hypothesis==6.150.0
 respx==0.22.0
 # Snapshot tests of normalised parser output (SR4-6); dev-only.
 syrupy==5.0.0
+# Starlette's TestClient prefers httpx2; httpx stays the runtime client for the
+# adapters and respx. Dev-only, never in requirements.lock (M4-5).
+httpx2==2.16.0
 
 # CI security checks (see docs/CI.md).
 pip-audit==2.10.1
