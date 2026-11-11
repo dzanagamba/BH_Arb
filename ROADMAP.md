@@ -77,34 +77,36 @@ skin / stale-price / feed-integrity guards, and prices only `verified` groups in
 `engine.arbitrage.ArbitrageEngine`. Heavy stages run in `asyncio.to_thread`.
 
 **Leg links** (`engine/destinations.py`, `config/bookmaker_destinations.json`,
-`docs/DESTINATIONS.md`): re-proven 2026-11-11 (SR9-1) — 4 of 18 book × mode
-cells open a filled ticket, 7 the match page, 7 a labelled fallback.
+`docs/DESTINATIONS.md`): 6 of 18 book × mode cells open a filled ticket, 6 the
+match page, 6 a labelled fallback (SR9-2; dated proofs in the JSON record).
 
-**Last measured live scan** (2026-11-11, `docs/evidence/2026-11-11-test-scan.md`):
-prematch 6,921 matches / 1,359 verified groups / 20 surebets in 139.0 s, all
-nine enabled books `ok`; live 183 / 27 / 1 in 29.1 s, with Mozzartbet and Betole
-`empty`. Suite size, coverage and lint baselines live in `docs/SESSION_BRIEF.md`.
+**Last measured scans** (2026-11-11, `docs/evidence/2026-11-11-m8-1-scans.md`):
+prematch 6,459 matches / 1,283 verified groups / 20 surebets (8 dropped by the
+price guard); live 243 / 19 / 0, with Mozzartbet the only missing book (SR8-1).
+The refreshed production-readiness verdict is
+`docs/PRODUCTION_READINESS.md` (M8-1). Suite size, coverage and lint baselines
+live in `docs/SESSION_BRIEF.md`.
 
 ## Production-readiness checklist
 
 The bar is the "What would make it production-ready" list in
-`docs/PRODUCTION_READINESS.md` (assessment dated 2026-11-03; refreshing it is
-M8-1). Status measured on 2026-11-11 unless noted; every open line points to the
-row or operator decision that closes it.
+`docs/PRODUCTION_READINESS.md` (refreshed 2026-11-11 by M8-1). Status measured
+on 2026-11-11 unless noted; every open line points to the row or operator
+decision that closes it.
 
 | # | Criterion | Status 2026-11-11 | Owner |
 |---|-----------|-------------------|-------|
-| 1 | A real prematch scan returns matches for every configured football book | **Met** for prematch (9/9 enabled). Live misses Mozzartbet and Betole | SR8-1 |
-| 2 | `pairing_audit.py --check` under 2 % strict miss rate across several days, zero duplicate-book groups | One scan: **0.4 %** (28 / 6,921), 0 duplicate-book groups, exit 0. "Several days" not measured | operator: N2-4 is deferred |
-| 3 | Every published market row mapped or with a dated absence proof | **Not met**: 45,678 / 454,293 prematch rows mapped | SR8-3 (operator) |
-| 4 | `price_check.py` 0 outliers over a meaningful comparison count | **Not met**: 26 outliers / 5,622 comparisons (0.46 %, threshold 0.10, scattered over 8 books; whether any reached a served surebet is not measured) | M8-1 decides whether the bar is 0 or a rate |
+| 1 | A real prematch scan returns matches for every configured football book | **Met** for prematch (9/9 enabled). Live: 8/9, Mozzartbet only (Betole live fixed 2026-11-11) | SR8-1 |
+| 2 | `pairing_audit.py --check` under 2 % strict miss rate across several days, zero duplicate-book groups | Prematch **0.28 %** (18 / 6,459), live **0.0 %** (0 / 243), zero duplicate-book groups, both exit 0. "Several days" not measured | operator: N2-4 is deferred |
+| 3 | Every published market row mapped or with a dated absence proof | **Not met**: 45,268 / 589,502 prematch rows (7.7 %), 1,288 / 50,477 live (2.6 %); the gap is the unregistered full-offer long tail | SR8-3 (operator) |
+| 4 | `price_check.py` 0 outliers over a meaningful comparison count | **Not met at 0**: 21 outliers / 5,795 prematch comparisons (0.36 %, threshold 0.10, concentrated in a few fixtures; 8 surebets dropped by the guard), live 0 / 34. A rate definition is proposed in `docs/PRODUCTION_READINESS.md`, not applied | operator decides the bar |
 | 5 | Cold-start replay reaches a fixed point, 0 false merges, 0 unresolved | **Met**: `replay_mappings.py tests/fixtures/replay/2026-11-03 --cold --check` exit 0, `fixed_point: true`, `false_merges: 0`, `pairs_unresolved: 0` | — |
 | 6 | The certified end-to-end test removes a surebet when a claim is spoiled | **Met** (`tests/test_e2e_certified.py` in the suite) | — |
 | 7 | No endpoint, config file or UI action can change trust | **Met** (M5-3 removed the last approval path) | — |
 | 8 | A 24 h soak shows no memory/browser growth and no stale-book blindness | **Not met**: P1-6 waived; 10-cycle plateau only | operator: the waiver and this criterion conflict |
 | 9 | Security hardening applied; not exposed without a key | **Met** in code (M1-1, M1-3); deployment must set `API_KEY` | `docs/DEPLOYMENT.md` |
-| — | Every surebet leg opens the match or a filled ticket (operator priority) | **Not met**: 2026-11-11 re-check — ticket 4 cells, match page 7 (MaxBet ×2 and WWIN prematch new, MBet live fixed), generic 7 (Mozzartbet live demoted). See `docs/evidence/2026-11-11-destinations.md` | SR9-1 … SR9-4 |
-| — | The committed suite is green | **Met** after M6-2 (2026-11-11) | — |
+| — | Every surebet leg opens the match or a filled ticket (operator priority) | **Not met**: 2026-11-11 — `ticket_filled` 6 cells (MDShop, Admiralbet, MaxBet), `match_page` 6 (Mozzartbet prematch, Betole prematch, MBet ×2, WWIN ×2), generic 6 (SportPlus ×2, Premier ×2, Mozzartbet live, Betole live). See `docs/evidence/2026-11-11-sr9-2.md` | SR9-1 … SR9-4 |
+| — | The committed suite is green | **Met**: `pytest` 2,453 passed, 12 skipped (2026-11-11) | — |
 
 Two items cannot move without the operator: criterion 2/8 depend on the
 deferred N2-4 and waived P1-6. Ask before treating the product as
@@ -127,7 +129,7 @@ work it before every other row.
 | SR8-1 | Live Mozzartbet and Betole parse to zero matches | In progress | — | operator (Mozzartbet transport) |
 | SR8-4 | `record_scan.py` restores state before scanning | Done | — | — |
 | SR8-2 | Structural-drift alarm noise and stale baselines | Done | — | — |
-| M8-1 | Refresh the production-readiness assessment | Not started | SR8-1 | — |
+| M8-1 | Refresh the production-readiness assessment | Done | SR8-1 | — |
 | SR8-3 | Mapping-coverage floor vs the full-offer long tail | Not started | — | operator |
 | SR4-3g | Strict wire schema: EVLBet | Blocked on a live EVLBet payload | SR4-3 | — |
 | N2-4 | Seven-day local opportunity baseline and drift gates | Deferred | — | operator |
@@ -566,7 +568,7 @@ Tests: `tests/test_structural_drift.py` (extend).
 
 ### M8-1 Refresh the production-readiness assessment
 
-Status: Not started
+Status: Done (2026-11-11)
 
 Why: `docs/PRODUCTION_READINESS.md` is dated 2026-11-03 and predates most of the
 SR/M work (it still cites an 80 % coverage floor, an approval path and a
@@ -581,9 +583,27 @@ numbers; update the checklist above. Propose (do not apply) a definition for
 criterion 4 and flag criteria 2 and 8 for the operator.
 
 Acceptance:
-- [ ] Every number in the refreshed doc is measured and dated, with its command.
-- [ ] The checklist in this file matches the doc.
-- [ ] `docs/ACCEPTANCE.md` links the refreshed assessment.
+- [x] Every number in the refreshed doc is measured and dated, with its command.
+- [x] The checklist in this file matches the doc.
+- [x] `docs/ACCEPTANCE.md` links the refreshed assessment.
+
+**M8-1 progress (2026-11-11).** Started with SR8-1 still open at the operator's
+Mozzartbet decision; the doc carries that as **not met** instead of waiting.
+Measurements (all 2026-11-11, state restored through `scripts/record_scan.py`):
+prematch 6,459 matches / 1,283 verified groups / 5,795 comparisons / 21 outliers
+/ 20 surebets (8 dropped by the price guard); live 243 / 19 / 34 / 0 / 0, with
+Mozzartbet the only missing book. Pairing: 0.28 % prematch (18 / 6,459), 0.0 %
+live (0 / 243), zero duplicate-book groups, both audits exit 0. Mapping: 45,268
+/ 589,502 prematch (7.7 %), 1,288 / 50,477 live (2.6 %) against the 0.95 floor.
+Cold replay exit 0 (`fixed_point: true`, `false_merges: 0`, `pairs_unresolved:
+0`). Destinations: 6 ticket / 6 match page / 6 generic of 18 cells. The doc was
+rewritten dated 2026-11-11, the checklist above now matches it (including the
+stale 4/7/7 leg-link line, corrected to 6/6/6), and `docs/ACCEPTANCE.md` links
+the refreshed assessment. **Criterion 4 proposal (not applied):** zero outlier
+legs on any served surebet, and at most 0.10 % of market comparisons flagged
+with at least 1,000 comparisons per mode; today prematch is 0.36 % while live has
+too few comparisons to count. **Criteria 2 and 8 flagged for the operator**
+(N2-4 deferred; P1-6 waived and in conflict with the criterion).
 
 ### SR8-3 Mapping-coverage floor vs the full-offer long tail — Gate: operator
 
@@ -651,3 +671,4 @@ Entries before 2026-11-11 are in the archive.
 | 2026-11-11 | SR9-4 | Done | Labelling: `legReachesMatch`/`reachSummary` count only ticket/match destinations with a URL; each card shows `Match links: N/M` (`row-reach-all` when every leg reaches it); generic leg pills are dimmed/dashed with `data-reach="no"` and a “no per-match link” title; in the slip the leg gets a `leg-no-match` tag and the copyable book spelling moves first. EN + BS copy. Tests: `tests/test_frontend_reach.py` 12, node-driven against the shipped helpers and the real `buildSurebetRow`. **Operator decision:** keep every surebet listed — no hide and no deprioritise option (asked with keep / default-off filter / default-off sort); recorded under the row. Full run (after the code change): `2437 passed, 12 skipped in 105.82s` (0 failed); ruff `All checks passed!`; mypy `no issues found in 295 source files`; market doc / refresh_fixtures / audit_admissibility `--check` exit 0. |
 | 2026-11-11 | SR8-4 | Done | `scripts/record_scan.py` restores the persisted runtime state once with `server.app._restore_state()` before the first scan, then scans each requested mode in order (`prematch live` in one invocation); `run(mode)` keeps the evidence-driver signature and goes through the same path. `--out` is now a directory and writes `<mode>-scan.json` per mode. New `tests/test_record_scan.py` (2 tests, real restore + stubbed `api.run_scan`, no traffic; seeded scan-cost history row survives the scan's `_finish_scan_cost`, restore runs once before the first scan, both reports written). Negative control with the restore skipped: `history rows after a scan without restore: 1`, `seeded row survived: False`; through the script the seeded row stays above the new one. `pytest tests/test_record_scan.py tests/test_scan_cost.py tests/test_app_lifecycle.py`: all passed. Full run: `2449 passed, 12 skipped in 104.72s` (0 failed); ruff `All checks passed!`; mypy `no issues found in 296 source files`; market doc / refresh_fixtures / audit_admissibility `--check` exit 0. |
 | 2026-11-11 | SR8-2 | Done | Structural-drift noise: `begin_scan()` (called by `run_scan`) opens a per-scan window, and `observe` logs a signature once while `bh_wire_structure_drift_total` still counts every occurrence; `observe` now returns `empty` before comparing a payload with no items (`[]`, `{"events": []}`, empty item list beside metadata); `NSoftBet` models both `sBV` and `sbv` because `scrapers/common.py` reads both; the stale Admiralbet baselines were deleted and re-recorded from the live feed (6 entries, `sbv*`/`tot*`, no `sBV`/`tOT`). **Measured with `python scripts/record_scan.py prematch --out …` before → after: drift lines 225 → 23, distinct signatures 29 → 23, signatures repeated in one scan 16 → 0; per book mbet 10→3, maxbet 2→2, betole 30→8, sportplus 1→1, wwin 21→2, mozzartbet 158→7, admiralbet 3→0; 1,283 groups / 20 surebets both runs (matches 6,461→6,459).** Live after: 8 lines, 0 repeats, 243 matches / 19 groups, 0 surebets; Betole live 75 matches (SR8-1 fix working), Mozzartbet 0 (`returned no matches`, SR8-1 blocker). Tests: `tests/test_structural_drift.py` +4, `tests/test_wire_schemas_admiralbet.py` +1. Full run: `2453 passed, 12 skipped in 104.54s` (0 failed); ruff `All checks passed!`; mypy `no issues found in 296 source files`; market doc / refresh_fixtures / audit_admissibility `--check` exit 0. |
+| 2026-11-11 | M8-1 | Done | `docs/PRODUCTION_READINESS.md` rewritten dated 2026-11-11 from state-restored scans (`python scripts/record_scan.py prematch` and `live`, reports under `docs/evidence/2026-11-11-m8-1-*.json`, summary `2026-11-11-m8-1-scans.md`). **Prematch 6,459 matches / 1,283 verified groups / 5,795 comparisons / 21 outliers (0.36 %) / 20 surebets, 8 dropped by the price guard, 9/9 books; live 243 / 19 / 34 / 0 / 0, 8/9 books (Mozzartbet empty, SR8-1). Pairing 0.28 % (18 / 6,459) and 0.0 % (0 / 243), zero duplicate-book groups; mapping 45,268/589,502 (7.7 %) and 1,288/50,477 (2.6 %); cold replay exit 0 (`fixed_point: true`, `false_merges: 0`, `pairs_unresolved: 0`); destinations corrected to 6 ticket / 6 match page / 6 generic.** The checklist above now matches the doc (criteria 1–9 plus leg links and suite). Criterion 4 proposal (not applied): zero outlier legs on served surebets and ≤ 0.10 % of comparisons with ≥ 1,000 per mode. Criteria 2 (N2-4) and 8 (P1-6) flagged to the operator. `docs/ACCEPTANCE.md` links the refreshed assessment. Full run: `2453 passed, 12 skipped in 104.54s`; ruff clean; mypy `no issues found in 296 source files`; the three `--check` scripts exit 0. |

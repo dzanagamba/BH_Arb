@@ -1,0 +1,621 @@
+{
+  "duplicate_book_groups": [],
+  "duplicate_listings": 0,
+  "group_sizes": {
+    "2": 297,
+    "3": 339,
+    "4": 226,
+    "5": 122,
+    "6": 68,
+    "7": 46,
+    "8": 69,
+    "9": 116
+  },
+  "groups": 1283,
+  "matches": 6459,
+  "per_book": {
+    "admiralbet": {
+      "grouped": 454,
+      "matches": 540
+    },
+    "betole": {
+      "grouped": 941,
+      "matches": 1231
+    },
+    "maxbet": {
+      "grouped": 718,
+      "matches": 870
+    },
+    "mbet": {
+      "grouped": 519,
+      "matches": 597
+    },
+    "mdshop": {
+      "grouped": 454,
+      "matches": 540
+    },
+    "mozzartbet": {
+      "grouped": 306,
+      "matches": 366
+    },
+    "premier_kladionica": {
+      "grouped": 800,
+      "matches": 960
+    },
+    "sportplus": {
+      "grouped": 660,
+      "matches": 720
+    },
+    "wwin": {
+      "grouped": 599,
+      "matches": 635
+    }
+  },
+  "scan_time": "2026-11-11T20:52:42.534634",
+  "strict_miss_examples": [
+    {
+      "away_team": "Albacete",
+      "bookmaker": "mozzartbet",
+      "home_team": "Puertollano CF",
+      "kickoff": "2026-11-12T17:30:00",
+      "league": "spanija - kup",
+      "other_away": "Albacete",
+      "other_bookmaker": "wwin",
+      "other_home": "CS Puertollano",
+      "other_league": "spanija - kup",
+      "similarity": 0.929
+    },
+    {
+      "away_team": "Dortmund",
+      "bookmaker": "betole",
+      "home_team": "B.M.gladbach",
+      "kickoff": "2026-11-21T14:30:00",
+      "league": "germany, bundesliga",
+      "other_away": "Dortmund",
+      "other_bookmaker": "sportplus",
+      "other_home": "B.M'gladbach",
+      "other_league": "bundesliga",
+      "similarity": 1.0
+    },
+    {
+      "away_team": "Hayy Al-Amir Hassan",
+      "bookmaker": "mbet",
+      "home_team": "Al Aqaba",
+      "kickoff": "2026-11-12T15:00:00",
+      "league": "jordan 2",
+      "other_away": "Hayy Al-Amir Hassan",
+      "other_bookmaker": "maxbet",
+      "other_home": "Al Aqaba",
+      "other_league": "jordan 2",
+      "similarity": 1.0
+    },
+    {
+      "away_team": "Sparta Prague Wom. (W)",
+      "bookmaker": "mbet",
+      "home_team": "Torreense Wom. (W)",
+      "kickoff": "2026-11-12T17:00:00",
+      "league": "uefa europa cup women",
+      "other_away": "Sparta Prague (W)",
+      "other_bookmaker": "maxbet",
+      "other_home": "SCU Torreense (W)",
+      "other_league": "international clubs - uefa europa cup women",
+      "similarity": 0.846
+    },
+    {
+      "away_team": "Independiente Rivadavia",
+      "bookmaker": "mbet",
+      "home_team": "Estudiantes L.P",
+      "kickoff": "2026-11-12T23:00:00",
+      "league": "argentina super cup",
+      "other_away": "Independiente Rivadavia",
+      "other_bookmaker": "maxbet",
+      "other_home": "Estudiantes",
+      "other_league": "argentina super cup",
+      "similarity": 1.0
+    },
+    {
+      "away_team": "Umm Al Hassam",
+      "bookmaker": "mbet",
+      "home_team": "Etehad Al Reef",
+      "kickoff": "2026-11-13T15:00:00",
+      "league": "bahrain 2",
+      "other_away": "Um Al Hassam",
+      "other_bookmaker": "maxbet",
+      "other_home": "Etihad Al Reef",
+      "other_league": "bahrain 2",
+      "similarity": 0.929
+    },
+    {
+      "away_team": "Al-Budaiya",
+      "bookmaker": "mbet",
+      "home_team": "Al-Hala",
+      "kickoff": "2026-11-13T16:30:00",
+      "league": "bahrain 2",
+      "other_away": "Al Budaiya",
+      "other_bookmaker": "maxbet",
+      "other_home": "Al Hala",
+      "other_league": "bahrain 2",
+      "similarity": 1.0
+    },
+    {
+      "away_team": "Atletico-MG",
+      "bookmaker": "mbet",
+      "home_team": "Mirassol",
+      "kickoff": "2026-11-14T21:30:00",
+      "league": "brazil_serie_a",
+      "other_away": "Atletico MG",
+      "other_bookmaker": "mdshop",
+      "other_home": "Mirassol",
+      "other_league": "brazil_serie_a",
+      "similarity": 1.0
+    },
+    {
+      "away_team": "Brisbane Roar Wom. (W)",
+      "bookmaker": "mbet",
+      "home_team": "Canberra United FC (W)",
+      "kickoff": "2026-11-15T04:00:00",
+      "league": "auto_australija_a_league_z",
+      "other_away": "Brisbane Roar (W)",
+      "other_bookmaker": "sportplus",
+      "other_home": "Canberra (W)",
+      "other_league": "auto_australija_a_league_z",
+      "similarity": 1.0
+    },
+    {
+      "away_team": "London City Lionesses Wom. (W)",
+      "bookmaker": "mbet",
+      "home_team": "Arsenal Wom. (W)",
+      "kickoff": "2026-11-15T16:30:00",
+      "league": "womens_super_league_england",
+      "other_away": "London City (W)",
+      "other_bookmaker": "sportplus",
+      "other_home": "Arsenal (W)",
+      "other_league": "womens_super_league_england",
+      "similarity": 1.0
+    },
+    {
+      "away_team": "\u0160panjolska",
+      "bookmaker": "premier_kladionica",
+      "home_team": "\u010ce\u0161ka",
+      "kickoff": "2026-11-12T19:45:00",
+      "league": "nations_league_a",
+      "other_away": "\u0160panjolska",
+      "other_bookmaker": "sportplus",
+      "other_home": "\u010ce\u0161ka",
+      "other_league": "nations_league_a",
+      "similarity": 1.0
+    },
+    {
+      "away_team": "Makedonija",
+      "bookmaker": "premier_kladionica",
+      "home_team": "\u0160kotska",
+      "kickoff": "2026-11-13T19:45:00",
+      "league": "nations_league_b",
+      "other_away": "Sj. Makedonija",
+      "other_bookmaker": "sportplus",
+      "other_home": "\u0160kotska",
+      "other_league": "nations_league_b",
+      "similarity": 1.0
+    },
+    {
+      "away_team": "Ukrajina",
+      "bookmaker": "premier_kladionica",
+      "home_team": "S.Irska",
+      "kickoff": "2026-11-14T19:45:00",
+      "league": "nations_league_b",
+      "other_away": "Ukrajina",
+      "other_bookmaker": "sportplus",
+      "other_home": "Sj. Irska",
+      "other_league": "nations_league_b",
+      "similarity": 0.933
+    },
+    {
+      "away_team": "Brisbane Roar (W)",
+      "bookmaker": "premier_kladionica",
+      "home_team": "Canberra FC (W)",
+      "kickoff": "2026-11-15T04:00:00",
+      "league": "auto_australija_a_league_z",
+      "other_away": "Brisbane Roar (W)",
+      "other_bookmaker": "sportplus",
+      "other_home": "Canberra (W)",
+      "other_league": "auto_australija_a_league_z",
+      "similarity": 1.0
+    },
+    {
+      "away_team": "FC Yokohama",
+      "bookmaker": "premier_kladionica",
+      "home_team": "Shonan Bell.",
+      "kickoff": "2026-11-14T05:00:00",
+      "league": "j_league_2",
+      "other_away": "Yokohama",
+      "other_bookmaker": "mdshop",
+      "other_home": "Shonan Bellmare",
+      "other_league": "j_league_2",
+      "similarity": 0.846
+    },
+    {
+      "away_team": "Olympiakos B",
+      "bookmaker": "premier_kladionica",
+      "home_team": "Panionios",
+      "kickoff": "2026-11-16T12:45:00",
+      "league": "greece_superleague_2",
+      "other_away": "Olympiacos B",
+      "other_bookmaker": "sportplus",
+      "other_home": "Panionios",
+      "other_league": "greece_superleague_2",
+      "similarity": 0.917
+    },
+    {
+      "away_team": "Gaziantep",
+      "bookmaker": "wwin",
+      "home_team": "G.birligi",
+      "kickoff": "2026-11-21T10:30:00",
+      "league": "super_lig_turkey",
+      "other_away": "Gaziantep",
+      "other_bookmaker": "premier_kladionica",
+      "other_home": "G'birligi",
+      "other_league": "super_lig_turkey",
+      "similarity": 1.0
+    },
+    {
+      "away_team": "Centre d'Esports Manresa",
+      "bookmaker": "maxbet",
+      "home_team": "Naxara CD",
+      "kickoff": "2026-11-15T11:00:00",
+      "league": "spain_segunda_federacion_2",
+      "other_away": "Manresa",
+      "other_bookmaker": "premier_kladionica",
+      "other_home": "Naxara",
+      "other_league": "spain_segunda_federacion_2",
+      "similarity": 1.0
+    }
+  ],
+  "strict_miss_group_count": 18,
+  "strict_miss_groups": [
+    {
+      "book_pair": "betole|sportplus",
+      "bookmakers": [
+        "betole",
+        "sportplus"
+      ],
+      "count": 1,
+      "example": {
+        "away_team": "Dortmund",
+        "home_team": "B.M.gladbach",
+        "other_away": "Dortmund",
+        "other_home": "B.M'gladbach",
+        "similarity": 1.0
+      },
+      "league": "germany, bundesliga",
+      "match_share": 0.0002,
+      "pattern": "b m gladbach~b m gladbach|dortmund~dortmund",
+      "share": 0.0556
+    },
+    {
+      "book_pair": "maxbet|mbet",
+      "bookmakers": [
+        "maxbet",
+        "mbet"
+      ],
+      "count": 1,
+      "example": {
+        "away_team": "Independiente Rivadavia",
+        "home_team": "Estudiantes L.P",
+        "other_away": "Independiente Rivadavia",
+        "other_home": "Estudiantes",
+        "similarity": 1.0
+      },
+      "league": "argentina super cup",
+      "match_share": 0.0002,
+      "pattern": "estudiantes l p~estudiantes|independiente rivadavia~independiente rivadavia",
+      "share": 0.0556
+    },
+    {
+      "book_pair": "maxbet|mbet",
+      "bookmakers": [
+        "maxbet",
+        "mbet"
+      ],
+      "count": 1,
+      "example": {
+        "away_team": "Al-Budaiya",
+        "home_team": "Al-Hala",
+        "other_away": "Al Budaiya",
+        "other_home": "Al Hala",
+        "similarity": 1.0
+      },
+      "league": "bahrain 2",
+      "match_share": 0.0002,
+      "pattern": "al hala~al hala|al budaiya~al budaiya",
+      "share": 0.0556
+    },
+    {
+      "book_pair": "maxbet|mbet",
+      "bookmakers": [
+        "maxbet",
+        "mbet"
+      ],
+      "count": 1,
+      "example": {
+        "away_team": "Umm Al Hassam",
+        "home_team": "Etehad Al Reef",
+        "other_away": "Um Al Hassam",
+        "other_home": "Etihad Al Reef",
+        "similarity": 0.929
+      },
+      "league": "bahrain 2",
+      "match_share": 0.0002,
+      "pattern": "etehad al reef~etihad al reef|umm al hassam~um al hassam",
+      "share": 0.0556
+    },
+    {
+      "book_pair": "maxbet|mbet",
+      "bookmakers": [
+        "maxbet",
+        "mbet"
+      ],
+      "count": 1,
+      "example": {
+        "away_team": "Hayy Al-Amir Hassan",
+        "home_team": "Al Aqaba",
+        "other_away": "Hayy Al-Amir Hassan",
+        "other_home": "Al Aqaba",
+        "similarity": 1.0
+      },
+      "league": "jordan 2",
+      "match_share": 0.0002,
+      "pattern": "al aqaba~al aqaba|hayy al amir hassan~hayy al amir hassan",
+      "share": 0.0556
+    },
+    {
+      "book_pair": "maxbet|mbet",
+      "bookmakers": [
+        "maxbet",
+        "mbet"
+      ],
+      "count": 1,
+      "example": {
+        "away_team": "Sparta Prague Wom. (W)",
+        "home_team": "Torreense Wom. (W)",
+        "other_away": "Sparta Prague (W)",
+        "other_home": "SCU Torreense (W)",
+        "similarity": 0.846
+      },
+      "league": "uefa europa cup women",
+      "match_share": 0.0002,
+      "pattern": "torreense wom w~scu torreense w|sparta prague wom w~sparta prague w",
+      "share": 0.0556
+    },
+    {
+      "book_pair": "maxbet|premier_kladionica",
+      "bookmakers": [
+        "maxbet",
+        "premier_kladionica"
+      ],
+      "count": 1,
+      "example": {
+        "away_team": "Centre d'Esports Manresa",
+        "home_team": "Naxara CD",
+        "other_away": "Manresa",
+        "other_home": "Naxara",
+        "similarity": 1.0
+      },
+      "league": "spain_segunda_federacion_2",
+      "match_share": 0.0002,
+      "pattern": "naxara cd~naxara|centre d manresa~manresa",
+      "share": 0.0556
+    },
+    {
+      "book_pair": "mbet|mdshop",
+      "bookmakers": [
+        "mbet",
+        "mdshop"
+      ],
+      "count": 1,
+      "example": {
+        "away_team": "Atletico-MG",
+        "home_team": "Mirassol",
+        "other_away": "Atletico MG",
+        "other_home": "Mirassol",
+        "similarity": 1.0
+      },
+      "league": "brazil_serie_a",
+      "match_share": 0.0002,
+      "pattern": "mirassol~mirassol|atletico mg~atletico mg",
+      "share": 0.0556
+    },
+    {
+      "book_pair": "mbet|sportplus",
+      "bookmakers": [
+        "mbet",
+        "sportplus"
+      ],
+      "count": 1,
+      "example": {
+        "away_team": "Brisbane Roar Wom. (W)",
+        "home_team": "Canberra United FC (W)",
+        "other_away": "Brisbane Roar (W)",
+        "other_home": "Canberra (W)",
+        "similarity": 1.0
+      },
+      "league": "auto_australija_a_league_z",
+      "match_share": 0.0002,
+      "pattern": "canberra united fc w~canberra w|brisbane roar wom w~brisbane roar w",
+      "share": 0.0556
+    },
+    {
+      "book_pair": "mbet|sportplus",
+      "bookmakers": [
+        "mbet",
+        "sportplus"
+      ],
+      "count": 1,
+      "example": {
+        "away_team": "London City Lionesses Wom. (W)",
+        "home_team": "Arsenal Wom. (W)",
+        "other_away": "London City (W)",
+        "other_home": "Arsenal (W)",
+        "similarity": 1.0
+      },
+      "league": "womens_super_league_england",
+      "match_share": 0.0002,
+      "pattern": "arsenal wom w~arsenal w|london city lionesses wom w~london city w",
+      "share": 0.0556
+    },
+    {
+      "book_pair": "mdshop|premier_kladionica",
+      "bookmakers": [
+        "mdshop",
+        "premier_kladionica"
+      ],
+      "count": 1,
+      "example": {
+        "away_team": "FC Yokohama",
+        "home_team": "Shonan Bell.",
+        "other_away": "Yokohama",
+        "other_home": "Shonan Bellmare",
+        "similarity": 0.846
+      },
+      "league": "j_league_2",
+      "match_share": 0.0002,
+      "pattern": "shonan bell~shonan bellmare|fc yokohama~yokohama",
+      "share": 0.0556
+    },
+    {
+      "book_pair": "mozzartbet|wwin",
+      "bookmakers": [
+        "mozzartbet",
+        "wwin"
+      ],
+      "count": 1,
+      "example": {
+        "away_team": "Albacete",
+        "home_team": "Puertollano CF",
+        "other_away": "Albacete",
+        "other_home": "CS Puertollano",
+        "similarity": 0.929
+      },
+      "league": "spanija - kup",
+      "match_share": 0.0002,
+      "pattern": "puertollano cf~cs puertollano|albacete~albacete",
+      "share": 0.0556
+    },
+    {
+      "book_pair": "premier_kladionica|sportplus",
+      "bookmakers": [
+        "premier_kladionica",
+        "sportplus"
+      ],
+      "count": 1,
+      "example": {
+        "away_team": "Brisbane Roar (W)",
+        "home_team": "Canberra FC (W)",
+        "other_away": "Brisbane Roar (W)",
+        "other_home": "Canberra (W)",
+        "similarity": 1.0
+      },
+      "league": "auto_australija_a_league_z",
+      "match_share": 0.0002,
+      "pattern": "canberra fc w~canberra w|brisbane roar w~brisbane roar w",
+      "share": 0.0556
+    },
+    {
+      "book_pair": "premier_kladionica|sportplus",
+      "bookmakers": [
+        "premier_kladionica",
+        "sportplus"
+      ],
+      "count": 1,
+      "example": {
+        "away_team": "Olympiakos B",
+        "home_team": "Panionios",
+        "other_away": "Olympiacos B",
+        "other_home": "Panionios",
+        "similarity": 0.917
+      },
+      "league": "greece_superleague_2",
+      "match_share": 0.0002,
+      "pattern": "panionios~panionios|olympiakos b~olympiacos b",
+      "share": 0.0556
+    },
+    {
+      "book_pair": "premier_kladionica|sportplus",
+      "bookmakers": [
+        "premier_kladionica",
+        "sportplus"
+      ],
+      "count": 1,
+      "example": {
+        "away_team": "\u0160panjolska",
+        "home_team": "\u010ce\u0161ka",
+        "other_away": "\u0160panjolska",
+        "other_home": "\u010ce\u0161ka",
+        "similarity": 1.0
+      },
+      "league": "nations_league_a",
+      "match_share": 0.0002,
+      "pattern": "ceska~ceska|spanjolska~spanjolska",
+      "share": 0.0556
+    },
+    {
+      "book_pair": "premier_kladionica|sportplus",
+      "bookmakers": [
+        "premier_kladionica",
+        "sportplus"
+      ],
+      "count": 1,
+      "example": {
+        "away_team": "Ukrajina",
+        "home_team": "S.Irska",
+        "other_away": "Ukrajina",
+        "other_home": "Sj. Irska",
+        "similarity": 0.933
+      },
+      "league": "nations_league_b",
+      "match_share": 0.0002,
+      "pattern": "s irska~sj irska|ukrajina~ukrajina",
+      "share": 0.0556
+    },
+    {
+      "book_pair": "premier_kladionica|sportplus",
+      "bookmakers": [
+        "premier_kladionica",
+        "sportplus"
+      ],
+      "count": 1,
+      "example": {
+        "away_team": "Makedonija",
+        "home_team": "\u0160kotska",
+        "other_away": "Sj. Makedonija",
+        "other_home": "\u0160kotska",
+        "similarity": 1.0
+      },
+      "league": "nations_league_b",
+      "match_share": 0.0002,
+      "pattern": "skotska~skotska|makedonija~sj makedonija",
+      "share": 0.0556
+    },
+    {
+      "book_pair": "premier_kladionica|wwin",
+      "bookmakers": [
+        "premier_kladionica",
+        "wwin"
+      ],
+      "count": 1,
+      "example": {
+        "away_team": "Gaziantep",
+        "home_team": "G.birligi",
+        "other_away": "Gaziantep",
+        "other_home": "G'birligi",
+        "similarity": 1.0
+      },
+      "league": "super_lig_turkey",
+      "match_share": 0.0002,
+      "pattern": "g birligi~g birligi|gaziantep~gaziantep",
+      "share": 0.0556
+    }
+  ],
+  "strict_miss_rate": 0.0028,
+  "strict_misses": 18,
+  "ungrouped": 1008
+}

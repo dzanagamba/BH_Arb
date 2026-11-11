@@ -1,0 +1,54 @@
+{
+  "duplicate_book_groups": [],
+  "duplicate_listings": 0,
+  "group_sizes": {
+    "2": 8,
+    "3": 1,
+    "4": 5,
+    "5": 4,
+    "6": 1
+  },
+  "groups": 19,
+  "matches": 243,
+  "per_book": {
+    "admiralbet": {
+      "grouped": 12,
+      "matches": 14
+    },
+    "betole": {
+      "grouped": 0,
+      "matches": 75
+    },
+    "maxbet": {
+      "grouped": 12,
+      "matches": 53
+    },
+    "mbet": {
+      "grouped": 10,
+      "matches": 16
+    },
+    "mdshop": {
+      "grouped": 11,
+      "matches": 13
+    },
+    "premier_kladionica": {
+      "grouped": 9,
+      "matches": 11
+    },
+    "sportplus": {
+      "grouped": 0,
+      "matches": 49
+    },
+    "wwin": {
+      "grouped": 11,
+      "matches": 12
+    }
+  },
+  "scan_time": "2026-11-11T20:54:13.773396",
+  "strict_miss_examples": [],
+  "strict_miss_group_count": 0,
+  "strict_miss_groups": [],
+  "strict_miss_rate": 0.0,
+  "strict_misses": 0,
+  "ungrouped": 178
+}

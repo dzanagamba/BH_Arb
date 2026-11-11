@@ -1,5 +1,10 @@
 # Acceptance record — 2026-11-03
 
+> **Current assessment (2026-11-11).** The production-readiness verdict and its
+> measured numbers live in [`PRODUCTION_READINESS.md`](PRODUCTION_READINESS.md)
+> (refreshed by M8-1). This file is the dated 2026-11-03 acceptance snapshot
+> behind it.
+
 This is the dated evidence behind the production-readiness claim. It is a
 measurement, not a promise: every number below was produced by the command
 named next to it.
