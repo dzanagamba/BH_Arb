@@ -28,7 +28,7 @@ is how this file's own subject matter got here in the first place.
 
 WHAT IS PROVED BY RUNNING CODE RATHER THAN READING IT
 -----------------------------------------------------
-* The whole truth table of the five flags is enumerated, so every state in which
+* The whole truth table of the six flags is enumerated, so every state in which
   nothing is on screen is answered by exactly one case, no case is dead, and no
   two cases claim the same state.
 * The shipped ``selectNoSurebetReason`` is executed under node and compared with
@@ -91,7 +91,7 @@ FLAG_NAMES = list(REASONS["flags"])
 
 # The three cases that follow a real scan. `never_scanned` is excluded because
 # the filter question does not exist before there is anything to filter.
-SCANNED_CASES = ("links_unverified", "identity_unproven", "no_edge")
+SCANNED_CASES = ("zero_matches", "links_unverified", "identity_unproven", "no_edge")
 
 # The two sentences the old panels asserted. Kept verbatim so that putting
 # either of them back is caught by identity, not by paraphrase.
@@ -212,6 +212,8 @@ def _unreachable(flags: dict[str, bool]) -> bool:
     in a table.
     """
     if flags["show_surebets"] and not flags["have_surebets"]:
+        return True
+    if flags["scanned"] and not flags["scan_completed"]:
         return True
     return flags["have_surebets"] and not flags["scanned"]
 
@@ -339,6 +341,10 @@ def _copy_problems(table: dict) -> list[str]:
                 f"{case_id} does not say outright that the filters are not the cause, which is "
                 "the sentence that replaces the old advice"
             )
+    # Only the cases decided by the feed itself may speak about the mode. Every
+    # other case is a statement about the gate or the filters, which are the same
+    # in both feeds, so a live variant there would be a claim nothing backs.
+    feed_cases = {"never_scanned", "zero_matches"}
     never = next((r for r in cases if r["id"] == "never_scanned"), None)
     if never is not None:
         prose = never["body"].lower()
@@ -347,17 +353,25 @@ def _copy_problems(table: dict) -> list[str]:
                 "the never-scanned copy raises the filter question before there is anything to "
                 "filter"
             )
-        if "body_live" in never:
-            if "in-play" not in never["body_live"]:
-                problems.append("the live sentence must say the scan is for in-play markets")
-            if "in-play" in never["body"]:
-                problems.append("the prematch sentence must not claim the feed is in-play")
-            if never.get("title_live") == never["title"] or never["body_live"] == never["body"]:
-                problems.append("the live sentence is a copy of the prematch one")
+    zero = next((r for r in cases if r["id"] == "zero_matches"), None)
+    if zero is not None and zero.get("body_live"):
+        if "in-play" not in zero["body_live"]:
+            problems.append("the zero-matches live sentence must say in-play")
+    for case_id in feed_cases:
+        reason = next((r for r in cases if r["id"] == case_id), None)
+        if reason is None:
+            continue
+        if "body_live" in reason:
+            if "in-play" not in reason["body_live"]:
+                problems.append(f"the {case_id} live sentence must say in-play")
+            if "in-play" in reason["body"]:
+                problems.append(f"the {case_id} prematch sentence must not claim in-play")
+            if reason.get("title_live") == reason["title"] or reason["body_live"] == reason["body"]:
+                problems.append(f"the {case_id} live sentence is a copy of the prematch one")
         else:
-            problems.append("the never-scanned case has no live sentence, so live mode has none")
+            problems.append(f"the {case_id} case has no live sentence, so live mode has none")
     for reason in cases:
-        if reason["id"] == "never_scanned":
+        if reason["id"] in feed_cases:
             continue
         if "body_live" in reason or "title_live" in reason:
             problems.append(
@@ -566,6 +580,7 @@ def _field_problems(js: str, table: dict) -> list[str]:
             f"{sorted(produced - set(table['flags']))} the table never guards on"
         )
     expected_sources = {
+        "scan_completed": ("last_scan_age_sec",),
         "scanned": ("matches_cached", "live_matches_cached", "last_scan_age_sec"),
         "unverified_links": ("unverified_links", "live_unverified_links"),
         "verified_groups": ("match_groups",),
@@ -699,7 +714,7 @@ def test_truth_table_check_fails_on_overlapping_guards_and_on_a_dead_case():
     assert any("no case claims the state" in problem for problem in problems), problems
 
 
-def test_the_five_states_the_brief_names_are_the_ones_the_table_distinguishes():
+def test_the_six_states_the_brief_names_are_the_ones_the_table_distinguishes():
     """The causes, pinned to the state that produces each.
 
     Written as the state rather than the id, so reordering or renumbering the
@@ -707,10 +722,11 @@ def test_the_five_states_the_brief_names_are_the_ones_the_table_distinguishes():
     """
     expected = {
         "never_scanned": {},
-        "links_unverified": {"scanned": True, "unverified_links": True},
-        "identity_unproven": {"scanned": True, "verified_groups": False},
-        "filters_hiding": {"scanned": True, "have_surebets": True},
-        "no_edge": {"scanned": True, "verified_groups": True},
+        "zero_matches": {"scan_completed": True},
+        "links_unverified": {"scan_completed": True, "scanned": True, "unverified_links": True},
+        "identity_unproven": {"scan_completed": True, "scanned": True, "verified_groups": False},
+        "filters_hiding": {"scan_completed": True, "scanned": True, "have_surebets": True},
+        "no_edge": {"scan_completed": True, "scanned": True, "verified_groups": True},
     }
     assert set(expected) == set(CASE_IDS), (
         f"the table's cases are {sorted(CASE_IDS)}; this test pins {sorted(expected)}"
@@ -1213,6 +1229,7 @@ def _flags_from_real_endpoints(health: dict, results: dict, shown: int) -> dict[
     matches = health["live_matches_cached"] if mode == "live" else health["matches_cached"]
     links = health["live_unverified_links"] if mode == "live" else health["unverified_links"]
     return {
+        "scan_completed": feed["last_scan_age_sec"] is not None,
         "scanned": int(matches) > 0 and feed["last_scan_age_sec"] is not None,
         "unverified_links": int(links) > 0,
         "verified_groups": int(results["match_groups"]) > 0,
@@ -1320,6 +1337,21 @@ def test_the_filter_case_is_reachable_from_a_real_priced_surebet():
         )
 
 
+def test_the_zero_matches_case_is_what_a_real_empty_scan_reports():
+    """A completed scan that read nothing must not say "ready to scan".
+
+    The old ``scanned`` flag required matches, so an empty but completed scan
+    looked like a fresh install. The new ``scan_completed`` flag separates them,
+    and this drives the real endpoints with a real empty scan.
+    """
+    with _backend_state([]) as (health, results):
+        assert health["matches_cached"] == 0
+        assert health["prematch"]["last_scan_age_sec"] is not None
+        flags = _flags_from_real_endpoints(health, results, shown=0)
+        assert flags["scan_completed"] is True and flags["scanned"] is False
+        assert _select(REASONS, flags)["id"] == "zero_matches"
+
+
 def test_the_never_scanned_case_is_what_the_endpoints_say_before_any_scan():
     """No cached matches and no scan age: the only state where "Scan Now" is right."""
     with _cleared_backend_state() as (health, results):
@@ -1348,7 +1380,7 @@ def test_a_cache_that_held_no_matches_reads_as_never_scanned_even_with_a_scan_ag
 
 @needs_node
 def test_every_case_is_selected_by_the_shipped_selector_from_real_payloads():
-    """The shipped selector, driven by the real endpoints, for all four scan cases.
+    """The shipped selector, driven by the real endpoints, for every scan case.
 
     The reachability tests above settle the backend half by asserting the flag
     values themselves. This closes the loop: the JavaScript that runs in the
@@ -1367,6 +1399,7 @@ def test_every_case_is_selected_by_the_shipped_selector_from_real_payloads():
         """
     )
     for matches, expected in (
+        ([], "zero_matches"),
         (LINK_BLOCKED, "links_unverified"),
         (IDENTITY_BLOCKED, "identity_unproven"),
         (IDENTICAL_ODDS, "no_edge"),

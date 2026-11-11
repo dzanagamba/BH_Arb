@@ -38,7 +38,10 @@ no-surebet copy table.
 
 The no-surebet cases keep their English `title`/`body` and a parallel
 `title_bs`/`body_bs` (and live variants); `renderCaseCopy()` chooses by the
-active language so the diagnostic never mixes languages.
+active language so the diagnostic never mixes languages. Six states are
+distinguished, including a completed scan that read zero matches
+(`scan_completed` without matches) and the run-mode-aware live wording for the
+two feed-decided cases.
 
 ## Automated accessibility
 

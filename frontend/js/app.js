@@ -1972,6 +1972,7 @@ function copySurebetDetails(id) {
 const DIAGNOSTIC_ACTIONS = {
     resetFilters: { label: 'Reset Filters', handler: () => resetFilters() },
     showReview: { label: 'Open review queue', handler: () => switchTab('review') },
+    scanNow: { label: 'Scan now', handler: () => scanNow() },
 };
 
 // Which elements hold the copy in each panel.
@@ -2007,6 +2008,7 @@ function diagnosticFlags(health, results, counts) {
     const matches = live ? health?.live_matches_cached : health?.matches_cached;
     const links = live ? health?.live_unverified_links : health?.unverified_links;
     return {
+        scan_completed: feed?.last_scan_age_sec != null,
         scanned: Number(matches) > 0 && feed?.last_scan_age_sec != null,
         unverified_links: Number(links) > 0,
         verified_groups: Number(results?.match_groups) > 0,

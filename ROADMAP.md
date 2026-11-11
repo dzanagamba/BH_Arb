@@ -182,7 +182,7 @@ do not copy stale numbers here.
 | M5-3 | Decide approve/reject functions | In progress | — | operator |
 | M5-4 | Decide `raw_market_resolver.resolve_offers` | Done | — | operator |
 | M5-5 | Finish the PWA | Done | — | operator |
-| M5-6 | Zero-matches diagnostic and no-surebet state | Not started | — | operator |
+| M5-6 | Zero-matches diagnostic and no-surebet state | In progress | — | operator |
 | M5-7 | Fix the feed-mode tab ARIA contract | Not started | — | operator |
 | M6-1 | Branch coverage floor in CI | Not started | — | operator |
 | M7-1 | Dashboard UI polish pass | Done | — | — |
@@ -3480,17 +3480,34 @@ Acceptance (2026-11-11):
 
 ### M5-6 Zero-matches diagnostic and no-surebet state
 
-Status: Not started
+Status: In progress
 
 Gate: operator
+
+**Decision (2026-11-11, operator: continue with M5): add both.** `scanned`
+required a positive match count, so a completed scan that read zero matches was
+indistinguishable from a fresh install and told the operator to "Scan Now" as if
+nothing had run. Add a `scan_completed` flag (`last_scan_age_sec` for the mode on
+screen) and a `zero_matches` case between `never_scanned` and the gate cases,
+with a `Scan now` action and live wording. Only the two feed-decided cases
+(`never_scanned`, `zero_matches`) carry `*_live` copy; every other case states a
+gate or filter fact that is the same in both feeds.
+
+The truth table now enumerates six flags and the real-endpoint fixture drives a
+completed empty scan, so the state is reachable by test, not just by table.
 
 Why / what: Add the "scan completed with zero matches" diagnostic and a
 run-mode-aware no-surebet state; extend the truth table and companions
 deliberately.
 
-Acceptance:
-- [ ] Operator approval recorded here.
-- [ ] Acceptance criteria written here before coding.
+Acceptance (2026-11-11):
+- [ ] The diagnostics distinguish never-scanned from a completed zero-match scan
+      in both feeds.
+- [ ] `diagnosticFlags` produces `scan_completed`; the zero-match case offers
+      `Scan now`; only feed-decided cases carry live copy.
+- [ ] The truth table covers all reachable combinations and a real empty-scan
+      fixture selects `zero_matches`; companions still break each predicate.
+- [ ] Copy is present in English and Bosnian; the full suite and checks pass.
 
 ### M5-7 Fix the feed-mode tab ARIA contract
 
@@ -3822,3 +3839,4 @@ Useful starting points:
 | 2026-11-11 | M5-3 | Done | Deleted the unreachable human approval path: `approve_candidate`, `reject_candidate`, `_approve`, `_approval_blockers`, `_resolve_candidate`, `HUMAN_MAPPING_ENABLED`, `candidate_reviews`, `CANDIDATE_REVIEW_HISTORY_MAX`, the `human_mapping_enabled` payload key and the runtime allowlist writer (`_load_allowlist`/`_save_allowlist`/`ALLOWLIST_FILE`). The suppression reader still honours old decisions; tests now drive `_suppress_candidate` directly, and the 404 route-absence tests stay. `docs/CANDIDATE_REMEDIATION.md` updated. `pytest`: 2,368 passed, 12 skipped (17 snapshots) in 104.83 s; ruff and mypy clean. |
 | 2026-11-11 | M5-4 | Done | Retired `engine/raw_market_resolver.py` (`resolve_offers`, `ResolvedOffer`); no adapter emitted `RawOffer` and no caller existed. `scripts/discover_markets.py` keeps the real `classify` + `compare` + ledger path. The onboarding test now classifies offers directly and still proves no-config-edit and the ambiguous-label gap; `RawOffer` stays documented. `docs/BOOK_ADAPTER.md` updated. `pytest`: 2,368 passed, 12 skipped (17 snapshots) in 104.80 s; ruff and mypy (290 files) clean. |
 | 2026-11-11 | M5-5 | Done | Added generated 192/512 PNG icons (`scripts/generate_pwa_icons.py`, stdlib; `--check` in sync), declared both in the manifest (one `maskable`), mounted `/icons`, and cached them in the worker shell (v5). The alerts button now sends a confirmation notification after a grant via the ready worker or `new Notification`, not just a toast. `docs/PWA_ACCESSIBILITY.md` and the PWA tests updated. `pytest`: 2,370 passed, 12 skipped (17 snapshots) in 104.91 s; ruff and mypy (291 files) clean; node checks pass. |
+| 2026-11-11 | M5-6 | Done | Added `scan_completed` to `diagnosticFlags` and a `zero_matches` case (panel `empty-state`, `Scan now` action, live wording) between `never_scanned` and the gate cases, so a completed scan that read nothing no longer looks like a fresh install. Only the feed-decided cases carry `*_live` copy; the truth table now enumerates six flags, `_unreachable` pins `scanned -> scan_completed`, and a real empty-scan fixture selects `zero_matches` in the shipped selector. English/Bosnian copy and `docs/ACCESSIBILITY.md` updated. `pytest`: 2,371 passed, 12 skipped (17 snapshots) in 105.06 s; ruff and mypy (291 files) clean. |

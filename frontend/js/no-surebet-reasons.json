@@ -10,6 +10,7 @@
   ],
   "flags": {
     "scanned": "matches_cached (live_matches_cached) is above zero AND prematch.last_scan_age_sec (live.last_scan_age_sec) is not null, for the mode on screen",
+    "scan_completed": "last_scan_age_sec (live.last_scan_age_sec) is not null for the mode on screen, whether the completed scan read any matches or none",
     "unverified_links": "unverified_links (live_unverified_links) is above zero, for the mode on screen",
     "verified_groups": "match_groups on /api/results for the mode on screen, which is the same count as the health endpoint's verified_groups but read per mode",
     "have_surebets": "the surebets the /api/results payload returned, as held in allSurebets",
@@ -28,7 +29,7 @@
       "guard": {
         "all": [],
         "none": [
-          "scanned"
+          "scan_completed"
         ]
       },
       "title": "Ready to Hunt Surebets",
@@ -40,6 +41,34 @@
       "title_live_bs": "Nema skeniranih utakmica uživo",
       "body_bs": "Kliknite <strong>Skeniraj sada</strong> da započnete skeniranje povezanih knjiga za arbitražne prilike. Otvorit će se prozori preglednika — riješite CAPTCHA ako se pojavi.",
       "body_live_bs": "Kliknite <strong>Skeniraj sada</strong> da skenirate sve knjige za <strong>in-play</strong> arbitražne prilike. Kvote uživo se brzo mijenjaju — skenirajte često."
+    },
+    {
+      "id": "zero_matches",
+      "panel": "empty-state",
+      "decided_by": [
+        "matches_cached",
+        "live_matches_cached",
+        "last_scan_age_sec"
+      ],
+      "guard": {
+        "all": [
+          "scan_completed"
+        ],
+        "none": [
+          "scanned"
+        ]
+      },
+      "title": "No Matches — The Scan Read Nothing",
+      "title_live": "No Live Matches — The Scan Read Nothing",
+      "body": "The scan finished, but every connected bookmaker returned no matches for this feed. A book that could not be read is left out of the scan rather than filled with stale prices, so this is a feed result, not a filter result. Check the per-book status and any error on the health bar, then scan again. <strong>This is not a filter problem:</strong> no market, bookmaker or minimum profit can create a match the books did not publish.",
+      "body_live": "The live scan finished, but every connected bookmaker returned no in-play matches. A book that could not be read is left out of the scan rather than filled with stale prices, so this is a feed result, not a filter result. Check the per-book status and any error on the health bar, then scan again. <strong>This is not a filter problem:</strong> no market, bookmaker or minimum profit can create a match the books did not publish.",
+      "actions": [
+        "scanNow"
+      ],
+      "title_bs": "Nema utakmica — skeniranje nije pročitalo ništa",
+      "title_live_bs": "Nema utakmica uživo — skeniranje nije pročitalo ništa",
+      "body_bs": "Skeniranje je završeno, ali nijedna povezana kladionica nije vratila utakmice za ovaj feed. Knjiga koja se nije mogla pročitati izostavljena je iz skeniranja umjesto da bude popunjena zastarjelim kvotama, pa je ovo rezultat feeda, a ne filtera. Provjerite status po knjigama i eventualnu grešku na health traci, pa skenirajte ponovo. <strong>Ovo nije problem filtera:</strong> nijedno tržište, knjiga ni minimalni profit ne mogu stvoriti utakmicu koju knjige nisu objavile.",
+      "body_live_bs": "Skeniranje uživo je završeno, ali nijedna povezana kladionica nije vratila in-play utakmice. Knjiga koja se nije mogla pročitati izostavljena je iz skeniranja umjesto da bude popunjena zastarjelim kvotama, pa je ovo rezultat feeda, a ne filtera. Provjerite status po knjigama i eventualnu grešku na health traci, pa skenirajte ponovo. <strong>Ovo nije problem filtera:</strong> nijedno tržište, knjiga ni minimalni profit ne mogu stvoriti utakmicu koju knjige nisu objavile."
     },
     {
       "id": "links_unverified",
