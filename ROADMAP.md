@@ -119,13 +119,13 @@ work it before every other row.
 | ID | Title | Status | Depends | Gate |
 |----|-------|--------|---------|------|
 | SR9-1 | Re-prove every leg destination on today's sites | Done | — | — |
-| SR9-2 | Match-level link or filled ticket for the generic cells | Not started | SR9-1 | — |
-| SR9-3 | On-demand browser check of a served surebet's leg links | Not started | SR9-1 | — |
-| SR9-4 | Show which legs reach the match; decide whether to hide the rest | Not started | SR9-1 | operator (hide option only) |
+| SR9-2 | Match-level link or filled ticket for the generic cells | Done | SR9-1 | — |
+| SR9-3 | On-demand browser check of a served surebet's leg links | Done | SR9-1 | — |
+| SR9-4 | Show which legs reach the match; decide whether to hide the rest | Done | SR9-1 | operator (hide option only) |
 | M7-2 | Live test scan and roadmap/brief/AGENTS rewrite | Done | — | — |
 | M6-2 | Coverage-floor test still pins the old floor (main is red) | Done | — | — |
-| SR8-1 | Live Mozzartbet and Betole parse to zero matches | Not started | — | — |
-| SR8-4 | `record_scan.py` restores state before scanning | Not started | — | — |
+| SR8-1 | Live Mozzartbet and Betole parse to zero matches | In progress | — | operator (Mozzartbet transport) |
+| SR8-4 | `record_scan.py` restores state before scanning | Done | — | — |
 | SR8-2 | Structural-drift alarm noise and stale baselines | Not started | — | — |
 | M8-1 | Refresh the production-readiness assessment | Not started | SR8-1 | — |
 | SR8-3 | Mapping-coverage floor vs the full-offer long tail | Not started | — | operator |
@@ -474,7 +474,7 @@ or the adapter's live test file; snapshot tests if the output changes.
 
 ### SR8-4 `record_scan.py` restores state before scanning
 
-Status: Not started
+Status: Done (2026-11-11)
 
 Why: `scripts/record_scan.py` calls `api.run_scan(mode)` from a fresh process,
 so the module globals are empty and the scan rewrites `cache/scan_cost.json`
@@ -487,10 +487,19 @@ in `record_scan.py`; accept several modes in one invocation (`prematch live`)
 so a test scan is one command.
 
 Acceptance:
-- [ ] After a stubbed scan through the script, pre-existing scan-cost history
+- [x] After a stubbed scan through the script, pre-existing scan-cost history
       entries survive.
-- [ ] `python scripts/record_scan.py prematch live --out <dir>` writes one
+- [x] `python scripts/record_scan.py prematch live --out <dir>` writes one
       report per mode.
+
+**SR8-4 progress (2026-11-11).** `scripts/record_scan.py` now restores once with
+`server.app._restore_state()` before the first scan, then scans each mode in
+order; `run(mode)` (the evidence-driver entry point) goes through the same
+path. `--out` is now a directory and each mode writes `<mode>-scan.json`.
+Negative control: with the restore skipped, a seeded history row was gone after
+`_finish_scan_cost` (`history rows after a scan without restore: 1`,
+`seeded row survived: False`); through the script the same row survives above
+the new one.
 
 Tests: new `tests/test_record_scan.py` with stubbed adapters (no traffic).
 
@@ -606,3 +615,4 @@ Entries before 2026-11-11 are in the archive.
 | 2026-11-11 | SR9-2 | Done | MaxBet ticket filled in both modes. `scrapers/maxbet.py` keeps each open outcome's own `id` (not `outcomeId`) in `Market.outcome_ids`; `engine/destinations.py` gained `{outcome_id}`; `config/bookmaker_destinations.json` ships `…/sportsbook/match/{event_id}?outcome={outcome_id}` prematch + live with dated proofs. Measured in plain headless Chromium: prematch `1027619` CD Universitario – Herrera FC, slip 1 @ 1.55; live `1032215` CD Ibiza Islas Pitiusas – UD Arenal (HT), slip 1 @ 1.21; the live list response carries `outcomes[].id` on 13,180/13,180 rows. MaxBet fixtures re-captured (`--capture --books maxbet --write`, 2026-10-26 → 2026-11-11); the "unpriced control" total moved 4.5 → 6.5 because the registry prices 4.5/5.5, and the two maxbet parser snapshots were regenerated for the new capture; `contracts.json` now records `[].outcomes[].id:int`. SportPlus and Premier Kladionica (four cells) got dated "no per-event URL" proofs: no router/route in the served app, no anchors on the offer pages, a row click leaves the URL, Premier's `?who=`/`#/who=` forms are ignored. Betole live stays copy-only (no live leg priced). Tests: `tests/test_maxbet.py` +3 (4 cases incl. the two-mode capture check), `tests/test_destinations.py` +3 (ticket URL, missing-id fallback, live ticket), `tests/test_fixture_metadata.py` `pop(key, None)` for freshly captured fixtures. Full run: `2385 passed, 12 skipped in 117.30s` (0 failed); ruff `All checks passed!`; mypy `no issues found in 291 source files`; market doc / refresh_fixtures / audit_admissibility `--check` exit 0. Operator then opened the WWIN live route for `4732588` (Z.Podbrezova – Z.Moravce) in a normal browser and reported it opens the fixture; WWIN live promoted to a confirmed match page with a second test (`test_wwin_live_match_page_is_confirmed_by_the_operator` replaces the old fallback test). All nine cells covered; best rungs 6 ticket / 6 match page / 6 generic (was 4 / 7 / 7). Mozzartbet live stays on `/sr/uzivo` (needs SR8-1's live-feed id). |
 | 2026-11-11 | SR9-3 | Done | `server/leg_link_check.py` + `POST /api/surebets/{id}/check-links` (`scan` scope) behind the slip's **Check links** button. Per leg with a ticket or match destination: a fresh browser context, then the rendered accessibility text (`aria_snapshot`, which also sees MaxBet's closed shadow DOM), both book-spelled team names for `opens_fixture`, and for a ticket the slip area after the FIRST slip marker must repeat the teams and the pick (side + line for totals); an empty slip fails on the book's own phrase. A surebet with only search/competition rungs is skipped without a browser. Per-surebet window 30 s (`SUREBET_LINK_CHECK_MIN_INTERVAL_SECONDS`, 429 + Retry-After), a `read`-only key gets 403, a scan in progress 409, and the check shares `_deep_link_check_lock` + `_browser_sem` with the deep-link checker; it never writes `deep_link_verified`. Captured page texts in `tests/fixtures/link_check/` (MaxBet filled `1027619` and empty slip, MDShop filled, MaxBet home). Tests: `tests/test_surebet_link_check.py` 27, `tests/test_frontend_link_check.py` 14 (node-driven against the shipped renderer). Full run: `2425 passed, 12 skipped in 105.07s` (0 failed); ruff `All checks passed!`; mypy `no issues found in 294 source files`; market doc / refresh_fixtures / audit_admissibility `--check` exit 0. |
 | 2026-11-11 | SR9-4 | Done | Labelling: `legReachesMatch`/`reachSummary` count only ticket/match destinations with a URL; each card shows `Match links: N/M` (`row-reach-all` when every leg reaches it); generic leg pills are dimmed/dashed with `data-reach="no"` and a “no per-match link” title; in the slip the leg gets a `leg-no-match` tag and the copyable book spelling moves first. EN + BS copy. Tests: `tests/test_frontend_reach.py` 12, node-driven against the shipped helpers and the real `buildSurebetRow`. **Operator decision:** keep every surebet listed — no hide and no deprioritise option (asked with keep / default-off filter / default-off sort); recorded under the row. Full run (after the code change): `2437 passed, 12 skipped in 105.82s` (0 failed); ruff `All checks passed!`; mypy `no issues found in 295 source files`; market doc / refresh_fixtures / audit_admissibility `--check` exit 0. |
+| 2026-11-11 | SR8-4 | Done | `scripts/record_scan.py` restores the persisted runtime state once with `server.app._restore_state()` before the first scan, then scans each requested mode in order (`prematch live` in one invocation); `run(mode)` keeps the evidence-driver signature and goes through the same path. `--out` is now a directory and writes `<mode>-scan.json` per mode. New `tests/test_record_scan.py` (2 tests, real restore + stubbed `api.run_scan`, no traffic; seeded scan-cost history row survives the scan's `_finish_scan_cost`, restore runs once before the first scan, both reports written). Negative control with the restore skipped: `history rows after a scan without restore: 1`, `seeded row survived: False`; through the script the seeded row stays above the new one. `pytest tests/test_record_scan.py tests/test_scan_cost.py tests/test_app_lifecycle.py`: all passed. Full run: `2449 passed, 12 skipped in 104.72s` (0 failed); ruff `All checks passed!`; mypy `no issues found in 296 source files`; market doc / refresh_fixtures / audit_admissibility `--check` exit 0. |

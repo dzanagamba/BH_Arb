@@ -564,10 +564,9 @@ python scripts/derive_mappings.py cache/last_scan.json --apply
 # Regenerate the market ID tables, or fail if they are stale.
 python scripts/generate_market_mapping_doc.py --check
 
-# Record one real scan's per-sport metrics. Run bare, it starts from empty
-# state and rewrites cache/scan_cost.json (SR8-4); prefer the dashboard's scan,
-# or restore state first as in docs/evidence/2026-11-11-test-scan.md.
-python scripts/record_scan.py prematch --out docs/evidence/prematch-scan.json
+# Record one real scan's (or both modes') per-sport metrics. Restores the
+# persisted state first (SR8-4) and writes <mode>-scan.json per mode.
+python scripts/record_scan.py prematch live --out docs/evidence/2026-11-11-scan
 
 # Sweep one book's declared event links until verify-links reports remaining 0.
 python scripts/sweep_links.py --bookmaker mozzartbet --mode prematch --check

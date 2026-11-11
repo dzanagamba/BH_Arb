@@ -3,10 +3,10 @@
 **Updated:** 2026-11-11
 **Goal:** keep the scanner correct and current without weakening the trust
 model; work `ROADMAP.md` top to bottom.
-**Current row:** SR8-1 in progress — Betole live is fixed and measured (0 → 76
-matches); Mozzartbet live is websocket-only and needs a scope decision.
-**Last commit:** `6c32e09` "feat: price Betole's live feed from proven pick codes
-(SR8-1)" on `main` (2026-11-11, not pushed). `git log -1` has the hash.
+**Current row:** none in progress. SR8-4 is Done; SR8-1 (live Mozzartbet and
+Betole) is In progress because Mozzartbet live is websocket-only and waits on
+the operator's transport decision; Betole live is fixed (0 → 76 matches).
+**Last commit:** `PENDING` on `main` (2026-11-11). `git log -1` has the hash.
 
 ## Project state
 
@@ -23,8 +23,8 @@ matches); Mozzartbet live is websocket-only and needs a scope decision.
   MBet both, WWIN prematch+live), generic 6 (SportPlus 2, Premier 2,
   Mozzartbet live, Betole live). Evidence:
   `docs/evidence/2026-11-11-sr9-2.md`.
-- **Verification baseline (2026-11-11, this session):** `pytest` 2,447 passed,
-  12 skipped in 108.53 s, 0 failed. Ruff clean, mypy 295 files clean, market
+- **Verification baseline (2026-11-11, this session):** `pytest` 2,449 passed,
+  12 skipped in 104.72 s, 0 failed. Ruff clean, mypy 296 files clean, market
   doc / refresh_fixtures / audit_admissibility `--check` exit 0.
 - Branch coverage floor `fail_under = 87.05` (measured 88.05 %, M6-1); CI's 3.11
   leg enforces it and runs both ledger modes.
@@ -37,11 +37,10 @@ matches); Mozzartbet live is websocket-only and needs a scope decision.
 
 ## Next action
 
-**SR8-1, last item:** decide whether to build a Socket.IO snapshot collector for
-Mozzartbet live (captured `livematches`/`sr_live_<sport>` frames, strict schema,
-fail closed) or accept a dated limitation. If the collector is wanted it is its
-own scope; otherwise the row closes with Betole fixed and the Mozzartbet
-limitation recorded. Then SR8-4, SR8-2, M8-1.
+**SR8-2** (structural-drift alarm noise and stale baselines) is the first
+ungated `Not started` row: one drift line per book/endpoint/signature per scan,
+empty pages silent, real paths still alarming, Admiralbet baseline re-recorded.
+After it: M8-1 once SR8-1's Mozzartbet decision lands.
 
 ## Blockers and standing decisions
 
@@ -52,5 +51,5 @@ limitation recorded. Then SR8-4, SR8-2, M8-1.
 - SR4-3g blocked on a live EVLBet payload.
 - N2-4 deferred, P1-6 waived — do not start without an operator instruction.
 - SR8-3 gated: operator decides how mapping coverage is measured.
-- Until SR8-4 lands, never run `scripts/record_scan.py` bare against the real
-  cache; restore state first (see `AGENTS.md` → Running a real scan).
+- `scripts/record_scan.py` restores state itself (SR8-4) and takes several modes
+  in one invocation, with `--out` as a directory.

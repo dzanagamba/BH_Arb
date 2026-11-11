@@ -85,12 +85,11 @@ isolation guard, which also runs
 ## Running a real scan
 
 A real scan hits the bookmakers, so run one only when a row or the operator asks.
-Run it through the app (dashboard or `POST /api/scan`) or through a script that
-calls `server.app._restore_state()` **before** `server.api.run_scan(mode)`.
-`scripts/record_scan.py` does not restore state yet (SR8-4): run bare, it
-rewrites `cache/scan_cost.json` and the other diagnostic stores from empty
-globals and wipes the restored history. The 2026-11-11 driver and its results
-are in `docs/evidence/2026-11-11-test-scan.md`. To look at a populated dashboard
+Run it through the app (dashboard or `POST /api/scan`), or with
+`python scripts/record_scan.py prematch live --out <dir>`, which restores the
+persisted state itself (SR8-4) before the first scan and writes one
+`<mode>-scan.json` per mode. The 2026-11-11 driver and its results are in
+`docs/evidence/2026-11-11-test-scan.md`. To look at a populated dashboard
 without traffic, seed `api.cached_surebets`/`cached_matches` with
 `api.SCRAPERS.clear()` instead of scanning.
 
