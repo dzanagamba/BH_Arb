@@ -207,6 +207,104 @@
         "uncovered_registry_rows"
       ]
     },
+    "betole_live": {
+      "bookmaker": "betole",
+      "captured_at": "2026-11-11",
+      "event_count": 14,
+      "experimental_markets": [
+        "first_half_1x2"
+      ],
+      "fingerprint": "7c907e7e586fbfa7",
+      "fixture": "tests/fixtures/markets/betole_live.json",
+      "labels": [
+        "1",
+        "2",
+        "21",
+        "219",
+        "22",
+        "24",
+        "242",
+        "25",
+        "272",
+        "273",
+        "3",
+        "7",
+        "8",
+        "9"
+      ],
+      "labels_fingerprint": "5ad18fcd498ac5ec",
+      "market_ids": [
+        "1",
+        "2",
+        "21",
+        "219",
+        "22",
+        "24",
+        "242",
+        "25",
+        "272",
+        "273",
+        "3",
+        "7",
+        "8",
+        "9"
+      ],
+      "mode": "live",
+      "payload_kind": "betole_live_offer_odds",
+      "required_top_level_keys": [
+        "bookmaker",
+        "mode",
+        "captured_at",
+        "recorded_at",
+        "recorded_at_source",
+        "endpoint",
+        "http_method",
+        "http_status",
+        "capture_tool_version",
+        "source",
+        "provenance",
+        "payload_kind",
+        "expected_markets",
+        "bets"
+      ],
+      "structure": [
+        "1:float",
+        "219:float",
+        "21:float",
+        "22:float",
+        "242:float",
+        "24:float",
+        "25:float",
+        "272:float",
+        "273:float",
+        "2:float",
+        "3:float",
+        "7:float",
+        "8:float",
+        "9:float"
+      ],
+      "structure_fingerprint": "2ef2e934096d1c63",
+      "top_level_keys": [
+        "bets",
+        "bookmaker",
+        "capture_tool_version",
+        "captured_at",
+        "dropped_fields",
+        "endpoint",
+        "excluded_ids_present",
+        "expected_markets",
+        "experimental_markets",
+        "http_method",
+        "http_status",
+        "mode",
+        "payload_kind",
+        "provenance",
+        "recorded_at",
+        "recorded_at_source",
+        "source",
+        "uncovered_registry_rows"
+      ]
+    },
     "betole_prematch": {
       "bookmaker": "betole",
       "captured_at": "2026-11-08",
@@ -1775,7 +1873,7 @@
       ]
     }
   },
-  "generated_at": "2026-11-11T15:49:31",
+  "generated_at": "2026-11-11T20:19:46",
   "max_age_days": 120,
   "schema": 1
 }

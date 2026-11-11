@@ -66,7 +66,7 @@ def _capture() -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _desk_event(odds: Any) -> dict[str, Any]:
+def _desk_event(odds: Any, *, live: bool = False) -> dict[str, Any]:
     return {
         "id": 91393484,
         "matchCode": "91393484",
@@ -74,22 +74,22 @@ def _desk_event(odds: Any) -> dict[str, Any]:
         "away": "Zeledon",
         "leagueName": "Test League",
         "kickOffTime": "2030-01-01T18:00:00Z",
-        "live": False,
+        "live": live,
         "blocked": False,
         "brMatchId": "",
         "odds": odds,
     }
 
 
-def _desk_page(odds: Any) -> dict[str, Any]:
-    return {"esMatches": [_desk_event(odds)]}
+def _desk_page(odds: Any, *, live: bool = False) -> dict[str, Any]:
+    return {"esMatches": [_desk_event(odds, live=live)]}
 
 
 def _offer_rows(odds: Any) -> list[dict[str, Any]]:
     return [{"id": 91393484, "odds": odds}]
 
 
-def _scrape(desk: Any = None, offer: Any = None):
+def _scrape(desk: Any = None, offer: Any = None, *, live: bool = False):
     """Run the real ``scrape()`` against mocked Betole endpoints."""
     from scrapers.betole import BetoleScraper
 
@@ -99,7 +99,7 @@ def _scrape(desk: Any = None, offer: Any = None):
             mock.get(url__startswith=BULK_PREFIX).mock(
                 return_value=httpx.Response(200, json=offer)
             )
-            return await BetoleScraper().scrape()
+            return await BetoleScraper().scrape(live=live)
 
     return asyncio.run(scenario())
 
@@ -200,6 +200,24 @@ def test_the_real_scrape_emits_the_families_the_capture_declares():
     assert emitted == set(capture["expected_markets"]) | set(
         capture["experimental_markets"]
     )
+
+
+def test_the_live_capture_parses_from_the_full_offer():
+    """SR8-1: a live desk event prices the proven live codes from its full offer."""
+    capture = json.loads(
+        (FIXTURE_DIR / "betole_live.json").read_text(encoding="utf-8")
+    )
+
+    matches = _scrape(
+        desk=_desk_page({}, live=True),
+        offer=_offer_rows(capture["bets"]),
+        live=True,
+    )
+
+    assert [match.bookmaker for match in matches] == ["betole"]
+    assert matches[0].is_live is True
+    emitted = {market.market_type.value for market in matches[0].markets}
+    assert emitted == set(capture["expected_markets"])
 
 
 def test_unknown_keys_do_not_drop_the_book_from_a_scrape():

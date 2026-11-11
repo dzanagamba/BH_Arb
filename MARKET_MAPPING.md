@@ -41,7 +41,7 @@ Verify without writing: `python scripts/generate_market_mapping_doc.py --check`
 Source of truth: `config/bookmaker_markets.json`, loaded by
 `engine/market_registry.py`. Values below are resolved through the loader,
 so registry defaults (outcome labels, min legs, settlement) are included.
-Covers 10 bookmakers and 137 book/mode/market rows.
+Covers 10 bookmakers and 145 book/mode/market rows.
 
 Scope: these are the IDs the **registry declares**. It is the authority on
 the declared mapping, not on parser dispatch — a book's parser may read a
@@ -157,6 +157,14 @@ bottom of this file say so.
 | `betole` | prematch | Over/Under 3.5 (`over_under_3_5`) | `3`, `25`, `137`, `138`, `219` | Over 3.5, Under 3.5 | 2 | 3.5 | full_time |
 | `betole` | prematch | Over/Under 4.5 (`over_under_4_5`) | `27`, `453` | Over 4.5, Under 4.5 | 2 | 4.5 | full_time |
 | `betole` | prematch | Over/Under 5.5 (`over_under_5_5`) | `223`, `266` | Over 5.5, Under 5.5 | 2 | 5.5 | full_time |
+| `betole` | live | Full-time 1X2 (`1x2`) | `1`, `2`, `3` | 1, 2, X | 3 | — | full_time |
+| `betole` | live | Double Chance (`double_chance`) | `7`, `8`, `9` | 12, 1X, X2 | 2 | — | full_time |
+| `betole` | live | BTTS (`btts`) | `272`, `273` | GG, NG | 2 | — | full_time |
+| `betole` | live | Over/Under 1.5 (`over_under_1_5`) | `21`, `242` | Over 1.5, Under 1.5 | 2 | 1.5 | full_time |
+| `betole` | live | Over/Under 2.5 (`over_under_2_5`) | `22`, `24` | Over 2.5, Under 2.5 | 2 | 2.5 | full_time |
+| `betole` | live | Over/Under 3.5 (`over_under_3_5`) | `25`, `219` | Over 3.5, Under 3.5 | 2 | 3.5 | full_time |
+| `betole` | live | Over/Under 4.5 (`over_under_4_5`) | `27`, `453` | Over 4.5, Under 4.5 | 2 | 4.5 | full_time |
+| `betole` | live | Over/Under 5.5 (`over_under_5_5`) | `223`, `266` | Over 5.5, Under 5.5 | 2 | 5.5 | full_time |
 | `mozzartbet` | prematch | Full-time 1X2 (`1x2`) | `1` | 1, 2, X | 3 | — | full_time |
 | `mozzartbet` | prematch | Double Chance (`double_chance`) | `2` | 12, 1X, X2 | 2 | — | full_time |
 | `mozzartbet` | prematch | BTTS (`btts`) | `130` | GG, NG | 2 | — | full_time |

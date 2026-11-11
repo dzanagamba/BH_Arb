@@ -52,8 +52,11 @@ def test_every_enabled_book_has_at_least_one_1x2_mode():
 
 def test_intentionally_unavailable_modes_are_empty():
     r = MarketRegistry()
+    # EVLBet is disabled and its live feed was never captured. Betole live was
+    # empty until SR8-1 proved its live pick codes against the site's own match
+    # page (2026-11-11); it now has live rows like every other enabled book.
     assert r.ids_for("evlbet", "live", MarketType.MATCH_RESULT) == set()
-    assert r.ids_for("betole", "live", MarketType.MATCH_RESULT) == set()
+    assert r.ids_for("betole", "live", MarketType.MATCH_RESULT) == {1, 2, 3}
 
 
 def test_nsoft_parser_uses_registry_min_legs(monkeypatch):

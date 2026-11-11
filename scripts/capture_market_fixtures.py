@@ -1199,6 +1199,18 @@ async def capture_maxbet(client: httpx.AsyncClient, _bookmaker: str, mode: str) 
 # --------------------------------------------------------------------------
 
 BETOLE_API = "https://www.betole.ba/restapi/offer/ba/sport/S/desk"
+# SR8-1: the live offer the adapter actually reads is the batched full offer, not
+# the trimmed live desk. Pick codes and their labels were proven against the
+# site's own match page on 2026-11-11 (docs/evidence/2026-11-11-betole-live.md).
+BETOLE_BULK = "https://www.betole.ba/restapi/offer/ba/matches/by-ids"
+BETOLE_LIVE_CODES = {
+    "1x2": ("1", "2", "3"),
+    "double_chance": ("7", "8", "9"),
+    "btts": ("272", "273"),
+    "over_under_1_5": ("242", "21"),
+    "over_under_2_5": ("24", "22"),
+    "over_under_3_5": ("25", "219"),
+}
 # Pick codes present on the prematch desk feed today. The feed does not carry
 # double chance or the 1.5/3.5 totals there, so those registry rows stay
 # uncovered and are declared in tests/test_market_fixtures.py.
@@ -1208,14 +1220,81 @@ BETOLE_EXPERIMENTAL = ("first_half_1x2",)
 BETOLE_UNCOVERED = ("double_chance", "over_under_1_5", "over_under_3_5")
 
 
-async def capture_betole(client: httpx.AsyncClient, _bookmaker: str, mode: str) -> None:
-    if mode != "prematch":
-        _skip(
-            "betole", mode,
-            "the registry declares no live rows for this book, so a live capture "
-            "could not satisfy the declared-market invariant without an admissibility "
-            "decision (N2-6 must not make one)",
+async def _capture_betole_live(client: httpx.AsyncClient, desk_url: str) -> None:
+    """Capture one live event's full offer, the payload the adapter prices."""
+    try:
+        response = await client.get(
+            desk_url,
+            headers={"User-Agent": UA, "Accept": "application/json, text/plain, */*"},
+            params={"desktopVersion": "2.47.6.7", "locale": "ba", "from": "0"},
         )
+        response.raise_for_status()
+    except Exception as error:  # noqa: BLE001 - never let a host failure read as drift
+        _skip("betole", "live", f"host unreachable: {type(error).__name__}: {error}")
+        return
+    live = [
+        event
+        for event in (response.json() or {}).get("esMatches") or []
+        if event.get("live") and not event.get("blocked") and event.get("id") is not None
+    ]
+    for event in live:
+        offer = await client.get(
+            BETOLE_BULK,
+            headers={"User-Agent": UA, "Accept": "application/json, text/plain, */*"},
+            params={
+                "annex": "0",
+                "desktopVersion": "2.47.6.10",
+                "locale": "ba",
+                "matchIdsToken": str(event["id"]),
+            },
+        )
+        rows = offer.json() if offer.status_code == 200 else []
+        if not isinstance(rows, list) or not rows:
+            continue
+        odds = rows[0].get("odds") or {}
+        trimmed = {
+            code: odds[code]
+            for codes in BETOLE_LIVE_CODES.values()
+            for code in codes
+            if code in odds
+        }
+        exercised = [
+            family
+            for family, codes in BETOLE_LIVE_CODES.items()
+            if all(_active(odds.get(code)) for code in codes)
+        ]
+        if not exercised:
+            continue
+        _finish(
+            {
+                "bookmaker": "betole",
+                "mode": "live",
+                "captured_at": CAPTURE_DATE,
+                "endpoint": f"{BETOLE_BULK}?matchIdsToken={event['id']}",
+                "source": "live_api_response",
+                "payload_kind": "betole_live_offer_odds",
+                "provenance": (
+                    f"odds{{}} of one live football event (id {event['id']!r}, "
+                    f"{event.get('home')!r} v {event.get('away')!r}) from Betole's "
+                    "full-offer endpoint, the payload the adapter reads in live mode. "
+                    "Trimmed to the live pick codes whose labels were proven against "
+                    "the site's own match page on 2026-11-11 "
+                    "(docs/evidence/2026-11-11-betole-live.md)."
+                ),
+                "dropped_fields": ["all pick codes without a proven live label"],
+                "excluded_ids_present": [],
+                "bets": trimmed,
+                "experimental_markets": [],
+            },
+            exercised,
+        )
+        return
+    _skip("betole", "live", "no live event carried a proven pick-code family")
+
+
+async def capture_betole(client: httpx.AsyncClient, _bookmaker: str, mode: str) -> None:
+    if mode == "live":
+        await _capture_betole_live(client, BETOLE_API)
         return
     url = BETOLE_API
     try:
@@ -1249,8 +1328,8 @@ async def capture_betole(client: httpx.AsyncClient, _bookmaker: str, mode: str) 
                     f"{event.get('home')!r} v {event.get('away')!r}) from the live Betole "
                     "desk feed, trimmed to the pick codes the prematch desk actually serves "
                     "for 1X2, BTTS, the 2.5 total and the experimental first-half 1X2. "
-                    "The prematch desk carries no double chance or 1.5/3.5 totals, and the "
-                    "registry declares no live rows for this book."
+                    "The prematch desk carries no double chance or 1.5/3.5 totals; the "
+                    "live capture exercises those families from the full-offer payload."
                 ),
                 "dropped_fields": ["all unregistered pick codes"],
                 "excluded_ids_present": [],
@@ -1283,7 +1362,7 @@ CAPTORS = {
 }
 BOTH_MODES = {
     "mdshop", "admiralbet", "wwin", "premier_kladionica",
-    "mbet", "sportplus", "mozzartbet", "maxbet",
+    "mbet", "sportplus", "mozzartbet", "maxbet", "betole",
 }
 
 

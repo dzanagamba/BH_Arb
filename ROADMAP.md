@@ -417,7 +417,7 @@ Tests: `tests/test_ci_hardening.py`.
 
 ### SR8-1 Live Mozzartbet and Betole parse to zero matches
 
-Status: Not started
+Status: In progress (2026-11-11)
 
 Why: in the 2026-11-11 live scan Mozzartbet (6 requests, 0.74 MB) and Betole
 (5 requests, 2.1 MB) answered but yielded 0 matches (`kind: empty`), and both
@@ -436,10 +436,38 @@ Steps:
 3. Do not widen schemas blindly: a renamed field stays `schema_drift`.
 
 Acceptance:
-- [ ] A dated capture per book in `docs/evidence/`.
+- [x] A dated capture per book in `docs/evidence/`.
 - [ ] Either each book parses its live events (measured match count, before →
       after on the same probe) or a dated proof shows the feed was empty.
-- [ ] A fixture-based test per fixed adapter pins the live parse.
+- [x] A fixture-based test per fixed adapter pins the live parse.
+
+**SR8-1 progress (2026-11-11).** Evidence:
+`docs/evidence/2026-11-11-sr8-1-live.md`.
+
+*Betole — fixed.* The live desk has 1,034 events, 76 live, with the prematch
+pick-code shape; `config/bookmaker_markets.json` had `"live": {}`, so every
+code was unmapped. Three live fixtures were opened on the site's own
+`/match-special/{id}` pages and every displayed price was matched to the
+full-offer payload the page loaded: 1/2/3 = 1/X/2, 7/8/9 = 1X/12/X2, 272/273 =
+GG/NG, and the 1.5–5.5 pairs exactly as prematch (52 of 54 sampled pairs exact;
+the two misses were `1.00`, shown as “no price”). Only those proven codes were
+added as live rows. The capture tool gained a live branch and
+`tests/fixtures/markets/betole_live.json` (full-offer payload); the live scraper
+now parses **76 matches, was 0** (1x2 75, DC 76, BTTS 74, O/U 2.5 76, 3.5 76,
+1.5 73, 4.5 67, 5.5 39).
+
+*Mozzartbet — transport blocker, needs a scope decision.* The adapter's HTTP
+path (`POST /betting/matches` with `date:"live"`, from the prematch page) returns
+14 items, all in the future, so `_is_in_play` correctly drops them. The site's
+own `/sr/uzivo/sport/all` page does not read live data over HTTP at all: it opens
+`wss://www.mozzartbet.ba/socket.io/?EIO=3` and receives `livematches` (odds maps
+keyed by odd type id), `sr_live_<sport>` (the market catalogue) and
+`streamPbpList` frames. Six HTTP candidates were tried in the page session; only
+`/betting/matches` answers a JSON list and none carries an in-play item. A fix means a
+Socket.IO snapshot collector with captured frames, strict schemas and fail-closed
+behaviour — a transport change of its own scope, not a filter or mapping fix.
+The row stays open until the operator decides whether to build it or accept a
+dated limitation.
 
 Tests: `tests/test_wire_schemas_mozzartbet.py`, `tests/test_wire_schemas_betole.py`
 or the adapter's live test file; snapshot tests if the output changes.

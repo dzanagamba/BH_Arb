@@ -1567,7 +1567,98 @@
         "settlement": "full_time"
       }
     },
-    "live": {}
+    "live": {
+      "1x2": {
+        "ids": [
+          1,
+          2,
+          3
+        ],
+        "labels": [
+          "1",
+          "X",
+          "2"
+        ],
+        "min_legs": 3,
+        "settlement": "full_time"
+      },
+      "double_chance": {
+        "ids": [
+          7,
+          8,
+          9
+        ],
+        "labels": [
+          "1X",
+          "12",
+          "X2"
+        ],
+        "min_legs": 2,
+        "settlement": "full_time"
+      },
+      "btts": {
+        "ids": [
+          272,
+          273
+        ],
+        "labels": [
+          "GG",
+          "NG"
+        ],
+        "min_legs": 2,
+        "settlement": "full_time"
+      },
+      "over_under_1_5": {
+        "ids": [
+          242,
+          21
+        ],
+        "line": 1.5,
+        "min_legs": 2
+      },
+      "over_under_2_5": {
+        "ids": [
+          24,
+          22
+        ],
+        "line": 2.5,
+        "min_legs": 2
+      },
+      "over_under_3_5": {
+        "ids": [
+          25,
+          219
+        ],
+        "line": 3.5,
+        "min_legs": 2
+      },
+      "over_under_4_5": {
+        "ids": [
+          27,
+          453
+        ],
+        "labels": [
+          "Over 4.5",
+          "Under 4.5"
+        ],
+        "line": 4.5,
+        "min_legs": 2,
+        "settlement": "full_time"
+      },
+      "over_under_5_5": {
+        "ids": [
+          223,
+          266
+        ],
+        "labels": [
+          "Over 5.5",
+          "Under 5.5"
+        ],
+        "line": 5.5,
+        "min_legs": 2,
+        "settlement": "full_time"
+      }
+    }
   },
   "mozzartbet": {
     "prematch": {

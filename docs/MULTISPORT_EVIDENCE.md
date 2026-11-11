@@ -290,10 +290,17 @@ types; the new fields default to `football` / `full_time`.
   not observed (no in-play events during measurement), so the parser refuses to
   guess. SportPlus, MBet and MaxBet provide the live non-football path.
 - **Premier, Mozzartbet, WWIN, Betole non-football**: blockers in §1.
-- **Betole live pick codes**: the live desk returns the same pick-code shape as
-  prematch, but no live registry row is proven and the feed's live detail is not
-  exposed. Every live code is therefore recorded in `unmapped_markets`; the
-  parser prices nothing from it. This is a diagnostics gap, not a surebet source.
+- **Betole live pick codes** (resolved 2026-11-11, SR8-1): the live desk returns
+  the same pick-code shape as prematch. The 2026-11-04 pass proved no live label;
+  the 2026-11-11 pass opened three live fixtures on the site's own
+  `/match-special/{id}` pages and matched every displayed price to the full-offer
+  payload: codes 1/2/3 are 1/X/2, 7/8/9 are 1X/12/X2, 272/273 are GG/NG and the
+  1.5–5.5 pairs map exactly as prematch (52 of 54 sampled code/price pairs matched
+  exactly; the two misses were `1.00`, which the site shows as no price). The
+  registry now has Betole live rows for those proven codes only
+  (`config/bookmaker_markets.json`), and the live scrape parses 76 matches from
+  that day's desk (was 0). Evidence:
+  `docs/evidence/2026-11-11-sr8-1-live.md`.
 - **NSoft live extension IDs**: the 2026-11-04 live scan observed IDs 110, 74,
   86, 124, 125 and similar in the football feed. They are not in the registry and
   are recorded unmapped. They were not admitted because no label/structure and
