@@ -12,8 +12,9 @@ SR7-1 and SR7-2 are done.
 feed). Every other `Not started` row is `Gate: operator`; the roadmap is the
 single task list in `ROADMAP.md`, N2-4 stays deferred and P1-6 stays waived
 until the operator says otherwise.
-**Last task commit:** `0f0d143` — "give feed tabs a tab contract and shrink the
-slip live region (M5-7)", pushed to `origin/main` on 2026-11-11, after
+**Last task commit:** `22519bd` — "enable branch coverage with a measured floor
+(M6-1)", pushed to `origin/main` on 2026-11-11, after `0f0d143` (feed-tab ARIA
+and the slip live region, M5-7),
 `a7ad653` (zero-match diagnostic, M5-6), `3d805db` (PWA icons/alerts, M5-5),
 `19a2405` (retire the raw market resolver, M5-4), `ecd3f0d` (delete the human
 approval path, M5-3), `4d7efa3` (remove the `link_sweeps` SQLite store, M5-2),
