@@ -52,7 +52,7 @@ def test_json_history_and_decisions_migrate_with_matching_counts(tmp_path):
     counts = storage.migrate_json(history_path=str(history), decisions_path=str(decisions))
 
     assert counts == {"scans": 3, "decisions": 2}
-    assert storage.counts() == {"scans": 3, "decisions": 2, "link_sweeps": 0}
+    assert storage.counts() == {"scans": 3, "decisions": 2}
     assert storage.decisions() == {"a": "approved", "b": "rejected"}
     assert storage.decision_premises() == {"a": "link_unverified"}
 

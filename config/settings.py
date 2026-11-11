@@ -208,7 +208,6 @@ CLOSING_CAPTURE_CUTOFF_MINUTES = int(os.getenv("CLOSING_CAPTURE_CUTOFF_MINUTES",
 # back up. Bets are never deleted by default; only settled rows past the archive
 # window are copied to a dated archive file.
 RETENTION_SCANS_DAYS = int(os.getenv("RETENTION_SCANS_DAYS", "90"))
-RETENTION_LINK_SWEEPS_DAYS = int(os.getenv("RETENTION_LINK_SWEEPS_DAYS", "90"))
 RETENTION_PAPER_DAYS = int(os.getenv("RETENTION_PAPER_DAYS", "180"))
 # The row cap is the second bound: a busy paper ledger is trimmed oldest-first
 # even when it is inside the date window.

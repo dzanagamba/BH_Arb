@@ -11,7 +11,6 @@ compatibility exports and the rollback path.
 | `meta` | Schema version and one-shot migration markers. |
 | `scans` | One row per completed scan: mode, time, matches, groups, surebets, per-book counts, errors, candidate queue/actionable counts. Indexed by `scan_time` and `(mode, scan_time)`. |
 | `decisions` | Candidate id, decision, premise, decided time. |
-| `link_sweeps` | Completed sweep reports (payload JSON) for later history queries. |
 
 SQLite runs in WAL mode with `synchronous=NORMAL`. `server/sqlite_store.py` is
 the one connection helper: every store and the maintenance runner open this file
@@ -59,7 +58,7 @@ which cost 44 MB and put the operator's ledger over
 | `cache/last_scan.json`, `cache/last_live_scan.json` | compact JSON | `_load_cache` → `/api/status`, `/api/surebets`, `/api/matches`, health; diagnostics read the same payload |
 | `cache/opportunity_metrics.json` | compact JSON (aggregates and bounded crossing keys, never the full board) | `/api/health`, `scripts/opportunity_baseline.py` |
 | `cache/coverage_budget.json`, `cache/feed_integrity.json`, `cache/scan_cost.json`, `cache/stale_price_state.json` | compact JSON | health diagnostics and alerting; never a trust input |
-| `cache/suppressed_candidates.json`, `cache/link_sweeps.json` | indented JSON, small and human-inspectable | decision restore / review tab, sweep history |
+| `cache/suppressed_candidates.json`, `cache/link_sweeps.json` | indented JSON, small and human-inspectable | decision restore / review tab, sweep history (capped at 200; the SQLite `link_sweeps` table was removed in M5-2) |
 | `config/generated/mapping_evidence.json` | **compact JSON since M2-5** | `MappingLedger.load()` (gate, learner, replay), `engine/league_resolver.py` (`detail["teams"]`), `candidate_remediation` / `mapping_coverage` (evidence types), `scripts/generate_market_registry.py` (last evidence detail), maintenance prune and health bytes |
 | `cache/bh_arb.sqlite3` | compact payloads in normalized tables | `/api/history`, paper/bet/CLV endpoints, maintenance |
 
@@ -85,7 +84,6 @@ Every runtime store now has a configured window in `config/settings.py`:
 | Store | Window | Behaviour |
 |---|---|---|
 | `scans` | `RETENTION_SCANS_DAYS` (90) | Rows older than the window are deleted. |
-| `link_sweeps` | `RETENTION_LINK_SWEEPS_DAYS` (90) | Rows older than the window are deleted. |
 | `recorded_opportunities` | `RETENTION_PAPER_DAYS` (180) | Old rows are deleted, then the newest `RETENTION_PAPER_MAX_ROWS` rows are kept. |
 | `paper_positions` | `RETENTION_PAPER_DAYS` (180) | Same age and row-cap rule as recorded opportunities. |
 | `bets` | never deleted | Settled rows older than `RETENTION_BETS_ARCHIVE_DAYS` (365) are copied to `cache/archives/bets-YYYY-MM-DD.json`; the database row stays. |

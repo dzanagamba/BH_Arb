@@ -178,7 +178,7 @@ do not copy stale numbers here.
 | M4-4 | Plan the remaining dependency upgrades | Done | — | operator |
 | M4-5 | Apply the planned dependency upgrades | Done | M4-4 | operator |
 | M5-1 | Remove legacy URL maps | Done | — | operator |
-| M5-2 | Decide the `link_sweeps` table | Not started | — | operator |
+| M5-2 | Decide the `link_sweeps` table | Done | — | operator |
 | M5-3 | Decide approve/reject functions | Not started | — | operator |
 | M5-4 | Decide `raw_market_resolver.resolve_offers` | Not started | — | operator |
 | M5-5 | Finish the PWA | Not started | — | operator |
@@ -3338,17 +3338,38 @@ Acceptance (2026-11-11):
 
 ### M5-2 Decide the `link_sweeps` table
 
-Status: Not started
+Status: Done
 
 Gate: operator
+
+**Decision (2026-11-11, operator: continue with M5): remove.** The sweep report
+has one live store, `cache/link_sweeps.json`, which `POST /api/link-sweeps`
+writes and `GET /api/link-sweeps` reads; it is capped at 200 reports. The SQLite
+`link_sweeps` table has no writer in the app — only `Storage.append_link_sweep()`
+and its tests — so wiring it would create a second history with a second
+retention rule. Remove the table from the schema, the method, the retention
+entry and the maintenance inventory, and keep the JSON store.
 
 Why / what: Decide the `link_sweeps` SQLite table: wire `append_link_sweep()`
 into `POST /api/link-sweeps`, or remove the table/method/retention entry and
 correct `docs/STORAGE.md`.
 
-Acceptance:
-- [ ] Operator approval recorded here.
-- [ ] Acceptance criteria written here before coding.
+**Outcome (2026-11-11).** Removed the SQLite `link_sweeps` table from the
+schema, `Storage.append_link_sweep()`/`prune_link_sweeps()`, the `counts()` key,
+the maintenance inventory/prune step, the `link_sweeps_days` window and
+`RETENTION_LINK_SWEEPS_DAYS`. `cache/link_sweeps.json` (capped at 200) stays the
+one sweep history for `GET /api/link-sweeps`; `docs/STORAGE.md` records the
+removal. Maintenance and migration tests were updated.
+
+Acceptance (2026-11-11):
+- [x] `Storage.initialize()` no longer creates `link_sweeps`; the append/prune
+      methods and the `counts()` key are gone.
+- [x] `server/maintenance.py` no longer inventories or prunes the table and the
+      retention report drops `link_sweeps_days`; `RETENTION_LINK_SWEEPS_DAYS` is
+      removed from settings.
+- [x] Maintenance and migration tests are updated; the JSON sweep store and its
+      API tests are unchanged.
+- [x] `docs/STORAGE.md` and the full suite/checks agree.
 
 ### M5-3 Decide approve/reject functions
 
@@ -3730,3 +3751,4 @@ Useful starting points:
 | 2026-11-09 | M4-4 | Done | Wrote **`docs/DEPENDENCY_UPGRADES.md`**, a plan-only row: no pin moved. Measured a throwaway venv (`/tmp/opencode/m44-venv`) with `fastapi==0.162.2`, `starlette==1.10.0`, `mypy==2.4.1`, `ruff==0.17.4` and `httpx2==2.16.0`: full suite green (2,389 collected, exit 0, 17 snapshots, 1 m 50 s, no test change); mypy 2.4.1 reports one `refresh_fixtures.py:212` assignment error; ruff 0.17.4 reports three `UP042` `str, Enum` findings (`MarketType`, `Sport`, `ScrapeKind`); `httpx2` removes the live `StarletteDeprecationWarning` and Starlette resolves it for `TestClient`. The plan splits U4 `httpx2` (dev-only), U1 FastAPI, U2 MyPy (one annotation), U3 Ruff (`StrEnum` with JSON/label assertions), each with steps, acceptance and rollback; `httpx` stays runtime, pydantic/uvicorn stay out of scope. Working tree verification: `pytest` 2,377 passed, 12 skipped (17 snapshots) in 113.82 s; ruff clean; mypy 290 files clean; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. |
 | 2026-11-11 | M4-5 | Done | Applied the four M4-4 upgrades as separate commits: **U4** `httpx2==2.16.0` dev-only (runtime lock keeps `httpx==0.28.1`; `starlette.testclient` resolves httpx2, deprecation warning gone; 2 new lock tests), **U1** FastAPI 0.162.2 with Starlette 1.10.0 and no app/test edit, **U2** mypy 2.4.1 with one `dict[str, Any]` annotation in `scripts/refresh_fixtures.py`, **U3** ruff 0.17.4 with `MarketType`/`Sport`/`ScrapeKind` as `StrEnum` (3 new value-string tests in `tests/test_enum_values.py`, no rule ignored). `docs/DEPENDENCY_UPGRADES.md` records the applied set. `pytest`: 2,382 passed, 12 skipped (17 snapshots) in 108.71 s, no warning line; ruff clean; mypy 291 files clean; market doc in sync; refresh_fixtures, audit_admissibility and lock `--check` exit 0. |
 | 2026-11-11 | M5-1 | Done | Removed the legacy URL maps: `Surebet.match_urls`, `Surebet.bet_urls`, `Match.bet_url`, `MATCH_URL_TEMPLATES` and `_collect_match_urls`/`_collect_bet_urls`. `SurebetStake.destination` stays the only served destination path; `Match.url` stays. `tests/test_urls.py` keeps only the two parser URL tests. `pytest`: 2,378 passed, 12 skipped (17 snapshots) in 106.61 s; ruff and mypy clean. |
+| 2026-11-11 | M5-2 | Done | Removed the unused SQLite `link_sweeps` store: table creation, `Storage.append_link_sweep()`/`prune_link_sweeps()`, the `counts()` key, the maintenance inventory/prune step and window, and `RETENTION_LINK_SWEEPS_DAYS`. `cache/link_sweeps.json` (cap 200) stays the one sweep history; `docs/STORAGE.md` and the maintenance/migration tests were updated. `pytest`: 2,378 passed, 12 skipped (17 snapshots) in 108.48 s; ruff and mypy clean. |

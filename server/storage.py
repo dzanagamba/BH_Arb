@@ -68,14 +68,6 @@ class Storage:
                     premise TEXT NOT NULL DEFAULT '',
                     decided_at TEXT NOT NULL
                 );
-                CREATE TABLE IF NOT EXISTS link_sweeps (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    bookmaker TEXT NOT NULL,
-                    mode TEXT NOT NULL,
-                    ended_at TEXT NOT NULL,
-                    status TEXT NOT NULL,
-                    payload TEXT NOT NULL
-                );
                 """
             )
             connection.execute(
@@ -248,35 +240,16 @@ class Storage:
             ).fetchall()
         return {row["candidate_id"]: row["premise"] for row in rows}
 
-    def append_link_sweep(self, report: dict[str, Any]) -> None:
-        with self._connect() as connection:
-            with connection:
-                connection.execute(
-                    """
-                    INSERT INTO link_sweeps(bookmaker, mode, ended_at, status, payload)
-                    VALUES (?, ?, ?, ?, ?)
-                    """,
-                    (
-                        str(report.get("bookmaker") or ""),
-                        str(report.get("mode") or "prematch"),
-                        str(report.get("ended_at") or ""),
-                        str(report.get("status") or ""),
-                        json.dumps(report, sort_keys=True),
-                    ),
-                )
-
     def counts(self) -> dict[str, int]:
         with self._connect() as connection:
             row = connection.execute(
                 "SELECT "
                 "(SELECT COUNT(*) FROM scans) AS scans, "
-                "(SELECT COUNT(*) FROM decisions) AS decisions, "
-                "(SELECT COUNT(*) FROM link_sweeps) AS link_sweeps"
+                "(SELECT COUNT(*) FROM decisions) AS decisions"
             ).fetchone()
         return {
             "scans": int(row["scans"]),
             "decisions": int(row["decisions"]),
-            "link_sweeps": int(row["link_sweeps"]),
         }
 
     def prune_scans(self, *, days: int = 90, dry_run: bool = False) -> int:
@@ -295,27 +268,6 @@ class Storage:
                 with connection:
                     cursor = connection.execute(
                         "DELETE FROM scans WHERE scan_time < ?", (cutoff,)
-                    )
-                    return int(cursor.rowcount or 0)
-        except sqlite3.Error:
-            return 0
-
-    def prune_link_sweeps(self, *, days: int = 90, dry_run: bool = False) -> int:
-        """Delete link-sweep rows older than ``days``; a dry run only counts."""
-        if not Path(self.path).exists():
-            return 0
-        cutoff = (utcnow() - timedelta(days=days)).isoformat()
-        try:
-            if dry_run:
-                with self._connect_readonly() as connection:
-                    row = connection.execute(
-                        "SELECT COUNT(*) FROM link_sweeps WHERE ended_at < ?", (cutoff,)
-                    ).fetchone()
-                return int(row[0] or 0)
-            with self._connect() as connection:
-                with connection:
-                    cursor = connection.execute(
-                        "DELETE FROM link_sweeps WHERE ended_at < ?", (cutoff,)
                     )
                     return int(cursor.rowcount or 0)
         except sqlite3.Error:

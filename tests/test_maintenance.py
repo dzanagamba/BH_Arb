@@ -66,23 +66,6 @@ def _seed(path: Path, now: datetime) -> dict[str, str]:
     storage.initialize()
     storage.append_scan(_scan("prematch", now - timedelta(days=120), matches=11))
     storage.append_scan(_scan("prematch", now - timedelta(days=10), matches=22))
-    storage.append_link_sweep(
-        {
-            "bookmaker": "mbet",
-            "mode": "prematch",
-            "ended_at": (now - timedelta(days=120)).isoformat(timespec="seconds"),
-            "status": "ok",
-        }
-    )
-    storage.append_link_sweep(
-        {
-            "bookmaker": "mbet",
-            "mode": "prematch",
-            "ended_at": (now - timedelta(days=10)).isoformat(timespec="seconds"),
-            "status": "ok",
-        }
-    )
-
     paper = PaperStore(str(path))
     paper.initialize()
     with paper._connect() as connection:
@@ -186,11 +169,10 @@ def test_old_rows_are_pruned_and_recent_rows_are_retained(tmp_path):
 
     assert report["ok"] is True
     assert report["dry_run"] is False
-    assert report["pruned"] == {"scans": 1, "link_sweeps": 1}
+    assert report["pruned"] == {"scans": 1}
     assert report["paper"]["recorded_opportunities"] == 1
     assert report["paper"]["paper_positions"] == 1
     assert _row_count(db_path, "scans") == 1
-    assert _row_count(db_path, "link_sweeps") == 1
     assert _row_count(db_path, "recorded_opportunities") == 1
     assert _row_count(db_path, "paper_positions") == 1
 
@@ -253,7 +235,7 @@ def test_dry_run_changes_nothing_and_reports_the_counts(tmp_path):
 
     assert report["ok"] is True
     assert report["dry_run"] is True
-    assert report["pruned"] == {"scans": 1, "link_sweeps": 1}
+    assert report["pruned"] == {"scans": 1}
     assert report["paper"]["recorded_opportunities"] == 1
     assert report["paper"]["paper_positions"] == 1
     assert report["bets"]["rows"] == 1
@@ -261,7 +243,6 @@ def test_dry_run_changes_nothing_and_reports_the_counts(tmp_path):
 
     # Nothing was pruned, archived, backed up, vacuumed or marked.
     assert _row_count(db_path, "scans") == 2
-    assert _row_count(db_path, "link_sweeps") == 2
     assert _row_count(db_path, "recorded_opportunities") == 2
     assert _row_count(db_path, "paper_positions") == 2
     assert _row_count(db_path, "bets") == 2

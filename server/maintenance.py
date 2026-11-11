@@ -45,13 +45,11 @@ _MAINTENANCE_ACTIVE = threading.Event()
 _TABLES = (
     "scans",
     "decisions",
-    "link_sweeps",
     "bets",
     "recorded_opportunities",
     "paper_positions",
 )
 _PAYLOAD_TABLES = {
-    "link_sweeps",
     "bets",
     "recorded_opportunities",
     "paper_positions",
@@ -152,7 +150,6 @@ def _table_inventory(path: Path) -> tuple[dict[str, dict[str, int]], dict[str, A
 def _windows() -> dict[str, Any]:
     return {
         "scans_days": settings.RETENTION_SCANS_DAYS,
-        "link_sweeps_days": settings.RETENTION_LINK_SWEEPS_DAYS,
         "paper_days": settings.RETENTION_PAPER_DAYS,
         "paper_max_rows": settings.RETENTION_PAPER_MAX_ROWS,
         "bets": "never deleted; settled rows older than "
@@ -406,9 +403,6 @@ def run_maintenance(
         pruned = {
             "scans": storage.prune_scans(
                 days=settings.RETENTION_SCANS_DAYS, dry_run=dry_run
-            ),
-            "link_sweeps": storage.prune_link_sweeps(
-                days=settings.RETENTION_LINK_SWEEPS_DAYS, dry_run=dry_run
             ),
         }
         paper_pruned = paper.prune(
