@@ -1,11 +1,11 @@
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Literal
 
 from pydantic import BaseModel
 
 
-class MarketType(str, Enum):
+class MarketType(StrEnum):
     MATCH_RESULT = "1x2"
     OVER_UNDER_1_5 = "over_under_1_5"
     OVER_UNDER_2_5 = "over_under_2_5"
@@ -28,7 +28,7 @@ class MarketType(str, Enum):
     TOTAL = "total"                  # line-embedded: "Over 221.5" / "Under 221.5"
 
 
-class Sport(str, Enum):
+class Sport(StrEnum):
     """Canonical sport identity. The value is persisted in the cache and API."""
 
     FOOTBALL = "football"

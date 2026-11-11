@@ -12,7 +12,7 @@ bucket so existing health fields and dashboards keep working.
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 import httpx
@@ -21,7 +21,7 @@ from playwright.async_api import Error as PlaywrightError
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
 
-class ScrapeKind(str, Enum):
+class ScrapeKind(StrEnum):
     """The outcome of one book's scrape attempt."""
 
     OK = "ok"
