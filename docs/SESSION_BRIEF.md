@@ -5,9 +5,8 @@
 model; work `ROADMAP.md` top to bottom.
 **Current row:** none in progress. SR9-2 is Done (MaxBet ticket both modes,
 WWIN live match page, dated "no URL" proofs for SportPlus and Premier).
-**Last commit:** "docs: refresh README, roadmap and docs; read the coverage floor
-(M6-2)" on `origin/main` (2026-11-11). `git log -1` has the hash; this session's
-changes are uncommitted.
+**Last commit:** `1e69a29` "feat: fill a MaxBet ticket and open WWIN live from a
+leg (SR9-2)" on `origin/main` (2026-11-11). `git log -1` has the hash.
 
 ## Project state
 
