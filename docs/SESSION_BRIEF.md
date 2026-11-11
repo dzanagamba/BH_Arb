@@ -3,10 +3,11 @@
 **Updated:** 2026-11-11
 **Goal:** keep the scanner correct and current without weakening the trust
 model; work `ROADMAP.md` top to bottom.
-**Current row:** none in progress. SR9-1 and M6-2 are Done.
+**Current row:** none in progress. SR9-2 is Done (MaxBet ticket both modes,
+WWIN live match page, dated "no URL" proofs for SportPlus and Premier).
 **Last commit:** "docs: refresh README, roadmap and docs; read the coverage floor
-(M6-2)" on `origin/main` (2026-11-11), after `5a4b8fe` (SR9-1). `git log -1`
-has the hash.
+(M6-2)" on `origin/main` (2026-11-11). `git log -1` has the hash; this session's
+changes are uncommitted.
 
 ## Project state
 
@@ -16,31 +17,29 @@ has the hash.
   prematch 6,921 matches / 1,359 verified groups / 20 surebets in 139.0 s, all
   nine enabled books `ok`; live 183 / 27 / 1 in 29.1 s, Mozzartbet and Betole
   `empty`. EVLBet disabled.
-- **Verification baseline (2026-11-11, clean ledger mode):** `pytest` 2,378 passed,
-  12 skipped in 136 s, 0 failed (M6-2 fixed). Ruff clean, mypy 291 files clean,
-  market doc / refresh_fixtures / audit_admissibility `--check` exit 0.
+- **Destinations now:** `ticket_filled` 6 of 18 cells (MDShop, Admiralbet,
+  MaxBet prematch+live), `match_page` 6 (Mozzartbet prematch, Betole prematch,
+  MBet both, WWIN prematch+live), generic 6 (SportPlus 2, Premier 2,
+  Mozzartbet live, Betole live). Evidence:
+  `docs/evidence/2026-11-11-sr9-2.md`.
+- **Verification baseline (2026-11-11, this session):** `pytest` 2,385 passed,
+  12 skipped in 117.30 s, 0 failed. Ruff clean, mypy 291 files clean, market
+  doc / refresh_fixtures / audit_admissibility `--check` exit 0.
 - Branch coverage floor `fail_under = 87.05` (measured 88.05 %, M6-1); CI's 3.11
   leg enforces it and runs both ledger modes.
 - **Production-readiness checklist** (`ROADMAP.md`): met — prematch book
   coverage, cold replay (0 false merges), certified e2e, no trust-changing
-  path, auth, green suite. Not met — leg links (SR9, 7 of 18 still fallback),
+  path, auth, green suite. Not met — leg links (SR9, 6 of 18 still generic),
   live Mozzartbet/Betole (SR8-1), mapping coverage (SR8-3), 26 price-check
   outliers / 5,622 (M8-1), and the multi-day / 24 h evidence that N2-4 and
   P1-6 (operator) would provide.
 
 ## Next action
 
-**Operator priority 1 (2026-11-11): SR9 — every surebet leg must open the exact
-match or a filled ticket.** SR9-1 is done (`docs/evidence/2026-11-11-destinations.md`:
-ticket 4, match page 7, fallback 7 of 18). Next is **SR9-2**: the MaxBet filled
-ticket first (`?outcome=<id>` is proven; the adapter must keep each outcome's
-`id`), then the Mozzartbet live id, then SportPlus, Premier and WWIN live (needs
-an operator click); then SR9-3 and SR9-4. Never log in or submit a ticket.
-
-After SR9: SR8-1 (live Mozzartbet and Betole parse to zero matches), SR8-4
-(`record_scan.py` restores state), SR8-2 (drift-alarm noise), M8-1 (refresh
-`docs/PRODUCTION_READINESS.md`). SR8-3 needs an operator choice (A/B/C), and
-N2-4/P1-6 block readiness criteria 2 and 8 — ask the operator.
+**SR9-3** (on-demand browser check of a served surebet's leg links), then
+**SR8-1** (live Mozzartbet and Betole parse to zero matches), which also
+unblocks the Mozzartbet live destination id. Then SR9-4 (gated), SR8-4, SR8-2,
+M8-1.
 
 ## Blockers and standing decisions
 

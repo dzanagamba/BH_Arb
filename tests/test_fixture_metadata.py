@@ -112,7 +112,7 @@ def test_backfill_marks_a_git_timestamp_and_never_rewrites_the_capture_date(
     source = FIXTURE_DIR / "maxbet_prematch.json"
     data = _capture(source)
     for key in (*METADATA_KEYS, "recorded_at_commit", "metadata_backfilled"):
-        data.pop(key)
+        data.pop(key, None)
     fixture = fixture_dir / source.name
     fixture.write_text(
         json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
@@ -144,7 +144,7 @@ def test_backfill_uses_the_capture_date_when_git_is_unavailable(tmp_path, monkey
     source = FIXTURE_DIR / "maxbet_prematch.json"
     data = _capture(source)
     for key in (*METADATA_KEYS, "recorded_at_commit", "metadata_backfilled"):
-        data.pop(key)
+        data.pop(key, None)
     fixture = fixture_dir / source.name
     fixture.write_text(
         json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"

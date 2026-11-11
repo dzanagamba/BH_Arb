@@ -1,13 +1,20 @@
 """MaxBet: which events and odds reach the matcher, and in what shape.
 
 Payload shapes are the ones the live /sportsbook/rest/v2/matches feed served on
-2026-10-27 (see tests/fixtures/markets/maxbet_*.json for captured ones).
+2026-10-27, plus the 2026-11-11 re-capture that keeps each outcome's row ``id``
+(see tests/fixtures/markets/maxbet_*.json for captured ones).
 """
 
+import json
 from datetime import datetime
+from pathlib import Path
+
+import pytest
 
 from models.schemas import MarketType
 from scrapers.maxbet import MaxBetScraper, parse_maxbet_odds
+
+FIXTURE = Path(__file__).parent / "fixtures" / "markets"
 
 
 def _outcome(outcome_id: str, label: str, value: float, status: int = 0) -> dict:
@@ -66,6 +73,54 @@ def test_an_outcome_whose_text_contradicts_its_id_is_not_trusted():
     swapped = _1x2()
     swapped["outcomes"][0]["outcome"] = "2"
     assert parse_maxbet_odds([swapped]) == []
+
+
+def test_each_open_outcome_keeps_its_own_row_id_for_the_ticket():
+    """SR9-2: ``?outcome=`` needs ``outcomes[].id``, not the ``outcomeId`` type."""
+    one_x_two = _1x2()
+    for row, row_id in zip(one_x_two["outcomes"], (146730861, 146730862, 146730863), strict=True):
+        row["id"] = row_id
+    total = _total("2.5", 1.8, 2.0)
+    for row, row_id in zip(total["outcomes"], (147294042, 147294040), strict=True):
+        row["id"] = row_id
+
+    by_type = {market.market_type: market for market in parse_maxbet_odds([one_x_two, total])}
+
+    assert by_type[MarketType.MATCH_RESULT].outcome_ids == {
+        "1": "146730861",
+        "X": "146730862",
+        "2": "146730863",
+    }
+    # The label a total carries is the parser's ("Over 2.5"), and the id moves
+    # with it.
+    assert by_type[MarketType.OVER_UNDER_2_5].outcome_ids == {
+        "Under 2.5": "147294042",
+        "Over 2.5": "147294040",
+    }
+
+
+def test_a_payload_without_row_ids_still_parses_and_leaves_the_ticket_unset():
+    """A feed without ``id`` still prices; only the slip route is lost, never guessed."""
+    [market] = parse_maxbet_odds([_1x2()])
+    assert market.outcome_ids == {}
+    assert {odd.label for odd in market.odds} == {"1", "X", "2"}
+
+
+@pytest.mark.parametrize("mode", ["prematch", "live"])
+def test_the_dated_capture_carries_each_row_id_the_ticket_needs(mode):
+    capture = json.loads((FIXTURE / f"maxbet_{mode}.json").read_text(encoding="utf-8"))
+    raw_ids: dict[str, set[str]] = {}
+    for block in capture["bets"]:
+        raw_ids.setdefault(str(block["id"]), set()).update(
+            str(outcome["id"]) for outcome in block["outcomes"]
+        )
+
+    markets = parse_maxbet_odds(capture["bets"], mode=mode)
+
+    assert markets
+    for market in markets:
+        assert set(market.outcome_ids) == {odd.label for odd in market.odds}
+        assert set(market.outcome_ids.values()) <= raw_ids[market.source_id]
 
 
 def test_parse_events_builds_a_match_with_identity_and_link_fields():

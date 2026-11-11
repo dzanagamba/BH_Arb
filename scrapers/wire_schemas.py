@@ -1159,12 +1159,18 @@ class MaxbetSpecifiers(BaseModel):
 
 
 class MaxbetOutcome(BaseModel):
-    """One price row. ``oddValue`` is nullable but the key must be present."""
+    """One price row. ``oddValue`` is nullable but the key must be present.
+
+    ``outcomeId`` names the outcome *type* (``1001`` = home win); ``id`` is this
+    row's own id and is what ``?outcome=<id>`` needs to prefill the slip. The
+    list feed carries both; a capture that trims ``id`` cannot fill a ticket.
+    """
 
     model_config = MODEL_CONFIG
 
     outcome: str
     outcomeId: str
+    id: int | None = None
     status: int
     oddValue: float | None
     marketAvailableForBetting: bool | None

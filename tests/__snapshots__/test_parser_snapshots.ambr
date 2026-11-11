@@ -308,11 +308,11 @@
       'odds': list([
         dict({
           'label': 'Under 1.5',
-          'value': 8.0,
+          'value': 5.5,
         }),
         dict({
           'label': 'Over 1.5',
-          'value': 1.05,
+          'value': 1.11111,
         }),
       ]),
       'period': 'full_time',
@@ -323,11 +323,11 @@
       'odds': list([
         dict({
           'label': 'Under 2.5',
-          'value': 3.0,
+          'value': 2.2,
         }),
         dict({
           'label': 'Over 2.5',
-          'value': 1.33333,
+          'value': 1.6,
         }),
       ]),
       'period': 'full_time',
@@ -338,11 +338,11 @@
       'odds': list([
         dict({
           'label': 'Under 3.5',
-          'value': 1.6,
+          'value': 1.33333,
         }),
         dict({
           'label': 'Over 3.5',
-          'value': 2.2,
+          'value': 3.0,
         }),
       ]),
       'period': 'full_time',
@@ -353,15 +353,15 @@
       'odds': list([
         dict({
           'label': '1',
-          'value': 1.13,
+          'value': 1.08,
         }),
         dict({
           'label': 'X',
-          'value': 7.25,
+          'value': 8.0,
         }),
         dict({
           'label': '2',
-          'value': 15.0,
+          'value': 26.0,
         }),
       ]),
       'period': 'full_time',
@@ -372,15 +372,15 @@
       'odds': list([
         dict({
           'label': '1X',
-          'value': 1.02,
+          'value': 1.01,
         }),
         dict({
           'label': '12',
-          'value': 1.07,
+          'value': 1.06,
         }),
         dict({
           'label': 'X2',
-          'value': 5.4,
+          'value': 6.75,
         }),
       ]),
       'period': 'full_time',
@@ -391,26 +391,11 @@
       'odds': list([
         dict({
           'label': 'GG',
-          'value': 1.76,
+          'value': 2.25,
         }),
         dict({
           'label': 'NG',
-          'value': 1.86,
-        }),
-      ]),
-      'period': 'full_time',
-      'settlement': 'full_time',
-    }),
-    dict({
-      'market_type': 'over_under_4_5',
-      'odds': list([
-        dict({
-          'label': 'Under 4.5',
-          'value': 1.2,
-        }),
-        dict({
-          'label': 'Over 4.5',
-          'value': 4.0,
+          'value': 1.52,
         }),
       ]),
       'period': 'full_time',
@@ -425,11 +410,11 @@
       'odds': list([
         dict({
           'label': 'Under 1.5',
-          'value': 4.0,
+          'value': 4.4,
         }),
         dict({
           'label': 'Over 1.5',
-          'value': 1.2,
+          'value': 1.14,
         }),
       ]),
       'period': 'full_time',
@@ -444,7 +429,7 @@
         }),
         dict({
           'label': 'Over 2.5',
-          'value': 1.65,
+          'value': 1.58,
         }),
       ]),
       'period': 'full_time',
@@ -455,11 +440,11 @@
       'odds': list([
         dict({
           'label': 'Under 3.5',
-          'value': 1.4,
+          'value': 1.42,
         }),
         dict({
           'label': 'Over 3.5',
-          'value': 2.75,
+          'value': 2.5,
         }),
       ]),
       'period': 'full_time',
@@ -470,15 +455,15 @@
       'odds': list([
         dict({
           'label': '1',
-          'value': 1.31,
+          'value': 1.55,
         }),
         dict({
           'label': 'X',
-          'value': 4.9,
+          'value': 3.9,
         }),
         dict({
           'label': '2',
-          'value': 8.25,
+          'value': 4.8,
         }),
       ]),
       'period': 'full_time',
@@ -489,15 +474,15 @@
       'odds': list([
         dict({
           'label': '1X',
-          'value': 1.06,
+          'value': 1.13,
         }),
         dict({
           'label': '12',
-          'value': 1.15,
+          'value': 1.19,
         }),
         dict({
           'label': 'X2',
-          'value': 3.2,
+          'value': 2.25,
         }),
       ]),
       'period': 'full_time',
@@ -508,26 +493,11 @@
       'odds': list([
         dict({
           'label': 'GG',
-          'value': 2.0,
+          'value': 1.6,
         }),
         dict({
           'label': 'NG',
-          'value': 1.7,
-        }),
-      ]),
-      'period': 'full_time',
-      'settlement': 'full_time',
-    }),
-    dict({
-      'market_type': 'over_under_4_5',
-      'odds': list([
-        dict({
-          'label': 'Under 4.5',
-          'value': 1.11111,
-        }),
-        dict({
-          'label': 'Over 4.5',
-          'value': 5.5,
+          'value': 2.1,
         }),
       ]),
       'period': 'full_time',

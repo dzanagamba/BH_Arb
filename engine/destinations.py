@@ -261,6 +261,14 @@ def _ticket_items(match: Match, stake: SurebetStake, market_type: MarketType) ->
     return json.dumps([values], separators=(",", ":"))
 
 
+def _outcome_id(match: Match, stake: SurebetStake, market_type: MarketType) -> str:
+    """The book's own outcome id for this leg, when its parser carried one."""
+    market = _find_market(match, market_type, stake.outcome_label)
+    if market is None:
+        return ""
+    return market.outcome_ids.get(stake.outcome_label, "")
+
+
 def _sportplus_prefill_script(
     match: Match, stake: SurebetStake, market_type: MarketType, mode: str
 ) -> tuple[str, str]:
@@ -330,6 +338,7 @@ def _event_values(match: Match, stake: SurebetStake, market_type: MarketType) ->
         "event_id": str(match.event_id or ""),
         "betradar_id": str(match.betradar_id or ""),
         "match_code": str(match.match_code or ""),
+        "outcome_id": _outcome_id(match, stake, market_type),
         "sport_id": sport_id,
         "region_id": region_id,
         "competition_id": competition_id,

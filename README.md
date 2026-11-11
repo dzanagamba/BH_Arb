@@ -174,8 +174,8 @@ POST /api/scan
   browser proof, best first: a **filled ticket** (the book's own slip opens with
   the leg's selection; the stake is never prefilled or submitted), the **match
   page**, or a labelled fallback (the book's search spelling or competition
-  page). On the 2026-11-11 re-check (SR9-1), 4 of the 18 book × mode cells open a
-  filled ticket, 7 the match page and 7 a fallback; the table is in
+  page). On the 2026-11-11 re-check (SR9-1 and SR9-2), 6 of the 18 book × mode
+  cells open a filled ticket, 6 the match page and 6 a fallback; the table is in
   [`docs/DESTINATIONS.md`](docs/DESTINATIONS.md) and the record in
   `config/bookmaker_destinations.json`. A destination never changes the gate.
 - **Installable shell** — the dashboard registers a service worker for the

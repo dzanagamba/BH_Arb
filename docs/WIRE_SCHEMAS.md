@@ -280,9 +280,12 @@ typed part; the event shell stays unmodelled.
 
 - `MaxbetSpecifiers` — `total` and `hcp`; the feed spells lines as strings.
 - `MaxbetOutcome` — `outcome`, `outcomeId`, `status`, `oddValue` (required but
-  nullable) and `marketAvailableForBetting` (required but nullable). A renamed
-  price field or a string price is drift; a null price is kept because the
-  parser already drops it.
+  nullable) and `marketAvailableForBetting` (required but nullable), plus the
+  optional `id` (SR9-2: the row's own id, which `?outcome=<id>` needs to prefill
+  the slip; the 2026-11-11 captures carry it, and an older capture or a feed
+  that omits it stays valid so the book still prices without a slip route). A
+  renamed price field or a string price is drift; a null price is kept because
+  the parser already drops it.
 - `MaxbetMarket` — `id`, `name`, `specifiers` (optional: line-less markets omit
   the key) and `outcomes`.
 

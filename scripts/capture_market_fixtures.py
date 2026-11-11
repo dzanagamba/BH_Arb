@@ -1106,11 +1106,14 @@ async def capture_evlbet(client: httpx.AsyncClient, _bookmaker: str, _mode: str)
 
 MAXBET_API = "https://sportsbook.maxbet.ba/sportsbook/rest/v2/matches"
 MAXBET_MARKET_FIELDS = ("id", "name", "specifiers")
-MAXBET_OUTCOME_FIELDS = ("outcome", "outcomeId", "status", "oddValue", "marketAvailableForBetting")
+# SR9-2: `id` is the per-row id the ticket prefill (`?outcome=`) needs, so the
+# capture keeps it alongside the `outcomeId` type id.
+MAXBET_OUTCOME_FIELDS = ("id", "outcome", "outcomeId", "status", "oddValue", "marketAvailableForBetting")
 MAXBET_PLAIN = {1: "1x2", 10: "double_chance", 27: "btts"}
 MAXBET_TOTALS = {"1.5": "over_under_1_5", "2.5": "over_under_2_5", "3.5": "over_under_3_5"}
-# A total at a line the registry does not price: kept as a control that must emit nothing.
-MAXBET_CONTROL_TOTAL = "4.5"
+# A total at a line the registry does not price: kept as a control that must emit
+# nothing. 4.5 and 5.5 are priced now, so the control moved to 6.5.
+MAXBET_CONTROL_TOTAL = "6.5"
 
 
 def _trim_maxbet_market(market: dict[str, Any]) -> dict[str, Any]:
@@ -1179,10 +1182,10 @@ async def capture_maxbet(client: httpx.AsyncClient, _bookmaker: str, mode: str) 
             "provenance": (
                 f"odds[] of one football match (id {event.get('id')!r}, {event.get('name')!r})"
                 " from the live MaxBet sportsbook /rest/v2/matches response, trimmed to the"
-                " open markets the registry maps plus the unpriced 4.5 total as a control."
+                " open markets the registry maps plus an unpriced total as a control."
             ),
             "dropped_bet_fields": ["isPlayerMarket", "description"],
-            "dropped_odd_fields": ["id", "description", "updateDate", "providerTimestamp",
+            "dropped_odd_fields": ["description", "updateDate", "providerTimestamp",
                                    "externalIds"],
             "excluded_ids_present": [],
             "bets": keep,

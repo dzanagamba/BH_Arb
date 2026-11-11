@@ -225,7 +225,7 @@ date check now accepts any re-check from 2026-11-03 on.
 
 ### SR9-2 Match-level link or filled ticket for the nine generic cells
 
-Status: Not started
+Status: Done (2026-11-11)
 
 Why: for SportPlus, Premier Kladionica, WWIN, MaxBet (both modes) and Betole
 live, a surebet leg today opens a generic or competition page, so the operator
@@ -261,12 +261,35 @@ Leads from SR9-1 (2026-11-11), cheapest first:
   SPA routes and slip storage.
 
 Acceptance:
-- [ ] Each of the nine cells is either upgraded to `ticket_filled`/`match_page`
+- [x] Each of the nine cells is either upgraded to `ticket_filled`/`match_page`
       with a dated browser proof, or carries a dated proof that the site offers
       neither without login (listing what was tried).
-- [ ] A unit test per new route builds the URL from a fixture `Match` and
+- [x] A unit test per new route builds the URL from a fixture `Match` and
       `SurebetStake` and asserts the exact selection identifiers.
-- [ ] No new route requires a login, an account endpoint or a ticket submit.
+- [x] No new route requires a login, an account endpoint or a ticket submit.
+
+**SR9-2 progress (2026-11-11).** Evidence: `docs/evidence/2026-11-11-sr9-2.md`
+and its screenshots. MaxBet is done in both modes: the live list response carries
+`odds[].outcomes[].id` (13,180/13,180 rows on the 2026-11-11 probe), the adapter
+keeps it in `Market.outcome_ids`, and `?outcome=<row id>` put the leg on the slip
+for a prematch fixture (`1027619`, 1 @ 1.55) and an in-play one (`1032215`, 1 @
+1.21). A missing row id falls back to the confirmed match page with the reason
+`ticket parameters missing`; no extra request. The dated maxbet fixtures were
+re-captured so the row id is in the frozen shape (their "unpriced control" total
+moved 4.5 → 6.5 because the registry prices 4.5/5.5 now), and the parser
+snapshots were regenerated for the new capture. SportPlus (both modes) and
+Premier Kladionica (both modes) carry a dated "no URL exists" proof: no router or
+per-event route in the served app, no anchors on the offer pages, a row click
+leaves the URL unchanged, and Premier's `?who=`/`#/who=` forms are ignored. The
+SportPlus script stays a manual copy action: a `javascript:` bookmarklet clicked
+in the dashboard runs in the dashboard's origin, not SportPlus's. Betole live is
+recorded as copy-only (no live leg is priced). WWIN live is promoted: the
+operator opened `#/match/4732588` (Z.Podbrezova – Z.Moravce, a live id from that
+day's scan) in a normal browser and it opened the fixture, so the route is a
+confirmed match page (the panel still shows WWIN as an empty shell). All nine
+cells are now covered. Best rungs of the 18: ticket 6, match page 6, generic 6
+(was 4 / 7 / 7 before this pass). Mozzartbet live stays on `/sr/uzivo`: it is not
+one of the nine cells and needs the live-feed id from SR8-1 first.
 
 ### SR9-3 On-demand browser check of a served surebet's leg links
 
@@ -509,3 +532,4 @@ Entries before 2026-11-11 are in the archive.
 | 2026-11-11 | SR9-1 | In progress | Re-checked all destinations on that day's fixtures in the OpenChamber panel and headless Chromium (no login, nothing submitted); evidence `docs/evidence/2026-11-11-destinations.md` + screenshots. Fixed in `config/bookmaker_destinations.json`: MBet live → `/live?id=` (old route 404), SportPlus live → `/live/betting` (old 404), Premier live → `/live`, Mozzartbet live match page demoted (prematch id opens nothing); promoted MaxBet match page `www.maxbet.ba/ba/sportsbook/match/{id}` (panel + headless, both modes) and found its `?outcome=` slip prefill. Before → after best rungs: ticket 4 → 4, match page 5 → 6, generic 9 → 8. Full run: `2 failed, 2375 passed, 12 skipped in 107.78s` — M6-2 (pre-existing) and `test_e2e_certified.py` pinning `proof_checked_at == "2026-11-03"`, relaxed to a dated proof ≥ 2026-11-03; rerun of `tests/test_e2e_certified.py tests/test_destinations.py` all passed. Ruff clean, mypy 291 files clean, market doc / refresh_fixtures / audit_admissibility `--check` exit 0. Waiting on the operator: WWIN/Betole click check and the MaxBet gate template. |
 | 2026-11-11 | SR9-1 | Done | Operator: WWIN prematch and Betole match links open the match in a normal browser; change the MaxBet gate template. Promoted WWIN prematch (`#/top-bets/match/{event_id}`); Betole proof names the operator check; `config/bookmaker_deeplinks.json` MaxBet template/template_live → `https://www.maxbet.ba/ba/sportsbook/match/{event_id}`, fallback `https://www.maxbet.ba/ba`. Best rungs now: ticket 4, match page 7, generic 7 (was 4 / 5 / 9). Tests: `tests/test_maxbet.py` new `Match.url`; `tests/test_destinations.py` + WWIN prematch test. Full run: `1 failed, 2377 passed, 12 skipped in 125.01s` (the one failure is the pre-existing M6-2 test); ruff `All checks passed!`; mypy `no issues found in 291 source files`; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. |
 | 2026-11-11 | M6-2 + docs | Done | Operator: update the README, roadmap and every file that should follow. M6-2: `tests/test_ci_hardening.py` reads `fail_under` via `tomllib` (80 ≤ floor ≤ 88.05, `branch = true`); with `fail_under = 79` the test failed, file restored. README: MaxBet's new declared URL, a **Leg links** dashboard bullet (4 / 7 / 7 of 18), the `record_scan.py` state caveat, lock-file `pip_audit` commands, the 87.05 % branch floor, a Project status section. `docs/PRODUCTION_READINESS.md` status note pointing at the checklist (M8-1 still refreshes it); `docs/ACCEPTANCE.md` coverage line marked superseded; `AGENTS.md` destinations building block. Full run: `2378 passed, 12 skipped in 136.38s` (0 failed); ruff `All checks passed!`; mypy `no issues found in 291 source files`; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. |
+| 2026-11-11 | SR9-2 | Done | MaxBet ticket filled in both modes. `scrapers/maxbet.py` keeps each open outcome's own `id` (not `outcomeId`) in `Market.outcome_ids`; `engine/destinations.py` gained `{outcome_id}`; `config/bookmaker_destinations.json` ships `…/sportsbook/match/{event_id}?outcome={outcome_id}` prematch + live with dated proofs. Measured in plain headless Chromium: prematch `1027619` CD Universitario – Herrera FC, slip 1 @ 1.55; live `1032215` CD Ibiza Islas Pitiusas – UD Arenal (HT), slip 1 @ 1.21; the live list response carries `outcomes[].id` on 13,180/13,180 rows. MaxBet fixtures re-captured (`--capture --books maxbet --write`, 2026-10-26 → 2026-11-11); the "unpriced control" total moved 4.5 → 6.5 because the registry prices 4.5/5.5, and the two maxbet parser snapshots were regenerated for the new capture; `contracts.json` now records `[].outcomes[].id:int`. SportPlus and Premier Kladionica (four cells) got dated "no per-event URL" proofs: no router/route in the served app, no anchors on the offer pages, a row click leaves the URL, Premier's `?who=`/`#/who=` forms are ignored. Betole live stays copy-only (no live leg priced). Tests: `tests/test_maxbet.py` +3 (4 cases incl. the two-mode capture check), `tests/test_destinations.py` +3 (ticket URL, missing-id fallback, live ticket), `tests/test_fixture_metadata.py` `pop(key, None)` for freshly captured fixtures. Full run: `2385 passed, 12 skipped in 117.30s` (0 failed); ruff `All checks passed!`; mypy `no issues found in 291 source files`; market doc / refresh_fixtures / audit_admissibility `--check` exit 0. Operator then opened the WWIN live route for `4732588` (Z.Podbrezova – Z.Moravce) in a normal browser and reported it opens the fixture; WWIN live promoted to a confirmed match page with a second test (`test_wwin_live_match_page_is_confirmed_by_the_operator` replaces the old fallback test). All nine cells covered; best rungs 6 ticket / 6 match page / 6 generic (was 4 / 7 / 7). Mozzartbet live stays on `/sr/uzivo` (needs SR8-1's live-feed id). |

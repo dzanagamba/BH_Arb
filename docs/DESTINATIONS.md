@@ -1,6 +1,7 @@
 # Surebet leg destinations — dated coverage record
 
-**Checked:** 2026-11-03; re-checked 2026-11-11 (SR9-1)  
+**Checked:** 2026-11-03; re-checked 2026-11-11 (SR9-1, and SR9-2 for the
+MaxBet ticket and WWIN live)  
 **Scope:** the nine enabled football books. EVLBet is disabled and excluded.  
 **Method:** operator spot check in the OpenChamber browser against each book's
 own site. No bookmaker credentials were stored and no bet was placed. A route is
@@ -38,7 +39,7 @@ plain headless Chromium, or both showed it.
 | SportPlus | competition + manual prefill script | `https://www.sportplus.ba/prematch/betting` | book spelling for copying | page opened; no per-event route found yet (SR9-2) |
 | Premier Kladionica | competition | `https://www.premier-kladionica.com/ponuda/` | book spelling for copying | page opened; no per-event route found yet (SR9-2) |
 | WWIN | **match page (new)** | `https://wwin.ba/kladjenje/#/top-bets/match/{event_id}` | feed event id | `4730200`, America MG – Avai SC (operator's browser and headless; the panel shows an empty shell) |
-| MaxBet | **match page (new)** | `https://www.maxbet.ba/ba/sportsbook/match/{event_id}` | feed event id | `1024788`, America MG – Avai (panel and headless). `?outcome=<outcome id>` also fills the slip (1 @ 3.70 seen in both); needs the per-outcome id in the adapter (SR9-2) |
+| MaxBet | **ticket filled (new)** | `https://www.maxbet.ba/ba/sportsbook/match/{event_id}?outcome={outcome_id}` | feed event id + the row's own `odds[].outcomes[].id` | `1027619`, CD Universitario – Herrera FC; 1 @ 1.55 on the slip with the site's default stake (headless). Falls back to the confirmed match page when the row id is absent (SR9-2) |
 
 ## Live
 
@@ -51,8 +52,8 @@ plain headless Chromium, or both showed it.
 | MBet | **match page (route changed)** | `https://mbet.ba/live?id={event_id}` | feed event id | `e:fb:cze-net:0001`, Czech Republic U19 – Netherlands U19 (panel and headless); the old `single-live?id=` is now a 404 |
 | SportPlus | competition (URL changed) | `https://www.sportplus.ba/live/betting` | book spelling for copying | `/live` is now a 404; `/live/betting` is the site's own live link |
 | Premier Kladionica | competition (URL changed) | `https://www.premier-kladionica.com/live` | book spelling for copying | `/live` lists the in-play rows; `/ponuda/` does not |
-| WWIN | competition fallback | `https://wwin.ba/kladjenje-uzivo/#/sport/2` | book spelling for copying | `#/match/4734682` opened Al Qanater – El Obour SC in headless; **awaiting an operator click** |
-| MaxBet | **match page (new)** | `https://www.maxbet.ba/ba/sportsbook/match/{event_id}` | feed event id | `1028009`, Czech Rep U19 – Netherlands U19 in play (panel and headless) |
+| WWIN | **match page (new)** | `https://wwin.ba/kladjenje-uzivo/#/match/{event_id}` | feed live event id | `4732588`, Z.Podbrezova – Z.Moravce (operator's browser, 2026-11-11; the panel shows an empty shell, as for prematch) |
+| MaxBet | **ticket filled (new)** | `https://www.maxbet.ba/ba/sportsbook/match/{event_id}?outcome={outcome_id}` | feed event id + the row's own `odds[].outcomes[].id` | `1032215`, CD Ibiza Islas Pitiusas – UD Arenal at HT; 1 @ 1.21 on the slip (headless). Falls back to the confirmed match page when the row id is absent (SR9-2) |
 
 ### Gate vs destination (MaxBet)
 
@@ -69,8 +70,10 @@ The operator opened the WWIN prematch route
 (`#/top-bets/match/4730200`) and the Betole match route
 (`/match-special/91420001`) in a normal browser and both showed the fixture. The
 OpenChamber panel renders both sites as an empty shell, so it is not the reference
-for these two books. WWIN prematch is now a confirmed match page; WWIN live
-(`#/match/{event_id}`) stays failed until it gets its own click.
+for these two books. WWIN prematch is a confirmed match page. Later the same day
+the operator opened the WWIN live route for a live fixture from that day's scan
+(`#/match/4732588`, Z.Podbrezova – Z.Moravce) and reported that it opens the
+fixture, so WWIN live is a confirmed match page too.
 
 ## SportPlus manual ticket prefill
 
@@ -99,6 +102,11 @@ live offer has a different shape, so the script is prematch-only.
   the URL (`ticketItems`). They do not accept a stake query parameter, so the
   slip shows the site's default stake. The dashboard labels these links
   “pick prefilled; set stake” and still shows the planned stake for copying.
+- **MaxBet stake.** `?outcome=<row id>` puts the selection and its price on the
+  slip; the stake stays the site's default (0.50 BAM). No stake parameter was
+  found, so the ticket label also says “pick prefilled; set stake”. The row id is
+  the `id` of each `odds[].outcomes[]` entry in the adapter's own list response;
+  `outcomeId` is the market-type id and fills nothing.
 - **Betole live.** The client route `live-special/{matchCode}` is valid — the
   sampled live event `273` opened Shakhtar Donetsk U19 – Sporting CP U19. The
   scraper does not price Betole live because its desk feed exposes

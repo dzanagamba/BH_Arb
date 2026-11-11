@@ -1208,14 +1208,14 @@
               "label": "Open WWIN live match",
               "proof": {
                 "checked_at": "2026-11-11",
-                "result": "failed",
-                "method": "headless Chromium (plain context, no request blocking) (panel disagrees or untested)",
-                "sample_event_id": "4734682",
-                "sample_fixture": "Al Qanater - El Obour SC",
-                "sample_url": "https://wwin.ba/kladjenje-uzivo/#/match/4734682",
-                "fixture_confirmed": false,
+                "result": "confirmed",
+                "method": "operator's own browser (2026-11-11, reported in chat)",
+                "sample_event_id": "4732588",
+                "sample_fixture": "Z.Podbrezova - Z.Moravce",
+                "sample_url": "https://wwin.ba/kladjenje-uzivo/#/match/4732588",
+                "fixture_confirmed": true,
                 "ticket_confirmed": false,
-                "notes": "Headless Chromium opened the in-play fixture with its score panel. Not yet confirmed in the operator's browser; kept failed until then. The operator confirmed the prematch hash route in a normal browser on 2026-11-11; the live route still needs its own click before it is promoted."
+                "notes": "The operator opened the route for a live match from that day's scan and reported that it opens the fixture. The OpenChamber panel renders WWIN as an empty shell, so the operator's browser is the reference (as for the prematch route). This is the live id from the live feed, not the prematch id."
               },
               "attempts": [
                 {
@@ -1238,12 +1238,21 @@
                 },
                 {
                   "checked_at": "2026-11-11",
-                  "method": "headless Chromium (plain context, no request blocking) (panel disagrees or untested)",
+                  "method": "headless Chromium (plain context, no request blocking)",
                   "url": "https://wwin.ba/kladjenje-uzivo/#/match/4734682",
                   "sample_event_id": "4734682",
                   "sample_fixture": "Al Qanater - El Obour SC",
-                  "result": "failed",
-                  "notes": "Headless Chromium opened the in-play fixture with its score panel. Not yet confirmed in the operator's browser; kept failed until then."
+                  "result": "confirmed",
+                  "notes": "Headless Chromium opened the in-play fixture with its score panel; kept failed at the time because the operator had not yet clicked it, which the entry below settles."
+                },
+                {
+                  "checked_at": "2026-11-11",
+                  "method": "operator's own browser (2026-11-11, reported in chat)",
+                  "url": "https://wwin.ba/kladjenje-uzivo/#/match/4732588",
+                  "sample_event_id": "4732588",
+                  "sample_fixture": "Z.Podbrezova - Z.Moravce",
+                  "result": "confirmed",
+                  "notes": "Opens the fixture."
                 }
               ]
             },
@@ -1305,6 +1314,38 @@
         "prematch": {
           "routes": [
             {
+              "kind": "ticket_filled",
+              "url_template": "https://www.maxbet.ba/ba/sportsbook/match/{event_id}?outcome={outcome_id}",
+              "identifier_source": "event_id",
+              "label": "Open MaxBet ticket (pick prefilled; set stake)",
+              "ticket": {
+                "stake_prefilled": false,
+                "format": "?outcome=<odds[].outcomes[].id>"
+              },
+              "proof": {
+                "checked_at": "2026-11-11",
+                "result": "confirmed",
+                "method": "headless Chromium (plain context, no request blocking)",
+                "sample_event_id": "1027619",
+                "sample_fixture": "CD Universitario - Herrera FC",
+                "sample_url": "https://www.maxbet.ba/ba/sportsbook/match/1027619?outcome=147294305",
+                "fixture_confirmed": true,
+                "ticket_confirmed": true,
+                "notes": "The fixture page opened (Fudbal / Panama / Panama 1, Sat 14.11 22:00, CD Universitario - Herrera FC, Konačan ishod 1 @ 1.55) and the slip held that one selection with the site's default 0.50 BAM stake. The id is the per-row outcomes[].id of the adapter's own /rest/v2/matches payload (147294305); outcomeId is the type id (1001) and does not fill a slip. Both ids are in the same list response, so the adapter needs no second request. SR9-2 wired the shipped template to it."
+              },
+              "attempts": [
+                {
+                  "checked_at": "2026-11-11",
+                  "method": "OpenChamber browser panel and headless Chromium (plain context, no request blocking)",
+                  "url": "https://www.maxbet.ba/ba/sportsbook/match/1024788?outcome=146730868",
+                  "sample_event_id": "1024788",
+                  "sample_fixture": "America MG - Avai",
+                  "result": "confirmed",
+                  "notes": "Slip showed America MG - Avai, Konačan ishod 1 @ 3.70 in both browsers (SR9-1); the route was not shipped then because the adapter did not keep the per-outcome id."
+                }
+              ]
+            },
+            {
               "kind": "match_page",
               "url_template": "https://www.maxbet.ba/ba/sportsbook/match/{event_id}",
               "identifier_source": "event_id",
@@ -1318,7 +1359,7 @@
                 "sample_url": "https://www.maxbet.ba/ba/sportsbook/match/1024788",
                 "fixture_confirmed": true,
                 "ticket_confirmed": false,
-                "notes": "www.maxbet.ba/ba/sportsbook/match/<id> opens the fixture inside the site shell (Fudbal / Brazil / Brazil 2, all markets). Its own home page links matches this way. The 2026-11-03 failures used sportsbook.maxbet.ba/match/<id> and www.maxbet.ba/match/<id>, which still render blank or redirect home. Adding ?outcome=<outcome id> also puts that selection on the slip (seen in both browsers); the ticket route needs the per-outcome id, which the adapter does not keep yet (SR9-2)."
+                "notes": "www.maxbet.ba/ba/sportsbook/match/<id> opens the fixture inside the site shell (Fudbal / Brazil / Brazil 2, all markets). Its own home page links matches this way. The 2026-11-03 failures used sportsbook.maxbet.ba/match/<id> and www.maxbet.ba/match/<id>, which still render blank or redirect home. Adding ?outcome=<outcome id> also puts that selection on the slip (seen in both browsers); the shipped ticket route now carries the per-outcome id (SR9-2)."
               },
               "attempts": [
                 {
@@ -1346,7 +1387,7 @@
                   "sample_event_id": "1024788",
                   "sample_fixture": "America MG - Avai",
                   "result": "confirmed",
-                  "notes": "www.maxbet.ba/ba/sportsbook/match/<id> opens the fixture inside the site shell (Fudbal / Brazil / Brazil 2, all markets). Its own home page links matches this way. The 2026-11-03 failures used sportsbook.maxbet.ba/match/<id> and www.maxbet.ba/match/<id>, which still render blank or redirect home. Adding ?outcome=<outcome id> also puts that selection on the slip (seen in both browsers); the ticket route needs the per-outcome id, which the adapter does not keep yet (SR9-2)."
+                  "notes": "www.maxbet.ba/ba/sportsbook/match/<id> opens the fixture inside the site shell (Fudbal / Brazil / Brazil 2, all markets). Its own home page links matches this way. The 2026-11-03 failures used sportsbook.maxbet.ba/match/<id> and www.maxbet.ba/match/<id>, which still render blank or redirect home. Adding ?outcome=<outcome id> also puts that selection on the slip (seen in both browsers); the shipped ticket route now carries the per-outcome id (SR9-2)."
                 }
               ]
             },
@@ -1410,6 +1451,27 @@
         },
         "live": {
           "routes": [
+            {
+              "kind": "ticket_filled",
+              "url_template": "https://www.maxbet.ba/ba/sportsbook/match/{event_id}?outcome={outcome_id}",
+              "identifier_source": "event_id",
+              "label": "Open MaxBet live ticket (pick prefilled; set stake)",
+              "ticket": {
+                "stake_prefilled": false,
+                "format": "?outcome=<odds[].outcomes[].id>"
+              },
+              "proof": {
+                "checked_at": "2026-11-11",
+                "result": "confirmed",
+                "method": "headless Chromium (plain context, no request blocking)",
+                "sample_event_id": "1032215",
+                "sample_fixture": "CD Ibiza Islas Pitiusas - UD Arenal",
+                "sample_url": "https://www.maxbet.ba/ba/sportsbook/match/1032215?outcome=148101262",
+                "fixture_confirmed": true,
+                "ticket_confirmed": true,
+                "notes": "The in-play fixture (Fudbal / Spain / Spain Tercera RFEF, HT) opened with its live markets and the slip held UŽIVO HT CD Ibiza Islas Pitiusas - UD Arenal, Konačan ishod 1 @ 1.21 with the site's default 0.50 BAM stake. The row id came from the live /rest/v2/matches?status=Live response, so the live leg needs no extra request either."
+              }
+            },
             {
               "kind": "match_page",
               "url_template": "https://www.maxbet.ba/ba/sportsbook/match/{event_id}",

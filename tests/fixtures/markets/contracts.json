@@ -333,10 +333,10 @@
     },
     "maxbet_live": {
       "bookmaker": "maxbet",
-      "captured_at": "2026-10-26",
+      "captured_at": "2026-11-11",
       "event_count": 7,
       "experimental_markets": [],
-      "fingerprint": "7b485254ec49d0ca",
+      "fingerprint": "0692d07bd345be1f",
       "fixture": "tests/fixtures/markets/maxbet_live.json",
       "labels": [
         "1",
@@ -385,6 +385,7 @@
         "[].name:str",
         "[].outcomes:list",
         "[].outcomes[]",
+        "[].outcomes[].id:int",
         "[].outcomes[].marketAvailableForBetting:bool",
         "[].outcomes[].oddValue:float",
         "[].outcomes[].outcome:str",
@@ -393,7 +394,7 @@
         "[].specifiers.total:str",
         "[].specifiers:dict"
       ],
-      "structure_fingerprint": "fe5f43dad834b923",
+      "structure_fingerprint": "95dc51eece36cd52",
       "top_level_keys": [
         "bets",
         "bookmaker",
@@ -406,12 +407,10 @@
         "expected_markets",
         "http_method",
         "http_status",
-        "metadata_backfilled",
         "mode",
         "payload_kind",
         "provenance",
         "recorded_at",
-        "recorded_at_commit",
         "recorded_at_source",
         "source",
         "uncovered_registry_rows"
@@ -419,10 +418,10 @@
     },
     "maxbet_prematch": {
       "bookmaker": "maxbet",
-      "captured_at": "2026-10-26",
-      "event_count": 7,
+      "captured_at": "2026-11-11",
+      "event_count": 6,
       "experimental_markets": [],
-      "fingerprint": "7b485254ec49d0ca",
+      "fingerprint": "0692d07bd345be1f",
       "fixture": "tests/fixtures/markets/maxbet_prematch.json",
       "labels": [
         "1",
@@ -471,6 +470,7 @@
         "[].name:str",
         "[].outcomes:list",
         "[].outcomes[]",
+        "[].outcomes[].id:int",
         "[].outcomes[].marketAvailableForBetting:bool",
         "[].outcomes[].oddValue:float",
         "[].outcomes[].outcome:str",
@@ -479,7 +479,7 @@
         "[].specifiers.total:str",
         "[].specifiers:dict"
       ],
-      "structure_fingerprint": "fe5f43dad834b923",
+      "structure_fingerprint": "95dc51eece36cd52",
       "top_level_keys": [
         "bets",
         "bookmaker",
@@ -492,12 +492,10 @@
         "expected_markets",
         "http_method",
         "http_status",
-        "metadata_backfilled",
         "mode",
         "payload_kind",
         "provenance",
         "recorded_at",
-        "recorded_at_commit",
         "recorded_at_source",
         "source",
         "uncovered_registry_rows"
@@ -1777,7 +1775,7 @@
       ]
     }
   },
-  "generated_at": "2026-11-08T02:05:04",
+  "generated_at": "2026-11-11T15:49:31",
   "max_age_days": 120,
   "schema": 1
 }

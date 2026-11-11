@@ -91,6 +91,28 @@ def _nsoft_match(
     )
 
 
+def _maxbet_match(*, with_outcome_ids: bool = True) -> Match:
+    """The 2026-11-11 MaxBet fixture, with the row ids its feed carries."""
+    from scrapers.maxbet import parse_maxbet_odds
+
+    outcomes = [
+        {"outcome": label, "outcomeId": type_id, "status": 0, "oddValue": value,
+         "marketAvailableForBetting": True}
+        for label, type_id, value in (("1", "1001", 1.55), ("X", "1002", 3.90), ("2", "1003", 4.80))
+    ]
+    if with_outcome_ids:
+        for row, row_id in zip(outcomes, (147294305, 147294306, 147294307), strict=True):
+            row["id"] = row_id
+    return Match(
+        bookmaker="maxbet",
+        home_team="CD Universitario",
+        away_team="Herrera FC",
+        league="Panama 1",
+        event_id="1027619",
+        markets=parse_maxbet_odds([{"id": 1, "name": "Konačan ishod", "outcomes": outcomes}]),
+    )
+
+
 def _stake(label: str = "1", bookmaker: str = "mdshop") -> SurebetStake:
     return SurebetStake(
         bookmaker=bookmaker,
@@ -265,19 +287,20 @@ def test_wwin_prematch_match_page_is_confirmed_by_the_operator():
     assert destination.url == "https://wwin.ba/kladjenje/#/top-bets/match/4730200"
 
 
-def test_wwin_live_failed_route_falls_to_competition():
+def test_wwin_live_match_page_is_confirmed_by_the_operator():
+    """SR9-2: the operator opened #/match/<live id> (the panel shows a shell)."""
     match = Match(
         bookmaker="wwin",
-        home_team="Galatasaray/19",
-        away_team="Stuttgart/19",
-        event_id="4713116",
+        home_team="Z.Podbrezova",
+        away_team="Z.Moravce",
+        event_id="4732588",
     )
     destination = build_destination(
         match, _stake(bookmaker="wwin"), MarketType.MATCH_RESULT, mode="live"
     )
-    assert destination.kind == "competition"
-    assert destination.url == "https://wwin.ba/kladjenje-uzivo/#/sport/2"
-    assert "match/4713116" not in destination.url
+    assert destination.kind == "match_page"
+    assert destination.url == "https://wwin.ba/kladjenje-uzivo/#/match/4732588"
+    assert destination.proof_checked_at == "2026-11-11"
 
 
 @pytest.mark.parametrize("mode", ["prematch", "live"])
@@ -291,6 +314,39 @@ def test_maxbet_match_page_uses_the_site_shell_path(mode):
     )
     assert destination.kind == "match_page"
     assert destination.url == "https://www.maxbet.ba/ba/sportsbook/match/1024788"
+    assert destination.proof_checked_at == "2026-11-11"
+
+
+def test_maxbet_ticket_url_carries_the_outcome_row_id():
+    """SR9-2: ?outcome=<outcomes[].id> put the leg's selection on MaxBet's slip."""
+    destination = _destination(_maxbet_match(), _stake("1", "maxbet"))
+    assert destination.kind == "ticket_filled"
+    assert destination.url == (
+        "https://www.maxbet.ba/ba/sportsbook/match/1027619?outcome=147294305"
+    )
+    assert destination.identifier == "1027619"
+    assert destination.identifier_source == "event_id"
+    assert destination.selection == "1"
+    assert destination.ticket_stake_supported is False
+
+
+def test_maxbet_ticket_without_the_outcome_row_id_falls_to_the_match_page():
+    destination = _destination(_maxbet_match(with_outcome_ids=False), _stake("1", "maxbet"))
+    assert destination.kind == "match_page"
+    assert destination.url == "https://www.maxbet.ba/ba/sportsbook/match/1027619"
+    assert "outcome=" not in destination.url
+    assert destination.fallback_reason == "ticket parameters missing"
+
+
+def test_maxbet_live_ticket_uses_the_live_row_id():
+    """SR9-2: the live list response carries the same per-row id."""
+    destination = build_destination(
+        _maxbet_match(), _stake("1", "maxbet"), MarketType.MATCH_RESULT, mode="live"
+    )
+    assert destination.kind == "ticket_filled"
+    assert destination.url == (
+        "https://www.maxbet.ba/ba/sportsbook/match/1027619?outcome=147294305"
+    )
     assert destination.proof_checked_at == "2026-11-11"
 
 

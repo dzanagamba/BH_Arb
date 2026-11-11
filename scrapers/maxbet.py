@@ -152,6 +152,11 @@ def parse_maxbet_odds(odds: list, mode: str = "prematch") -> list[Market]:
 
         values: dict[str, float] = {}
         source_times: dict[str, datetime | None] = {}
+        # SR9-2: each outcome's own ``id`` prefills the slip through
+        # ``?outcome=<id>``; ``outcomeId`` is the type id (1001 = "1"), not this
+        # one. A payload that omits it leaves the map empty and the destination
+        # falls back to the match page rather than guessing.
+        outcome_ids: dict[str, str] = {}
         for outcome in market.get("outcomes") or []:
             if not isinstance(outcome, dict):
                 continue
@@ -170,6 +175,9 @@ def parse_maxbet_odds(odds: list, mode: str = "prematch") -> list[Market]:
                 continue
             values[label] = value
             source_times[label] = _outcome_source_updated_at(outcome)
+            raw_outcome_id = outcome.get("id")
+            if raw_outcome_id is not None and str(raw_outcome_id):
+                outcome_ids[label] = str(raw_outcome_id)
 
         if len(values) >= spec.min_legs and set(values) <= spec.labels:
             markets.append(Market(
@@ -183,6 +191,7 @@ def parse_maxbet_odds(odds: list, mode: str = "prematch") -> list[Market]:
                     for label, value in values.items()
                 ],
                 source_id=str(odd_type_id),
+                outcome_ids=outcome_ids,
             ))
     return markets
 
