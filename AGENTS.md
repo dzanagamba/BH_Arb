@@ -148,6 +148,14 @@ without traffic, seed `api.cached_surebets`/`cached_matches` with
   `scripts/capture_har.py` regenerates them; never hand-edit a `.har.gz`. A
   replay must run with `route_from_har(not_found="abort")`. See
   `docs/HAR_REPLAY.md`.
+- `engine.destinations.build_destination()` picks each surebet leg's link from
+  `config/bookmaker_destinations.json` (ticket_filled > match_page > search >
+  competition), and only a rung whose dated `proof` is `confirmed` is used.
+  Change a route only with a browser proof recorded in that file and in
+  `docs/DESTINATIONS.md`; destinations never touch the gate. When checking links,
+  the OpenChamber panel shows WWIN and Betole as an empty shell even when they
+  work — use headless Chromium plus an operator click — and the panel is the
+  operator's real session, so ticket links leave picks on their slips.
 - `server/csv_export.csv_cell()` neutralises formula-leading cells in every CSV
   export. Use it rather than a local copy.
 - `server/json_store.atomic_write_json()` / `read_json()` are the JSON-store

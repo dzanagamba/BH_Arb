@@ -76,6 +76,10 @@ through `engine.matcher.MatchMatcher` + `engine.certainty.CertaintyGate`, runs
 skin / stale-price / feed-integrity guards, and prices only `verified` groups in
 `engine.arbitrage.ArbitrageEngine`. Heavy stages run in `asyncio.to_thread`.
 
+**Leg links** (`engine/destinations.py`, `config/bookmaker_destinations.json`,
+`docs/DESTINATIONS.md`): re-proven 2026-11-11 (SR9-1) — 4 of 18 book × mode
+cells open a filled ticket, 7 the match page, 7 a labelled fallback.
+
 **Last measured live scan** (2026-11-11, `docs/evidence/2026-11-11-test-scan.md`):
 prematch 6,921 matches / 1,359 verified groups / 20 surebets in 139.0 s, all
 nine enabled books `ok`; live 183 / 27 / 1 in 29.1 s, with Mozzartbet and Betole
@@ -100,7 +104,7 @@ row or operator decision that closes it.
 | 8 | A 24 h soak shows no memory/browser growth and no stale-book blindness | **Not met**: P1-6 waived; 10-cycle plateau only | operator: the waiver and this criterion conflict |
 | 9 | Security hardening applied; not exposed without a key | **Met** in code (M1-1, M1-3); deployment must set `API_KEY` | `docs/DEPLOYMENT.md` |
 | — | Every surebet leg opens the match or a filled ticket (operator priority) | **Not met**: 2026-11-11 re-check — ticket 4 cells, match page 7 (MaxBet ×2 and WWIN prematch new, MBet live fixed), generic 7 (Mozzartbet live demoted). See `docs/evidence/2026-11-11-destinations.md` | SR9-1 … SR9-4 |
-| — | The committed suite is green | **Not met**: 1 failing test at HEAD | M6-2 |
+| — | The committed suite is green | **Met** after M6-2 (2026-11-11) | — |
 
 Two items cannot move without the operator: criterion 2/8 depend on the
 deferred N2-4 and waived P1-6. Ask before treating the product as
@@ -110,8 +114,7 @@ production-ready while either stands.
 
 Closed rows are not listed; see the archive. Order within `Not started` is the
 recommended order. **SR9 is the operator's number-one priority (2026-11-11):**
-work it before every other row. M6-2 is a one-test fix and may be done first
-only if CI must be green for an SR9 push.
+work it before every other row.
 
 | ID | Title | Status | Depends | Gate |
 |----|-------|--------|---------|------|
@@ -120,11 +123,11 @@ only if CI must be green for an SR9 push.
 | SR9-3 | On-demand browser check of a served surebet's leg links | Not started | SR9-1 | — |
 | SR9-4 | Show which legs reach the match; decide whether to hide the rest | Not started | SR9-1 | operator (hide option only) |
 | M7-2 | Live test scan and roadmap/brief/AGENTS rewrite | Done | — | — |
-| M6-2 | Coverage-floor test still pins the old floor (main is red) | Not started | — | — |
+| M6-2 | Coverage-floor test still pins the old floor (main is red) | Done | — | — |
 | SR8-1 | Live Mozzartbet and Betole parse to zero matches | Not started | — | — |
 | SR8-4 | `record_scan.py` restores state before scanning | Not started | — | — |
 | SR8-2 | Structural-drift alarm noise and stale baselines | Not started | — | — |
-| M8-1 | Refresh the production-readiness assessment | Not started | M6-2, SR8-1 | — |
+| M8-1 | Refresh the production-readiness assessment | Not started | SR8-1 | — |
 | SR8-3 | Mapping-coverage floor vs the full-offer long tail | Not started | — | operator |
 | SR4-3g | Strict wire schema: EVLBet | Blocked on a live EVLBet payload | SR4-3 | — |
 | N2-4 | Seven-day local opportunity baseline and drift gates | Deferred | — | operator |
@@ -326,7 +329,7 @@ Acceptance:
 
 ### M6-2 Coverage-floor test still pins the old floor (main is red)
 
-Status: Not started
+Status: Done (2026-11-11)
 
 Why: M6-1 (`22519bd`) set `fail_under = 87.05` in `pyproject.toml`, but
 `tests/test_ci_hardening.py::test_coverage_is_scoped_and_has_a_measured_floor`
@@ -340,8 +343,9 @@ than the measured 88.05 recorded in the comment, instead of a string literal;
 keep the `branch = true` and source-scope assertions.
 
 Acceptance:
-- [ ] `pytest tests/test_ci_hardening.py` passes; the full suite has 0 failures.
-- [ ] Lowering the floor below 80 in a scratch copy makes the test fail.
+- [x] `pytest tests/test_ci_hardening.py` passes; the full suite has 0 failures.
+- [x] Lowering the floor below 80 in a scratch copy makes the test fail
+      (`fail_under = 79` → the test failed; file restored).
 
 Tests: `tests/test_ci_hardening.py`.
 
@@ -504,3 +508,4 @@ Entries before 2026-11-11 are in the archive.
 | 2026-11-11 | SR9 | Rows added | Operator: links on a surebet must open the exact match, or create a ticket with it where the site has no match page; make it priority one. Added SR9-1 … SR9-4 above every other row. Measured state from `config/bookmaker_destinations.json`: `ticket_filled` 4 cells (mdshop, admiralbet), `match_page` 5 (mozzartbet, mbet, betole prematch), competition/copy only 9 (sportplus, premier_kladionica, wwin, maxbet, betole live); all proofs `checked_at` 2026-11-03. Recorded the MaxBet contradiction between `bookmaker_deeplinks.json` (`route_pattern_verified`) and the destination record (`/match/<id>` rendered blank). No code changed. |
 | 2026-11-11 | SR9-1 | In progress | Re-checked all destinations on that day's fixtures in the OpenChamber panel and headless Chromium (no login, nothing submitted); evidence `docs/evidence/2026-11-11-destinations.md` + screenshots. Fixed in `config/bookmaker_destinations.json`: MBet live → `/live?id=` (old route 404), SportPlus live → `/live/betting` (old 404), Premier live → `/live`, Mozzartbet live match page demoted (prematch id opens nothing); promoted MaxBet match page `www.maxbet.ba/ba/sportsbook/match/{id}` (panel + headless, both modes) and found its `?outcome=` slip prefill. Before → after best rungs: ticket 4 → 4, match page 5 → 6, generic 9 → 8. Full run: `2 failed, 2375 passed, 12 skipped in 107.78s` — M6-2 (pre-existing) and `test_e2e_certified.py` pinning `proof_checked_at == "2026-11-03"`, relaxed to a dated proof ≥ 2026-11-03; rerun of `tests/test_e2e_certified.py tests/test_destinations.py` all passed. Ruff clean, mypy 291 files clean, market doc / refresh_fixtures / audit_admissibility `--check` exit 0. Waiting on the operator: WWIN/Betole click check and the MaxBet gate template. |
 | 2026-11-11 | SR9-1 | Done | Operator: WWIN prematch and Betole match links open the match in a normal browser; change the MaxBet gate template. Promoted WWIN prematch (`#/top-bets/match/{event_id}`); Betole proof names the operator check; `config/bookmaker_deeplinks.json` MaxBet template/template_live → `https://www.maxbet.ba/ba/sportsbook/match/{event_id}`, fallback `https://www.maxbet.ba/ba`. Best rungs now: ticket 4, match page 7, generic 7 (was 4 / 5 / 9). Tests: `tests/test_maxbet.py` new `Match.url`; `tests/test_destinations.py` + WWIN prematch test. Full run: `1 failed, 2377 passed, 12 skipped in 125.01s` (the one failure is the pre-existing M6-2 test); ruff `All checks passed!`; mypy `no issues found in 291 source files`; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. |
+| 2026-11-11 | M6-2 + docs | Done | Operator: update the README, roadmap and every file that should follow. M6-2: `tests/test_ci_hardening.py` reads `fail_under` via `tomllib` (80 ≤ floor ≤ 88.05, `branch = true`); with `fail_under = 79` the test failed, file restored. README: MaxBet's new declared URL, a **Leg links** dashboard bullet (4 / 7 / 7 of 18), the `record_scan.py` state caveat, lock-file `pip_audit` commands, the 87.05 % branch floor, a Project status section. `docs/PRODUCTION_READINESS.md` status note pointing at the checklist (M8-1 still refreshes it); `docs/ACCEPTANCE.md` coverage line marked superseded; `AGENTS.md` destinations building block. Full run: `2378 passed, 12 skipped in 136.38s` (0 failed); ruff `All checks passed!`; mypy `no issues found in 291 source files`; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. |

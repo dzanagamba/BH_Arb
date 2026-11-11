@@ -1,5 +1,14 @@
 # Production readiness assessment — 2026-11-03
 
+> **Status note (2026-11-11).** This assessment predates most of the SR/M work
+> and is due for a measured refresh (roadmap row M8-1). Until then the current,
+> measured view is the **Production-readiness checklist** in
+> [`ROADMAP.md`](../ROADMAP.md). Known stale points below: CI now enforces a
+> branch-coverage floor of 87.05 % (measured 88.05 %), the human approval path
+> is fully deleted (M5-3), surebet leg links were re-proven on 2026-11-11
+> (`docs/evidence/2026-11-11-destinations.md`), and the latest real scan is
+> `docs/evidence/2026-11-11-test-scan.md`.
+
 ## Verdict
 
 **The prematch pipeline now finds and re-verifies real surebets; the product is

@@ -3,10 +3,10 @@
 **Updated:** 2026-11-11
 **Goal:** keep the scanner correct and current without weakening the trust
 model; work `ROADMAP.md` top to bottom.
-**Current row:** none in progress. SR9-1 is Done (destinations re-proven,
-operator decisions recorded).
-**Last commit:** `5a4b8fe` "fix: re-prove bookmaker leg destinations on today's
-sites (SR9-1)", pushed to `origin/main` on 2026-11-11.
+**Current row:** none in progress. SR9-1 and M6-2 are Done.
+**Last commit:** "docs: refresh README, roadmap and docs; read the coverage floor
+(M6-2)" on `origin/main` (2026-11-11), after `5a4b8fe` (SR9-1). `git log -1`
+has the hash.
 
 ## Project state
 
@@ -16,35 +16,31 @@ sites (SR9-1)", pushed to `origin/main` on 2026-11-11.
   prematch 6,921 matches / 1,359 verified groups / 20 surebets in 139.0 s, all
   nine enabled books `ok`; live 183 / 27 / 1 in 29.1 s, Mozzartbet and Betole
   `empty`. EVLBet disabled.
-- **Verification baseline (2026-11-11, clean ledger mode):** `pytest` 1 failed, 2,371 passed,
-  12 skipped in 108.5 s; the failure is pre-existing at HEAD (M6-2). Ruff clean,
-  mypy 291 files clean, market doc / refresh_fixtures / audit_admissibility
-  `--check` exit 0.
+- **Verification baseline (2026-11-11, clean ledger mode):** `pytest` 2,378 passed,
+  12 skipped in 136 s, 0 failed (M6-2 fixed). Ruff clean, mypy 291 files clean,
+  market doc / refresh_fixtures / audit_admissibility `--check` exit 0.
 - Branch coverage floor `fail_under = 87.05` (measured 88.05 %, M6-1); CI's 3.11
   leg enforces it and runs both ledger modes.
-
 - **Production-readiness checklist** (`ROADMAP.md`): met — prematch book
   coverage, cold replay (0 false merges), certified e2e, no trust-changing
-  path, auth. Not met — live Mozzartbet/Betole (SR8-1), mapping coverage
-  (SR8-3), 26 price-check outliers / 5,622 (M8-1), green suite (M6-2), and the
-  multi-day / 24 h evidence that N2-4 and P1-6 (operator) would provide.
+  path, auth, green suite. Not met — leg links (SR9, 7 of 18 still fallback),
+  live Mozzartbet/Betole (SR8-1), mapping coverage (SR8-3), 26 price-check
+  outliers / 5,622 (M8-1), and the multi-day / 24 h evidence that N2-4 and
+  P1-6 (operator) would provide.
 
 ## Next action
 
-**Operator priority 1 (2026-11-11): SR9 — every surebet leg must open the
-exact match or a filled ticket.** SR9-1 is done; results in
-`docs/evidence/2026-11-11-destinations.md` (ticket 4, match page 7, generic 7 of 18). Next: SR9-2 starting with the MaxBet
-ticket (`?outcome=<id>`, proven) and the Mozzartbet live id, then SportPlus,
-Premier and WWIN live (needs an operator click), then SR9-3 and SR9-4. Never log in or submit a ticket. After SR9:
+**Operator priority 1 (2026-11-11): SR9 — every surebet leg must open the exact
+match or a filled ticket.** SR9-1 is done (`docs/evidence/2026-11-11-destinations.md`:
+ticket 4, match page 7, fallback 7 of 18). Next is **SR9-2**: the MaxBet filled
+ticket first (`?outcome=<id>` is proven; the adapter must keep each outcome's
+`id`), then the Mozzartbet live id, then SportPlus, Premier and WWIN live (needs
+an operator click); then SR9-3 and SR9-4. Never log in or submit a ticket.
 
-Take **M6-2**: `main` is red because `tests/test_ci_hardening.py:25`
-still expects `fail_under = 80` after M6-1 set 87.05 (one-line class of fix).
-Then **SR8-1** (live Mozzartbet and Betole parse to zero matches) — two of nine
-books are missing from every live scan. Then SR8-4 (make `record_scan.py`
-restore state; small), then SR8-2 (drift-alarm noise). Then M8-1 (refresh
-`docs/PRODUCTION_READINESS.md` from measurements). SR8-3 needs an operator
-choice between options A/B/C. Ask the operator about N2-4/P1-6: they block
-readiness criteria 2 and 8.
+After SR9: SR8-1 (live Mozzartbet and Betole parse to zero matches), SR8-4
+(`record_scan.py` restores state), SR8-2 (drift-alarm noise), M8-1 (refresh
+`docs/PRODUCTION_READINESS.md`). SR8-3 needs an operator choice (A/B/C), and
+N2-4/P1-6 block readiness criteria 2 and 8 — ask the operator.
 
 ## Blockers and standing decisions
 

@@ -331,7 +331,7 @@ nothing audited dependencies or scanned for dangerous constructs on each push.
 **Coverage.** `[tool.coverage.run]` measures `engine`, `server`, `scrapers`,
 `config` and `models` (8,096 statements; tests, operator scripts and generated
 state excluded). The measured baseline is **81.55%**; `fail_under = 80` keeps a
-small cushion below it rather than forcing low-value tests. The Python 3.11 CI
+small cushion below it rather than forcing low-value tests. *(Superseded 2026-11-11 by M6-1: coverage now counts branches, measured 88.05 %, `fail_under = 87.05`; see `docs/CI.md`.)* The Python 3.11 CI
 test leg runs `pytest --cov`, prints the missing-line report, appends a markdown
 summary to the workflow run page, and uploads `coverage.xml` as an artifact.
 

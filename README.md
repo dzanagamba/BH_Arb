@@ -15,7 +15,10 @@ have their own tab and never pair with football. It never places a bet.
 >   eight of the ten configured books) has **no per-event URL** to prove. The
 >   declaration is the proof: the group carries a `no_event_link` evidence note and is verified on identity alone — league, kickoff, category, teams and orientation. A book with no declaration is refused; the gate fails safe.
 > * **Mozzartbet** and **MaxBet** declare a route and must prove it. Their
->   path-based patterns were browser-proven on 2026-11-03. A listing with an
+>   path-based patterns were browser-proven on 2026-11-03; on 2026-11-11 MaxBet's
+>   declared URL moved to `https://www.maxbet.ba/ba/sportsbook/match/{event_id}`,
+>   the page a browser actually renders (operator decision, same event
+>   identity). A listing with an
 >   event id verifies with a `route_pattern_verified` note; one without an id
 >   still blocks. MDShop's and Admiralbet's declared `?event=<id>` routes are
 >   **inert** — the served page is byte-identical to the plain football page —
@@ -167,6 +170,14 @@ POST /api/scan
   paper), auto-rescan, alert sound, enabled bookmakers, experimental markets and
   the health line. Unhealthy books also appear in a feed-integrity strip above
   the tabs, with the reason they are degraded or quarantined from pricing.
+- **Leg links** — every surebet leg carries a destination chosen from a dated
+  browser proof, best first: a **filled ticket** (the book's own slip opens with
+  the leg's selection; the stake is never prefilled or submitted), the **match
+  page**, or a labelled fallback (the book's search spelling or competition
+  page). On the 2026-11-11 re-check (SR9-1), 4 of the 18 book × mode cells open a
+  filled ticket, 7 the match page and 7 a fallback; the table is in
+  [`docs/DESTINATIONS.md`](docs/DESTINATIONS.md) and the record in
+  `config/bookmaker_destinations.json`. A destination never changes the gate.
 - **Installable shell** — the dashboard registers a service worker for the
   static app shell only. It never caches `/api` responses or odds; an offline
   reload shows the shell, and a stale scan is still labelled historical.
@@ -506,12 +517,13 @@ BH_ARB_TEST_BROWSER=1 python -m pytest tests/test_browser_har_replay.py
 
 # Same coverage and security gates as CI
 python -m pytest --cov --cov-report=term-missing
-python -m pip_audit -r requirements.txt -r requirements-dev.txt --progress-spinner off
+python -m pip_audit -r requirements.lock --progress-spinner off
+python -m pip_audit -r requirements-dev.lock --progress-spinner off
 python -m bandit -r engine server scrapers config models main.py scripts -ll -q
 ```
 
-The coverage floor is 80% (measured baseline 85.63%) and Bandit fails at medium
-severity or above. Accepted `# nosec` entries and the coverage baseline are
+Coverage counts branches; the floor is `fail_under = 87.05`, one point under the
+measured 88.05% (M6-1, 2026-11-11). Bandit fails at medium severity or above. Accepted `# nosec` entries and the coverage baseline are
 documented in [`docs/CI.md`](docs/CI.md).
 
 - Tests must stay offline: use fakes, `httpx.MockTransport` or
@@ -546,7 +558,9 @@ python scripts/derive_mappings.py cache/last_scan.json --apply
 # Regenerate the market ID tables, or fail if they are stale.
 python scripts/generate_market_mapping_doc.py --check
 
-# Record one real scan's per-sport metrics.
+# Record one real scan's per-sport metrics. Run bare, it starts from empty
+# state and rewrites cache/scan_cost.json (SR8-4); prefer the dashboard's scan,
+# or restore state first as in docs/evidence/2026-11-11-test-scan.md.
 python scripts/record_scan.py prematch --out docs/evidence/prematch-scan.json
 
 # Sweep one book's declared event links until verify-links reports remaining 0.
@@ -576,6 +590,17 @@ python scripts/discover_push_feeds.py --bookmaker mozzartbet --seconds 20
   regenerate `MARKET_MAPPING.md`.
 - **League and team names:** prefer the ledger and `scripts/derive_mappings.py`
   over hand edits. Inspect Diagnostics to see what the gate refused.
+
+## Project status
+
+- [`ROADMAP.md`](ROADMAP.md) — open work, the production-readiness checklist and
+  the execution log. The current priority is SR9: every surebet leg must open
+  the exact match or a filled ticket.
+- [`docs/SESSION_BRIEF.md`](docs/SESSION_BRIEF.md) — where work stands and what
+  is next.
+- [`AGENTS.md`](AGENTS.md) — rules for anyone (human or agent) changing the code.
+- Latest measured scan: `docs/evidence/2026-11-11-test-scan.md`; closed work is
+  archived in `docs/archive/`.
 
 ## Notes
 

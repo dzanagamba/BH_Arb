@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import tomllib
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -22,7 +23,13 @@ def test_dev_requirements_pin_the_coverage_and_scan_tools():
 
 def test_coverage_is_scoped_and_has_a_measured_floor():
     assert 'source = ["engine", "server", "scrapers", "config", "models"]' in PYPROJECT
-    assert "fail_under = 80" in PYPROJECT
+    # M6-2: read the floor instead of pinning a literal. It must never drop
+    # below the original P1-4 floor (80) and never exceed the measured M6-1
+    # branch coverage (88.05), and branch coverage must stay on.
+    coverage = tomllib.loads(PYPROJECT)["tool"]["coverage"]
+    floor = float(coverage["report"]["fail_under"])
+    assert 80 <= floor <= 88.05, floor
+    assert coverage["run"]["branch"] is True
     # Tests and operator scripts must not pad the denominator.
     assert '"tests"' not in PYPROJECT.split("[tool.coverage.run]", 1)[1].split("[", 1)[0]
 
