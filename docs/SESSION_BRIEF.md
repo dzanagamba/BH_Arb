@@ -5,8 +5,8 @@
 model; work `ROADMAP.md` top to bottom.
 **Current row:** none in progress. SR9-4 is Done (labelling shipped; the
 operator declined a hide or deprioritise option).
-**Last commit:** `225f55e` "feat: show which legs reach the match on each card
-(SR9-4)" on `main` (2026-11-11, not pushed). `git log -1` has the hash.
+**Last commit:** `d317bf6` "docs: close SR9-4 with the operator's decision" on
+`main` (2026-11-11, not pushed). `git log -1` has the hash.
 
 ## Project state
 
