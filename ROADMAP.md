@@ -339,7 +339,7 @@ node-driven against the shipped `renderLinkCheckPanel`/`linkStatusLabel`).
 
 ### SR9-4 Show which legs reach the match; decide whether to hide the rest — Gate: operator (hide option only)
 
-Status: Not started
+Status: In progress (2026-11-11) — labelling done, hide option awaiting the operator
 
 Why: the operator must see at a glance whether a surebet can be placed from
 links alone.
@@ -352,8 +352,21 @@ an option that hides or deprioritises surebets whose legs cannot reach the match
 default without that decision.
 
 Acceptance:
-- [ ] Card count and per-leg marking in EN and BS, covered by frontend tests.
+- [x] Card count and per-leg marking in EN and BS, covered by frontend tests.
 - [ ] Hide/deprioritise option implemented only after a recorded decision.
+
+**SR9-4 labelling (2026-11-11).** `legReachesMatch`/`reachSummary` in
+`frontend/js/app.js` count only `ticket_filled`/`match_page` destinations that
+carry a URL; a missing destination is not a claim. Each card shows
+`Match links: N/M` (`row-reach-all` when every leg reaches it) and every leg pill
+whose link is only a search/competition page gets `data-reach="no"`, a dimmed
+dashed style and a “no per-match link” title. In the slip the leg gets a
+`leg-no-match` class and tag, and its copyable book spelling/name moves to the
+front of the listing row. EN and BS copy added (`Match links: {opened}/{legs}`,
+`no per-match link`). Tests: `tests/test_frontend_reach.py` (12, node-driven:
+`legReachesMatch`, `reachSummary`, the real `buildSurebetRow` HTML, the slip
+markup and catalog). No hide/deprioritise option exists; that half waits for a
+recorded operator decision.
 
 ### M7-2 Live test scan and roadmap/brief/AGENTS rewrite
 

@@ -3,8 +3,8 @@
 **Updated:** 2026-11-11
 **Goal:** keep the scanner correct and current without weakening the trust
 model; work `ROADMAP.md` top to bottom.
-**Current row:** none in progress. SR9-2 and SR9-3 are Done (MaxBet ticket
-both modes, WWIN live match page, on-demand leg-link check).
+**Current row:** SR9-4 in progress — the labelling half is Done; the
+hide/deprioritise option waits for an operator decision.
 **Last commit:** `582f81a` "feat: check a surebet's leg links on demand (SR9-3)"
 on `origin/main` (2026-11-11). `git log -1` has the hash.
 
@@ -21,8 +21,8 @@ on `origin/main` (2026-11-11). `git log -1` has the hash.
   MBet both, WWIN prematch+live), generic 6 (SportPlus 2, Premier 2,
   Mozzartbet live, Betole live). Evidence:
   `docs/evidence/2026-11-11-sr9-2.md`.
-- **Verification baseline (2026-11-11, this session):** `pytest` 2,425 passed,
-  12 skipped in 105.07 s, 0 failed. Ruff clean, mypy 294 files clean, market
+- **Verification baseline (2026-11-11, this session):** `pytest` 2,437 passed,
+  12 skipped in 105.82 s, 0 failed. Ruff clean, mypy 295 files clean, market
   doc / refresh_fixtures / audit_admissibility `--check` exit 0.
 - Branch coverage floor `fail_under = 87.05` (measured 88.05 %, M6-1); CI's 3.11
   leg enforces it and runs both ledger modes.
@@ -35,12 +35,12 @@ on `origin/main` (2026-11-11). `git log -1` has the hash.
 
 ## Next action
 
-**SR9-4**, labelling half only (ungated): on each surebet card show "N/M legs
-open the match or a filled ticket" and mark the legs that do not, with the
-copyable book spelling first. The hide/deprioritise option waits for a recorded
-operator decision. Then **SR8-1** (live Mozzartbet and Betole parse to zero
-matches), which also unblocks the Mozzartbet live destination id; then SR8-4,
-SR8-2, M8-1.
+**SR9-4:** the labelling half is done (`Match links: N/M`, dimmed generic leg
+pills, “no per-match link”, copy-first in the slip, EN/BS). Ask the operator for
+the hide/deprioritise decision; record it in the row, then either implement the
+option behind a default-off toggle or close the row with "not wanted". Then
+**SR8-1** (live Mozzartbet and Betole parse to zero matches), which also
+unblocks the Mozzartbet live destination id; then SR8-4, SR8-2, M8-1.
 
 ## Blockers and standing decisions
 

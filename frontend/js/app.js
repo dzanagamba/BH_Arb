@@ -1344,6 +1344,22 @@ function renderSurebets(surebets) {
     }
 }
 
+// SR9-4: which legs can actually reach the fixture from their link. A leg
+// reaches it only with a ticket-filled or match-page destination that carries a
+// URL; search/competition fallbacks do not, and a missing destination is not a
+// claim. This is display only — it never changes what is priced or shown.
+function legReachesMatch(leg) {
+    const destination = leg && leg.destination;
+    if (!destination || !destination.url) return false;
+    return destination.kind === 'ticket_filled' || destination.kind === 'match_page';
+}
+
+function reachSummary(sb) {
+    const stakes = sb && Array.isArray(sb.stakes) ? sb.stakes : [];
+    const opened = stakes.filter(legReachesMatch).length;
+    return { opened, legs: stakes.length, all: stakes.length > 0 && opened === stakes.length };
+}
+
 function buildSurebetRow(sb) {
     const row = document.createElement('button');
     row.type = 'button';
@@ -1358,12 +1374,17 @@ function buildSurebetRow(sb) {
     const minutesAway = kickoff ? (kickoff.getTime() - Date.now()) / 60000 : null;
     const whenClass = currentMode === 'live' ? ' live' : (minutesAway != null && minutesAway >= 0 && minutesAway < 60 ? ' soon' : '');
     const whenText = whenClass === ' soon' ? tr('in {minutes} min', { minutes: Math.max(1, Math.round(minutesAway)) }) : when;
-    const legs = placementOrder(sb.stakes).map(s => `
-        <span class="leg-pill" title="${escapeHtml(bookName(s.bookmaker))}: ${escapeHtml(outcomeDescription(s.outcome_label, sb.market_type, sb.sport))} at ${s.odds.toFixed(2)}">
+    const legs = placementOrder(sb.stakes).map(s => {
+        const reaches = legReachesMatch(s);
+        const pillTitle = `${bookName(s.bookmaker)}: ${outcomeDescription(s.outcome_label, sb.market_type, sb.sport)} at ${s.odds.toFixed(2)}${reaches ? '' : ` — ${tr('no per-match link')}`}`;
+        return `
+        <span class="leg-pill${reaches ? '' : ' leg-pill-generic'}" data-reach="${reaches ? 'yes' : 'no'}" title="${escapeHtml(pillTitle)}">
             <span class="book-dot" data-book-color="${escapeHtml(s.bookmaker)}">${escapeHtml(bookShort(s.bookmaker))}</span>
             <span class="leg-pick">${escapeHtml(s.outcome_label)}</span>
             <span class="leg-odds">${s.odds.toFixed(2)}</span>
-        </span>`).join('');
+        </span>`;
+    }).join('');
+    const reach = reachSummary(sb);
     const check = verifyState[sb.id];
     const badge = check ? `<span class="row-check row-check-${escapeHtml(check.state)}">${escapeHtml(verifyShortLabel(check))}</span>` : '';
     // What the default stake would earn at the scanned, unrounded prices.
@@ -1372,7 +1393,7 @@ function buildSurebetRow(sb) {
         <span class="row-profit"><b>${sb.profit_percent.toFixed(2)}%</b><small>+${money(earns)} KM</small></span>
         <span class="row-main">
             <span class="row-teams">${escapeHtml(formatTeamName(sb.home_team))} – ${escapeHtml(formatTeamName(sb.away_team))}</span>
-            <span class="row-meta"><span class="mkt">${escapeHtml(marketLabel(sb.market_type))}</span><span class="row-when${whenClass}">${escapeHtml(whenText)}</span><span class="row-league">${escapeHtml(formatLeague(sb.league))}</span></span>
+            <span class="row-meta"><span class="mkt">${escapeHtml(marketLabel(sb.market_type))}</span><span class="row-when${whenClass}">${escapeHtml(whenText)}</span><span class="row-league">${escapeHtml(formatLeague(sb.league))}</span><span class="row-reach${reach.all ? ' row-reach-all' : ''}">${escapeHtml(tr('Match links: {opened}/{legs}', { opened: reach.opened, legs: reach.legs }))}</span></span>
         </span>
         <span class="row-legs">${legs}</span>${badge}
     `;
@@ -1578,6 +1599,7 @@ function renderSlip() {
         // called a ticket.
         const dest = leg.destination || {};
         const destKind = dest.kind || '';
+        const reaches = legReachesMatch(leg);
         const url = dest.url || '';
         const destLabel = dest.label || (url ? tr('Open {name}', { name }) : '');
         const searchText = dest.search_text || listedAs;
@@ -1585,6 +1607,12 @@ function renderSlip() {
         const pickLine = dest.line || leg.line || '';
         const lineText = pickLine && !String(pickText).includes(pickLine) ? tr(' · line {line}', { line: pickLine }) : '';
         const copyLabel = tr(destKind === 'search' ? 'copy search' : destKind === 'competition' ? 'copy fixture' : 'copy name');
+        const copyMessage = copyLabel === tr('copy search') ? tr('Search text copied') : tr('Match name copied');
+        const copyButton = `<button type="button" class="link-btn" ${copyAttributes(searchText, copyMessage)}>${copyLabel}</button>`;
+        const listedSpan = `<span class="leg-listed-as" title="${escapeHtml(tr('How {name} lists this match', { name }))}">${escapeHtml(listedAs)}</span>`;
+        // SR9-4: when the leg has no per-match link, the copyable book spelling
+        // is the most useful thing on the row, so it comes first.
+        const listingOrder = reaches ? `${listedSpan}${copyButton}` : `${copyButton}${listedSpan}`;
         const stakeNote = destKind === 'ticket_filled' && !dest.ticket_stake_supported
             ? `<span class="leg-sub">${escapeHtml(tr('stake not prefilled'))}</span>` : '';
         const drift = check?.data?.drift?.[leg.outcome_label];
@@ -1597,7 +1625,7 @@ function renderSlip() {
         const stakeText = leg.plannedStake.toFixed(stakeRounding === 'exact' ? 2 : 0);
         const label = escapeHtml(leg.outcome_label);
         return `
-        <li class="leg${leg.placed ? ' leg-placed' : ''}" data-book-color="${escapeHtml(leg.bookmaker)}" data-label="${label}">
+        <li class="leg${leg.placed ? ' leg-placed' : ''}${reaches ? '' : ' leg-no-match'}" data-book-color="${escapeHtml(leg.bookmaker)}" data-label="${label}">
             <div class="leg-step">${index + 1}</div>
             <div class="leg-body">
                 <div class="leg-head">
@@ -1610,10 +1638,10 @@ function renderSlip() {
                     ${dest.ticket_script ? `<button type="button" class="btn btn-small btn-secondary" title="${escapeHtml(tr('Paste this in the SportPlus page console; it only fills the slip'))}" ${copyAttributes(dest.ticket_script, tr('SportPlus prefill script copied — paste it into the SportPlus page console'))}>${escapeHtml(dest.ticket_script_label || tr('Copy prefill script'))}</button>` : ''}
                 </div>
                 <div class="leg-listing">
-                    <span title="${escapeHtml(tr('How {name} lists this match', { name }))}">${escapeHtml(listedAs)}</span>
-                    <button type="button" class="link-btn" ${copyAttributes(searchText, copyLabel === tr('copy search') ? tr('Search text copied') : tr('Match name copied'))}>${copyLabel}</button>
+                    ${listingOrder}
                     ${listing?.league ? `<span class="leg-league">${escapeHtml(listing.league)}</span>` : ''}
                     ${destKind ? `<span class="leg-league">${escapeHtml(destKind === 'ticket_filled' ? tr('ticket') : destKind === 'match_page' ? tr('match page') : destKind)}</span>` : ''}
+                    ${reaches ? '' : `<span class="leg-no-match-tag">${escapeHtml(tr('no per-match link'))}</span>`}
                     <span class="leg-risk-note" title="${escapeHtml(risk.limit)}">${escapeHtml(risk.typical)}</span>
                 </div>
                 <div class="leg-bet">

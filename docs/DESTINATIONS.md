@@ -165,3 +165,15 @@ one-browser lock.
 The captured page text the check is tested against lives in
 `tests/fixtures/link_check/` (MaxBet filled and empty slip, MDShop filled slip, a
 MaxBet home page).
+
+## Reachability labels (SR9-4)
+
+Without opening anything, the dashboard shows how many of a surebet's legs can
+reach the fixture: each card carries `Match links: N/M`, and every leg pill whose
+destination is only a search or competition page is dimmed with a dashed edge
+and a “no per-match link” title. In the slip, such a leg carries a “no per-match
+link” tag and its copyable book spelling moves to the front of the row, because
+that is what the operator needs on a book with no per-event page. These labels
+are display only: they never hide or deprioritise a surebet, and they never
+change the certainty gate. Hiding or deprioritising unlinked surebets needs an
+operator decision recorded in SR9-4 before it exists.

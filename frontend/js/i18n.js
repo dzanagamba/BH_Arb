@@ -567,6 +567,8 @@ window.I18N = {
         "Could not check the links: {error}": "Nije moguće provjeriti linkove: {error}",
         "{opened} of {legs} legs open the match": "{opened} od {legs} nogu otvara utakmicu",
         "checked {ago}.": "provjereno {ago}.",
-        "The link check is advisory; it never proves a link for the certainty gate.": "Provjera linkova je informativna; nikada ne dokazuje link za sigurnosnu provjeru."
+        "The link check is advisory; it never proves a link for the certainty gate.": "Provjera linkova je informativna; nikada ne dokazuje link za sigurnosnu provjeru.",
+        "Match links: {opened}/{legs}": "Linkovi na utakmicu: {opened}/{legs}",
+        "no per-match link": "nema linka na utakmicu"
     }
 };

@@ -181,7 +181,9 @@ POST /api/scan
   A slip's **Check links** button opens each leg's destination on demand in a
   fresh browser context and reports per leg, with a timestamp, whether the page
   showed the fixture and — for a filled ticket — the pick on the slip. That check
-  is advisory and never sets `deep_link_verified`.
+  is advisory and never sets `deep_link_verified`. Each card also shows
+  `Match links: N/M` and marks the legs whose link is only a search or
+  competition page.
 - **Installable shell** — the dashboard registers a service worker for the
   static app shell only. It never caches `/api` responses or odds; an offline
   reload shows the shell, and a stale scan is still labelled historical.

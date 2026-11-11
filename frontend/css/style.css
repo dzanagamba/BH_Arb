@@ -603,6 +603,11 @@ body.feed-stale .row-profit b { color: var(--warn); }
 }
 .leg-pill .leg-pick { color: var(--muted); font-weight: 600; }
 .leg-pill .leg-odds { font-family: var(--mono); font-weight: 700; font-size: 13px; }
+/* SR9-4: a leg with no per-match link is still a priced leg; it is marked, not
+   hidden. The dashed edge and the dimmed pick say "copy the spelling". */
+.leg-pill-generic { border-style: dashed; opacity: .7; }
+.row-meta .row-reach { color: var(--warn); font-variant-numeric: tabular-nums; }
+.row-meta .row-reach-all { color: var(--accent); }
 
 .book-dot {
     display: inline-grid;
@@ -873,9 +878,11 @@ body.feed-stale .row-profit b { color: var(--warn); }
 .risk-badge[data-risk-profile="sharp"], .risk-badge[data-risk-profile="exchange"] { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); background: var(--accent-soft); }
 .risk-badge[data-risk-profile="unknown"] { color: var(--faint); }
 .leg-listing { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin: 2px 0 10px; font-size: 13px; color: var(--muted); }
-.leg-listing > span:first-child { color: var(--text); }
+.leg-listing > span:first-child, .leg-listing .leg-listed-as { color: var(--text); }
 .leg-league { color: var(--faint); font-size: 12px; }
 .leg-risk-note { color: var(--faint); font-size: 11px; }
+/* SR9-4: the leg has no per-match link; the copyable book spelling is the way in. */
+.leg-no-match-tag { color: var(--warn); font-size: 11.5px; }
 .leg-bet {
     display: grid;
     grid-template-columns: 1.2fr .8fr 1.1fr .9fr;
