@@ -6,7 +6,8 @@ model; work `ROADMAP.md` top to bottom.
 **Current row:** none in progress. SR8-4 is Done; SR8-1 (live Mozzartbet and
 Betole) is In progress because Mozzartbet live is websocket-only and waits on
 the operator's transport decision; Betole live is fixed (0 → 76 matches).
-**Last commit:** `PENDING` on `main` (2026-11-11). `git log -1` has the hash.
+**Last commit:** `af291e1` "fix: restore runtime state before record_scan scans
+(SR8-4)" on `main` (2026-11-11). `git log -1` has the hash.
 
 ## Project state
 
