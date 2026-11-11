@@ -3,8 +3,8 @@
 **Updated:** 2026-11-11
 **Goal:** keep the scanner correct and current without weakening the trust
 model; work `ROADMAP.md` top to bottom.
-**Current row:** SR9-4 in progress — the labelling half is Done; the
-hide/deprioritise option waits for an operator decision.
+**Current row:** none in progress. SR9-4 is Done (labelling shipped; the
+operator declined a hide or deprioritise option).
 **Last commit:** `225f55e` "feat: show which legs reach the match on each card
 (SR9-4)" on `main` (2026-11-11, not pushed). `git log -1` has the hash.
 
@@ -35,17 +35,13 @@ hide/deprioritise option waits for an operator decision.
 
 ## Next action
 
-**SR9-4:** the labelling half is done (`Match links: N/M`, dimmed generic leg
-pills, “no per-match link”, copy-first in the slip, EN/BS). Ask the operator for
-the hide/deprioritise decision; record it in the row, then either implement the
-option behind a default-off toggle or close the row with "not wanted". Then
 **SR8-1** (live Mozzartbet and Betole parse to zero matches), which also
-unblocks the Mozzartbet live destination id; then SR8-4, SR8-2, M8-1.
+unblocks the Mozzartbet live destination id. Then SR8-4, SR8-2, M8-1.
 
 ## Blockers and standing decisions
 
-- SR9-4's hide/deprioritise option needs an operator decision (recorded in the
-  row before any implementation).
+- SR9-4: the operator chose to keep every surebet listed — no hide and no
+  deprioritise option exists; revisit only on a new operator instruction.
 - SR4-3g blocked on a live EVLBet payload.
 - N2-4 deferred, P1-6 waived — do not start without an operator instruction.
 - SR8-3 gated: operator decides how mapping coverage is measured.
