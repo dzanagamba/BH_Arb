@@ -4,9 +4,9 @@
 **Goal:** keep the scanner correct and current without weakening the trust
 model; work `ROADMAP.md` top to bottom.
 **Current row:** none in progress. SR9-1 is Done (destinations re-proven,
-operator decisions recorded); uncommitted.
-**Last commit:** `afbb3c1` "docs: live test scan, production-readiness
-checklist and roadmap rewrite (M7-2)", pushed to `origin/main` on 2026-11-11.
+operator decisions recorded).
+**Last commit:** `5a4b8fe` "fix: re-prove bookmaker leg destinations on today's
+sites (SR9-1)", pushed to `origin/main` on 2026-11-11.
 
 ## Project state
 
