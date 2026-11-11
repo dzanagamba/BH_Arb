@@ -99,6 +99,7 @@ row or operator decision that closes it.
 | 7 | No endpoint, config file or UI action can change trust | **Met** (M5-3 removed the last approval path) | — |
 | 8 | A 24 h soak shows no memory/browser growth and no stale-book blindness | **Not met**: P1-6 waived; 10-cycle plateau only | operator: the waiver and this criterion conflict |
 | 9 | Security hardening applied; not exposed without a key | **Met** in code (M1-1, M1-3); deployment must set `API_KEY` | `docs/DEPLOYMENT.md` |
+| — | Every surebet leg opens the match or a filled ticket (operator priority) | **Not met**: 9 of 18 book × mode cells reach only a generic page; all proofs dated 2026-11-03 | SR9-1 … SR9-4 |
 | — | The committed suite is green | **Not met**: 1 failing test at HEAD | M6-2 |
 
 Two items cannot move without the operator: criterion 2/8 depend on the
@@ -108,10 +109,16 @@ production-ready while either stands.
 ## Task table
 
 Closed rows are not listed; see the archive. Order within `Not started` is the
-recommended order (by impact).
+recommended order. **SR9 is the operator's number-one priority (2026-11-11):**
+work it before every other row. M6-2 is a one-test fix and may be done first
+only if CI must be green for an SR9 push.
 
 | ID | Title | Status | Depends | Gate |
 |----|-------|--------|---------|------|
+| SR9-1 | Re-prove every leg destination on today's sites | Not started | — | — |
+| SR9-2 | Match-level link or filled ticket for the nine generic cells | Not started | SR9-1 | — |
+| SR9-3 | On-demand browser check of a served surebet's leg links | Not started | SR9-1 | — |
+| SR9-4 | Show which legs reach the match; decide whether to hide the rest | Not started | SR9-1 | operator (hide option only) |
 | M7-2 | Live test scan and roadmap/brief/AGENTS rewrite | Done | — | — |
 | M6-2 | Coverage-floor test still pins the old floor (main is red) | Not started | — | — |
 | SR8-1 | Live Mozzartbet and Betole parse to zero matches | Not started | — | — |
@@ -124,6 +131,139 @@ recommended order (by impact).
 | P1-6 | 24-hour soak and resource budget | Waived | — | operator |
 
 ## Open task sections
+
+### SR9 — Bookmaker destinations (operator priority 1, 2026-11-11)
+
+Operator: "when the program finds surebets … the links to the bookmakers'
+matches [must] actually link to the match in question, or if the bookmaker's site
+doesn't work that way, [the link must] create a ticket with the match in
+question."
+
+Where it stands (`config/bookmaker_destinations.json`, `engine/destinations.py`,
+`docs/DESTINATIONS.md`, all proofs dated 2026-11-03). The ladder is
+`ticket_filled` > `match_page` > `search` > `competition`, and a rung is used only
+with a confirmed proof. Of the 18 book × mode cells:
+
+| Best rung | Cells |
+|---|---|
+| `ticket_filled` | MDShop prematch/live, Admiralbet prematch/live (NSoft `ticketItems`; stake not prefilled) |
+| `match_page` | Mozzartbet prematch/live, MBet prematch/live, Betole prematch |
+| competition / copy only | **SportPlus** prematch/live (prematch has a console prefill script), **Premier Kladionica** prematch/live, **WWIN** prematch/live, **MaxBet** prematch/live, **Betole** live |
+
+Contradiction to settle in SR9-1: `config/bookmaker_deeplinks.json` treats
+MaxBet's `/match/<id>` route as `route_pattern_verified` (2026-11-03: "the app
+requests `/sportsbook/rest/v2/matches/<id>`"), while the destination record from
+the same day says `/match/<id>` "rendered blank" in the operator's browser. The
+gate's link half and the dashboard's destination must not disagree about the
+same URL.
+
+Boundaries for every SR9 row (trust invariant 9 and the scraper rules): a
+"ticket" means **prefilling the book's own slip on the operator's side** — a URL
+parameter, a public share/booking code the site itself issues without login, or
+a client-side prefill the operator triggers. Never log in, never submit or place
+a ticket, never store credentials, never call an endpoint that needs an account.
+Destinations never set `deep_link_verified` and never change a group's status;
+if SR9-1 shows the gate's declaration is wrong, record it and ask the operator
+before changing `config/bookmaker_deeplinks.json`.
+
+### SR9-1 Re-prove every leg destination on today's sites
+
+Status: Not started
+
+Why: every proof is eight days old and one contradicts the gate (MaxBet). A
+link the operator clicks must open the fixture today, not on 2026-11-03.
+
+Steps:
+1. Take fresh legs from a real scan (state restored; `docs/evidence/2026-11-11-test-scan.md`
+   shows how) — at least two fixtures per book and mode where the book has legs.
+2. Open each confirmed route in a real browser (OpenChamber browser panel or the
+   Playwright pool, headed where a headless page differs) and record: fixture
+   heading seen, selection on the slip seen (ticket rungs), screenshot path.
+3. Update each route's `proof` in `config/bookmaker_destinations.json`
+   (`checked_at`, `result`, sample, notes); demote a route that no longer works.
+4. Settle the MaxBet contradiction with a dated observation in both records'
+   notes; if the gate declaration is wrong, stop and ask the operator.
+5. Update the tables in `docs/DESTINATIONS.md`.
+
+Acceptance:
+- [ ] All 18 cells have a proof dated after 2026-11-11 (confirmed, failed or
+      unavailable), each with a sample fixture.
+- [ ] The MaxBet route has one consistent verdict in both records, or an
+      operator decision is recorded.
+- [ ] `tests/test_destinations.py` passes
+      against the updated record; no route is used above its proof.
+
+### SR9-2 Match-level link or filled ticket for the nine generic cells
+
+Status: Not started
+
+Why: for SportPlus, Premier Kladionica, WWIN, MaxBet (both modes) and Betole
+live, a surebet leg today opens a generic or competition page, so the operator
+must search for the fixture by hand while the price moves.
+
+Steps, per book (one book per sub-commit, cheapest first):
+1. Investigate, in the browser and the site's own JS/network traffic, the routes
+   that would identify the fixture: a hash/SPA route with the event id, a
+   `ticketItems`-like query, a share/booking-code URL the site issues without
+   login, or a client-side slip format (as SportPlus `localStorage["cn-prematch.ticket"]`).
+2. Prefer `ticket_filled` (the leg's exact selection on the slip), then
+   `match_page`. Record each attempt, including failures, in the JSON record.
+3. Add the route to `engine/destinations.py` with the identifiers the adapter
+   already parses; if the adapter does not carry the needed id, add it to the
+   parsed `Match` (no extra request per event unless measured and justified).
+4. SportPlus: turn the console prefill into a one-click path if the site
+   allows one without login (for example a bookmarklet the operator drags once);
+   otherwise keep the honest label.
+5. Betole live stays copy-only until it prices live legs (score guard; see
+   `docs/DESTINATIONS.md` "Honest limits") — record it and move on.
+
+Acceptance:
+- [ ] Each of the nine cells is either upgraded to `ticket_filled`/`match_page`
+      with a dated browser proof, or carries a dated proof that the site offers
+      neither without login (listing what was tried).
+- [ ] A unit test per new route builds the URL from a fixture `Match` and
+      `SurebetStake` and asserts the exact selection identifiers.
+- [ ] No new route requires a login, an account endpoint or a ticket submit.
+
+### SR9-3 On-demand browser check of a served surebet's leg links
+
+Status: Not started
+
+Why: a one-time sample proves a pattern, not today's leg. Before the operator
+acts on a surebet, each leg's link should be checked to open that fixture (and,
+for ticket rungs, that selection).
+
+Steps: reuse the `server/deeplink_verifier.py` browser path (isolated context, no
+cookies kept) to open each leg's destination for **one** surebet on request
+(slip "Check links" button → a scoped `/api` route), look for the fixture's team
+names (book spelling) and, for ticket rungs, the selection on the slip; return
+per-leg `opens_fixture` / `ticket_has_selection` / `failed` with a timestamp.
+Operator-triggered only: it never runs per scan, so it adds no scheduled
+traffic. It is advisory and never sets `deep_link_verified`.
+
+Acceptance:
+- [ ] The slip shows a per-leg link check result with its time.
+- [ ] Offline tests drive the check against HAR/fixture pages for a pass, a
+      generic page (fail) and an empty slip (fail).
+- [ ] The route requires the `scan` scope and is rate-limited per surebet.
+
+### SR9-4 Show which legs reach the match; decide whether to hide the rest — Gate: operator (hide option only)
+
+Status: Not started
+
+Why: the operator must see at a glance whether a surebet can be placed from
+links alone.
+
+Steps: on each surebet card show "N/M legs open the match or a filled ticket"
+and mark the legs that do not; give the generic legs the copyable book spelling
+first. The labelling part is ungated. **Operator decision needed** before adding
+an option that hides or deprioritises surebets whose legs cannot reach the match
+— it changes what is listed (not the certainty gate) and must not be on by
+default without that decision.
+
+Acceptance:
+- [ ] Card count and per-leg marking in EN and BS, covered by frontend tests.
+- [ ] Hide/deprioritise option implemented only after a recorded decision.
 
 ### M7-2 Live test scan and roadmap/brief/AGENTS rewrite
 
@@ -321,3 +461,4 @@ Entries before 2026-11-11 are in the archive.
 |------|------|--------|-------|
 | 2026-11-11 | M7-2 | Done | Operator: run a test scan for live and prematch, then rewrite the brief, roadmap and AGENTS. Driver `/tmp/bhscan/scan_both.py` (`_restore_state()` then `record_scan.run(mode)` for each mode). **Measured: prematch 6,921 matches / 1,359 groups (all verified) / 20 surebets, 139.0 s, nine books `ok`, error `5 surebet(s) dropped: a leg was a price outlier`; live 183 / 27 / 1, 29.1 s, `Mozzartbet: returned no matches`, `Betole: returned no matches`.** Mapping coverage 45,678/454,293 prematch, 718/89,919 live (floor 0.95); 173 mozzartbet offer drift lines; scan-cost history 1 → 3 entries (baseline kept); `git status` clean after the scan. Findings → SR8-1 … SR8-4; the full run exposed a pre-existing M6-1 test failure → M6-2; evidence `docs/evidence/2026-11-11-test-scan.md`. Old `ROADMAP.md` and `docs/SESSION_BRIEF.md` copied verbatim to `docs/archive/*_2026-11-11.md`; this file, the brief and `AGENTS.md` rewritten. Verification: `pytest` **1 failed, 2371 passed, 12 skipped in 108.50 s** (the failure is `test_ci_hardening.py::test_coverage_is_scoped_and_has_a_measured_floor`, pre-existing at HEAD, → M6-2); ruff `All checks passed!`; mypy `no issues found in 291 source files`; market doc in sync; refresh_fixtures and audit_admissibility `--check` exit 0. |
 | 2026-11-11 | M7-2 review | Done | Operator: check the changes help reach production readiness. Added the production-readiness checklist (criteria from `docs/PRODUCTION_READINESS.md`) with offline measurements: `replay_mappings.py tests/fixtures/replay/2026-11-03 --cold --check` exit 0 (`fixed_point: true`, `false_merges: 0`, `pairs_unresolved: 0`); `pairing_audit.py --cache cache/last_scan.json --check` exit 0 (`strict_miss_rate: 0.004`, 28 misses, 0 duplicate-book groups, 1,359 groups); `price_check.py` `outliers: 26` over `market comparisons: 5622`. New row M8-1 (refresh the readiness doc); deferred/waived section renamed so existing references resolve. |
+| 2026-11-11 | SR9 | Rows added | Operator: links on a surebet must open the exact match, or create a ticket with it where the site has no match page; make it priority one. Added SR9-1 … SR9-4 above every other row. Measured state from `config/bookmaker_destinations.json`: `ticket_filled` 4 cells (mdshop, admiralbet), `match_page` 5 (mozzartbet, mbet, betole prematch), competition/copy only 9 (sportplus, premier_kladionica, wwin, maxbet, betole live); all proofs `checked_at` 2026-11-03. Recorded the MaxBet contradiction between `bookmaker_deeplinks.json` (`route_pattern_verified`) and the destination record (`/match/<id>` rendered blank). No code changed. |

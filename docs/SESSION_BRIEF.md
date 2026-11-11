@@ -30,7 +30,13 @@ checklist and roadmap rewrite (M7-2)", pushed to `origin/main` on 2026-11-11.
 
 ## Next action
 
-Take **M6-2** first: `main` is red because `tests/test_ci_hardening.py:25`
+**Operator priority 1 (2026-11-11): SR9 — every surebet leg must open the
+exact match or a filled ticket.** Start with SR9-1 (re-prove all 18 book × mode
+destinations on today's sites and settle the MaxBet gate/destination
+contradiction), then SR9-2 (upgrade SportPlus, Premier, WWIN, MaxBet, Betole
+live), SR9-3, SR9-4. Never log in or submit a ticket. After SR9:
+
+Take **M6-2**: `main` is red because `tests/test_ci_hardening.py:25`
 still expects `fail_under = 80` after M6-1 set 87.05 (one-line class of fix).
 Then **SR8-1** (live Mozzartbet and Betole parse to zero matches) — two of nine
 books are missing from every live scan. Then SR8-4 (make `record_scan.py`
