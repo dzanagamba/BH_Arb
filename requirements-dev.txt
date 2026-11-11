@@ -3,7 +3,7 @@ pytest==9.0.3
 pytest-cov==7.1.0
 coverage==7.17.1
 ruff==0.9.10
-mypy==1.15.0
+mypy==2.4.1
 # Property-based tests for pricing/identity invariants (N3-1); dev-only.
 hypothesis==6.150.0
 # Transport-level adapter tests over a fake HTTP transport (SR4-1); dev-only.

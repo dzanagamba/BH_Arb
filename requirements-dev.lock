@@ -10,6 +10,7 @@ annotated-doc==0.0.6
 annotated-types==0.8.0
 anyio==4.16.0
 arrow==1.4.0
+ast_serialize==0.13.1
 attrs==26.1.0
 bandit==1.9.4
 boolean.py==5.0
@@ -39,16 +40,18 @@ jsonpointer==3.12
 jsonschema-specifications==2025.9.1
 jsonschema==4.26.0
 lark==1.3.1
+librt==0.16.0
 license-expression==30.4.4
 lxml==6.1.3
 markdown-it-py==4.3.0
 mdurl==0.1.2
 msgpack==1.2.4
-mypy==1.15.0
+mypy==2.4.1
 mypy_extensions==1.2.0
 opentelemetry-api==1.45.2
 packageurl-python==0.17.6
 packaging==26.3
+pathspec==1.1.1
 pip-requirements-parser==32.0.1
 pip_api==0.0.35
 pip_audit==2.10.1

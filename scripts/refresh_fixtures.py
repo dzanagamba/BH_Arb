@@ -185,7 +185,8 @@ def main(argv: list[str] | None = None) -> int:
     books = [book.strip() for book in args.books.split(",") if book.strip()]
     capture_report = capture(books) if args.capture else {"status": "not_requested"}
     if args.capture and capture_report["status"] != "ok":
-        report = {"ok": False, "capture": capture_report}
+        # The report gains integer fields after --write; keep one dict type.
+        report: dict[str, Any] = {"ok": False, "capture": capture_report}
         print(json.dumps(report, indent=2, sort_keys=True))
         return 1
 
