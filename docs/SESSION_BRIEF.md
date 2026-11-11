@@ -5,8 +5,8 @@
 model; work `ROADMAP.md` top to bottom.
 **Current row:** SR9-4 in progress — the labelling half is Done; the
 hide/deprioritise option waits for an operator decision.
-**Last commit:** `582f81a` "feat: check a surebet's leg links on demand (SR9-3)"
-on `origin/main` (2026-11-11). `git log -1` has the hash.
+**Last commit:** `225f55e` "feat: show which legs reach the match on each card
+(SR9-4)" on `main` (2026-11-11, not pushed). `git log -1` has the hash.
 
 ## Project state
 
