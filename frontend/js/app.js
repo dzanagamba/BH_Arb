@@ -325,6 +325,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadResults(true);
     const tabs = document.querySelector('.results-tabs');
     if (tabs) tabs.addEventListener('keydown', handleTabKeydown);
+    const modeTabs = document.getElementById('mode-toggle');
+    if (modeTabs) modeTabs.addEventListener('keydown', handleModeTabKeydown);
     document.addEventListener('keydown', handleGlobalKeydown);
     // Health and review-queue refresh share one 30-second cadence.
     refreshDiagnostics();
@@ -443,6 +445,7 @@ function updateModeToggleUI() {
         if (!button) continue;
         button.classList.toggle('active', currentMode === mode);
         button.setAttribute('aria-selected', String(currentMode === mode));
+        button.tabIndex = currentMode === mode ? 0 : -1;
     }
 }
 
@@ -526,6 +529,24 @@ function switchTab(tab) {
     if (target === 'history') loadHistory();
     if (target === 'evidence') loadEvidence(true);
     if (target === 'other') renderOtherSports();
+}
+
+function handleModeTabKeydown(event) {
+    const tab = event.target.closest('[role="tab"]');
+    if (!tab || !tab.closest('#mode-toggle')) return;
+    const tabs = [...document.querySelectorAll('#mode-toggle [role="tab"]')];
+    const currentIndex = tabs.indexOf(tab);
+    if (currentIndex < 0) return;
+    let nextIndex = null;
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') nextIndex = (currentIndex + 1) % tabs.length;
+    else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+    else if (event.key === 'Home') nextIndex = 0;
+    else if (event.key === 'End') nextIndex = tabs.length - 1;
+    if (nextIndex === null) return;
+    event.preventDefault();
+    const next = tabs[nextIndex];
+    next.focus();
+    switchMode(next.dataset.mode);
 }
 
 function handleTabKeydown(event) {
@@ -1480,6 +1501,11 @@ function slipFor(sb) {
     return slipState[sb.id];
 }
 
+function setSlipStatus(text) {
+    const status = document.getElementById('slip-status');
+    if (status) status.textContent = text;
+}
+
 function renderSlip() {
     const pane = document.getElementById('slip');
     if (!pane) return;
@@ -1491,6 +1517,7 @@ function renderSlip() {
                 <h3>${escapeHtml(tr('Bet slip'))}</h3>
                 <p>${escapeHtml(tr('Pick a surebet on the left. Its odds are re-checked first, then you get each leg in the order to place it, with the stake to type.'))}</p>
             </div>`;
+        setSlipStatus('');
         return;
     }
     const state = slipFor(sb);
@@ -1679,6 +1706,9 @@ function renderSlip() {
     `;
     applyDynamicStyles(pane);
     applyStatusBadge(pane.querySelector('.status-badge'), sb.status || sb.match_status);
+    // The slip pane is no longer one big live region; announce only the fixture
+    // the operator just opened.
+    setSlipStatus(`${formatTeamName(sb.home_team)} – ${formatTeamName(sb.away_team)}`);
 }
 
 // Only show a status the backend explicitly sent; never infer safety from the

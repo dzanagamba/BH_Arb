@@ -40,9 +40,14 @@ conventions.
 
 - Skip link to `#main` (`tabindex="-1"` on the main region), visible on focus.
 - Tab buttons use `role="tab"`, `aria-selected`, `aria-controls` and a roving
-  `tabindex`; their keydown handler is in `handleTabKeydown`.
+  `tabindex`; their keydown handler is in `handleTabKeydown`. The two feed-mode
+  tabs in the top bar use the same contract, both control
+  `#surebets-panel`, and share `handleModeTabKeydown`.
 - Live regions: the freshness banner (`role="alert"`), feed-integrity strip,
-  slip pane, sweep status and toast (`role="status"`) all use `aria-live`.
+  slip status (`#slip-status`), sweep status and toast (`role="status"`) all use
+  `aria-live`. The slip pane itself is not a live region: announcing every price
+  tick and stake edit made the whole panel noisy, so only the opened fixture is
+  announced.
 - Every generated link/button is a real `<button>`/`<a>` with an accessible
   label; no inline handlers.
 - Form controls have a visible `<span>` label or `aria-label`.

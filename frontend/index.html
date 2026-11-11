@@ -28,8 +28,12 @@
     </div>
 
     <div class="segmented" id="mode-toggle" role="tablist" aria-label="Match mode" data-i18n-aria-label="Match mode">
-        <button class="segment active" id="mode-prematch" role="tab" aria-selected="true" data-action="switch-mode" data-mode="prematch" data-i18n="Upcoming">Upcoming</button>
-        <button class="segment" id="mode-live" role="tab" aria-selected="false" data-action="switch-mode" data-mode="live"><span class="live-dot"></span><span data-i18n="Live">Live</span></button>
+        <button class="segment active" id="mode-prematch" role="tab" aria-selected="true"
+                aria-controls="surebets-panel" tabindex="0" data-action="switch-mode"
+                data-mode="prematch" data-i18n="Upcoming">Upcoming</button>
+        <button class="segment" id="mode-live" role="tab" aria-selected="false"
+                aria-controls="surebets-panel" tabindex="-1" data-action="switch-mode"
+                data-mode="live"><span class="live-dot"></span><span data-i18n="Live">Live</span></button>
     </div>
 
     <div class="topbar-right">
@@ -175,12 +179,13 @@
                 </div>
             </div>
 
-            <aside class="slip-pane" id="slip" aria-live="polite">
+            <aside class="slip-pane" id="slip" aria-label="Bet slip" data-i18n-aria-label="Bet slip">
                 <div class="slip-placeholder">
                     <h3 data-i18n="Bet slip">Bet slip</h3>
                     <p data-i18n="Pick a surebet on the left. Its odds are re-checked first, then you get each leg in the order to place it, with the stake to type.">Pick a surebet on the left. Its odds are re-checked first, then you get each leg in the order to place it, with the stake to type.</p>
                 </div>
             </aside>
+            <p class="sr-only" id="slip-status" role="status" aria-live="polite"></p>
         </div>
     </section>
 

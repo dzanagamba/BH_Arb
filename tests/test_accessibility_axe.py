@@ -98,7 +98,9 @@ def test_main_landmarks_and_live_regions_exist():
     assert '<main class="main" id="main" tabindex="-1">' in HTML
     assert '<nav class="results-tabs" role="tablist"' in HTML
     assert 'aria-label="Dashboard views"' in HTML
-    assert '<aside class="slip-pane" id="slip" aria-live="polite">' in HTML
+    assert '<aside class="slip-pane" id="slip" aria-label="Bet slip"' in HTML
+    assert 'id="slip-status"' in HTML
+    assert 'role="status" aria-live="polite"' in HTML
     assert 'class="skip-link"' in HTML
     assert HTML.count('aria-live="polite"') >= 2
     assert 'role="alert"' in HTML
@@ -113,8 +115,20 @@ def test_every_tab_exposes_its_state_and_panel():
     # Six view tabs plus the two feed-mode tabs in the top bar.
     assert HTML.count('role="tab"') == 8
     assert HTML.count("aria-selected=") >= 8
-    assert HTML.count("aria-controls=") >= 6
+    assert HTML.count("aria-controls=") >= 8
     assert HTML.count('role="tabpanel"') == 6
+
+
+def test_the_feed_mode_tabs_control_their_panel_with_a_roving_tabindex():
+    """The top-bar tabs had aria-selected but no aria-controls or roving tabindex."""
+    for mode, tabindex in (("prematch", "0"), ("live", "-1")):
+        tag = re.search(rf'<button[^>]*id="mode-{mode}"[^>]*>', HTML, re.S)
+        assert tag is not None, mode
+        assert 'aria-controls="surebets-panel"' in tag.group(0), mode
+        assert f'tabindex="{tabindex}"' in tag.group(0), mode
+        assert 'data-action="switch-mode"' in tag.group(0), mode
+    assert "handleModeTabKeydown" in JS
+    assert "button.tabIndex = currentMode === mode ? 0 : -1" in JS
 
 
 def test_every_control_has_a_programmatic_name():

@@ -183,7 +183,7 @@ do not copy stale numbers here.
 | M5-4 | Decide `raw_market_resolver.resolve_offers` | Done | — | operator |
 | M5-5 | Finish the PWA | Done | — | operator |
 | M5-6 | Zero-matches diagnostic and no-surebet state | In progress | — | operator |
-| M5-7 | Fix the feed-mode tab ARIA contract | Not started | — | operator |
+| M5-7 | Fix the feed-mode tab ARIA contract | In progress | — | operator |
 | M6-1 | Branch coverage floor in CI | Not started | — | operator |
 | M7-1 | Dashboard UI polish pass | Done | — | — |
 
@@ -3511,16 +3511,32 @@ Acceptance (2026-11-11):
 
 ### M5-7 Fix the feed-mode tab ARIA contract
 
-Status: Not started
+Status: In progress
 
 Gate: operator
+
+**Decision (2026-11-11, operator: continue with M5): use a real tab contract.**
+The two top-bar buttons already had `role="tab"` inside a `role="tablist"`, but
+no `aria-controls`, no roving `tabindex` and no arrow-key handler, so a keyboard
+user tabbed into both and the panel association was unstated. Both tabs now
+control `#surebets-panel`, keep one tab in the tab order, and share
+`handleModeTabKeydown` (arrows/Home/End) with `switchMode`.
+
+The whole slip pane was one `aria-live` region, so every price tick, stake edit
+and re-render announced the entire panel. The pane becomes a labelled region and
+a small `#slip-status` line announces only the fixture that was opened.
 
 Why / what: Fix the feed-mode tab ARIA contract (`aria-controls`/roving tabindex
 or a `group` with `aria-pressed`) and reconsider the whole-slip live region.
 
-Acceptance:
-- [ ] Operator approval recorded here.
-- [ ] Acceptance criteria written here before coding.
+Acceptance (2026-11-11):
+- [ ] Both feed tabs carry `aria-controls="surebets-panel"`, one `tabindex="0"`
+      and one `-1`, kept in sync by `updateModeToggleUI`.
+- [ ] Arrow/Home/End keys move focus and switch the feed via
+      `handleModeTabKeydown`.
+- [ ] The slip pane is a labelled region, not a live region; `#slip-status`
+      announces the opened fixture and clears when the slip closes.
+- [ ] Accessibility tests and docs pin the contract; the full suite passes.
 
 ---
 
@@ -3840,3 +3856,4 @@ Useful starting points:
 | 2026-11-11 | M5-4 | Done | Retired `engine/raw_market_resolver.py` (`resolve_offers`, `ResolvedOffer`); no adapter emitted `RawOffer` and no caller existed. `scripts/discover_markets.py` keeps the real `classify` + `compare` + ledger path. The onboarding test now classifies offers directly and still proves no-config-edit and the ambiguous-label gap; `RawOffer` stays documented. `docs/BOOK_ADAPTER.md` updated. `pytest`: 2,368 passed, 12 skipped (17 snapshots) in 104.80 s; ruff and mypy (290 files) clean. |
 | 2026-11-11 | M5-5 | Done | Added generated 192/512 PNG icons (`scripts/generate_pwa_icons.py`, stdlib; `--check` in sync), declared both in the manifest (one `maskable`), mounted `/icons`, and cached them in the worker shell (v5). The alerts button now sends a confirmation notification after a grant via the ready worker or `new Notification`, not just a toast. `docs/PWA_ACCESSIBILITY.md` and the PWA tests updated. `pytest`: 2,370 passed, 12 skipped (17 snapshots) in 104.91 s; ruff and mypy (291 files) clean; node checks pass. |
 | 2026-11-11 | M5-6 | Done | Added `scan_completed` to `diagnosticFlags` and a `zero_matches` case (panel `empty-state`, `Scan now` action, live wording) between `never_scanned` and the gate cases, so a completed scan that read nothing no longer looks like a fresh install. Only the feed-decided cases carry `*_live` copy; the truth table now enumerates six flags, `_unreachable` pins `scanned -> scan_completed`, and a real empty-scan fixture selects `zero_matches` in the shipped selector. English/Bosnian copy and `docs/ACCESSIBILITY.md` updated. `pytest`: 2,371 passed, 12 skipped (17 snapshots) in 105.06 s; ruff and mypy (291 files) clean. |
+| 2026-11-11 | M5-7 | Done | Gave the feed-mode tabs a real tab contract: both `aria-controls="surebets-panel"`, roving `tabindex` kept by `updateModeToggleUI`, and `handleModeTabKeydown` for arrows/Home/End. Replaced the whole-slip `aria-live` with a labelled region plus `#slip-status`, which announces the opened fixture and clears on close. `docs/PWA_ACCESSIBILITY.md` and `tests/test_accessibility_axe.py` pin it. `pytest`: 2,372 passed, 12 skipped (17 snapshots) in 105.12 s; ruff and mypy (291 files) clean; node --check passes. |
