@@ -1,4 +1,4 @@
-"""A new book's labels and markets resolve without a hand-written registry row."""
+"""A new book's labels classify without a hand-written registry row."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ import hashlib
 from datetime import datetime
 from pathlib import Path
 
+from engine.market_discovery import classify
 from engine.matcher import MatchMatcher
-from engine.raw_market_resolver import resolve_offers
 from models.schemas import Market, MarketType, Match, OddsValue, RawOffer
 
 REPO_ROOT = Path(__file__).parents[1]
@@ -87,17 +87,32 @@ def _match(book: str, markets: list[Market]) -> Match:
     )
 
 
+def _classify(offer: RawOffer):
+    return classify(
+        offer.labels,
+        line=offer.line,
+        period=offer.period,
+        market_key=offer.market_key,
+    )
+
+
 def test_a_synthetic_book_resolves_and_groups_with_no_config_edits():
     before = {path: hashlib.sha256(path.read_bytes()).hexdigest() for path in CONFIG_FILES}
-    resolved = resolve_offers(_offers(), _references() * 2)
-    by_key = {item.offer.market_key: item for item in resolved}
-    assert by_key["unknown-match-result"].market is not None
-    assert by_key["unknown-total"].market is not None
-    assert by_key["unknown-btts"].market is not None
-    assert by_key["unknown-two-way"].market is None
-    assert by_key["unknown-two-way"].reason == "unclassified_labels"
+    classified = {offer.market_key: _classify(offer) for offer in _offers()}
+    assert classified["unknown-match-result"] is not None
+    assert classified["unknown-total"] is not None
+    assert classified["unknown-btts"] is not None
+    assert classified["unknown-two-way"] is None
 
-    synthetic_markets = [item.market for item in resolved if item.market is not None]
+    synthetic_markets = [
+        Market(
+            market_type=classification.market_type,
+            odds=list(offer.odds),
+            source_id=offer.source_id,
+        )
+        for offer in _offers()
+        if (classification := _classify(offer)) is not None
+    ]
     matches = [
         _match("syntheticbook", synthetic_markets),
         _match("mbet", _references()),
@@ -113,7 +128,5 @@ def test_a_synthetic_book_resolves_and_groups_with_no_config_edits():
 
 
 def test_an_ambiguous_offer_is_a_gap_not_a_guess():
-    offers = [RawOffer(bookmaker="syntheticbook", labels=["Home", "Away"])]
-    resolved = resolve_offers(offers)
-    assert resolved[0].market is None
-    assert resolved[0].reason == "unclassified_labels"
+    offer = RawOffer(bookmaker="syntheticbook", labels=["Home", "Away"])
+    assert _classify(offer) is None

@@ -180,7 +180,7 @@ do not copy stale numbers here.
 | M5-1 | Remove legacy URL maps | Done | — | operator |
 | M5-2 | Decide the `link_sweeps` table | Done | — | operator |
 | M5-3 | Decide approve/reject functions | In progress | — | operator |
-| M5-4 | Decide `raw_market_resolver.resolve_offers` | Not started | — | operator |
+| M5-4 | Decide `raw_market_resolver.resolve_offers` | Done | — | operator |
 | M5-5 | Finish the PWA | Not started | — | operator |
 | M5-6 | Zero-matches diagnostic and no-surebet state | Not started | — | operator |
 | M5-7 | Fix the feed-mode tab ARIA contract | Not started | — | operator |
@@ -3406,16 +3406,40 @@ Acceptance (2026-11-11):
 
 ### M5-4 Decide `raw_market_resolver.resolve_offers`
 
-Status: Not started
+Status: Done
 
 Gate: operator
+
+**Decision (2026-11-11, operator: continue with M5): retire.** No adapter emits
+`RawOffer` and nothing calls the resolver; `scripts/discover_markets.py` proves
+mappings from already-typed markets with the same `classify` + `compare` steps
+plus ledger evidence the resolver does not produce. Wiring it would mean
+converting typed markets back to raw offers and duplicating the evidence path, so
+retire the wrapper and keep the two shared building blocks it used.
+
+`tests/test_new_book_onboarding.py` keeps its acceptance at the classifier level
+(a synthetic book's labels resolve or are a gap, grouping works, and no
+hand-written config file changes), so removing the wrapper does not remove the
+onboarding proof. `docs/BOOK_ADAPTER.md` describes the actual pipeline.
 
 Why / what: Decide `engine/raw_market_resolver.resolve_offers`: wire it into
 `scripts/discover_markets.py` or retire it.
 
-Acceptance:
-- [ ] Operator approval recorded here.
-- [ ] Acceptance criteria written here before coding.
+**Outcome (2026-11-11).** Deleted `engine/raw_market_resolver.py`
+(`resolve_offers`/`ResolvedOffer`). `scripts/discover_markets.py` already uses
+`classify` + `compare` with ledger evidence, so nothing production changed.
+`tests/test_new_book_onboarding.py` now classifies the synthetic offers directly
+and still proves the no-config-edit and ambiguous-gap properties; `RawOffer`
+stays the documented adapter type. `docs/BOOK_ADAPTER.md` describes the actual
+pipeline.
+
+Acceptance (2026-11-11):
+- [x] `engine/raw_market_resolver.py` and its `ResolvedOffer` wrapper are gone;
+      `RawOffer` stays the documented adapter type.
+- [x] The onboarding test exercises `classify` directly and still proves the
+      no-config-edit and ambiguous-label properties.
+- [x] `docs/BOOK_ADAPTER.md` names the classifier/consensus/ledger pipeline, not
+      a resolver function; the full suite and checks pass.
 
 ### M5-5 Finish the PWA
 
@@ -3772,3 +3796,4 @@ Useful starting points:
 | 2026-11-11 | M5-1 | Done | Removed the legacy URL maps: `Surebet.match_urls`, `Surebet.bet_urls`, `Match.bet_url`, `MATCH_URL_TEMPLATES` and `_collect_match_urls`/`_collect_bet_urls`. `SurebetStake.destination` stays the only served destination path; `Match.url` stays. `tests/test_urls.py` keeps only the two parser URL tests. `pytest`: 2,378 passed, 12 skipped (17 snapshots) in 106.61 s; ruff and mypy clean. |
 | 2026-11-11 | M5-2 | Done | Removed the unused SQLite `link_sweeps` store: table creation, `Storage.append_link_sweep()`/`prune_link_sweeps()`, the `counts()` key, the maintenance inventory/prune step and window, and `RETENTION_LINK_SWEEPS_DAYS`. `cache/link_sweeps.json` (cap 200) stays the one sweep history; `docs/STORAGE.md` and the maintenance/migration tests were updated. `pytest`: 2,378 passed, 12 skipped (17 snapshots) in 108.48 s; ruff and mypy clean. |
 | 2026-11-11 | M5-3 | Done | Deleted the unreachable human approval path: `approve_candidate`, `reject_candidate`, `_approve`, `_approval_blockers`, `_resolve_candidate`, `HUMAN_MAPPING_ENABLED`, `candidate_reviews`, `CANDIDATE_REVIEW_HISTORY_MAX`, the `human_mapping_enabled` payload key and the runtime allowlist writer (`_load_allowlist`/`_save_allowlist`/`ALLOWLIST_FILE`). The suppression reader still honours old decisions; tests now drive `_suppress_candidate` directly, and the 404 route-absence tests stay. `docs/CANDIDATE_REMEDIATION.md` updated. `pytest`: 2,368 passed, 12 skipped (17 snapshots) in 104.83 s; ruff and mypy clean. |
+| 2026-11-11 | M5-4 | Done | Retired `engine/raw_market_resolver.py` (`resolve_offers`, `ResolvedOffer`); no adapter emitted `RawOffer` and no caller existed. `scripts/discover_markets.py` keeps the real `classify` + `compare` + ledger path. The onboarding test now classifies offers directly and still proves no-config-edit and the ambiguous-label gap; `RawOffer` stays documented. `docs/BOOK_ADAPTER.md` updated. `pytest`: 2,368 passed, 12 skipped (17 snapshots) in 104.80 s; ruff and mypy (290 files) clean. |

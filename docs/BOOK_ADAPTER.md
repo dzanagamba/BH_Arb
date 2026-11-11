@@ -30,15 +30,18 @@ Do not choose a `MarketType` in the adapter. `engine/market_discovery.py` does
 that from labels, line and period; `engine/market_consensus.py` checks the result
 against other books on the same fixture.
 
-## What the resolver does
+## What the discovery pipeline does
 
 * **Names** — the learner (`engine/mapping_learner.py`) proves team aliases and
   league equivalences from shared Betradar ids and exact shared fixtures, and
   writes them to `config/generated/mapping_evidence.json`. The gate reads only
   accepted, non-stale claims.
-* **Markets** — the classifier accepts a complete label set, and the consensus
-  check accepts it only when at least two other books agree on the de-vigged
-  probabilities. A row with no corroboration is quarantined, not guessed.
+* **Markets** — `engine/market_discovery.classify()` accepts a complete label
+  set, and `engine/market_consensus.compare()` accepts it only when at least two
+  other books agree on the de-vigged probabilities. A row with no corroboration
+  is quarantined, not guessed; `scripts/discover_markets.py` records the ledger
+  evidence. (The old `engine/raw_market_resolver.resolve_offers` wrapper was
+  retired in M5-4 because no adapter used it.)
 * **Absence** — a market the book never publishes is recorded as
   `market_absence` with the capture dates and payload hashes. Do not silently
   omit it.
