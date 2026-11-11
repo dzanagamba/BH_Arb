@@ -21,12 +21,15 @@ exclude = ["venv/", "cache/"]
 # state would inflate or destabilise the number.
 source = ["engine", "server", "scrapers", "config", "models"]
 omit = ["config/generated/*"]
+# M6-1: count each branch outcome, not just each line, so an untaken guard fails.
+branch = true
 
 [tool.coverage.report]
-# Baseline measured on 2026-11-04: 81.55% across the packages above. Keep a small
-# cushion so unrelated refactors do not turn CI red, and raise this as coverage
-# improves. Enforced only when pytest runs with --cov (the CI test job).
-fail_under = 80
+# M6-1: branch coverage measured 88.05% on 2026-11-11 on the 3.11 clean-mode
+# suite (the populated-ledger run does not pass --cov). The floor is one point
+# under so ordinary refactors do not turn CI red; raise it when coverage
+# improves. Enforced only when pytest runs with --cov (the CI 3.11 leg).
+fail_under = 87.05
 show_missing = true
 exclude_lines = [
     "pragma: no cover",

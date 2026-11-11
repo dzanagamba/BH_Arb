@@ -184,7 +184,7 @@ do not copy stale numbers here.
 | M5-5 | Finish the PWA | Done | — | operator |
 | M5-6 | Zero-matches diagnostic and no-surebet state | Done | — | operator |
 | M5-7 | Fix the feed-mode tab ARIA contract | Done | — | operator |
-| M6-1 | Branch coverage floor in CI | Not started | — | operator |
+| M6-1 | Branch coverage floor in CI | Done | — | operator |
 | M7-1 | Dashboard UI polish pass | Done | — | — |
 
 ---
@@ -3569,15 +3569,37 @@ Acceptance (2026-11-11):
 
 ### M6-1 Branch coverage floor in CI
 
-Status: Not started
+Status: Done
 
 Gate: operator
 
+**Decision (2026-11-11, operator: "measure it and take a point under").** Enable
+`branch = true` in `[tool.coverage.run]`, measure the branch percentage on the
+3.11 suite in the clean runtime state, and set `fail_under` exactly one
+percentage point below the measurement. CI already runs
+`pytest --cov --cov-report=term-missing --cov-report=xml` on the 3.11 leg, so the
+configured floor is enforced with no new workflow step.
+
+The floor is re-measured, not derived from the old 81.55 % line-coverage
+baseline: branch coverage counts the untaken side of every guard, so it is a
+different number. The config comment records the measured date and value.
+
 Why / what: Enable branch coverage with a measured floor and add it to CI.
 
-Acceptance:
-- [ ] Operator approval recorded here.
-- [ ] Acceptance criteria written here before coding.
+**Outcome (2026-11-11).** `[tool.coverage.run]` sets `branch = true`, and the
+3.11 suite measured **88.05%** (14,255 statements, 5,260 branches, 863 partial;
+`pytest --cov --cov-report=term-missing --cov-report=xml`, 2,372 passed, 12
+skipped, 4 m 34 s). `fail_under` is **87.05**, one point under, and the CI 3.11
+command already enforces it; `coverage report` exits 0 at 88.05. The config
+comment and `docs/CI.md` record the measurement and the rule.
+
+Acceptance (2026-11-11):
+- [x] `[tool.coverage.run]` sets `branch = true`; the 3.11 CI command enforces it.
+- [x] `fail_under` is one percentage point below the measured branch percentage,
+      and the config comment records that measurement.
+- [x] The measurement command and output are in the execution log.
+- [x] `docs/CI.md` and the session brief describe the branch floor; the full
+      suite and the other checks pass.
 
 ---
 
@@ -3882,3 +3904,4 @@ Useful starting points:
 | 2026-11-11 | M5-5 | Done | Added generated 192/512 PNG icons (`scripts/generate_pwa_icons.py`, stdlib; `--check` in sync), declared both in the manifest (one `maskable`), mounted `/icons`, and cached them in the worker shell (v5). The alerts button now sends a confirmation notification after a grant via the ready worker or `new Notification`, not just a toast. `docs/PWA_ACCESSIBILITY.md` and the PWA tests updated. `pytest`: 2,370 passed, 12 skipped (17 snapshots) in 104.91 s; ruff and mypy (291 files) clean; node checks pass. |
 | 2026-11-11 | M5-6 | Done | Added `scan_completed` to `diagnosticFlags` and a `zero_matches` case (panel `empty-state`, `Scan now` action, live wording) between `never_scanned` and the gate cases, so a completed scan that read nothing no longer looks like a fresh install. Only the feed-decided cases carry `*_live` copy; the truth table now enumerates six flags, `_unreachable` pins `scanned -> scan_completed`, and a real empty-scan fixture selects `zero_matches` in the shipped selector. English/Bosnian copy and `docs/ACCESSIBILITY.md` updated. `pytest`: 2,371 passed, 12 skipped (17 snapshots) in 105.06 s; ruff and mypy (291 files) clean. |
 | 2026-11-11 | M5-7 | Done | Gave the feed-mode tabs a real tab contract: both `aria-controls="surebets-panel"`, roving `tabindex` kept by `updateModeToggleUI`, and `handleModeTabKeydown` for arrows/Home/End. Replaced the whole-slip `aria-live` with a labelled region plus `#slip-status`, which announces the opened fixture and clears on close. `docs/PWA_ACCESSIBILITY.md` and `tests/test_accessibility_axe.py` pin it. `pytest`: 2,372 passed, 12 skipped (17 snapshots) in 105.12 s; ruff and mypy (291 files) clean; node --check passes. |
+| 2026-11-11 | M6-1 | Done | Enabled `branch = true` in `[tool.coverage.run]` and measured the 3.11 clean-mode suite: **88.05%** branch coverage (14,255 statements, 5,260 branches, 863 partial; `pytest --cov --cov-report=term-missing --cov-report=xml`, 2,372 passed, 12 skipped, 4 m 34 s). Set `fail_under = 87.05`, one percentage point under; the existing CI 3.11 `--cov` step enforces it, and `coverage report` exits 0. Updated the config comment and `docs/CI.md`. `ruff` and `mypy` (291 files) clean; market doc, fixtures, admissibility and lock checks green. |

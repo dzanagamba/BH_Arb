@@ -188,12 +188,18 @@ only, because the push CI does not run Chromium.
 
 ## Coverage
 
-The measured baseline on 2026-11-06 was **85.63%** across
-`engine`, `server`, `scrapers`, `config` and `models` (11,639 statements).
-`pyproject.toml` sets `fail_under = 80`, a deliberately small cushion below that
-baseline. The old roadmap's rule was: do not set an arbitrary high coverage
-threshold that forces low-value tests; use the current measured baseline. Raise
-the number as real coverage improves.
+Coverage is measured with **branch coverage** (`branch = true` in
+`[tool.coverage.run]`, M6-1), so an `if` whose false arm never runs counts
+against the number. Measured 2026-11-11 on the Python 3.11 clean-mode suite:
+**88.05%** across `engine`, `server`, `scrapers`, `config` and `models`
+(14,255 statements, 5,260 branches, 863 partial branches). `pyproject.toml` sets
+`fail_under = 87.05`, exactly one point below that measurement, so an ordinary
+refactor does not turn CI red but a real regression does.
+
+The rule stays: do not set an arbitrary high threshold that forces low-value
+tests; use the current measured baseline and raise the floor as coverage
+improves. The populated-ledger run does not pass `--cov`; the floor is enforced
+on the clean-mode 3.11 leg.
 
 Tests, operator scripts and generated runtime state are outside the measured
 packages. The suite itself is not the product.

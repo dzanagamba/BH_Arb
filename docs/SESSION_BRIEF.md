@@ -3,7 +3,7 @@
 **Updated:** 2026-11-09
 **Goal:** keep `ROADMAP.md` current without weakening the trust model.
 **Current task:** none; SR0-1, SR0-2, SR1-1, SR1-2, SR1-3, SR1-4, M1-1, M1-2,
-M1-3, M2-1, M2-2, M2-3, M2-4, M2-5, M3-1 … M3-6, M4-1 … M4-5, M5-1 … M5-7, SR2-1 …
+M1-3, M2-1, M2-2, M2-3, M2-4, M2-5, M3-1 … M3-6, M4-1 … M4-5, M5-1 … M5-7, M6-1, SR2-1 …
 SR2-6, SR3-1, SR3-2, SR3-3, SR3-4, SR4-1, SR4-2, SR4-3, SR4-3b … SR4-3f,
 SR4-3h, SR4-3i, SR4-3j, SR4-4, SR4-5, SR4-6, SR4-7, SR4-7a, SR4-8, SR4-8a,
 SR4-9, SR4-10, SR4-11, SR4-12, SR4-13, SR5-1, SR5-2, SR6-1, SR6-2, SR6-3,
@@ -38,6 +38,11 @@ key guard (M1-1), `3f9a911` carries the health-summary cache (M2-3), and
 `8a1cb90` carries SR6-2, SR4-8a and SR4-8.
 
 ## Project state
+
+M6-1 (2026-11-11, working tree, operator: "measure it and take a point under"):
+coverage now counts branches (`branch = true`). The 3.11 clean-mode suite measured
+**88.05%** (14,255 statements, 5,260 branches, 863 partial) and `fail_under` is
+**87.05**, one point under; the existing CI 3.11 `--cov` step enforces it.
 
 M5-1 … M5-7 (2026-11-11, working tree, operator: continue with M5): the
 removal/decision rows are settled — legacy URL maps and the unused `link_sweeps`
@@ -799,11 +804,10 @@ the seven-day opportunity baseline remains unmeasured and N2-4 owns it.
 ## Next action
 
 **No `Not started` row is ungated.** M1-1, M1-2, M1-3, M2-1, M2-2, M2-3, M2-4,
-M2-5, M3-1 … M3-6, M4-1 … M4-5, M5-1 … M5-7 and SR4-8 closed the last ones.
+M2-5, M3-1 … M3-6, M4-1 … M4-5, M5-1 … M5-7, M6-1 and SR4-8 closed the last ones.
 What is left needs the operator: **SR4-3g** (blocked on a live EVLBet payload —
-do not start it), **M6-1** (branch coverage floor in CI; needs the floor value),
-and the deferred N2-4 / waived P1-6 (leave both alone). Every remaining row is
-`Gate: operator`. A HAR refresh is an operator action, not a task:
+do not start it) and the deferred N2-4 / waived P1-6 (leave both alone). There
+is no ungated roadmap row left. A HAR refresh is an operator action, not a task:
 `python scripts/capture_har.py --books all`.
 
 ## Rules
