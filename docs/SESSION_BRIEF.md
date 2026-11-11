@@ -4,8 +4,8 @@
 **Goal:** keep the scanner correct and current without weakening the trust
 model; work `ROADMAP.md` top to bottom.
 **Current row:** none in progress. M7-2 (live test scan + doc rewrite) is Done.
-**Last commit:** `38b98ae` "docs: point the session brief at the task commit"
-(after `22519bd`, M6-1). M7-2 is **uncommitted** in the working tree.
+**Last commit:** `afbb3c1` "docs: live test scan, production-readiness
+checklist and roadmap rewrite (M7-2)", pushed to `origin/main` on 2026-11-11.
 
 ## Project state
 
