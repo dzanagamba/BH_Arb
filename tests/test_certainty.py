@@ -1176,6 +1176,60 @@ def test_same_betradar_id_detects_swapped_orientation():
     assert result.is_swapped is True
 
 
+def test_same_betradar_id_refuses_an_orientation_only_noise_can_decide():
+    """M8-2: a name comparison that is merely closer must not flip 1 and 2.
+
+    The 2026-11-12 scan merged wwin's correctly oriented `Montevideo City - RC
+    Montevideo` into an anchor spelled with aliases (`Torque - Racing Club`) and
+    swapped it, because "swapped" won the fuzzy sum 48.1 to 38.1. wwin's one
+    team normalizes to the bare city key, so that comparison says nothing.
+    """
+    gate = CertaintyGate()
+    aliased_anchor = _m("maxbet", "Torque", "Racing Club", "Uruguay 1", betradar_id="111")
+    wwin = _m("wwin", "Montevideo City", "RC Montevideo", "Uruguay 1", betradar_id="111")
+    wwin.home_team_normalized = "montevideo city"
+    wwin.away_team_normalized = "montevideo"  # what the normalizer really produces
+    gate.normalize([aliased_anchor, wwin])
+
+    result = gate.evaluate_pair(aliased_anchor, wwin)
+
+    assert result.status != "verified"
+    assert "orientation_unresolved" in result.reasons
+    assert result.is_swapped is False, "a refused pair is never also flipped"
+
+
+def test_same_betradar_id_swaps_a_decisive_reversal():
+    gate = CertaintyGate()
+    a = _m("mdshop", "Sarajevo", "Zeljeznicar", "BiH Premier Liga", betradar_id="111")
+    b = _m("wwin", "FK Zeljeznicar", "Sarajevo", "Premijer Liga", betradar_id="111")
+    gate.normalize([a, b])
+
+    result = gate.evaluate_pair(a, b)
+
+    assert result.status == "verified", result.reasons
+    assert result.is_swapped is True
+
+
+def test_same_betradar_id_lets_ledger_aliases_settle_the_orientation(tmp_path):
+    """Ledger proof orients a pair whose spellings share nothing (M8-2)."""
+    from engine.mapping_evidence import Evidence, MappingLedger, team_alias_key
+
+    ledger = MappingLedger(tmp_path / "evidence.json")
+    proof = [Evidence(type="betradar_shared_id", scan="s1", books=("mdshop", "wwin"))]
+    for left, right in (("Alpha", "Delta"), ("Bravo", "Charlie")):
+        ledger.accept("team_alias", team_alias_key(left, right), proof, "same Betradar id")
+
+    gate = CertaintyGate(evidence=ledger)
+    a = _m("mdshop", "Alpha", "Bravo", "League", betradar_id="111")
+    b = _m("wwin", "Charlie", "Delta", "League", betradar_id="111")
+    gate.normalize([a, b])
+
+    result = gate.evaluate_pair(a, b)
+
+    assert result.status == "verified", result.reasons
+    assert result.is_swapped is True, "the ledger proves the reversed orientation"
+
+
 def test_one_sided_betradar_id_changes_nothing():
     gate = CertaintyGate()
     a = _m("mdshop", "Manchester City", "Arsenal", "England 1", betradar_id="111")

@@ -1992,6 +1992,7 @@ async def run_scan(
     status.bookmakers_done = []
     status.bookmaker_progress = {}
     status.errors = []
+    status.notes = []
     status.total_matches = 0
     status.surebets_found = 0
     status.recorded_opportunities = 0
@@ -2253,7 +2254,7 @@ async def run_scan(
                 spread = (max(times) - min(times)).total_seconds()  # type: ignore[operator]
                 if spread > 90:
                     logger.warning(f"Odds age spread {spread:.0f}s exceeds 90s — results may be stale")
-                    status.errors.append(f"Odds age spread {spread:.0f}s — verify before betting")
+                    status.notes.append(f"Odds age spread {spread:.0f}s — verify before betting")
 
         # P2-9: a whole feed can disappear while the remaining books still
         # price a clean-looking scan. These are the CPU diagnostics, so they run
@@ -2474,7 +2475,7 @@ async def run_scan(
                 for item in price_dropped[:5]
             )
             logger.warning("Dropped %s surebet(s) with a price outlier: %s", len(price_dropped), detail)
-            status.errors.append(
+            status.notes.append(
                 f"{len(price_dropped)} surebet(s) dropped: a leg was a price outlier"
             )
 
@@ -3986,11 +3987,13 @@ async def health() -> dict[str, Any]:
             "last_scan_age_sec": age_sec(scan_status.last_scan_time),
             "per_bookie": dict(cached_per_bookie),
             "errors": list(scan_status.errors),
+            "notes": list(scan_status.notes),
         },
         "live": {
             "last_scan_age_sec": age_sec(live_status.last_scan_time),
             "per_bookie": dict(cached_live_per_bookie),
             "errors": list(live_status.errors),
+            "notes": list(live_status.notes),
         },
         "odds_ttl_sec": ODDS_TTL_SECONDS,
         # P1-5/P1-6: delivery counters and the soft resource budget. The

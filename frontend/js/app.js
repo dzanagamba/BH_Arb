@@ -947,7 +947,14 @@ async function onScanComplete(status) {
     btn.disabled = false;
     setScanButtonLabel('Scan now');
     if (status.errors && status.errors.length > 0) {
-        showError(tr('Some bookmakers failed: {books}', { books: status.errors.slice(0, 3).join('; ') }));
+        showError(tr('Scan finished with problems: {items}', { items: status.errors.slice(0, 3).join('; ') }));
+    }
+    // Not failures: what the scan did to protect the operator (a price-guard
+    // drop, a wide odds-age spread). Shown as information so the error banner
+    // stays a statement about bookmakers (M8-3).
+    const notes = Array.isArray(status.notes) ? status.notes : [];
+    if (notes.length > 0) {
+        showToast(notes.slice(0, 2).join('; '));
     }
     const completeText = () => (status.surebets_found > 0
         ? tr(status.surebets_found === 1 ? '{count} surebet found' : '{count} surebets found', { count: status.surebets_found })

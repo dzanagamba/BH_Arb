@@ -350,7 +350,7 @@ window.I18N = {
         "Scanning…": "Skeniram…",
         "Could not start the scan: {error}": "Nije moguće pokrenuti skeniranje: {error}",
         "Processing…": "Obrađujem…",
-        "Some bookmakers failed: {books}": "Neke knjige nisu uspjele: {books}",
+        "Scan finished with problems: {items}": "Skeniranje završeno s problemima: {items}",
         "Scan complete — no surebets": "Skeniranje završeno — nema sigurnih dobitaka",
         "Failed to load results: {error}": "Učitavanje rezultata nije uspjelo: {error}",
         "unknown age": "nepoznata starost",

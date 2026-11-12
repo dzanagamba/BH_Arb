@@ -78,6 +78,15 @@ HARD_REJECT_REASONS = frozenset(
 # set is consulted. It is deliberately not listed here: the README's dead-entry
 # audit compares this set with the reasons a football pairing can produce.
 
+# A shared provider id proves the event, not which side is home, and a wrong
+# swap turns every 1 into a 2 (M8-2). Orientation therefore needs real
+# evidence: a ledger/allowlist alias pair, or a decisive name comparison. The
+# comparison sums one 0-100 fuzzy ratio per team slot, so 200 is a perfect
+# agreement; below either bar the pair is refused as `orientation_unresolved`
+# and splits instead of being priced upside down.
+ORIENTATION_MIN_SCORE = 60.0
+ORIENTATION_MIN_MARGIN = 20.0
+
 
 @dataclass
 class GateResult:
@@ -749,26 +758,46 @@ class CertaintyGate:
         alias_source = self._teams_alias_source(a, b) if teams_ok else ""
         if same_id:
             # The provider id proves the clubs; the names only decide which way
-            # round the listing is. Direct and swapped are compared as whole
-            # fixtures, so one coincidental name hit cannot claim a swap.
-            direct = fuzz.token_set_ratio(
-                a.home_team_normalized, b.home_team_normalized
-            ) + fuzz.token_set_ratio(a.away_team_normalized, b.away_team_normalized)
-            swapped = fuzz.token_set_ratio(
-                a.home_team_normalized, b.away_team_normalized
-            ) + fuzz.token_set_ratio(a.away_team_normalized, b.home_team_normalized)
-            if direct == swapped:
-                # The id says "same event", but the names say nothing about
-                # which side is home. Pricing a flipped orientation would turn
-                # a 1 into a 2; refuse instead of guessing.
-                teams_ok = False
-                team_reason = "orientation_unresolved"
-                alias_source = ""
-            else:
+            # round the listing is. A swap inverts 1 and 2, so only real
+            # evidence may do it (M8-2):
+            #
+            #   1. a ledger/allowlist alias pair that proves both team slots in
+            #      one orientation — the same proof the non-id path uses;
+            #   2. otherwise the whole-fixture name comparison, and only when it
+            #      is decisive both in absolute terms and by its margin.
+            #
+            # Anything else is refused: a split loses one group, while a
+            # flipped member prices a 1 as a 2 and invents an arbitrage. The
+            # old code refused only on an exact tie, which fuzzy ratios
+            # essentially never produce.
+            aliased, alias_swapped, _ = self._teams_match_details(a, b)
+            if aliased:
                 teams_ok = True
                 team_reason = "betradar_id"
-                is_swapped = swapped > direct
+                is_swapped = alias_swapped
                 alias_source = ""
+            else:
+                direct = fuzz.token_set_ratio(
+                    a.home_team_normalized, b.home_team_normalized
+                ) + fuzz.token_set_ratio(a.away_team_normalized, b.away_team_normalized)
+                swapped = fuzz.token_set_ratio(
+                    a.home_team_normalized, b.away_team_normalized
+                ) + fuzz.token_set_ratio(a.away_team_normalized, b.home_team_normalized)
+                if (
+                    max(direct, swapped) < ORIENTATION_MIN_SCORE
+                    or abs(direct - swapped) < ORIENTATION_MIN_MARGIN
+                ):
+                    # The id says "same event", but the names cannot say which
+                    # side is home. Pricing a flipped orientation would turn a
+                    # 1 into a 2; refuse instead of guessing.
+                    teams_ok = False
+                    team_reason = "orientation_unresolved"
+                    alias_source = ""
+                else:
+                    teams_ok = True
+                    team_reason = "betradar_id"
+                    is_swapped = swapped > direct
+                    alias_source = ""
         if alias_source and not (league_ok and kickoff_ok and category_ok):
             teams_ok = False
             team_reason = "team_unresolved"

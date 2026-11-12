@@ -398,4 +398,8 @@ class ScanStatus(BaseModel):
     run_mode: str = "advisory"
     recorded_opportunities: int = 0
     errors: list[str] = []
+    # Not failures: what the scan did to protect the operator (a price-guard
+    # drop, a wide odds-age spread). The dashboard shows these as information so
+    # "some bookmakers failed" stays a statement about bookmakers (M8-3).
+    notes: list[str] = []
     last_scan_time: datetime | None = None

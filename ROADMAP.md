@@ -131,6 +131,8 @@ work it before every other row.
 | SR8-2 | Structural-drift alarm noise and stale baselines | Done | — | — |
 | M8-1 | Refresh the production-readiness assessment | Done | SR8-1 | — |
 | SR8-5 | SportPlus drops out of a scan on a blank 200 body | Done | — | — |
+| M8-2 | Home/away orientation is decided by name noise | Done | — | — |
+| M8-3 | A guard drop is reported as a bookmaker failure | Done | — | — |
 | SR8-3 | Mapping-coverage floor vs the full-offer long tail | Not started | — | operator |
 | SR4-3g | Strict wire schema: EVLBet | Blocked on a live EVLBet payload | SR4-3 | — |
 | N2-4 | Seven-day local opportunity baseline and drift gates | Deferred | — | operator |
@@ -620,6 +622,91 @@ scans (scans 1–2 logged `Quarantined from pricing: sportplus` with reason
 field the parser never reads, so it is one benign line, not a price path.
 
 
+### M8-2 Home/away orientation is decided by name noise
+
+Status: Done (2026-11-12)
+
+Why: the 2026-11-12 scans drop a surebet on `torque - racing club` every run
+because wwin's listing joins the group with its 1 and 2 inverted. wwin's own
+feed is correctly oriented (`Montevideo City` home, `1@1.84`, the same favourite
+as six other books); it is the matcher that flips it. With a shared Betradar id
+the gate decides orientation by summing two fuzzy name ratios, and against an
+anchor spelled with aliases (`maxbet`: `Torque - Racing Club`) the "swapped"
+total wins by noise: direct **38.1**, swapped **48.1**, one team name folding to
+the bare city key `montevideo`. The code's own comment says a flipped
+orientation must be refused rather than guessed, but the refusal only fires when
+the two totals are exactly equal, which almost never happens. A flipped member
+is a phantom arb: the price guard dropped it, so nothing wrong was served, but a
+`verified` group should not hold an inverted listing in the first place.
+
+Steps:
+1. In the same-provider-id branch, let real alias/ledger evidence decide
+   orientation first (`_teams_match_details`, the gate's existing proof).
+2. Only when no alias settles it, fall back to the name comparison and require a
+   decisive result: a minimum total and a minimum margin.
+3. Otherwise refuse the pair (`orientation_unresolved`). A split is cheaper than
+   a flipped price; never lower the gate.
+4. Measure offline by replaying the stored scan through `MatchMatcher`: verified
+   groups, comparisons, outliers, and the wwin member's orientation.
+
+Acceptance:
+- [x] A correctly oriented listing is not swapped for an alias-spelled anchor
+      (test).
+- [x] An alias-proven orientation is still accepted in both directions (test).
+- [x] A genuinely reversed listing is still swapped (test).
+- [x] The offline replay drops the inverted wwin rows without losing verified
+      groups.
+
+**M8-2 progress (2026-11-12).** The same-provider-id branch now proves
+orientation before it flips anything: `_teams_match_details` (the ledger and
+allowlist proof the non-id path already used) decides first, and only when that
+proves nothing does the whole-fixture name comparison run — with
+`ORIENTATION_MIN_SCORE = 60` and `ORIENTATION_MIN_MARGIN = 20`, otherwise the
+pair is refused as `orientation_unresolved`. Measured by replaying the stored
+01:10 scan (6,368 listings) through `MatchMatcher` with the change stashed for
+"before": verified groups **1,292 → 1,293**, comparisons **5,971 → 5,976**,
+outliers **18 → 12**, ungrouped **869 → 868**, strict misses **21 → 21**
+(0.33 %), duplicate-book groups **0 → 0**. The wwin member of the Torque group
+goes from `swapped=True`, `1@3.65` to `swapped=False`, `1@1.84`, matching the six
+other books; the four `torque - racing club` outlier rows disappear. A live
+rescan on the new code: 6,367 listings / 1,297 verified groups / 19 surebets,
+`price_check` **12 outliers, none on that fixture**. The remaining 12 are genuine
+price disagreements (betole BTTS on three fixtures, maxbet on `malawi - egypt`),
+not orientation. Tests: `tests/test_certainty.py` +3 (noise is refused, a
+decisive reversal still swaps, ledger alias settles it).
+
+### M8-3 A guard drop is reported as a bookmaker failure
+
+Status: Done (2026-11-12)
+
+Why: the operator's dashboard said "Some bookmakers failed: 7 surebet(s) dropped:
+a leg was a price outlier" after a scan in which every book was read. The banner
+joins `status.errors` under a bookmaker label, and the price guard's protective
+drop — plus the odds-age notice — was written into that list.
+
+Steps:
+1. Add `notes` to `ScanStatus` next to `errors`, reset both per scan.
+2. Route the price-guard drop and the odds-age spread to `notes`; a book that
+   cannot be read, a failed learning/candidate/closing pass and a scan error stay
+   `errors`.
+3. Dashboard: errors keep the banner with honest wording, notes show as a toast.
+4. Ship `notes` in `/api/status` and the diagnostics payload.
+
+Acceptance:
+- [x] The guard drop lands in `notes`, not `errors` (test).
+- [x] `/api/status` exposes `notes` (test).
+- [x] The dashboard stops calling every entry a bookmaker failure (test, i18n
+      key added).
+
+**M8-3 progress (2026-11-12).** `ScanStatus.notes` is reset with `errors` in
+`run_scan`, the price-guard and odds-age messages append to it, and
+`/api/status` plus the diagnostics payload ship it. The dashboard shows
+`Scan finished with problems: …` for real errors and a toast for notes
+(`Some bookmakers failed` is gone from app and catalog). Measured on a live
+scan: `GET /api/status?mode=prematch` returned
+`errors = []`, `notes = ['6 surebet(s) dropped: a leg was a price outlier']`.
+Tests: `tests/test_scan_notes.py` (4).
+
 ### M8-1 Refresh the production-readiness assessment
 
 Status: Done (2026-11-11)
@@ -727,3 +814,5 @@ Entries before 2026-11-11 are in the archive.
 | 2026-11-11 | SR8-2 | Done | Structural-drift noise: `begin_scan()` (called by `run_scan`) opens a per-scan window, and `observe` logs a signature once while `bh_wire_structure_drift_total` still counts every occurrence; `observe` now returns `empty` before comparing a payload with no items (`[]`, `{"events": []}`, empty item list beside metadata); `NSoftBet` models both `sBV` and `sbv` because `scrapers/common.py` reads both; the stale Admiralbet baselines were deleted and re-recorded from the live feed (6 entries, `sbv*`/`tot*`, no `sBV`/`tOT`). **Measured with `python scripts/record_scan.py prematch --out …` before → after: drift lines 225 → 23, distinct signatures 29 → 23, signatures repeated in one scan 16 → 0; per book mbet 10→3, maxbet 2→2, betole 30→8, sportplus 1→1, wwin 21→2, mozzartbet 158→7, admiralbet 3→0; 1,283 groups / 20 surebets both runs (matches 6,461→6,459).** Live after: 8 lines, 0 repeats, 243 matches / 19 groups, 0 surebets; Betole live 75 matches (SR8-1 fix working), Mozzartbet 0 (`returned no matches`, SR8-1 blocker). Tests: `tests/test_structural_drift.py` +4, `tests/test_wire_schemas_admiralbet.py` +1. Full run: `2453 passed, 12 skipped in 104.54s` (0 failed); ruff `All checks passed!`; mypy `no issues found in 296 source files`; market doc / refresh_fixtures / audit_admissibility `--check` exit 0. |
 | 2026-11-11 | M8-1 | Done | `docs/PRODUCTION_READINESS.md` rewritten dated 2026-11-11 from state-restored scans (`python scripts/record_scan.py prematch` and `live`, reports under `docs/evidence/2026-11-11-m8-1-*.json`, summary `2026-11-11-m8-1-scans.md`). **Prematch 6,459 matches / 1,283 verified groups / 5,795 comparisons / 21 outliers (0.36 %) / 20 surebets, 8 dropped by the price guard, 9/9 books; live 243 / 19 / 34 / 0 / 0, 8/9 books (Mozzartbet empty, SR8-1). Pairing 0.28 % (18 / 6,459) and 0.0 % (0 / 243), zero duplicate-book groups; mapping 45,268/589,502 (7.7 %) and 1,288/50,477 (2.6 %); cold replay exit 0 (`fixed_point: true`, `false_merges: 0`, `pairs_unresolved: 0`); destinations corrected to 6 ticket / 6 match page / 6 generic.** The checklist above now matches the doc (criteria 1–9 plus leg links and suite). Criterion 4 proposal (not applied): zero outlier legs on served surebets and ≤ 0.10 % of comparisons with ≥ 1,000 per mode. Criteria 2 (N2-4) and 8 (P1-6) flagged to the operator. `docs/ACCEPTANCE.md` links the refreshed assessment. Full run: `2453 passed, 12 skipped in 104.54s`; ruff clean; mypy `no issues found in 296 source files`; the three `--check` scripts exit 0. |
 | 2026-11-12 | SR8-5 | Done | SportPlus's blank 200 is a transport failure now: `scrapers.errors.EmptyBodyError` (kind `transport`) plus `fetch_with_retry(..., require_body=True)`, used by both SportPlus feeds, so a whitespace-only body spends an existing attempt instead of the book, and a non-JSON body reports `HTTP <status>, <content-type>, <bytes>, head=<80>` (`python -m pytest tests/test_sportplus_transport.py tests/test_retry.py` → 16 passed; full run `2458 passed, 12 skipped in 120.30s`). **Measured on the new code, three prematch scans via `POST /api/scan?mode=prematch`: `✅ SportPlus: 737 prematch matches scraped` each, zero `Scrape error`/`not JSON` lines, nine books in the last one (6,327 matches / 1,266 groups / 22 surebets), SportPlus back to `healthy` after the guard's three clean scans.** Budget, rate and timeouts unchanged: a book that never returns a body still fails closed. Evidence: `docs/evidence/2026-11-12-sr8-5-sportplus-blank-body.md`. |
+| 2026-11-12 | M8-2 | Done | Home/away orientation needs proof in the shared-id branch: `_teams_match_details` (ledger/allowlist) decides first, else the name comparison must clear `ORIENTATION_MIN_SCORE=60` and `ORIENTATION_MIN_MARGIN=20`, else `orientation_unresolved`. Offline replay of the stored 01:10 scan (`6,368` listings, change stashed for "before"): verified groups **1,292 → 1,293**, comparisons **5,971 → 5,976**, outliers **18 → 12**, ungrouped **869 → 868**, strict misses **21 → 21 (0.33 %)**, duplicate-book groups **0 → 0**; the wwin Torque member goes `swapped=True 1@3.65` → `swapped=False 1@1.84`. Live rescan: 6,367 listings / 1,297 verified groups / 19 surebets, `price_check` **12 outliers, none on torque - racing club**. `tests/test_certainty.py` +3. Evidence: `docs/evidence/2026-11-12-m8-2-orientation.md`. |
+| 2026-11-12 | M8-3 | Done | `ScanStatus.notes` next to `errors`; the price-guard drop and odds-age spread go to notes, book/step failures stay errors, `/api/status` and the diagnostics payload ship both, and the dashboard shows notes as a toast with the honest `Scan finished with problems: …` label. Measured live: `GET /api/status?mode=prematch` → `errors = []`, `notes = ['6 surebet(s) dropped: a leg was a price outlier']`. `tests/test_scan_notes.py` (4). Full suite `2465 passed, 12 skipped in 120.51s`; ruff, mypy and the three `--check` scripts clean. |
