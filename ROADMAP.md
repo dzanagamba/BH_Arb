@@ -130,6 +130,7 @@ work it before every other row.
 | SR8-4 | `record_scan.py` restores state before scanning | Done | — | — |
 | SR8-2 | Structural-drift alarm noise and stale baselines | Done | — | — |
 | M8-1 | Refresh the production-readiness assessment | Done | SR8-1 | — |
+| SR8-5 | SportPlus drops out of a scan on a blank 200 body | Done | — | — |
 | SR8-3 | Mapping-coverage floor vs the full-offer long tail | Not started | — | operator |
 | SR4-3g | Strict wire schema: EVLBet | Blocked on a live EVLBet payload | SR4-3 | — |
 | N2-4 | Seven-day local opportunity baseline and drift gates | Deferred | — | operator |
@@ -566,6 +567,59 @@ the live scrape still prices O/U 1.5/2.5/3.5).
 
 Tests: `tests/test_structural_drift.py` (extend).
 
+### SR8-5 SportPlus drops out of a scan on a blank 200 body
+
+Status: Done (2026-11-12)
+
+Why: the operator's 2026-11-12 00:26 prematch scan lost SportPlus completely.
+Two attempts died with an empty-message `httpx.ReadError` and the third answered
+`HTTP 200` with a body of nothing but CRLF whitespace, which the adapter reported
+as `sportplus response is not JSON: Expecting value: line 3 column 1 (char 4)` —
+kind `schema_drift`, i.e. "the feed changed shape". It had not: five probes of
+the same endpoint minutes later each returned 21 MB of valid (double-serialised)
+JSON in about 3 s. A body that never arrives is the feed failing to deliver, not
+a parse bug, and it should read that way and use the retry budget it is already
+entitled to.
+
+Steps:
+1. Model "2xx with an empty or whitespace-only body" as `transport` in
+   `scrapers.errors` (`EmptyBodyError`), not `schema_drift`.
+2. `scrapers.retry.fetch_with_retry(..., require_body=True)` re-raises it inside
+   `send`, so the existing attempt cap, time budget and rate limit retry it.
+3. Use it on both SportPlus feeds and put status, content type, size and the
+   first bytes into the non-JSON message so a real drift is diagnosable.
+4. Do not raise the attempt cap, the rate or a timeout: a book that never sends
+   a body still fails closed and drops out of the scan.
+
+Acceptance:
+- [x] A blank 200 is retried and the next attempt's real offer parses (test).
+- [x] A book that only sends blank bodies ends as `transport`, never
+      `schema_drift` (test).
+- [x] A non-JSON body names status, content type, size and head (test).
+
+**SR8-5 progress (2026-11-12).** `scrapers/errors.py` gains `EmptyBodyError`
+(classified `transport`, so the breaker treats it as a soft feed failure);
+`fetch_with_retry` gains `require_body`, which raises it from inside `send` for a
+2xx whose body strips to nothing, so `retry_call` spends attempts it already
+has. SportPlus passes `require_body=True` for prematch and live, and both
+non-JSON messages now carry `HTTP <status>, <content-type>, <n> bytes,
+head=<first 80 bytes>`.
+
+*Measured, new code in the running server:* three prematch scans
+(`POST /api/scan?mode=prematch`) each returned `✅ SportPlus: 737 prematch
+matches scraped`, no `Scrape error` line and no `not JSON` line; all nine books
+present in the last one (6,327 matches / 1,266 groups / 22 surebets, the 18.55 %
+Malawi–Egypt BTTS artefact among the ones the price guard dropped). SportPlus
+came back into pricing after the feed-integrity guard's required three clean
+scans (scans 1–2 logged `Quarantined from pricing: sportplus` with reason
+`recovering`, by design). Evidence and the decoder arithmetic:
+`docs/evidence/2026-11-12-sr8-5-sportplus-blank-body.md`.
+
+*Observation, not fixed here:* the same feed now fingerprints
+`matches[].leagueDescription:string->null` once per scan. It is a nullable
+field the parser never reads, so it is one benign line, not a price path.
+
+
 ### M8-1 Refresh the production-readiness assessment
 
 Status: Done (2026-11-11)
@@ -672,3 +726,4 @@ Entries before 2026-11-11 are in the archive.
 | 2026-11-11 | SR8-4 | Done | `scripts/record_scan.py` restores the persisted runtime state once with `server.app._restore_state()` before the first scan, then scans each requested mode in order (`prematch live` in one invocation); `run(mode)` keeps the evidence-driver signature and goes through the same path. `--out` is now a directory and writes `<mode>-scan.json` per mode. New `tests/test_record_scan.py` (2 tests, real restore + stubbed `api.run_scan`, no traffic; seeded scan-cost history row survives the scan's `_finish_scan_cost`, restore runs once before the first scan, both reports written). Negative control with the restore skipped: `history rows after a scan without restore: 1`, `seeded row survived: False`; through the script the seeded row stays above the new one. `pytest tests/test_record_scan.py tests/test_scan_cost.py tests/test_app_lifecycle.py`: all passed. Full run: `2449 passed, 12 skipped in 104.72s` (0 failed); ruff `All checks passed!`; mypy `no issues found in 296 source files`; market doc / refresh_fixtures / audit_admissibility `--check` exit 0. |
 | 2026-11-11 | SR8-2 | Done | Structural-drift noise: `begin_scan()` (called by `run_scan`) opens a per-scan window, and `observe` logs a signature once while `bh_wire_structure_drift_total` still counts every occurrence; `observe` now returns `empty` before comparing a payload with no items (`[]`, `{"events": []}`, empty item list beside metadata); `NSoftBet` models both `sBV` and `sbv` because `scrapers/common.py` reads both; the stale Admiralbet baselines were deleted and re-recorded from the live feed (6 entries, `sbv*`/`tot*`, no `sBV`/`tOT`). **Measured with `python scripts/record_scan.py prematch --out …` before → after: drift lines 225 → 23, distinct signatures 29 → 23, signatures repeated in one scan 16 → 0; per book mbet 10→3, maxbet 2→2, betole 30→8, sportplus 1→1, wwin 21→2, mozzartbet 158→7, admiralbet 3→0; 1,283 groups / 20 surebets both runs (matches 6,461→6,459).** Live after: 8 lines, 0 repeats, 243 matches / 19 groups, 0 surebets; Betole live 75 matches (SR8-1 fix working), Mozzartbet 0 (`returned no matches`, SR8-1 blocker). Tests: `tests/test_structural_drift.py` +4, `tests/test_wire_schemas_admiralbet.py` +1. Full run: `2453 passed, 12 skipped in 104.54s` (0 failed); ruff `All checks passed!`; mypy `no issues found in 296 source files`; market doc / refresh_fixtures / audit_admissibility `--check` exit 0. |
 | 2026-11-11 | M8-1 | Done | `docs/PRODUCTION_READINESS.md` rewritten dated 2026-11-11 from state-restored scans (`python scripts/record_scan.py prematch` and `live`, reports under `docs/evidence/2026-11-11-m8-1-*.json`, summary `2026-11-11-m8-1-scans.md`). **Prematch 6,459 matches / 1,283 verified groups / 5,795 comparisons / 21 outliers (0.36 %) / 20 surebets, 8 dropped by the price guard, 9/9 books; live 243 / 19 / 34 / 0 / 0, 8/9 books (Mozzartbet empty, SR8-1). Pairing 0.28 % (18 / 6,459) and 0.0 % (0 / 243), zero duplicate-book groups; mapping 45,268/589,502 (7.7 %) and 1,288/50,477 (2.6 %); cold replay exit 0 (`fixed_point: true`, `false_merges: 0`, `pairs_unresolved: 0`); destinations corrected to 6 ticket / 6 match page / 6 generic.** The checklist above now matches the doc (criteria 1–9 plus leg links and suite). Criterion 4 proposal (not applied): zero outlier legs on served surebets and ≤ 0.10 % of comparisons with ≥ 1,000 per mode. Criteria 2 (N2-4) and 8 (P1-6) flagged to the operator. `docs/ACCEPTANCE.md` links the refreshed assessment. Full run: `2453 passed, 12 skipped in 104.54s`; ruff clean; mypy `no issues found in 296 source files`; the three `--check` scripts exit 0. |
+| 2026-11-12 | SR8-5 | Done | SportPlus's blank 200 is a transport failure now: `scrapers.errors.EmptyBodyError` (kind `transport`) plus `fetch_with_retry(..., require_body=True)`, used by both SportPlus feeds, so a whitespace-only body spends an existing attempt instead of the book, and a non-JSON body reports `HTTP <status>, <content-type>, <bytes>, head=<80>` (`python -m pytest tests/test_sportplus_transport.py tests/test_retry.py` → 16 passed; full run `2458 passed, 12 skipped in 120.30s`). **Measured on the new code, three prematch scans via `POST /api/scan?mode=prematch`: `✅ SportPlus: 737 prematch matches scraped` each, zero `Scrape error`/`not JSON` lines, nine books in the last one (6,327 matches / 1,266 groups / 22 surebets), SportPlus back to `healthy` after the guard's three clean scans.** Budget, rate and timeouts unchanged: a book that never returns a body still fails closed. Evidence: `docs/evidence/2026-11-12-sr8-5-sportplus-blank-body.md`. |

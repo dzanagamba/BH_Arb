@@ -65,6 +65,24 @@ _PREFIX_LABEL = re.compile(r"^[A-Z]{1,3}/")
 _NUMBER = re.compile(r"[+-]?\d+(?:[.,]\d+)?")
 
 
+def _envelope(resp: object) -> str:
+    """What the response said, for a body that could not be parsed (SR8-5)."""
+    body = getattr(resp, "content", b"") or b""
+    try:
+        body = bytes(body)
+    except TypeError:  # pragma: no cover - a non-bytes body is already a bug
+        body = b""
+    headers = getattr(resp, "headers", None) or {}
+    try:
+        content_type = headers.get("content-type", "") or "no content-type"
+    except AttributeError:  # pragma: no cover - plain dict includes .get
+        content_type = "unknown content-type"
+    return (
+        f"HTTP {getattr(resp, 'status_code', '?')}, {content_type}, "
+        f"{len(body)} bytes, head={body[:80]!r}"
+    )
+
+
 def _wanted_sports(values: tuple[str, ...] | list[str] | None) -> set[str]:
     """Canonical sports to parse. Default is football, the historical path."""
     if values is None:
@@ -240,7 +258,9 @@ class SportPlusScraper:
 
         async with transport_client(BOOKMAKER_ID, "prematch") as client:
             try:
-                resp = await fetch_with_retry(client, self.url, headers=self.headers)
+                resp = await fetch_with_retry(
+                    client, self.url, headers=self.headers, require_body=True
+                )
 
                 # Response may be double-serialized
                 try:
@@ -248,7 +268,8 @@ class SportPlusScraper:
                 except ValueError as exc:
                     raise ScrapeError(
                         ScrapeKind.SCHEMA_DRIFT,
-                        f"{BOOKMAKER_ID} response is not JSON: {exc}",
+                        f"{BOOKMAKER_ID} response is not JSON "
+                        f"({_envelope(resp)}): {exc}",
                     ) from exc
                 if isinstance(data, str):
                     try:
@@ -256,7 +277,8 @@ class SportPlusScraper:
                     except ValueError as exc:
                         raise ScrapeError(
                             ScrapeKind.SCHEMA_DRIFT,
-                            f"{BOOKMAKER_ID} double-serialised body is not JSON: {exc}",
+                            f"{BOOKMAKER_ID} double-serialised body is not JSON "
+                            f"({_envelope(resp)}): {exc}",
                         ) from exc
 
                 # SR4-3f: validate the envelope and every market block before
@@ -296,14 +318,17 @@ class SportPlusScraper:
 
         async with transport_client(BOOKMAKER_ID, "live") as client:
             try:
-                resp = await fetch_with_retry(client, LIVE_API, headers=self.headers)
+                resp = await fetch_with_retry(
+                    client, LIVE_API, headers=self.headers, require_body=True
+                )
 
                 try:
                     data = resp.json()
                 except ValueError as exc:
                     raise ScrapeError(
                         ScrapeKind.SCHEMA_DRIFT,
-                        f"{BOOKMAKER_ID} live response is not JSON: {exc}",
+                        f"{BOOKMAKER_ID} live response is not JSON "
+                        f"({_envelope(resp)}): {exc}",
                     ) from exc
                 if isinstance(data, str):
                     try:
@@ -311,7 +336,8 @@ class SportPlusScraper:
                     except ValueError as exc:
                         raise ScrapeError(
                             ScrapeKind.SCHEMA_DRIFT,
-                            f"{BOOKMAKER_ID} live body is not JSON: {exc}",
+                            f"{BOOKMAKER_ID} live body is not JSON "
+                            f"({_envelope(resp)}): {exc}",
                         ) from exc
 
                 # Live payload: { "date": ..., "sports": [{ id, name, matches: [...] }] }

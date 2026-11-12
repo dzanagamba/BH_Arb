@@ -46,20 +46,21 @@ class _Clock:
         self.value += seconds
 
 
-def _fetch(handler, *, policy=None, sleep=None, now=None, rand=None):
+def _fetch(handler, *, policy=None, sleep=None, now=None, rand=None, **kwargs):
     async def scenario():
-        kwargs = {
+        options = {
             "policy": policy or _policy(),
             "sleep": sleep or _sleep_recorder([]),
             "rand": rand or (lambda: 0.5),
+            **kwargs,
         }
         if now is not None:
-            kwargs["now"] = now
+            options["now"] = now
         async with _client(handler) as client:
             return await fetch_with_retry(
                 client,
                 "https://example.test/feed",
-                **kwargs,
+                **options,
             )
 
     return scenario
@@ -206,6 +207,27 @@ def test_transport_errors_retry_then_end_as_transport():
     assert caught.value.kind is ScrapeKind.TRANSPORT
     assert len(calls) == 3
 
+
+def test_require_body_retries_a_blank_200():
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(200, content=b"\r\n\r\n")
+
+    # Without the flag the transport contract is unchanged: one attempt, and
+    # the (empty) body is handed to the adapter.
+    blank = asyncio.run(_fetch(handler)())
+    assert blank.status_code == 200
+    assert len(calls) == 1
+
+    calls.clear()
+    with pytest.raises(ScrapeError) as caught:
+        asyncio.run(_fetch(handler, require_body=True)())
+
+    assert caught.value.kind is ScrapeKind.TRANSPORT
+    assert "empty body" in str(caught.value)
+    assert len(calls) == 3, "it spends the existing attempt cap, not a new one"
 
 def test_every_attempt_is_recorded_by_the_cost_collector():
     calls = []

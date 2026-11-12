@@ -50,6 +50,17 @@ class ScrapeError(Exception):
         super().__init__(message or kind.value)
 
 
+class EmptyBodyError(Exception):
+    """A 2xx response whose body is empty or whitespace only.
+
+    The feed answered but delivered nothing — a dropped or truncated response,
+    not a shape change. ``retry_call`` classifies it ``transport``, so it is
+    retried inside the book's existing attempt budget, and a book that never
+    sends a body fails closed as an unreadable feed instead of raising a false
+    schema-drift alarm (SR8-5).
+    """
+
+
 # The historical outcome labels. ``blocked`` used to absorb every timeout and
 # 429 (the text classifier's markers); keeping that mapping means an existing
 # failure-rate dashboard does not change meaning with this task.
@@ -159,6 +170,8 @@ def classify_exception(exc: BaseException) -> ScrapeKind:
         return classify_response(exc.response)
     if isinstance(exc, httpx.HTTPError):
         return ScrapeKind.TRANSPORT
+    if isinstance(exc, EmptyBodyError):
+        return ScrapeKind.TRANSPORT
     if isinstance(exc, PlaywrightError):
         return ScrapeKind.TRANSPORT
     if isinstance(exc, pydantic.ValidationError):
@@ -178,6 +191,7 @@ def classify_scrape(
 
 
 __all__ = [
+    "EmptyBodyError",
     "ScrapeError",
     "ScrapeKind",
     "classify_exception",

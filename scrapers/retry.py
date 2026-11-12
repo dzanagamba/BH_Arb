@@ -30,6 +30,7 @@ import httpx
 
 from scrapers.cost import record_request, response_bytes
 from scrapers.errors import (
+    EmptyBodyError,
     ScrapeError,
     ScrapeKind,
     classify_exception,
@@ -218,6 +219,7 @@ async def fetch_with_retry(
     json: Any | None = None,
     policy: TransportPolicy | None = None,
     account: bool = True,
+    require_body: bool = False,
     sleep: Sleep = asyncio.sleep,
     now: Clock = time.monotonic,
     rand: Random = random.random,
@@ -226,10 +228,15 @@ async def fetch_with_retry(
 
     ``method``/``content``/``json`` exist for the Premier JSON-RPC read; every
     call in this project is a read-only odds query, so POST retries are safe.
+
+    ``require_body`` treats a 2xx response whose body is empty or whitespace
+    only as an :class:`~scrapers.errors.EmptyBodyError`: the site answered but
+    delivered nothing, so ``retry_call`` spends the attempt budget it already
+    has on it (SR8-5). The returned response is always one that carried bytes.
     """
 
     async def send() -> httpx.Response:
-        return await client.request(
+        response = await client.request(
             method,
             url,
             headers=headers,
@@ -237,6 +244,13 @@ async def fetch_with_retry(
             content=content,
             json=json,
         )
+        if require_body and classify_response(response) is ScrapeKind.OK:
+            body = getattr(response, "content", b"") or b""
+            if not bytes(body).strip():
+                raise EmptyBodyError(
+                    f"HTTP {getattr(response, 'status_code', '?')} with an empty body"
+                )
+        return response
 
     return await retry_call(
         send,
